@@ -1,0 +1,541 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua Tabelas como Dicionários — guardando valores por nome | Guia Lua</title>
+<meta name="description" content="Tabelas como dicionários no Lua 5.5 para quem está começando: chave e valor, criar com {nome = valor} e {[&quot;café&quot;] = valor}, ler com t.nome, t[&quot;nome&quot;] e t[variavel], a chave que não existe dá nil (e o or 0), acrescentar, mudar e apagar, chave número × chave texto (t[1] ≠ t[&quot;1&quot;]), por que o # dá 0, e os erros reais (acento depois do ponto, table index is nil, concatenate a nil value), com missões no editor.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">Tabelas como Dicionários</span></h1>
+
+<p class="intro">Numa lista, você acha um item pela <strong>posição</strong>: o primeiro, o segundo, o quinto. Mas no balcão da padaria ninguém pergunta "quanto custa o produto número 2?"; pergunta "quanto custa o <strong>leite</strong>?". A mesma tabela do Lua que vira lista também serve para isso: em vez de 1, 2, 3, você usa um <strong>nome</strong> para guardar cada valor. Uma tabela usada assim se chama <strong>dicionário</strong> (outras linguagens dizem também "mapa" ou "tabela associativa"). O nome é a <strong>chave</strong>; o que fica guardado nele é o <strong>valor</strong>.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>A criar um dicionário: <code>{pao = 0.50, leite = 4.75}</code> e <code>{["café"] = 18.90}</code>.</li>
+  <li>As três escritas para ler: <code>t.nome</code>, <code>t["nome"]</code> e <code>t[nome]</code> (com uma variável), e quando cada uma serve.</li>
+  <li>Que pedir uma chave que não existe dá <code>nil</code>, sem erro, e como usar um valor padrão com <code>or</code>.</li>
+  <li>A acrescentar, mudar e apagar um par.</li>
+  <li>Que <code>t[1]</code> e <code>t["1"]</code> são chaves <strong>diferentes</strong>.</li>
+  <li>Por que o <code>#</code> de um dicionário dá 0.</li>
+  <li>Os erros reais de acento, palavra reservada, chave <code>nil</code> e maiúscula.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>A ideia: a tabela de preços da padaria</h2>
+<p>Pendurada na parede da padaria há uma tabela: à esquerda o nome do produto, à direita o preço. Ninguém lê a tabela inteira: o cliente procura o nome e olha o preço ao lado.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Chave (o nome)</th><th>Valor (o que está guardado)</th></tr>
+<tr><td><code>pao</code></td><td><code>0.50</code></td></tr>
+<tr><td><code>leite</code></td><td><code>4.75</code></td></tr>
+<tr><td><code>cafe</code></td><td><code>18.90</code></td></tr>
+</table>
+</div>
+
+<p>Cada linha é um <strong>par chave-valor</strong>. No Lua, essa tabela inteira cabe numa variável. E não é um tipo novo: é a mesma <a href="tabelas.html">tabela</a> de sempre. A lista é uma tabela cujas chaves são 1, 2, 3…; o dicionário é uma tabela cujas chaves são nomes.</p>
+
+<hr>
+
+<h2>1. Criando um dicionário</h2>
+
+<pre class="file" data-file="precos.lua">local precos = {pao = 0.50, leite = 4.75, cafe = 18.90}
+print(precos)
+print(precos.leite)
+print(precos["leite"])
+print(type(precos))
+print(#precos)
+</pre>
+
+<dl class="anatomy">
+  <dt>{ … }</dt><dd>As chaves <code>{ }</code> criam a tabela, como numa lista.</dd>
+  <dt>pao = 0.50</dt><dd>Um par: a <strong>chave</strong> <code>pao</code>, o sinal <code>=</code>, e o <strong>valor</strong> <code>0.50</code>. Leia como "pao vale 0.50". A chave aqui é o texto <code>"pao"</code>, escrito sem aspas.</dd>
+  <dt>,</dt><dd>A vírgula separa um par do outro.</dd>
+  <dt>precos.leite</dt><dd>Lê o valor guardado na chave <code>"leite"</code>: o nome da tabela, um <strong>ponto</strong>, o nome da chave.</dd>
+  <dt>precos["leite"]</dt><dd>O mesmo, com colchetes e aspas. As duas escritas são a mesma coisa (seção 2).</dd>
+  <dt>#precos</dt><dd>O <code>#</code> conta só os itens de <strong>lista</strong> (posições 1, 2, 3…). Este dicionário não tem nenhum: dá 0.</dd>
+</dl>
+
+<pre class="term">$ lua precos.lua
+table: 0x5577a57af780
+4.75
+4.75
+table
+0
+</pre>
+
+<p>O <code>print(precos)</code> não mostra o conteúdo: mostra <code>table:</code> e um endereço de memória, que muda a cada execução. Para ver todos os pares, é preciso percorrer a tabela, com o <code>pairs</code> (próxima aula, <a href="pairs.html">Percorrendo Chaves</a>). E o <code>#</code> dar 0 não quer dizer que a tabela esteja vazia: quer dizer que ela não tem parte de lista. Para contar os pares, também é com o <code>pairs</code>.</p>
+
+<h3>Chaves com acento ou espaço: <code>["…"] = </code></h3>
+<p>A escrita <code>pao = 0.50</code> só serve quando a chave poderia ser o nome de uma variável: letras sem acento, números e <code>_</code>, sem começar com número (aula <a href="nomes-variaveis.html">Nomes de Variáveis</a>). Para qualquer outro texto, escreva a chave entre colchetes e aspas:</p>
+
+<pre class="file" data-file="chaves_texto.lua">local precos = {
+  pao = 0.50,
+  ["café"] = 18.90,
+  ["pão de queijo"] = 3.00,
+}
+print(precos.pao)
+print(precos["café"])
+print(precos["pão de queijo"])
+print(string.format("Café: R$ %.2f", precos["café"]))
+</pre>
+
+<pre class="term">$ lua chaves_texto.lua
+0.5
+18.9
+3.0
+Café: R$ 18.90
+</pre>
+
+<dl class="anatomy">
+  <dt>["café"] = 18.90</dt><dd>A chave é o texto <code>"café"</code>, com acento. Entre colchetes vai <strong>qualquer valor</strong> como chave; aqui, um texto.</dd>
+  <dt>["pão de queijo"] = 3.00</dt><dd>Chave com espaços: também só com colchetes.</dd>
+  <dt>a vírgula depois do último par</dt><dd>É permitida, e facilita acrescentar outro par depois. Com muitos pares, o costume é um por linha, com 2 espaços na frente.</dd>
+  <dt>0.5, 18.9, 3.0</dt><dd>O <code>print</code> não mostra os zeros do fim que não mudam o número. Para mostrar dinheiro com duas casas, use <code>string.format("%.2f", …)</code> (aula <a href="string-format.html">string.format</a>).</dd>
+</dl>
+
+<div class="trylua" data-goal="out:Café: R$ 18.90;;src:precos\[">
+<p class="try-task"><strong>Missão:</strong> troque o <code>0</code> pela leitura do preço do café no dicionário (com colchetes, por causa do acento), para o programa mostrar <code>Café: R$ 18.90</code>.</p>
+<pre class="script" data-file="main.lua">local precos = {pao = 0.50, leite = 4.75, ["café"] = 18.90}
+print(string.format("Café: R$ %.2f", 0))
+</pre>
+<pre class="solucao" data-file="main.lua">local precos = {pao = 0.50, leite = 4.75, ["café"] = 18.90}
+print(string.format("Café: R$ %.2f", precos["café"]))
+</pre>
+</div>
+
+<hr>
+
+<h2>2. Três escritas: <code>t.nome</code>, <code>t["nome"]</code> e <code>t[nome]</code></h2>
+<p>Esta é a parte que mais confunde quem começa. Leia com calma:</p>
+
+<pre class="file" data-file="tres_jeitos.lua">local ficha = {nome = "Ana", cidade = "Teresina"}
+local nome = "cidade"
+print(ficha.nome)
+print(ficha["nome"])
+print(ficha[nome])
+local campo = "nome"
+print(ficha[campo])
+</pre>
+
+<pre class="term">$ lua tres_jeitos.lua
+Ana
+Ana
+Teresina
+Ana
+</pre>
+
+<dl class="anatomy">
+  <dt>ficha.nome</dt><dd>A chave é o <strong>texto</strong> <code>"nome"</code>. O ponto é só um atalho: <code>ficha.nome</code> é exatamente o mesmo que <code>ficha["nome"]</code>. Resultado: <code>Ana</code>.</dd>
+  <dt>ficha["nome"]</dt><dd>A chave é o texto <code>"nome"</code>, escrito com aspas. Resultado: <code>Ana</code>.</dd>
+  <dt>ficha[nome]</dt><dd><strong>Sem aspas</strong>, dentro dos colchetes: <code>nome</code> é uma <strong>variável</strong>, e a chave é o que está guardado nela. A variável <code>nome</code> vale <code>"cidade"</code>, então é <code>ficha["cidade"]</code>: <code>Teresina</code>.</dd>
+  <dt>ficha[campo]</dt><dd>A variável <code>campo</code> vale <code>"nome"</code>: é <code>ficha["nome"]</code>, <code>Ana</code>.</dd>
+</dl>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>Qual é a chave</th><th>Quando usar</th></tr>
+<tr><td><code>t.nome</code></td><td>O texto <code>"nome"</code></td><td>Quase sempre: a chave é fixa e é um nome simples</td></tr>
+<tr><td><code>t["nome"]</code></td><td>O texto <code>"nome"</code></td><td>Quando a chave tem acento, espaço, hífen, ou é uma palavra reservada (<code>t["café"]</code>, <code>t["end"]</code>)</td></tr>
+<tr><td><code>t[nome]</code></td><td>O que estiver na <strong>variável</strong> <code>nome</code></td><td>Quando a chave só é conhecida na hora: veio do teclado, de um arquivo, de um laço</td></tr>
+</table>
+</div>
+
+<p>Regra para não errar: <strong>depois do ponto, a chave é sempre um texto fixo</strong>; para usar uma variável como chave, só com colchetes. <code>ficha.campo</code> procuraria a chave <code>"campo"</code>, e não o que está na variável <code>campo</code>.</p>
+
+<hr>
+
+<h2>3. A chave que não existe: <code>nil</code></h2>
+<p>A padaria não vende bolo. O que acontece se o programa pedir o preço do bolo?</p>
+
+<pre class="file" data-file="nao_existe.lua">local precos = {pao = 0.50, leite = 4.75}
+print(precos.bolo)
+print(precos.bolo or 0)
+if precos.bolo == nil then
+  print("Não temos bolo.")
+end
+if precos.leite ~= nil then
+  print("Temos leite.")
+end
+</pre>
+
+<pre class="term">$ lua nao_existe.lua
+nil
+0
+Não temos bolo.
+Temos leite.
+</pre>
+
+<dl class="anatomy">
+  <dt>precos.bolo</dt><dd>Chave que não existe: o Lua <strong>não dá erro</strong>, devolve <code>nil</code> ("nada", aula <a href="nil.html">O Valor nil</a>). Para o Lua, "não existe" e "vale <code>nil</code>" são a mesma coisa.</dd>
+  <dt>precos.bolo or 0</dt><dd>O truque do <code>or</code> (aula <a href="operadores-logicos.html">and, or e not</a>): se o da esquerda é <code>nil</code>, vale o da direita. É o jeito de ter um <strong>valor padrão</strong>.</dd>
+  <dt>precos.bolo == nil</dt><dd>Pergunta se a chave está <strong>faltando</strong>.</dd>
+  <dt>precos.leite ~= nil</dt><dd>Pergunta se a chave <strong>existe</strong> (<code>~=</code> é "diferente de").</dd>
+</dl>
+
+<div class="warning">
+<strong>O <code>nil</code> não para o programa, mas o erro aparece depois</strong>
+<p>Como pedir uma chave que não existe não dá erro, o <code>nil</code> segue caminho e o programa só quebra lá na frente, quando alguém tenta fazer conta ou juntar texto com ele (veja <a href="#errado">Quando dá errado</a>). Se o valor pode faltar, trate na hora: <code>or 0</code>, ou um <code>if … == nil</code>.</p>
+</div>
+
+<div class="tip">
+<strong>Cuidado com o <code>or</code> quando o valor pode ser <code>false</code></strong>
+<p>Se a tabela guarda <code>true</code>/<code>false</code> (<code>config.som = false</code>), <code>config.som or true</code> dá <code>true</code> mesmo com o som desligado, porque o <code>or</code> trata <code>false</code> igual a <code>nil</code>. Nesse caso, pergunte com <code>config.som == nil</code>.</p>
+</div>
+
+<hr>
+
+<h2>4. Acrescentar, mudar e apagar</h2>
+<p>Um dicionário muda o tempo todo: chegou produto novo, o preço subiu, um item saiu do cardápio. As três coisas são feitas com o mesmo <code>=</code>:</p>
+
+<pre class="file" data-file="mudar.lua">local estoque = {pao = 40, leite = 12}
+estoque.bolo = 5
+estoque.leite = estoque.leite - 2
+estoque["pao"] = nil
+print(estoque.pao, estoque.leite, estoque.bolo)
+</pre>
+
+<pre class="term">$ lua mudar.lua
+nil	10	5
+</pre>
+
+<dl class="anatomy">
+  <dt>estoque.bolo = 5</dt><dd>A chave <code>bolo</code> não existia: o par é <strong>criado</strong>.</dd>
+  <dt>estoque.leite = estoque.leite - 2</dt><dd>A chave já existia: o valor é <strong>trocado</strong>. Lê o valor antigo (12), tira 2, guarda 10.</dd>
+  <dt>estoque["pao"] = nil</dt><dd>Guardar <code>nil</code> <strong>apaga</strong> o par. Num dicionário isso é normal e seguro; os buracos só são problema em <a href="sequencias.html">listas</a>, onde a ordem 1, 2, 3 importa.</dd>
+</dl>
+
+<p>Cada chave aparece <strong>uma vez só</strong> na tabela. Se você escrever a mesma chave duas vezes, a segunda troca o valor da primeira.</p>
+
+<div class="trylua" data-goal="out:leite: 10;;out:bolo: 5">
+<p class="try-task"><strong>Missão:</strong> chegaram 5 bolos e foram vendidos 2 leites. Antes dos <code>print</code>, acrescente a chave <code>bolo</code> com 5 e tire 2 do <code>leite</code>, para o programa mostrar <code>leite: 10</code> e <code>bolo: 5</code>.</p>
+<pre class="script" data-file="main.lua">local estoque = {pao = 40, leite = 12}
+
+print("pão: " .. estoque.pao)
+print("leite: " .. estoque.leite)
+print("bolo: " .. tostring(estoque.bolo))
+</pre>
+<pre class="solucao" data-file="main.lua">local estoque = {pao = 40, leite = 12}
+estoque.bolo = 5
+estoque.leite = estoque.leite - 2
+print("pão: " .. estoque.pao)
+print("leite: " .. estoque.leite)
+print("bolo: " .. tostring(estoque.bolo))
+</pre>
+</div>
+
+<hr>
+
+<h2>5. Chave número × chave texto: <code>t[1]</code> não é <code>t["1"]</code></h2>
+<p>Para a tabela, o <strong>número</strong> 1 e o <strong>texto</strong> <code>"1"</code> são chaves diferentes, como duas gavetas com etiquetas diferentes:</p>
+
+<pre class="file" data-file="numero_texto.lua">local t = {}
+t[1] = "número um"
+t["1"] = "texto um"
+print(t[1])
+print(t["1"])
+print(t[1.0])
+print(t[1] == t["1"])
+local digitado = "1"
+print(t[digitado])
+print(t[tonumber(digitado)])
+</pre>
+
+<pre class="term">$ lua numero_texto.lua
+número um
+texto um
+número um
+false
+texto um
+número um
+</pre>
+
+<dl class="anatomy">
+  <dt>t[1] e t["1"]</dt><dd>Duas chaves, dois valores: <code>"número um"</code> e <code>"texto um"</code>.</dd>
+  <dt>t[1.0]</dt><dd>O número <code>1.0</code> é igual ao inteiro <code>1</code>, então a chave é a mesma: <code>"número um"</code>. Com números, vale o valor, não a escrita.</dd>
+  <dt>t[digitado]</dt><dd>O que vem do teclado (<code>io.read</code>) ou de um arquivo é sempre <strong>texto</strong>. Com a chave <code>"1"</code>, achou o <code>"texto um"</code>.</dd>
+  <dt>t[tonumber(digitado)]</dt><dd>Para usar como posição de lista, converta primeiro (aula <a href="conversao.html">tonumber e tostring</a>).</dd>
+</dl>
+
+<div class="warning">
+<strong>O erro clássico do menu</strong>
+<p>A Ana faz um menu numa lista (<code>opcoes = {"Ver", "Somar", "Sair"}</code>) e lê a escolha com <code>io.read()</code>. O <code>opcoes[escolha]</code> dá <code>nil</code>, mesmo ela digitando <code>2</code>: a escolha é o texto <code>"2"</code>, e a lista tem a chave <strong>número</strong> 2. O conserto é <code>opcoes[tonumber(escolha)]</code>, ou ler já como número, com <code>io.read("n")</code>.</p>
+</div>
+
+<hr>
+
+<h2>6. Lista e dicionário na mesma tabela</h2>
+<p>Como é tudo tabela, dá para misturar: uma parte de lista (1, 2, 3…) e uma parte de dicionário (nomes). E a chave pode ser quase qualquer valor, não só texto e número inteiro:</p>
+
+<pre class="file" data-file="mistura.lua">local turma = {"Ana", "Bia", "Caio", nome = "3º A", sala = 12}
+print(#turma)
+print(turma[1], turma[3])
+print(turma.nome, turma.sala)
+local estranho = {[true] = "sim", [false] = "não", [3.5] = "três e meio"}
+print(estranho[true], estranho[false], estranho[3.5])
+</pre>
+
+<pre class="term">$ lua mistura.lua
+3
+Ana	Caio
+3º A	12
+sim	não	três e meio
+</pre>
+
+<dl class="anatomy">
+  <dt>{"Ana", "Bia", "Caio", nome = "3º A", sala = 12}</dt><dd>Os valores sem chave vão para as posições 1, 2, 3; os outros têm nome.</dd>
+  <dt>#turma</dt><dd>Conta só a parte de lista: 3. Os pares <code>nome</code> e <code>sala</code> não entram na conta.</dd>
+  <dt>[true] = "sim", [3.5] = …</dt><dd><code>true</code>, <code>false</code>, números com vírgula, até outra tabela: tudo pode ser chave. Só dois valores não podem: <code>nil</code> e o "não é um número" (<code>0/0</code>), como mostra <a href="#errado">Quando dá errado</a>.</dd>
+</dl>
+
+<h3>Lista ou dicionário?</h3>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Situação</th><th>Use</th></tr>
+<tr><td>Uma fila de coisas do mesmo tipo, em que a ordem importa (as tarefas do dia)</td><td>Lista: <code>{"lavar", "passar"}</code></td></tr>
+<tr><td>Você procura pelo <strong>nome</strong> (o preço de cada produto, o telefone de cada pessoa)</td><td>Dicionário: <code>{leite = 4.75}</code></td></tr>
+<tr><td>Os campos de uma ficha (nome, idade, cidade)</td><td>Dicionário: <code>{nome = "Ana", idade = 34}</code></td></tr>
+<tr><td>Uma lista de fichas (a turma inteira)</td><td>Uma lista de dicionários (aula <a href="tabelas-aninhadas.html">Tabelas Aninhadas</a>)</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+
+<div class="cenario">
+<strong>Chave com acento depois do ponto</strong>
+<pre class="file" data-file="erro_acento.lua">local precos = {["café"] = 18.90}
+print(precos.café)
+</pre>
+<pre class="term">$ lua erro_acento.lua
+lua: erro_acento.lua:2: ')' expected near '&lt;\195&gt;'
+</pre>
+<dl class="anatomy">
+  <dt>lua: erro_acento.lua:2:</dt><dd>Linha 2. Não há <code>stack traceback</code>: é um erro de <strong>sintaxe</strong>, o programa nem começou a rodar.</dd>
+  <dt>')' expected</dt><dd>"Era esperado um <code>)</code>". O Lua leu <code>precos.caf</code> e, no "é", achou um símbolo que não pode estar num nome; para ele, o <code>print( … )</code> deveria fechar ali.</dd>
+  <dt>near '&lt;\195&gt;'</dt><dd>"Perto do byte 195": é o primeiro pedaço do "é" (cada letra acentuada ocupa 2 bytes, aula <a href="utf8.html">utf8</a>). O Lua não aceita acento em nomes, nem depois do ponto.</dd>
+</dl>
+<p><strong>Como consertar:</strong> <code>precos["café"]</code>. Ou use chaves sem acento no programa todo (<code>cafe</code>) e deixe o acento só no texto que o usuário vê.</p>
+</div>
+
+<div class="cenario">
+<strong>Chave sem aspas nos colchetes (sem erro nenhum)</strong>
+<pre class="file" data-file="erro_semaspas.lua">local precos = {pao = 0.50, leite = 4.75}
+print(precos[leite])
+</pre>
+<pre class="term">$ lua erro_semaspas.lua
+nil
+</pre>
+<p>Saiu <code>nil</code>, e o leite está lá. Sem aspas, <code>leite</code> é uma <strong>variável</strong>, que não existe e por isso vale <code>nil</code>; a pergunta virou "qual o valor da chave <code>nil</code>?", e a resposta é <code>nil</code>. Nenhuma mensagem avisa. <strong>Como consertar:</strong> <code>precos["leite"]</code> ou <code>precos.leite</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Conta com uma chave que não existe</strong>
+<pre class="file" data-file="erro_conta.lua">local estoque = {pao = 40, leite = 12}
+local total = estoque.pao + estoque.bolo
+print(total)
+</pre>
+<pre class="term">$ lua erro_conta.lua
+lua: erro_conta.lua:2: attempt to perform arithmetic on a nil value (field 'bolo')
+stack traceback:
+	erro_conta.lua:2: in main chunk
+	[C]: in ?
+</pre>
+<p>"Tentativa de fazer conta com um valor <code>nil</code> (campo <code>'bolo'</code>)". O Lua diz até o nome da chave que faltou: <code>field 'bolo'</code> ("campo" é outro nome para a chave de uma tabela). <strong>Como consertar:</strong> confira o nome da chave, ou use um padrão: <code>(estoque.bolo or 0)</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Maiúscula diferente</strong>
+<pre class="file" data-file="erro_maiuscula.lua">local precos = {leite = 4.75}
+print(precos.Leite)
+print("Leite: R$ " .. precos.Leite)
+</pre>
+<pre class="term">$ lua erro_maiuscula.lua
+nil
+lua: erro_maiuscula.lua:3: attempt to concatenate a nil value (field 'Leite')
+stack traceback:
+	erro_maiuscula.lua:3: in main chunk
+	[C]: in ?
+</pre>
+<p>Para a tabela, <code>Leite</code> e <code>leite</code> são chaves diferentes. A linha 2 só mostrou <code>nil</code>; a linha 3 tentou juntar (<em>concatenate</em>) o texto com esse <code>nil</code> e parou. <strong>Como consertar:</strong> escreva a chave exatamente como foi guardada. Se ela vem do teclado, padronize antes: <code>precos[item:lower()]</code> (aula <a href="string-metodos.html">Funções de Texto</a>).</p>
+</div>
+
+<div class="cenario">
+<strong>Guardar com chave <code>nil</code></strong>
+<pre class="file" data-file="erro_nil_chave.lua">local precos = {}
+local item
+precos[item] = 2.50
+</pre>
+<pre class="term">$ lua erro_nil_chave.lua
+lua: erro_nil_chave.lua:3: table index is nil
+stack traceback:
+	erro_nil_chave.lua:3: in main chunk
+	[C]: in ?
+</pre>
+<p>"O índice da tabela é <code>nil</code>": a variável <code>item</code> não recebeu valor. <strong>Ler</strong> com chave <code>nil</code> só devolve <code>nil</code> (cenário acima), mas <strong>guardar</strong> com chave <code>nil</code> é erro. O mesmo vale para <code>0/0</code>: <code>lua: (command line):1: table index is NaN</code>. <strong>Como consertar:</strong> confira de onde vem a chave (um <code>io.read()</code> que chegou ao fim, um nome trocado).</p>
+</div>
+
+<div class="cenario">
+<strong>Escrita de outras linguagens: <code>nome: "Ana"</code></strong>
+<pre class="file" data-file="erro_doispontos.lua">local ficha = {nome: "Ana", idade: 34}
+</pre>
+<pre class="term">$ lua erro_doispontos.lua
+lua: erro_doispontos.lua:1: &lt;name&gt; expected near '"Ana"'
+</pre>
+<p>No JavaScript e no Python a chave se separa do valor com dois-pontos; no Lua é com <code>=</code>. (O dois-pontos no Lua serve para os métodos, aula <a href="metodos.html">Métodos e o Dois-Pontos</a>, por isso ele esperava um nome, <code>&lt;name&gt;</code>, depois dele.) <strong>Como consertar:</strong> <code>{nome = "Ana", idade = 34}</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Chave que é palavra reservada</strong>
+<pre class="file" data-file="erro_end.lua">local agenda = {inicio = "8h", end = "18h"}
+</pre>
+<pre class="term">$ lua erro_end.lua
+lua: erro_end.lua:1: unexpected symbol near 'end'
+</pre>
+<p><code>end</code> é uma palavra do próprio Lua (fecha blocos) e não pode ser usada como nome, nem como chave na escrita <code>end = …</code>. <strong>Como consertar:</strong> escolha outro nome (<code>fim = "18h"</code>), ou use colchetes: <code>{["end"] = "18h"}</code> e <code>agenda["end"]</code>, que funcionam. A lista das palavras reservadas está em <a href="ref-palavras-chave.html">Palavras Reservadas</a>.</p>
+</div>
+
+<hr>
+
+<h2>Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>O que faz</th></tr>
+<tr><td><code>t = {a = 1, b = 2}</code></td><td>Cria um dicionário com chaves de texto simples</td></tr>
+<tr><td><code>t = {["café"] = 1, [10] = "x"}</code></td><td>Chave de qualquer tipo, entre colchetes</td></tr>
+<tr><td><code>t = {}</code></td><td>Tabela vazia, para encher depois</td></tr>
+<tr><td><code>t.a</code> / <code>t["a"]</code></td><td>O valor da chave <code>"a"</code> (as duas são iguais)</td></tr>
+<tr><td><code>t[k]</code></td><td>O valor da chave que está na variável <code>k</code></td></tr>
+<tr><td><code>t.a or 0</code></td><td>O valor, ou 0 se a chave não existir</td></tr>
+<tr><td><code>t.a == nil</code> / <code>t.a ~= nil</code></td><td>A chave falta / existe</td></tr>
+<tr><td><code>t.a = 5</code></td><td>Cria ou troca o valor</td></tr>
+<tr><td><code>t.a = nil</code></td><td>Apaga o par</td></tr>
+<tr><td><code>#t</code></td><td>Só a parte de lista: num dicionário puro, 0</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Mensagem</th><th>Causa provável</th></tr>
+<tr><td><code>')' expected near '&lt;\195&gt;'</code> (ou outro símbolo)</td><td>Chave com acento depois do ponto: use <code>t["café"]</code></td></tr>
+<tr><td><code>attempt to perform arithmetic on a nil value (field 'x')</code></td><td>Conta com uma chave que não existe</td></tr>
+<tr><td><code>attempt to concatenate a nil value (field 'x')</code></td><td><code>..</code> com uma chave que não existe (nome ou maiúscula diferente)</td></tr>
+<tr><td><code>table index is nil</code></td><td>Guardou com uma chave <code>nil</code></td></tr>
+<tr><td><code>&lt;name&gt; expected near …</code></td><td>Usou <code>:</code> no lugar de <code>=</code> ao criar</td></tr>
+<tr><td><code>unexpected symbol near 'end'</code></td><td>Palavra reservada como chave: use <code>["end"]</code></td></tr>
+<tr><td>Deu <code>nil</code>, sem erro</td><td>Chave escrita diferente, sem aspas, ou número × texto (<code>t["1"]</code> × <code>t[1]</code>)</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. Lendo o preço</h3>
+<p>Complete para mostrar o preço do leite, com a escrita do ponto:</p>
+<div class="ex-code">print(precos<input data-answer=".leite" aria-label="leitura">)</div>
+</div>
+
+<div class="exercise">
+<h3>2. Valor padrão</h3>
+<p>Complete para o programa mostrar 0 quando não houver bolo no estoque:</p>
+<div class="ex-code">print(estoque.bolo <input data-answer="or 0" aria-label="padrão">)</div>
+</div>
+
+<div class="exercise">
+<h3>3. Apagando</h3>
+<p>Complete para apagar a chave <code>leite</code>:</p>
+<div class="ex-code">precos.leite = <input data-answer="nil" aria-label="valor"></div>
+</div>
+
+<div class="mc" data-answer="3">
+<p class="mc-q">4. Com <code>local k = "cidade"</code> e <code>local t = {nome = "Ana", cidade = "Picos", k = "?"}</code>, o que <code>t[k]</code> devolve?</p>
+<label><input type="radio" name="q4"> <code>"?"</code></label>
+<label><input type="radio" name="q4"> <code>"Ana"</code></label>
+<label><input type="radio" name="q4"> <code>"Picos"</code></label>
+<label><input type="radio" name="q4"> <code>nil</code></label>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">5. Com <code>local t = {[1] = "um"}</code>, quanto vale <code>t["1"]</code>?</p>
+<label><input type="radio" name="q5"> <code>"um"</code></label>
+<label><input type="radio" name="q5"> <code>nil</code></label>
+<label><input type="radio" name="q5"> Dá erro</label>
+<label><input type="radio" name="q5"> <code>1</code></label>
+</div>
+
+<div class="mc" data-answer="4">
+<p class="mc-q">6. Quanto vale <code>#{pao = 1, leite = 2, cafe = 3}</code>?</p>
+<label><input type="radio" name="q6"> 3</label>
+<label><input type="radio" name="q6"> 6</label>
+<label><input type="radio" name="q6"> Dá erro</label>
+<label><input type="radio" name="q6"> 0</label>
+</div>
+
+<h3>Missão final: o balcão da padaria</h3>
+
+<div class="trylua" data-stdin="leite" data-goal="out:leite custa R$ 4.75;;src:\bif\b">
+<p class="try-task"><strong>Missão:</strong> o cliente digita o nome de um produto (a caixa já vai responder <code>leite</code> por ele). Use <code>precos[item]</code> para achar o preço. Se ele existir, mostre <code>leite custa R$ 4.75</code> (com <code>string.format("%s custa R$ %.2f", …)</code>); se for <code>nil</code>, mostre <code>Não temos …</code>.</p>
+<pre class="script" data-file="main.lua">local precos = {pao = 0.50, leite = 4.75, cafe = 18.90}
+io.write("Qual produto? ")
+local item = io.read()
+print("?")
+</pre>
+<pre class="solucao" data-file="main.lua">local precos = {pao = 0.50, leite = 4.75, cafe = 18.90}
+io.write("Qual produto? ")
+local item = io.read()
+local preco = precos[item]
+if preco then
+  print(string.format("%s custa R$ %.2f", item, preco))
+else
+  print("Não temos " .. item .. ".")
+end
+</pre>
+</div>
+
+<p>A Ana salvou a solução como <code>balcao.lua</code> e rodou duas vezes no terminal; na primeira digitou <code>leite</code>, na segunda <code>bolo</code>:</p>
+
+<pre class="term">$ lua balcao.lua
+Qual produto? leite
+leite custa R$ 4.75
+$ lua balcao.lua
+Qual produto? bolo
+Não temos bolo.
+</pre>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li>Um <strong>dicionário</strong> é uma tabela com chaves que são nomes: <code>{pao = 0.50, ["café"] = 18.90}</code>.</li>
+  <li><code>t.nome</code> e <code>t["nome"]</code> são a mesma coisa (a chave é o texto); <code>t[nome]</code> usa o que está na <strong>variável</strong> <code>nome</code>.</li>
+  <li>Chave que não existe dá <code>nil</code>, sem erro; o erro aparece depois, na conta ou no <code>..</code>. Use <code>or 0</code> ou <code>if t.x == nil</code>.</li>
+  <li><code>t.x = valor</code> cria ou troca; <code>t.x = nil</code> apaga.</li>
+  <li><code>t[1]</code> e <code>t["1"]</code> são chaves diferentes; o que vem do teclado é texto.</li>
+  <li>O <code>#</code> conta só a parte de lista; para ver e contar os pares, use o <a href="pairs.html"><code>pairs</code></a>.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
