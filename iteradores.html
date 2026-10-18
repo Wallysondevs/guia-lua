@@ -1,0 +1,579 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua Iteradores Próprios — escrevendo o seu ipairs | Guia Lua</title>
+<meta name="description" content="Iteradores próprios no Lua 5.5 para quem está começando: uma função que devolve uma função (closure), o for genérico por dentro (função, estado, valor de controle e valor de fechamento), iteradores com filtro, iterador sem estado como o ipairs, string.gmatch, e os erros reais (attempt to call a table value (for iterator), attempt to assign to const variable).">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">Iteradores Próprios</span></h1>
+
+<p class="intro">Você já usou o <code>for</code> com <code>ipairs</code> e <code>pairs</code> para percorrer tabelas. Esse <code>for</code> se chama <strong><code>for</code> genérico</strong>, e ele não tem nada de mágico: ele só chama, de novo e de novo, uma função que entrega <strong>o próximo item</strong>. Essa função se chama <strong>iterador</strong> (de "iterar", repetir passo a passo). <code>ipairs</code> e <code>pairs</code> são iteradores que já vêm com o Lua. Nesta aula você vai escrever os seus: um que conta para trás, um que só entrega os produtos caros, um que pula de dois em dois.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O que é um iterador e como o <code>for</code> genérico conversa com ele.</li>
+  <li>O jeito mais comum de escrever um: uma função que <strong>devolve uma função</strong> (uma closure), que lembra onde parou.</li>
+  <li>Iteradores com filtro: entregar só os itens que interessam.</li>
+  <li>Os três (e quatro) valores do <code>for</code> genérico, e como fazer um iterador "sem estado", igual ao <code>ipairs</code>.</li>
+  <li>Os erros reais: esquecer os parênteses, passar uma tabela no lugar do iterador, mudar a variável do laço.</li>
+</ul>
+</div>
+
+<p>Todos os programas desta aula rodaram no <strong>Lua 5.5</strong> da máquina da Ana (usuária <code>ana</code>, computador <code>notebook</code>), na pasta pessoal dela, com <code>lua arquivo.lua</code>. Você vai precisar de <a href="closures.html">Closures</a> e de <a href="ipairs.html">ipairs</a>.</p>
+
+<hr>
+
+<h2>A ideia: a senha da fila do açougue</h2>
+<p>No açougue do mercado tem aquela maquininha de senhas. Cada vez que alguém aperta o botão, sai <strong>o próximo número</strong>: 1, depois 2, depois 3. A maquininha não imprime todas as senhas de uma vez; ela só sabe duas coisas:</p>
+<ul>
+  <li><strong>onde parou</strong> (qual foi a última senha), e</li>
+  <li><strong>como dar a próxima</strong> (somar 1).</li>
+</ul>
+<p>Quando o rolo de papel acaba, ela não imprime mais nada, e a fila acabou. Um iterador é essa maquininha. O <code>for</code> genérico é a pessoa que aperta o botão: aperta, recebe um número, atende; aperta de novo… até a maquininha não entregar nada (<code>nil</code>).</p>
+
+<hr>
+
+<h2>1. O primeiro iterador: uma contagem</h2>
+
+<pre class="file" data-file="contagem.lua">local function contagem(n)
+  local i = 0
+  return function ()
+    i = i + 1
+    if i &lt;= n then
+      return i
+    end
+  end
+end
+for numero in contagem(3) do
+  print("volta", numero)
+end
+</pre>
+
+<pre class="term">$ lua contagem.lua
+volta	1
+volta	2
+volta	3</pre>
+
+<dl class="anatomy">
+  <dt>local function contagem(n)</dt><dd>A <strong>fábrica</strong> do iterador. Ela não conta nada sozinha: ela monta e devolve a maquininha.</dd>
+  <dt>local i = 0</dt><dd>O "onde parou". É uma variável local da fábrica, mas a função de dentro continua enxergando-a depois que <code>contagem</code> termina: é uma <strong>closure</strong> (aula <a href="closures.html">Closures</a>).</dd>
+  <dt>return function () … end</dt><dd>A maquininha: uma função sem parâmetros. Cada chamada soma 1 ao <code>i</code> e devolve o número.</dd>
+  <dt>if i &lt;= n then return i end</dt><dd>Enquanto não passou de <code>n</code>, entrega o número. Depois disso, a função chega ao <code>end</code> sem <code>return</code>, e devolve <strong>nada</strong>, que o <code>for</code> lê como <code>nil</code>: é o "rolo acabou".</dd>
+  <dt>for numero in contagem(3) do</dt><dd>O <code>for</code> chama <code>contagem(3)</code> <strong>uma vez</strong>, guarda a maquininha, e passa a chamá-la a cada volta. O que ela devolve vai para <code>numero</code>. Quando ela devolve <code>nil</code>, o laço acaba.</dd>
+</dl>
+
+<h3>Apertando o botão à mão</h3>
+<p>Para ver que não há mágica, chame a maquininha você mesmo, sem <code>for</code>:</p>
+
+<pre class="file" data-file="mao.lua">local function contagem(n)
+  local i = 0
+  return function ()
+    i = i + 1
+    if i &lt;= n then
+      return i
+    end
+  end
+end
+local proximo = contagem(2)
+print("chamada 1:", proximo())
+print("chamada 2:", proximo())
+print("chamada 3:", proximo())
+print("chamada 4:", proximo())
+</pre>
+
+<pre class="term">$ lua mao.lua
+chamada 1:	1
+chamada 2:	2
+chamada 3:
+chamada 4:</pre>
+
+<p>As duas primeiras chamadas entregaram 1 e 2. A terceira e a quarta não devolveram <strong>nada</strong>: depois do texto, o <code>print</code> não tinha mais o que mostrar. O <code>for</code> faz exatamente isso, e para na primeira resposta vazia.</p>
+
+<div class="trylua" data-goal="outre:3\.\.\.\n2\.\.\.\n1\.\.\.\nJá!;;src:\bfor\s+\w+\s+in\b">
+<p class="try-task"><strong>Missão:</strong> este iterador conta para a frente e o programa mostra <code>1...</code>, <code>2...</code>, <code>3...</code>. Mude o iterador (sem mexer no <code>for</code>) para ele contar <strong>para trás</strong>: <code>3...</code>, <code>2...</code>, <code>1...</code> e depois <code>Já!</code>. Dica: comece o <code>atual</code> em <code>n + 1</code> e diminua.</p>
+<pre class="script" data-file="main.lua">local function regressiva(n)
+  local atual = 0
+  return function ()
+    atual = atual + 1
+    if atual &lt;= n then
+      return atual
+    end
+  end
+end
+for s in regressiva(3) do
+  print(s .. "...")
+end
+print("Já!")
+</pre>
+<pre class="solucao" data-file="main.lua">local function regressiva(n)
+  local atual = n + 1
+  return function ()
+    atual = atual - 1
+    if atual &gt;= 1 then
+      return atual
+    end
+  end
+end
+for s in regressiva(3) do
+  print(s .. "...")
+end
+print("Já!")
+</pre>
+</div>
+
+<hr>
+
+<h2>2. Um iterador com filtro</h2>
+<p>A vantagem de escrever o seu iterador é esconder dentro dele o trabalho chato. A Ana quer percorrer o estoque da lojinha, mas só os produtos de R$ 10 ou mais. Em vez de pôr um <code>if</code> dentro de todo <code>for</code>, ela faz um iterador que já entrega <strong>só</strong> os caros:</p>
+
+<pre class="file" data-file="caros.lua">local function caros(produtos, limite)
+  local i = 0
+  return function ()
+    repeat
+      i = i + 1
+      local p = produtos[i]
+      if p and p.preco &gt;= limite then
+        return p.nome, p.preco
+      end
+    until p == nil
+  end
+end
+local estoque = {
+  { nome = "pão", preco = 0.75 },
+  { nome = "queijo", preco = 32.90 },
+  { nome = "café", preco = 18.50 },
+  { nome = "bala", preco = 0.10 },
+}
+for nome, preco in caros(estoque, 10) do
+  print(string.format("%s: R$ %.2f", nome, preco))
+end
+</pre>
+
+<pre class="term">$ lua caros.lua
+queijo: R$ 32.90
+café: R$ 18.50</pre>
+
+<p>O que mudou em relação à contagem:</p>
+<ul>
+  <li><strong>Dois valores por volta.</strong> A maquininha devolve <code>p.nome, p.preco</code>, e o <code>for</code> distribui: <code>for nome, preco in …</code>. O laço acaba quando o <strong>primeiro</strong> valor é <code>nil</code>.</li>
+  <li><strong>Um laço dentro do iterador.</strong> A cada chamada, o <code>repeat … until</code> (aula <a href="repeat.html">repeat</a>) avança o <code>i</code> até achar um produto caro, e o <code>return</code> sai na hora. Se chegar ao fim da lista (<code>p == nil</code>), sai do <code>repeat</code> sem <code>return</code>: o iterador devolve nada, e o <code>for</code> termina.</li>
+</ul>
+<p>O <code>for</code> lá embaixo ficou limpo: quem lê entende na hora que ele percorre "os produtos caros do estoque".</p>
+
+<h3>Iteradores que já vêm com o Lua</h3>
+<p>Além de <code>ipairs</code> e <code>pairs</code>, há outros. O <code>string.gmatch</code> (aula <a href="gmatch.html">gmatch</a>) é um iterador que entrega cada pedaço de um texto que casa com um padrão. E um iterador seu pode simplesmente devolver um deles:</p>
+
+<pre class="file" data-file="palavras.lua">local frase = "pão leite café"
+for palavra in string.gmatch(frase, "%S+") do
+  print(palavra)
+end
+local function palavras(texto)
+  return string.gmatch(texto, "%S+")
+end
+for p in palavras("um dois") do print(p) end
+</pre>
+
+<pre class="term">$ lua palavras.lua
+pão
+leite
+café
+um
+dois</pre>
+
+<p>(<code>%S+</code> quer dizer "um ou mais caracteres que não são espaço": uma palavra. Veja <a href="padroes.html">Padrões</a>.) O <code>io.lines</code> (aula <a href="io-lines.html">io.lines</a>) também é um iterador: entrega uma linha do arquivo por volta.</p>
+
+<hr>
+
+<h2>3. O <code>for</code> genérico por dentro</h2>
+<p>Até aqui, o iterador era uma closure que guardava tudo dentro dela. Mas o <code>for</code> genérico sabe guardar algumas coisas <strong>para</strong> o iterador. O manual do Lua explica que a expressão depois do <code>in</code> pode dar até <strong>quatro</strong> valores:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Valor</th><th>Nome no manual</th><th>Para que serve</th></tr>
+<tr><td>1º</td><td>função iteradora</td><td>a maquininha, chamada a cada volta</td></tr>
+<tr><td>2º</td><td>estado</td><td>uma coisa que não muda, entregue à função em toda volta (por exemplo, a tabela)</td></tr>
+<tr><td>3º</td><td>valor inicial de controle</td><td>o "onde parou" da primeira chamada</td></tr>
+<tr><td>4º</td><td>valor de fechamento</td><td>um valor com <code>__close</code>, fechado quando o laço acaba (aula <a href="close.html">&lt;close&gt;</a>)</td></tr>
+</table>
+</div>
+
+<p>A cada volta, o <code>for</code> chama <code>função(estado, controle)</code>. O primeiro valor que ela devolver vira o <strong>novo controle</strong> (e vai para a primeira variável do laço). Quando ele for <code>nil</code>, acabou. Veja o <code>ipairs</code> fazendo exatamente isso:</p>
+
+<pre class="file" data-file="comoipairs.lua">local f, estado, inicio = ipairs({ "x", "y" })
+print(type(f), type(estado), inicio)
+print(f(estado, inicio))
+print(f(estado, 1))
+print(f(estado, 2))
+</pre>
+
+<pre class="term">$ lua comoipairs.lua
+function	table	0
+1	x
+2	y
+nil</pre>
+
+<p>O <code>ipairs</code> devolveu três coisas: uma função, a própria tabela (o estado) e o número 0 (o controle inicial). Chamando a função com <code>(tabela, 0)</code> ela entrega <code>1, "x"</code>; com <code>(tabela, 1)</code>, <code>2, "y"</code>; com <code>(tabela, 2)</code>, <code>nil</code>. O <code>ipairs</code> não guarda nada dentro de si: quem lembra "onde parou" é o <code>for</code>. Por isso ele é chamado de iterador <strong>sem estado</strong>.</p>
+
+<h3>Um iterador sem estado: de dois em dois</h3>
+
+<pre class="file" data-file="semestado.lua">local function proximo_par(lista, i)
+  i = i + 2
+  local v = lista[i]
+  if v ~= nil then
+    return i, v
+  end
+end
+local function pares(lista)
+  return proximo_par, lista, 0
+end
+local letras = { "a", "b", "c", "d", "e", "f" }
+for i, v in pares(letras) do
+  print(i, v)
+end
+</pre>
+
+<pre class="term">$ lua semestado.lua
+2	b
+4	d
+6	f</pre>
+
+<p>A função <code>proximo_par</code> recebe a lista (o estado) e o último índice (o controle), e devolve o próximo índice par com o valor dele. A <code>pares</code> só entrega as três peças ao <code>for</code>: <code>proximo_par, lista, 0</code>. Nenhuma closure, nenhuma variável escondida.</p>
+
+<p>Para ver o que o <code>for</code> faz com essas peças, aqui está o mesmo laço escrito com <code>while</code>, à mão:</p>
+
+<pre class="file" data-file="pordentro.lua">local function proximo_par(lista, i)
+  i = i + 2
+  local v = lista[i]
+  if v ~= nil then
+    return i, v
+  end
+end
+local letras = { "a", "b", "c", "d", "e", "f" }
+local f, s, c = proximo_par, letras, 0
+while true do
+  local i, v = f(s, c)
+  if i == nil then break end
+  c = i
+  print(i, v)
+end
+</pre>
+
+<pre class="term">$ lua pordentro.lua
+2	b
+4	d
+6	f</pre>
+
+<p>A mesma saída. Tudo o que o <code>for</code> genérico faz é este <code>while</code>: chamar <code>f(s, c)</code>, parar no <code>nil</code>, guardar o novo controle.</p>
+
+<p>Dá até para passar as três peças <strong>direto</strong> no <code>for</code>, sem fábrica. É assim que o <code>pairs</code> funciona por dentro, com a função <code>next</code>:</p>
+
+<pre class="file" data-file="nofor.lua">local t = { "x", "y" }
+for i, v in next, t do
+  print(i, v)
+end
+</pre>
+
+<pre class="term">$ lua nofor.lua
+1	x
+2	y</pre>
+
+<h3>O quarto valor: fechar quando o laço acaba</h3>
+<p>Se o iterador usa algo que precisa ser fechado (um arquivo, por exemplo), ele pode entregar esse algo como <strong>quarto valor</strong>. O <code>for</code> o fecha quando o laço termina, até com <code>break</code>:</p>
+
+<pre class="file" data-file="fechamento.lua">local function contagem(n)
+  local i = 0
+  local alarme = setmetatable({}, { __close = function () print("(iterador encerrado)") end })
+  return function ()
+    i = i + 1
+    if i &lt;= n then return i end
+  end, nil, nil, alarme
+end
+for numero in contagem(5) do
+  print(numero)
+  if numero == 2 then break end
+end
+print("depois do for")
+</pre>
+
+<pre class="term">$ lua fechamento.lua
+1
+2
+(iterador encerrado)
+depois do for</pre>
+
+<p>O <code>io.lines</code> faz isso com o arquivo que abriu: no lab, <code>print(select("#", io.lines("lista.txt")))</code> mostrou <code>4</code> (são quatro valores), e um <code>for linha in io.lines(…)</code> interrompido com <code>break</code> fecha o arquivo do mesmo jeito.</p>
+
+<hr>
+
+<h2 id="formas">Formas diferentes de fazer a mesma coisa</h2>
+<p>Percorrer os itens 2, 4 e 6 de uma lista, de três jeitos:</p>
+
+<pre class="file" data-file="formas.lua">local letras = { "a", "b", "c", "d", "e", "f" }
+
+-- 1) for numérico com passo 2: sem iterador nenhum
+for i = 2, #letras, 2 do print(i, letras[i]) end
+
+-- 2) closure: o iterador lembra onde parou
+local function pares_closure(lista)
+  local i = 0
+  return function ()
+    i = i + 2
+    if lista[i] ~= nil then return i, lista[i] end
+  end
+end
+for i, v in pares_closure(letras) do print(i, v) end
+
+-- 3) sem estado: o for lembra onde parou
+local function proximo_par(lista, i)
+  i = i + 2
+  if lista[i] ~= nil then return i, lista[i] end
+end
+for i, v in proximo_par, letras, 0 do print(i, v) end
+</pre>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Situação</th><th>Qual usar</th></tr>
+<tr><td>Contar números com um passo fixo</td><td>O <code>for</code> numérico (aula <a href="for-numerico.html">for Numérico</a>): mais simples e mais rápido</td></tr>
+<tr><td>Percorrer uma lista ou tabela inteira</td><td><code>ipairs</code> ou <code>pairs</code></td></tr>
+<tr><td>Um percurso com regra própria (filtro, ordem especial, fonte de dados qualquer)</td><td>Um iterador com closure: o jeito mais fácil de escrever</td></tr>
+<tr><td>O "onde parou" cabe num único valor e você quer evitar criar uma closure a cada laço</td><td>Um iterador sem estado (como o <code>ipairs</code>)</td></tr>
+<tr><td>Um percurso complicado, que seria mais fácil de escrever "de uma vez" do que "aos pedaços"</td><td>Um gerador com <code>coroutine.wrap</code> (aula <a href="corrotinas-wrap.html">coroutine.wrap e Geradores</a>)</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+
+<div class="cenario">
+<strong>Pôs a tabela direto no <code>for</code></strong>
+<pre class="file" data-file="errotabela.lua">local compras = { "pão", "leite" }
+for item in compras do
+  print(item)
+end
+</pre>
+<pre class="term">$ lua errotabela.lua
+lua: errotabela.lua:2: attempt to call a table value (for iterator 'for iterator')
+stack traceback:
+	errotabela.lua:2: in main chunk
+	[C]: in ?</pre>
+<p>"Tentativa de chamar um valor tabela (o iterador do for)". O <code>for</code> genérico quer uma <strong>função</strong> para chamar a cada volta, e recebeu a tabela. Quem vem do Python estranha: lá, <code>for item in compras</code> funciona. <strong>Como consertar:</strong> <code>for _, item in ipairs(compras) do</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>A fábrica não devolveu a maquininha</strong>
+<pre class="file" data-file="erronil.lua">local function contagem(n)
+end
+for numero in contagem(3) do
+  print(numero)
+end
+</pre>
+<pre class="term">$ lua erronil.lua
+lua: erronil.lua:3: attempt to call a nil value (for iterator 'for iterator')
+stack traceback:
+	erronil.lua:3: in main chunk
+	[C]: in ?</pre>
+<p>Agora o <code>for</code> recebeu <code>nil</code> no lugar da função. Acontece quando a fábrica esquece o <code>return function () … end</code> (ou o <code>return</code> ficou dentro de um <code>if</code> que não rodou). <strong>Como consertar:</strong> confira se a fábrica sempre termina com <code>return function …</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Esqueceu os parênteses: o laço não para</strong>
+<pre class="file" data-file="chamou.lua">local function contagem(n)
+  local i = 0
+  return function ()
+    i = i + 1
+    if i &lt;= n then return i end
+  end
+end
+for numero in contagem do
+  print(numero)
+end
+</pre>
+<pre class="term">$ lua chamou.lua | head -3
+function: 0x56512f3c2530
+function: 0x56512f3c25e0
+function: 0x56512f3c26c0</pre>
+<p>Sem os parênteses, o <code>for</code> usou a <strong>fábrica</strong> como se ela fosse a maquininha. A cada volta, ele chama <code>contagem(nil, …)</code>, que devolve uma função nova (nunca <code>nil</code>), e o laço nunca acaba: o lab mostrou funções diferentes sem parar (os endereços mudam a cada execução). Aqui o <code>| head -3</code> mostrou só as 3 primeiras linhas e encerrou o programa; sem ele, seria preciso apertar <kbd>Ctrl</kbd>+<kbd>C</kbd>. <strong>Como consertar:</strong> <code>for numero in contagem(3) do</code>.</p>
+</div>
+
+<div class="cenario">
+<strong><span class="versao">5.5</span> Tentou mudar a variável do laço</strong>
+<pre class="file" data-file="constfor.lua">local function contagem(n)
+  local i = 0
+  return function ()
+    i = i + 1
+    if i &lt;= n then return i end
+  end
+end
+for numero in contagem(3) do
+  numero = numero * 10
+  print(numero)
+end
+</pre>
+<pre class="term">$ lua constfor.lua
+lua: constfor.lua:9: attempt to assign to const variable 'numero'
+$ lua5.4 constfor.lua
+10
+20
+30</pre>
+<p>No Lua 5.5, a variável do <code>for</code> (numérico e genérico) é <strong>constante</strong>: ela é o "onde parou" que o <code>for</code> entrega ao iterador, e mudá-la bagunçaria o percurso. O erro sai antes de rodar (como na aula <a href="const.html">&lt;const&gt;</a>). No Lua 5.4 o mesmo arquivo roda. <strong>Como consertar:</strong> use outra variável: <code>local dez_vezes = numero * 10</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>O iterador nunca devolve <code>nil</code></strong>
+<pre class="file" data-file="infinito.lua">local function sempre()
+  return function () return 1 end
+end
+local voltas = 0
+for x in sempre() do
+  voltas = voltas + 1
+  if voltas == 5 then print("parei na volta", voltas) break end
+end
+</pre>
+<pre class="term">$ lua infinito.lua
+parei na volta	5</pre>
+<p>Um iterador que nunca entrega <code>nil</code> faz um laço infinito. Aqui o <code>break</code> salvou; sem ele, só <kbd>Ctrl</kbd>+<kbd>C</kbd> (ou o botão Parar do editor). Às vezes é de propósito (um iterador "sem fim", como um gerador de números), e então quem usa precisa do <code>break</code>. Quando não é de propósito, procure o caminho do iterador que deveria terminar sem <code>return</code>.</p>
+</div>
+
+<hr>
+
+<h2>Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>O que faz</th></tr>
+<tr><td><code>local function fab(…) local i = 0 return function () … end end</code></td><td>Fábrica de iterador com closure</td></tr>
+<tr><td><code>return valor</code> / sem <code>return</code></td><td>Entrega o próximo item / avisa que acabou (<code>nil</code>)</td></tr>
+<tr><td><code>for a, b in fab(…) do</code></td><td>Recebe vários valores por volta; para quando <code>a</code> é <code>nil</code></td></tr>
+<tr><td><code>for a, b in f, estado, inicio do</code></td><td>Iterador sem estado: o <code>for</code> chama <code>f(estado, controle)</code></td></tr>
+<tr><td><code>return f, estado, inicio, fechar</code></td><td>Com o quarto valor, o <code>for</code> fecha <code>fechar</code> no fim</td></tr>
+<tr><td><code>string.gmatch</code>, <code>io.lines</code>, <code>ipairs</code>, <code>pairs</code></td><td>Iteradores que vêm com o Lua</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Mensagem</th><th>Causa provável</th></tr>
+<tr><td><code>attempt to call a table value (for iterator 'for iterator')</code></td><td>Tabela direto no <code>for</code>: faltou <code>ipairs</code>/<code>pairs</code></td></tr>
+<tr><td><code>attempt to call a nil value (for iterator 'for iterator')</code></td><td>A fábrica não devolveu uma função</td></tr>
+<tr><td><code>attempt to assign to const variable '…'</code></td><td>Mudou a variável do <code>for</code> (Lua 5.5)</td></tr>
+<tr><td>Laço que não para</td><td>O iterador nunca devolve <code>nil</code>, ou faltaram os <code>()</code> da fábrica</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. Complete a fábrica</h3>
+<div class="ex-code">local function contagem(n)<br>&nbsp;&nbsp;local i = 0<br>&nbsp;&nbsp;<input data-answer="return" aria-label="palavra-chave"> function ()<br>&nbsp;&nbsp;&nbsp;&nbsp;i = i + 1<br>&nbsp;&nbsp;&nbsp;&nbsp;if i &lt;= n then return i end<br>&nbsp;&nbsp;end<br>end</div>
+</div>
+
+<div class="exercise">
+<h3>2. Quantas voltas?</h3>
+<p>Com a <code>contagem</code> da seção 1, quantas vezes o corpo deste laço roda? <code>for x in contagem(0) do print(x) end</code></p>
+<div class="ex-code">Roda <input data-answer="0" aria-label="número de voltas"> vezes.</div>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">3. Quando o <code>for</code> genérico para?</p>
+<label><input type="radio" name="q3"> Quando o iterador devolve <code>false</code></label>
+<label><input type="radio" name="q3"> Quando o primeiro valor devolvido pelo iterador é <code>nil</code></label>
+<label><input type="radio" name="q3"> Depois de 100 voltas</label>
+<label><input type="radio" name="q3"> Quando a tabela fica vazia</label>
+</div>
+
+<div class="mc" data-answer="3">
+<p class="mc-q">4. O que <code>ipairs(t)</code> devolve?</p>
+<label><input type="radio" name="q4"> Uma lista com os índices</label>
+<label><input type="radio" name="q4"> O primeiro item de <code>t</code></label>
+<label><input type="radio" name="q4"> Uma função, a tabela <code>t</code> e o número 0</label>
+<label><input type="radio" name="q4"> Uma corrotina</label>
+</div>
+
+<div class="mc" data-answer="1">
+<p class="mc-q">5. <code>for item in compras do</code>, com <code>compras</code> sendo uma tabela, dá qual erro?</p>
+<label><input type="radio" name="q5"> <code>attempt to call a table value (for iterator 'for iterator')</code></label>
+<label><input type="radio" name="q5"> <code>attempt to index a nil value</code></label>
+<label><input type="radio" name="q5"> Nenhum: percorre os itens</label>
+<label><input type="radio" name="q5"> <code>'do' expected</code></label>
+</div>
+
+<h3>Missão final: o que está acabando no estoque</h3>
+
+<div class="trylua" data-goal="outre:^leite \(2\)\novos \(4\)\n;;src:\bfor\s+\w+\s*,\s*\w+\s+in\s+acabando\b">
+<p class="try-task"><strong>Missão:</strong> escreva o corpo da maquininha de <code>acabando</code>: a cada chamada, ela avança o <code>i</code> até achar um item com <code>quantidade</code> <strong>menor que 5</strong> e devolve o nome e a quantidade dele; se a lista acabar, devolve <code>nil</code>. O programa deve mostrar <code>leite (2)</code> e <code>ovos (4)</code>, nessa ordem e só eles. (Dica: um <code>while true do … end</code> com dois <code>return</code> dentro.)</p>
+<pre class="script" data-file="main.lua">local estoque = {
+  { nome = "pão", quantidade = 10 },
+  { nome = "leite", quantidade = 2 },
+  { nome = "café", quantidade = 7 },
+  { nome = "ovos", quantidade = 4 },
+}
+local function acabando(lista)
+  local i = 0
+  return function ()
+    -- avance o i até achar um item com quantidade menor que 5
+    -- e devolva o nome e a quantidade dele
+  end
+end
+for nome, qtd in acabando(estoque) do
+  print(nome .. " (" .. qtd .. ")")
+end
+</pre>
+<pre class="solucao" data-file="main.lua">local estoque = {
+  { nome = "pão", quantidade = 10 },
+  { nome = "leite", quantidade = 2 },
+  { nome = "café", quantidade = 7 },
+  { nome = "ovos", quantidade = 4 },
+}
+local function acabando(lista)
+  local i = 0
+  return function ()
+    while true do
+      i = i + 1
+      local item = lista[i]
+      if item == nil then return nil end
+      if item.quantidade &lt; 5 then
+        return item.nome, item.quantidade
+      end
+    end
+  end
+end
+for nome, qtd in acabando(estoque) do
+  print(nome .. " (" .. qtd .. ")")
+end
+</pre>
+</div>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li>Um <strong>iterador</strong> é uma função que, a cada chamada, entrega o próximo item, e devolve <code>nil</code> quando acaba. O <code>for</code> genérico chama o iterador até receber <code>nil</code>.</li>
+  <li>O jeito mais comum: uma <strong>fábrica</strong> que guarda o "onde parou" numa variável local e devolve uma closure.</li>
+  <li>O iterador pode devolver vários valores por volta (<code>for nome, preco in …</code>) e pode filtrar, pulando o que não interessa.</li>
+  <li>Por dentro, o <code>for</code> recebe até quatro valores: função, estado, controle inicial e valor de fechamento; e chama <code>função(estado, controle)</code> a cada volta. É assim que <code>ipairs</code> e <code>pairs</code> funcionam.</li>
+  <li>Erros comuns: tabela direto no <code>for</code>, fábrica sem <code>return</code>, esquecer os <code>()</code> (laço sem fim) e, no 5.5, mudar a variável do laço.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
