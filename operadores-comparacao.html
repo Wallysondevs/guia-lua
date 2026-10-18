@@ -1,0 +1,451 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua comparações — ==, ~=, &lt;, &gt;, &lt;= e &gt;= | Guia Lua</title>
+<meta name="description" content="Os operadores de comparação do Lua 5.5 para quem nunca programou: == (igual), ~= (diferente, e não !=), &lt;, &gt;, &lt;= e &gt;=; comparar números, textos (ordem alfabética, maiúsculas, &quot;10&quot; &lt; &quot;9&quot;, acentos), tipos diferentes, tabelas e floats; e os erros reais: 'then' expected near '=', 'then' expected near '!', attempt to compare string with number, attempt to compare boolean with number.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">Comparações</span> (==, ~=, &lt;, &gt;)</h1>
+
+<p class="intro">"A Ana tem 18 anos ou mais?" "A senha está certa?" "O preço passou de R$ 100?" Antes de tomar uma decisão, o programa precisa <strong>comparar</strong> dois valores. Os operadores de comparação fazem essa pergunta e respondem com um booleano: <code>true</code> (sim) ou <code>false</code> (não). São seis, quase todos conhecidos da escola. O diferente é o "diferente": no Lua ele se escreve <code>~=</code>, e não <code>!=</code> como em muitas outras linguagens.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>Os seis operadores: <code>==</code> (igual), <code>~=</code> (diferente), <code>&lt;</code>, <code>&gt;</code>, <code>&lt;=</code> e <code>&gt;=</code>.</li>
+  <li>A diferença entre <code>=</code> (guardar) e <code>==</code> (comparar).</li>
+  <li>Como o Lua compara números (<code>3 == 3.0</code>), textos (ordem alfabética, maiúsculas antes, <code>"10" &lt; "9"</code>) e valores de tipos diferentes.</li>
+  <li>Por que duas tabelas iguais não são <code>==</code>, e por que floats não se comparam com <code>==</code>.</li>
+  <li>Os erros reais: <code>=</code> no lugar de <code>==</code>, <code>!=</code> no lugar de <code>~=</code>, <code>0 &lt;= nota &lt;= 10</code>, e comparar texto com número.</li>
+</ul>
+</div>
+
+<p>Todos os programas desta aula rodaram no <strong>Lua 5.5</strong> da máquina da Ana (usuária <code>ana</code>, computador <code>notebook</code>), salvos na pasta pessoal dela e executados com <code>lua arquivo.lua</code> (veja <a href="executar.html">Rodando um Programa</a>). Você pode rodar cada um no editor do guia.</p>
+
+<hr>
+
+<h2>A ideia: a balança de dois pratos</h2>
+<p>Uma balança antiga tem dois pratos. Você põe uma coisa de cada lado e olha: os pratos ficaram <strong>iguais</strong>? Um lado ficou mais <strong>pesado</strong>? A balança não diz quanto pesa cada coisa; ela só responde à pergunta. Um operador de comparação é essa balança: um valor de cada lado, e a resposta é <code>true</code> ou <code>false</code> (veja <a href="booleanos.html">Booleanos</a>).</p>
+
+<hr>
+
+<h2>1. Os seis operadores</h2>
+
+<pre class="file" data-file="comp.lua">local idade = 17
+print(idade == 17, idade ~= 17)
+print(idade &lt; 18, idade &gt; 18)
+print(idade &lt;= 17, idade &gt;= 18)
+</pre>
+
+<pre class="term">$ lua comp.lua
+true	false
+true	false
+true	false</pre>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Operador</th><th>Pergunta</th><th>Na matemática</th><th>Exemplo (<code>idade = 17</code>)</th><th>Resposta</th></tr>
+<tr><td><code>==</code></td><td>"é igual a?"</td><td>=</td><td><code>idade == 17</code></td><td><code>true</code></td></tr>
+<tr><td><code>~=</code></td><td>"é diferente de?"</td><td>≠</td><td><code>idade ~= 17</code></td><td><code>false</code></td></tr>
+<tr><td><code>&lt;</code></td><td>"é menor que?"</td><td>&lt;</td><td><code>idade &lt; 18</code></td><td><code>true</code></td></tr>
+<tr><td><code>&gt;</code></td><td>"é maior que?"</td><td>&gt;</td><td><code>idade &gt; 18</code></td><td><code>false</code></td></tr>
+<tr><td><code>&lt;=</code></td><td>"é menor <strong>ou igual</strong> a?"</td><td>≤</td><td><code>idade &lt;= 17</code></td><td><code>true</code></td></tr>
+<tr><td><code>&gt;=</code></td><td>"é maior <strong>ou igual</strong> a?"</td><td>≥</td><td><code>idade &gt;= 18</code></td><td><code>false</code></td></tr>
+</table>
+</div>
+
+<p>Três detalhes de escrita:</p>
+<ul>
+  <li>O "igual" de comparar tem <strong>dois</strong> sinais: <code>==</code>. Um sinal só (<code>=</code>) é outra coisa: "guarde este valor na variável" (veja <a href="variaveis.html">Variáveis</a>).</li>
+  <li>O "diferente" é <strong>til e igual</strong>: <code>~=</code>. Lembre do <code>≠</code> da matemática, com o risquinho torto.</li>
+  <li>Em <code>&lt;=</code> e <code>&gt;=</code>, o sinal de igual vem <strong>depois</strong>, e sem espaço no meio. <code>=&lt;</code>, <code>=&gt;</code> e <code>&lt; =</code> não existem.</li>
+</ul>
+
+<h3>"Menor que" × "menor ou igual"</h3>
+<p>Na escola da Ana, a nota mínima para passar é 6: quem tira <strong>6 ou mais</strong> é aprovado. Repare no que acontece com quem tirou exatamente 6, se o programa usar <code>&gt;</code>:</p>
+
+<pre class="file" data-file="nota.lua">local nota = 6
+if nota &gt; 6 then
+  print("Aprovada")
+else
+  print("Reprovada")
+end
+</pre>
+
+<pre class="term">$ lua nota.lua
+Reprovada</pre>
+
+<p><code>6 &gt; 6</code> é <code>false</code>: seis não é maior que seis. Para incluir o próprio 6, a pergunta certa é "maior <strong>ou igual</strong>". Esse tipo de engano (errar o limite por um) é tão comum que tem nome em inglês: <em>off-by-one</em>, "errar por um".</p>
+
+<div class="trylua" data-goal="out:Aprovada;;src:&gt;=;;semerro">
+<p class="try-task"><strong>Missão:</strong> a Ana tirou 6 e o programa diz <code>Reprovada</code>. Troque o operador da condição para quem tira 6 <strong>ou mais</strong> ser aprovado.</p>
+<pre class="script" data-file="main.lua">local nota = 6
+if nota &gt; 6 then
+  print("Aprovada")
+else
+  print("Reprovada")
+end
+</pre>
+<pre class="solucao" data-file="main.lua">local nota = 6
+if nota &gt;= 6 then
+  print("Aprovada")
+else
+  print("Reprovada")
+end
+</pre>
+</div>
+
+<hr>
+
+<h2>2. Igual e diferente: <code>==</code> e <code>~=</code></h2>
+<p>O <code>==</code> funciona com qualquer valor, de qualquer tipo. A regra é: <strong>primeiro o Lua olha o tipo</strong>. Se os tipos forem diferentes, a resposta é <code>false</code>, sem conversão nenhuma. Se forem iguais, ele compara os valores.</p>
+
+<pre class="file" data-file="igual.lua">print(3 == 3.0, 1 == 1.0000001)
+print("Ana" == "Ana", "Ana" == "ana", "Ana" == "Ana ")
+print("10" == 10, true == "true", nil == false)
+local a = {1, 2}
+local b = {1, 2}
+local c = a
+print(a == b, a == c)
+print(0.1 + 0.2 == 0.3)
+</pre>
+
+<pre class="term">$ lua igual.lua
+true	false
+true	false	false
+false	false	false
+false	true
+false</pre>
+
+<dl class="anatomy">
+  <dt>3 == 3.0 → true</dt><dd>Inteiro e float com o mesmo valor são iguais (os dois são do tipo <code>number</code>; veja <a href="numeros.html">Números</a>).</dd>
+  <dt>"Ana" == "ana" → false</dt><dd>Textos só são iguais se forem <strong>idênticos</strong>, letra por letra: maiúscula conta.</dd>
+  <dt>"Ana" == "Ana " → false</dt><dd>Até um espaço no fim faz diferença. Cuidado com o que a pessoa digita.</dd>
+  <dt>"10" == 10 → false</dt><dd>Texto × número: tipos diferentes, resposta <code>false</code>. O <code>==</code> <strong>não</strong> converte (veja <a href="conversao.html">Conversão</a>).</dd>
+  <dt>true == "true" e nil == false → false</dt><dd>Também tipos diferentes.</dd>
+  <dt>a == b → false, a == c → true</dt><dd>Tabelas são comparadas pela <strong>identidade</strong>, não pelo conteúdo. <code>a</code> e <code>b</code> têm o mesmo conteúdo, mas são duas tabelas diferentes (duas caixas iguais, uma ao lado da outra). <code>c</code> é a <strong>mesma</strong> tabela que <code>a</code> (a mesma caixa, com duas etiquetas). Mais em <a href="tabelas-referencia.html">Tabelas São Referências</a>.</dd>
+  <dt>0.1 + 0.2 == 0.3 → false</dt><dd>Floats são aproximados, e a soma dá <code>0.30000000000000004</code>. Veja a seção 5.</dd>
+</dl>
+
+<p>O <code>~=</code> é exatamente o contrário do <code>==</code>: <code>a ~= b</code> é sempre o mesmo que <code>not (a == b)</code>.</p>
+
+<div class="tip">
+<strong>Comparar sem ligar para maiúsculas</strong>
+<p>Se a pessoa pode digitar <code>Sim</code>, <code>SIM</code> ou <code>sim</code>, transforme tudo em minúsculas antes de comparar, com <code>string.lower</code> (aula <a href="string-metodos.html">Funções de Texto</a>):</p>
+<pre class="file" data-file="maiusc.lua">local resposta = "Sim"
+print(resposta == "sim")
+print(string.lower(resposta) == "sim")
+</pre>
+<p>No lab, a primeira linha deu <code>false</code> e a segunda, <code>true</code>.</p>
+</div>
+
+<hr>
+
+<h2>3. Maior e menor com textos</h2>
+<p>Os operadores <code>&lt;</code>, <code>&gt;</code>, <code>&lt;=</code> e <code>&gt;=</code> funcionam com dois números ou com <strong>dois textos</strong>. Com textos, "menor" quer dizer "vem antes" na ordem, como no dicionário:</p>
+
+<pre class="file" data-file="textos.lua">print("abacaxi" &lt; "banana", "banana" &lt; "abacaxi")
+print("Ana" &lt; "Bia", "ana" &lt; "Bia")
+print("Zebra" &lt; "abacaxi")
+print("10" &lt; "9", 10 &lt; 9)
+print("casa" &lt; "casaco", "" &lt; "a")
+print("árvore" &lt; "zebra")
+</pre>
+
+<pre class="term">$ lua textos.lua
+true	false
+true	false
+true
+true	false
+true	true
+false</pre>
+
+<dl class="anatomy">
+  <dt>"abacaxi" &lt; "banana" → true</dt><dd>O Lua compara letra por letra, da esquerda para a direita, e para na primeira diferença: <code>a</code> vem antes de <code>b</code>.</dd>
+  <dt>"ana" &lt; "Bia" → false, "Zebra" &lt; "abacaxi" → true</dt><dd>Surpresa: <strong>toda maiúscula vem antes de toda minúscula</strong>. Por dentro, cada letra é um número (o código dela: <code>A</code> é 65, <code>Z</code> é 90, <code>a</code> é 97), e o Lua compara esses números. Como 90 &lt; 97, "Zebra" vem antes de "abacaxi".</dd>
+  <dt>"10" &lt; "9" → true</dt><dd>Comparando como <strong>texto</strong>, o primeiro caractere decide: <code>"1"</code> vem antes de <code>"9"</code>, então "10" vem antes de "9", como num dicionário. Como <strong>números</strong>, <code>10 &lt; 9</code> é <code>false</code>. Se os valores vieram do teclado ou de um arquivo, converta com <code>tonumber</code> antes de comparar.</dd>
+  <dt>"casa" &lt; "casaco" e "" &lt; "a" → true</dt><dd>Um texto que é o começo de outro vem antes dele. O texto vazio vem antes de tudo.</dd>
+  <dt>"árvore" &lt; "zebra" → false</dt><dd>Letras com acento vêm <strong>depois</strong> de todas as letras sem acento: o <code>á</code> é guardado com códigos maiores que o do <code>z</code> (veja <a href="utf8.html">Acentos e a Biblioteca utf8</a>).</dd>
+</dl>
+
+<div class="note">
+<strong>A ordem dos textos depende do idioma</strong>
+<p>O manual do Lua diz que textos são comparados "de acordo com o idioma atual" (<em>locale</em>). O Lua começa no idioma neutro (<code>C</code>), que é a ordem dos códigos mostrada acima. Se o programa chamar <code>os.setlocale("")</code>, passa a valer a ordem do português, em que o acento e a maiúscula quase não pesam:</p>
+<pre class="file" data-file="localeorder.lua">print("árvore" &lt; "zebra", "ana" &lt; "Bia")
+os.setlocale("")
+print("árvore" &lt; "zebra", "ana" &lt; "Bia")
+</pre>
+<pre class="term">$ lua localeorder.lua
+false	false
+true	true</pre>
+<p>Mas o <code>os.setlocale("")</code> muda outras coisas também (por exemplo, o <code>print</code> de um float passa a mostrar vírgula; veja <a href="conversao.html">Conversão</a>), então não use só para isso. Para uma ordem "sem ligar para maiúsculas", compare com <code>string.lower</code> dos dois lados. Ordenar listas é assunto de <a href="table-sort.html">table.sort</a>.</p>
+</div>
+
+<hr>
+
+<h2>4. Comparar coisas de tipos diferentes</h2>
+<p>Com o <code>==</code> e o <code>~=</code>, tipos diferentes simplesmente dão <code>false</code> (e <code>true</code>). Com <code>&lt;</code>, <code>&gt;</code>, <code>&lt;=</code> e <code>&gt;=</code> é diferente: eles só aceitam <strong>dois números</strong> ou <strong>dois textos</strong>. Qualquer outra mistura para o programa:</p>
+
+<pre class="term">$ lua -e 'print("10" &lt; 9)'
+lua: (command line):1: attempt to compare string with number
+stack traceback:
+	(command line):1: in main chunk
+	[C]: in ?
+$ lua -e 'print(nil &lt; 1)'
+lua: (command line):1: attempt to compare nil with number
+stack traceback:
+	(command line):1: in main chunk
+	[C]: in ?
+$ lua -e 'print({} &lt; {})'
+lua: (command line):1: attempt to compare two table values
+stack traceback:
+	(command line):1: in main chunk
+	[C]: in ?</pre>
+
+<p>"Tentativa de comparar texto com número", "… <code>nil</code> com número", "… dois valores tabela". (O <code>lua -e '…'</code> roda um programa de uma linha só, por isso o erro fala de <code>(command line):1:</code>.) O caso do texto com número é o mais comum de todos, e vem quase sempre do <code>io.read()</code>, que devolve texto: veja <a href="conversao.html">Conversão</a>.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Os dois lados</th><th><code>==</code> / <code>~=</code></th><th><code>&lt; &gt; &lt;= &gt;=</code></th></tr>
+<tr><td>dois números (inteiro ou float)</td><td>compara o valor</td><td>compara o valor</td></tr>
+<tr><td>dois textos</td><td>iguais só se idênticos</td><td>ordem dos caracteres</td></tr>
+<tr><td>dois booleanos</td><td>compara</td><td>erro: <code>attempt to compare two boolean values</code></td></tr>
+<tr><td>duas tabelas</td><td>só é igual se for a mesma tabela</td><td>erro: <code>attempt to compare two table values</code></td></tr>
+<tr><td>tipos diferentes</td><td><code>false</code> / <code>true</code>, sem erro</td><td>erro: <code>attempt to compare … with …</code></td></tr>
+</table>
+</div>
+
+<p>(Dá para ensinar uma tabela a se comparar com <code>&lt;</code>, usando metamétodos; isso é do nível avançado: <a href="metametodos-aritmeticos.html">Metamétodos de Operadores</a>.)</p>
+
+<hr>
+
+<h2>5. Floats e o <code>==</code></h2>
+<p>Como floats são aproximados (veja <a href="numeros.html">Números</a>), comparar o resultado de uma conta com <code>==</code> é arriscado: <code>0.1 + 0.2 == 0.3</code> dá <code>false</code>. O jeito seguro é perguntar se a diferença entre os dois é <strong>muito pequena</strong>:</p>
+
+<pre class="term">$ lua -e 'print(math.abs((0.1 + 0.2) - 0.3) &lt; 1e-9)'
+true</pre>
+
+<p><code>math.abs</code> tira o sinal da diferença, e <code>1e-9</code> é 0,000000001: se a diferença for menor que isso, os números são "iguais o bastante". Com <code>&lt;</code>, <code>&gt;</code>, <code>&lt;=</code> e <code>&gt;=</code> entre floats normais não há problema. E um caso curioso: o <code>nan</code> (o resultado de <code>0/0</code>) não é igual a nada, nem a ele mesmo:</p>
+
+<pre class="term">$ lua -e 'local nan = 0/0 print(nan == nan, nan ~= nan, nan &lt; 1, nan &gt; 1)'
+false	true	false	false</pre>
+
+<hr>
+
+<h2 id="formas">Formas diferentes de fazer a mesma coisa</h2>
+<p>Toda comparação pode ser escrita "virada": <code>a &lt; b</code> é o mesmo que <code>b &gt; a</code>, e <code>a &gt;= b</code> é o mesmo que <code>not (a &lt; b)</code> (para números). Escolha a que se lê mais natural em português:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Pergunta</th><th>Jeito natural</th><th>Também funciona (mas lê pior)</th></tr>
+<tr><td>"Tem 18 anos ou mais?"</td><td><code>idade &gt;= 18</code></td><td><code>18 &lt;= idade</code>, <code>not (idade &lt; 18)</code></td></tr>
+<tr><td>"A senha está errada?"</td><td><code>senha ~= "pao123"</code></td><td><code>not (senha == "pao123")</code></td></tr>
+<tr><td>"Tem valor?"</td><td><code>x ~= nil</code> (ou só <code>x</code>; veja <a href="nil.html">nil</a>)</td><td><code>not (x == nil)</code></td></tr>
+<tr><td>"A nota está entre 0 e 10?"</td><td><code>nota &gt;= 0 and nota &lt;= 10</code></td><td><code>0 &lt;= nota and nota &lt;= 10</code></td></tr>
+</table>
+</div>
+
+<p>A última linha junta duas comparações com <code>and</code> ("e"): é o assunto da próxima aula, <a href="operadores-logicos.html">and, or e not</a>. O Lua <strong>não</strong> aceita <code>0 &lt;= nota &lt;= 10</code> (veja abaixo).</p>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+
+<div class="cenario">
+<strong>Um <code>=</code> só, no lugar de <code>==</code></strong>
+<pre class="file" data-file="atrib.lua">local nota = 6
+if nota = 6 then
+  print("Nota seis")
+end
+</pre>
+<pre class="term">$ lua atrib.lua
+lua: atrib.lua:2: 'then' expected near '='</pre>
+<p>"Era esperado <code>then</code> perto do <code>=</code>", na linha 2. Depois de <code>if nota</code>, o Lua esperava a condição continuar ou o <code>then</code> ("então"); um <code>=</code> sozinho (que é "guardar") não pode aparecer ali. É um erro de sintaxe: o programa nem começa. <strong>Como consertar:</strong> <code>if nota == 6 then</code>. (Em algumas linguagens, como C, esse engano não dá erro e vira um defeito escondido; no Lua, pelo menos, ele é pego na hora.)</p>
+</div>
+
+<div class="cenario">
+<strong><code>!=</code> no lugar de <code>~=</code></strong>
+<pre class="file" data-file="senha.lua">local senha = "abacate"
+if senha != "pao123" then
+  print("Senha errada!")
+else
+  print("Pode entrar.")
+end
+</pre>
+<pre class="term">$ lua senha.lua
+lua: senha.lua:2: 'then' expected near '!'</pre>
+<p>"Era esperado <code>then</code> perto do <code>!</code>". O <code>!=</code> é o "diferente" de C, JavaScript, Python e muitas outras, mas não do Lua. Também não existem <code>&lt;&gt;</code> (de algumas linguagens antigas e do SQL) nem <code>===</code> (do JavaScript): no lab, <code>print(5 &lt;&gt; 3)</code> deu <code>unexpected symbol near '&gt;'</code> e <code>print(5 === 5)</code> deu <code>unexpected symbol near '='</code>. <strong>Como consertar:</strong> <code>~=</code>. A missão final é este programa.</p>
+</div>
+
+<div class="cenario">
+<strong><code>=&gt;</code> e <code>=&lt;</code> (o igual do lado errado)</strong>
+<pre class="term">$ lua -e 'print(5 =&gt; 3)'
+lua: (command line):1: ')' expected near '='
+$ lua -e 'print(5 =&lt; 3)'
+lua: (command line):1: ')' expected near '='</pre>
+<p>"Era esperado <code>)</code> perto do <code>=</code>": o Lua leu o <code>5</code>, achou que a conta tinha acabado e esperava fechar o parêntese do <code>print</code>. <strong>Como consertar:</strong> o igual vem depois: <code>&gt;=</code> e <code>&lt;=</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Comparação encadeada: <code>0 &lt;= nota &lt;= 10</code></strong>
+<pre class="file" data-file="encadeado.lua">local nota = 15
+if 0 &lt;= nota &lt;= 10 then
+  print("Nota válida")
+end
+</pre>
+<pre class="term">$ lua encadeado.lua
+lua: encadeado.lua:2: attempt to compare boolean with number
+stack traceback:
+	encadeado.lua:2: in main chunk
+	[C]: in ?</pre>
+<p>Na matemática, 0 ≤ nota ≤ 10 é uma frase só. O Lua faz uma comparação de cada vez, da esquerda para a direita: primeiro <code>0 &lt;= nota</code>, que dá <code>true</code>; depois, <code>true &lt;= 10</code>. Aí ele reclama: "tentativa de comparar booleano com número". (O Python aceita essa escrita; o Lua, não.) <strong>Como consertar:</strong> duas comparações ligadas por <code>and</code>: <code>if nota &gt;= 0 and nota &lt;= 10 then</code> (aula <a href="operadores-logicos.html">and, or e not</a>).</p>
+</div>
+
+<div class="cenario">
+<strong>Comparou o texto digitado com um número</strong>
+<pre class="file" data-file="texto_num.lua">local digitado = "7"
+print(digitado == 7)
+print(tonumber(digitado) == 7)
+</pre>
+<pre class="term">$ lua texto_num.lua
+false
+true</pre>
+<p>Com <code>==</code>, nenhuma mensagem de erro: só um <code>false</code> que parece mentira. Com <code>&lt;</code> ou <code>&gt;</code>, seria o erro <code>attempt to compare string with number</code> da seção 4. <strong>Como consertar:</strong> converta com <code>tonumber</code> antes de comparar.</p>
+</div>
+
+<hr>
+
+<h2>Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>O que faz / o que dá</th></tr>
+<tr><td><code>a == b</code></td><td>igual? Tipos diferentes → <code>false</code></td></tr>
+<tr><td><code>a ~= b</code></td><td>diferente? (o contrário de <code>==</code>; <strong>não</strong> é <code>!=</code>)</td></tr>
+<tr><td><code>a &lt; b</code>, <code>a &gt; b</code></td><td>menor? maior? (dois números ou dois textos)</td></tr>
+<tr><td><code>a &lt;= b</code>, <code>a &gt;= b</code></td><td>menor ou igual? maior ou igual?</td></tr>
+<tr><td><code>3 == 3.0</code></td><td><code>true</code></td></tr>
+<tr><td><code>"10" == 10</code></td><td><code>false</code> (não converte)</td></tr>
+<tr><td><code>"10" &lt; 9</code></td><td>erro: <code>attempt to compare string with number</code></td></tr>
+<tr><td><code>"10" &lt; "9"</code></td><td><code>true</code> (ordem de texto)</td></tr>
+<tr><td><code>"Zebra" &lt; "abacaxi"</code></td><td><code>true</code> (maiúsculas antes das minúsculas)</td></tr>
+<tr><td><code>{} == {}</code></td><td><code>false</code> (tabelas: só a mesma tabela é igual)</td></tr>
+<tr><td><code>math.abs(a - b) &lt; 1e-9</code></td><td>floats "iguais o bastante"</td></tr>
+<tr><td><code>x &gt;= 0 and x &lt;= 10</code></td><td>"entre 0 e 10" (não existe <code>0 &lt;= x &lt;= 10</code>)</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Sintoma</th><th>Causa provável</th></tr>
+<tr><td><code>'then' expected near '='</code></td><td>Usou <code>=</code> no lugar de <code>==</code> no <code>if</code></td></tr>
+<tr><td><code>'then' expected near '!'</code> ou <code>')' expected near '!'</code></td><td>Usou <code>!=</code>: no Lua é <code>~=</code></td></tr>
+<tr><td><code>')' expected near '='</code></td><td>Escreveu <code>=&gt;</code> ou <code>=&lt;</code>: é <code>&gt;=</code> e <code>&lt;=</code></td></tr>
+<tr><td><code>attempt to compare boolean with number</code></td><td>Comparação encadeada (<code>0 &lt;= x &lt;= 10</code>): use <code>and</code></td></tr>
+<tr><td><code>attempt to compare string with number</code></td><td>Texto (do <code>io.read()</code>?) comparado com número: use <code>tonumber</code></td></tr>
+<tr><td><code>attempt to compare nil with number</code></td><td>Uma variável da comparação está <code>nil</code></td></tr>
+<tr><td>O <code>==</code> dá <code>false</code> e parecia igual</td><td>Maiúsculas, espaço sobrando, texto × número, ou float aproximado</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. Verdadeiro ou falso?</h3>
+<p>Escreva o que o Lua mostra (<code>true</code> ou <code>false</code>):</p>
+<div class="ex-code">print(5 &gt;= 5) → <input data-answer="true" aria-label="5 maior ou igual a 5"><br>print(5 ~= 5) → <input data-answer="false" aria-label="5 diferente de 5"><br>print("pão" == "Pão") → <input data-answer="false" aria-label="pão igual a Pão"><br>print(2 == 2.0) → <input data-answer="true" aria-label="2 igual a 2.0"></div>
+</div>
+
+<div class="exercise">
+<h3>2. O operador certo</h3>
+<p>Complete com o operador que pergunta "o estoque é diferente de zero?":</p>
+<div class="ex-code">if estoque <input data-answer="~=" aria-label="operador diferente"> 0 then</div>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">3. O que <code>print("10" &lt; "9")</code> mostra?</p>
+<label><input type="radio" name="q3"> <code>false</code>, porque 10 é maior que 9</label>
+<label><input type="radio" name="q3"> <code>true</code>, porque como texto o <code>"1"</code> vem antes do <code>"9"</code></label>
+<label><input type="radio" name="q3"> Um erro: <code>attempt to compare</code></label>
+<label><input type="radio" name="q3"> <code>nil</code></label>
+</div>
+
+<div class="mc" data-answer="4">
+<p class="mc-q">4. Qual destas linhas dá erro no Lua?</p>
+<label><input type="radio" name="q4"> <code>print(3 == "3")</code></label>
+<label><input type="radio" name="q4"> <code>print("a" &lt; "b")</code></label>
+<label><input type="radio" name="q4"> <code>print(nil == false)</code></label>
+<label><input type="radio" name="q4"> <code>print(3 &lt; "4")</code></label>
+</div>
+
+<div class="mc" data-answer="1">
+<p class="mc-q">5. Como se pergunta "a idade está entre 13 e 19?" no Lua?</p>
+<label><input type="radio" name="q5"> <code>idade &gt;= 13 and idade &lt;= 19</code></label>
+<label><input type="radio" name="q5"> <code>13 &lt;= idade &lt;= 19</code></label>
+<label><input type="radio" name="q5"> <code>idade =&gt; 13 and idade =&lt; 19</code></label>
+<label><input type="radio" name="q5"> <code>idade == 13..19</code></label>
+</div>
+
+<div class="mc" data-answer="3">
+<p class="mc-q">6. <code>local a = {1}</code> / <code>local b = {1}</code>. Quanto vale <code>a == b</code>?</p>
+<label><input type="radio" name="q6"> <code>true</code>, porque o conteúdo é igual</label>
+<label><input type="radio" name="q6"> Dá erro: não se comparam tabelas</label>
+<label><input type="radio" name="q6"> <code>false</code>: são duas tabelas diferentes</label>
+<label><input type="radio" name="q6"> <code>nil</code></label>
+</div>
+
+<h3>Missão final: a senha da padaria</h3>
+
+<div class="trylua" data-goal="out:Senha errada!;;src:~=;;semerro">
+<p class="try-task"><strong>Missão:</strong> o programa confere a senha do caixa, mas foi escrito com o <code>!=</code> de outra linguagem e o Lua responde <code>'then' expected near '!'</code>. Conserte o "diferente" para o programa rodar e avisar <code>Senha errada!</code> (a senha digitada, <code>abacate</code>, não é a certa).</p>
+<pre class="script" data-file="main.lua">local senha = "abacate"
+if senha != "pao123" then
+  print("Senha errada!")
+else
+  print("Pode entrar.")
+end
+</pre>
+<pre class="solucao" data-file="main.lua">local senha = "abacate"
+if senha ~= "pao123" then
+  print("Senha errada!")
+else
+  print("Pode entrar.")
+end
+</pre>
+</div>
+
+<p>Depois, troque <code>"abacate"</code> por <code>"pao123"</code> e rode de novo: deve aparecer <code>Pode entrar.</code>. E por <code>"Pao123"</code>, com maiúscula? O <code>~=</code> vai dizer que é diferente.</p>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li>Seis operadores de comparação: <code>==</code>, <code>~=</code>, <code>&lt;</code>, <code>&gt;</code>, <code>&lt;=</code>, <code>&gt;=</code>. Todos respondem <code>true</code> ou <code>false</code>.</li>
+  <li><code>=</code> guarda; <code>==</code> compara. O "diferente" é <code>~=</code>, nunca <code>!=</code>.</li>
+  <li><code>==</code> com tipos diferentes dá <code>false</code> sem converter: <code>"10" == 10</code> é <code>false</code>. Tabelas só são iguais se forem a mesma tabela.</li>
+  <li><code>&lt; &gt; &lt;= &gt;=</code> só comparam dois números ou dois textos; misturar dá <code>attempt to compare …</code>.</li>
+  <li>Textos seguem a ordem dos códigos: maiúsculas antes de minúsculas, acentos depois do <code>z</code>, e <code>"10" &lt; "9"</code>. Para comparar números que vieram como texto, use <code>tonumber</code>.</li>
+  <li>Floats não se comparam com <code>==</code> depois de contas: use <code>math.abs(a - b) &lt; 1e-9</code>.</li>
+  <li>"Entre 0 e 10" se escreve <code>x &gt;= 0 and x &lt;= 10</code>; o <code>0 &lt;= x &lt;= 10</code> dá erro.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
