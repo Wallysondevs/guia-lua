@@ -1,0 +1,513 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua table.sort — ordenando uma lista | Guia Lua</title>
+<meta name="description" content="table.sort no Lua para quem nunca programou: ordenar números e textos, a ordem dos bytes (maiúsculas, minúsculas e acentos), a função de comparação para ordem decrescente, por campo e com desempate, ordenar as chaves de um dicionário, e os erros reais do Lua 5.5: invalid order function for sorting, attempt to compare.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">table.sort</span>: Ordenando</h1>
+
+<p class="intro">A professora quer as notas da menor para a maior. A Ana quer a lista de clientes em ordem alfabética. A padaria quer os produtos do mais barato para o mais caro. <strong>Ordenar</strong> (em inglês, <em>sort</em>) é uma das tarefas mais comuns da programação, e o Lua já traz a função pronta: <code>table.sort</code>. Ela arruma uma <a href="listas.html">lista</a> no lugar, e você pode dizer a ela <strong>qual</strong> ordem quer, com uma pequena função de comparação.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li><code>table.sort(lista)</code>: ordem crescente de números e ordem "alfabética" de textos.</li>
+  <li>Por que <code>"Bia"</code> vem antes de <code>"ana"</code>, e <code>"Ágata"</code> vai para o fim.</li>
+  <li>A <strong>função de comparação</strong>: <code>table.sort(lista, function(a, b) return a &gt; b end)</code>.</li>
+  <li>Ordenar fichas por um campo (preço, nome) e com desempate.</li>
+  <li>Ordenar ignorando maiúsculas, e textos que são números.</li>
+  <li>Ordenar as chaves de um dicionário, para ter uma ordem fixa.</li>
+  <li>Os erros reais: <code>invalid order function for sorting</code>, <code>attempt to compare</code>, o <code>sort</code> que não devolve nada e a lista com buraco.</li>
+</ul>
+</div>
+
+<p>Todos os programas desta aula rodaram no <strong>Lua 5.5</strong> da máquina da Ana (usuária <code>ana</code>, computador <code>notebook</code>), com <code>lua arquivo.lua</code>. Para mostrar a lista numa linha, os exemplos usam <a href="table-concat.html">table.concat</a>.</p>
+
+<hr>
+
+<h2>A ideia: comparar dois de cada vez</h2>
+<p>A professora vai organizar a fila da turma por altura. Ela não mede todos de uma vez: pega <strong>dois</strong> alunos, pergunta "quem é o mais baixo?", e troca os dois de lugar se for preciso. Repetindo essa pergunta várias vezes, com pares diferentes, a fila fica em ordem.</p>
+<p>O <code>table.sort</code> trabalha assim. A única coisa que ele precisa saber é responder a pergunta <strong>"o <code>a</code> deve vir antes do <code>b</code>?"</strong>. Para números e textos, ele já sabe responder sozinho (usa o <code>&lt;</code>, "menor que"). Para outra ordem, ou para coisas que ele não sabe comparar (as fichas de produtos), você escreve uma função que responde essa pergunta com <code>true</code> ou <code>false</code>.</p>
+
+<hr>
+
+<h2>1. Ordenando números</h2>
+
+<pre class="file" data-file="numeros_sort.lua">local notas = {7.5, 9, 6, 10, 8.5}
+table.sort(notas)
+for i, nota in ipairs(notas) do
+  print(i, nota)
+end
+</pre>
+
+<pre class="term">$ lua numeros_sort.lua
+1	6
+2	7.5
+3	8.5
+4	9
+5	10</pre>
+
+<dl class="anatomy">
+  <dt>table.sort</dt><dd>A função <code>sort</code> ("ordenar") da biblioteca <code>table</code>.</dd>
+  <dt>(notas)</dt><dd>A lista a ordenar. Sem mais nada, a ordem é <strong>crescente</strong>: do menor para o maior.</dd>
+  <dt>(sem "=")</dt><dd>O <code>sort</code> arruma <strong>a própria lista</strong> (os programadores dizem "no lugar", <em>in-place</em>). Ele não cria uma lista nova e não devolve nada. Depois da linha 2, <code>notas[1]</code> já é a menor nota.</dd>
+</dl>
+
+<p>Como a lista original é mudada, a ordem antiga se perde. Se você ainda vai precisar dela (a ordem de chegada, por exemplo), faça uma cópia antes de ordenar, como na seção <a href="#formas">Formas diferentes</a>.</p>
+
+<hr>
+
+<h2>2. Ordenando textos: a ordem dos bytes</h2>
+
+<pre class="file" data-file="textos_sort.lua">local nomes = {"Caio", "ana", "Bia", "Ágata", "Zeca", "davi"}
+table.sort(nomes)
+print(table.concat(nomes, ", "))
+</pre>
+
+<pre class="term">$ lua textos_sort.lua
+Bia, Caio, Zeca, ana, davi, Ágata</pre>
+
+<p>Não é bem a ordem do dicionário. O Lua compara textos letra por letra pelo <strong>código</strong> de cada letra (o byte; veja <a href="string-sub.html">string.byte</a>), e nesses códigos:</p>
+<ul>
+  <li>todas as <strong>maiúsculas</strong> (A a Z) vêm <strong>antes</strong> de todas as minúsculas (a a z). Por isso <code>"Zeca"</code> veio antes de <code>"ana"</code>;</li>
+  <li>letras <strong>acentuadas</strong> têm códigos maiores que todas as letras sem acento (em UTF-8, o <code>Á</code> começa com o byte 195; veja <a href="utf8.html">Acentos e a Biblioteca utf8</a>). Por isso <code>"Ágata"</code> foi parar no fim.</li>
+</ul>
+<p>Se os nomes estiverem todos escritos do mesmo jeito (só a primeira maiúscula, sem acento na primeira letra), a ordem fica a esperada. Para ignorar maiúsculas, veja a seção 5.</p>
+
+<hr>
+
+<h2>3. A função de comparação: outra ordem</h2>
+<p>Para ordenar do <strong>maior para o menor</strong>, passe um segundo argumento: uma <a href="funcoes.html">função</a> que recebe dois itens, <code>a</code> e <code>b</code>, e devolve <code>true</code> quando <code>a</code> deve vir <strong>antes</strong> de <code>b</code>:</p>
+
+<pre class="file" data-file="decrescente.lua">local notas = {7.5, 9, 6, 10, 8.5}
+table.sort(notas, function(a, b)
+  return a &gt; b
+end)
+print(table.concat(notas, "  "))
+</pre>
+
+<pre class="term">$ lua decrescente.lua
+10  9  8.5  7.5  6</pre>
+
+<dl class="anatomy">
+  <dt>function(a, b) … end</dt><dd>Uma função sem nome, escrita direto como argumento (veja <a href="funcoes-valores.html">Funções São Valores</a>). O <code>sort</code> vai chamá-la muitas vezes, cada vez com dois itens da lista.</dd>
+  <dt>a, b</dt><dd>Os dois itens que estão sendo comparados naquele momento. Você não escolhe quais: o <code>sort</code> decide.</dd>
+  <dt>return a &gt; b</dt><dd>A resposta para "o <code>a</code> vem antes do <code>b</code>?". Aqui: "sim, se <code>a</code> for maior". Assim, os maiores vão para a frente.</dd>
+</dl>
+
+<p>Sem a função, o <code>sort</code> usa <code>a &lt; b</code>. Trocar por <code>a &gt; b</code> inverte a ordem. Uma regra importante, que a seção <a href="#errado">Quando dá errado</a> explica: use <code>&lt;</code> ou <code>&gt;</code>, <strong>nunca</strong> <code>&lt;=</code> ou <code>&gt;=</code>.</p>
+
+<div class="trylua" data-goal="out:10, 9, 8.5, 7.5, 6;;src:function\s*\(">
+<p class="try-task"><strong>Missão:</strong> o programa ordena do menor para o maior. Passe uma função de comparação ao <code>table.sort</code> para ordenar do <strong>maior para o menor</strong>. Deve sair <code>10, 9, 8.5, 7.5, 6</code>.</p>
+<pre class="script" data-file="main.lua">local notas = {7.5, 9, 6, 10, 8.5}
+table.sort(notas)
+print(table.concat(notas, ", "))
+</pre>
+<pre class="solucao" data-file="main.lua">local notas = {7.5, 9, 6, 10, 8.5}
+table.sort(notas, function(a, b)
+  return a &gt; b
+end)
+print(table.concat(notas, ", "))
+</pre>
+</div>
+
+<hr>
+
+<h2>4. Ordenando fichas por um campo</h2>
+<p>Uma lista de <a href="tabelas.html">fichas</a> (tabelas) o <code>sort</code> não sabe comparar sozinho: qual tabela é "menor"? A função de comparação diz <strong>qual campo</strong> olhar:</p>
+
+<pre class="file" data-file="fichas_sort.lua">local produtos = {
+  {nome = "Café", preco = 18.90},
+  {nome = "Pão", preco = 0.75},
+  {nome = "Leite", preco = 5.49},
+  {nome = "Manteiga", preco = 12.30},
+}
+table.sort(produtos, function(a, b)
+  return a.preco &lt; b.preco
+end)
+for i, p in ipairs(produtos) do
+  print(i .. ". " .. p.nome .. ": R$ " .. string.format("%.2f", p.preco))
+end
+</pre>
+
+<pre class="term">$ lua fichas_sort.lua
+1. Pão: R$ 0.75
+2. Leite: R$ 5.49
+3. Manteiga: R$ 12.30
+4. Café: R$ 18.90</pre>
+
+<p>Agora <code>a</code> e <code>b</code> são duas fichas inteiras, e <code>a.preco &lt; b.preco</code> compara o preço delas. As fichas andam inteiras: o nome vai junto com o preço.</p>
+
+<h3>Desempate: quando o campo é igual</h3>
+<p>No ranking da turma, a maior nota vem primeiro; quem tem a mesma nota fica em ordem alfabética. A função compara a nota e, <strong>só se for igual</strong>, compara o nome:</p>
+
+<pre class="file" data-file="desempate.lua">local alunos = {
+  {nome = "Caio", nota = 8},
+  {nome = "Ana", nota = 9},
+  {nome = "Eva", nota = 8},
+  {nome = "Bia", nota = 9},
+  {nome = "Davi", nota = 7},
+}
+table.sort(alunos, function(a, b)
+  if a.nota ~= b.nota then
+    return a.nota &gt; b.nota
+  end
+  return a.nome &lt; b.nome
+end)
+for i, al in ipairs(alunos) do
+  print(i .. "º " .. al.nome .. " (" .. al.nota .. ")")
+end
+</pre>
+
+<pre class="term">$ lua desempate.lua
+1º Ana (9)
+2º Bia (9)
+3º Caio (8)
+4º Eva (8)
+5º Davi (7)</pre>
+
+<div class="note">
+<strong>Por que o desempate importa: o <code>sort</code> não é "estável"</strong>
+<p>O manual do Lua avisa que o algoritmo do <code>table.sort</code> <strong>não é estável</strong>: itens que a sua função considera iguais (duas notas 9) podem trocar de lugar entre si, sem nenhuma garantia de manter a ordem em que estavam. Se a ordem dos empatados importa, diga qual é, com um desempate como o do nome. Assim, o resultado é sempre o mesmo.</p>
+</div>
+
+<hr>
+
+<h2>5. Ignorando maiúsculas, e textos que são números</h2>
+<p>Para ordem alfabética sem ligar para maiúsculas, compare as versões em minúsculas (<code>lower</code>; veja <a href="string-metodos.html">Funções de Texto</a>). A lista continua com os nomes originais; só a comparação usa as minúsculas:</p>
+
+<pre class="file" data-file="minusculas.lua">local nomes = {"Caio", "ana", "Bia", "davi"}
+table.sort(nomes, function(a, b)
+  return a:lower() &lt; b:lower()
+end)
+print(table.concat(nomes, ", "))
+</pre>
+
+<pre class="term">$ lua minusculas.lua
+ana, Bia, Caio, davi</pre>
+
+<p>E números guardados como <strong>texto</strong> (lidos de um arquivo, por exemplo) são comparados letra por letra: <code>"100"</code> vem antes de <code>"2"</code>, porque <code>"1"</code> vem antes de <code>"2"</code>. Converta na comparação com <a href="conversao.html">tonumber</a>:</p>
+
+<pre class="file" data-file="textos_numeros.lua">local codigos = {"10", "9", "100", "2"}
+table.sort(codigos)
+print(table.concat(codigos, " "))
+table.sort(codigos, function(a, b) return tonumber(a) &lt; tonumber(b) end)
+print(table.concat(codigos, " "))
+</pre>
+
+<pre class="term">$ lua textos_numeros.lua
+10 100 2 9
+2 9 10 100</pre>
+
+<hr>
+
+<h2>6. Ordenando as chaves de um dicionário</h2>
+<p>Um dicionário (<code>{pao = 40, leite = 0}</code>) não tem ordem: o <a href="pairs.html">pairs</a> passa pelas chaves numa ordem que o Lua escolhe, e ela pode mudar de uma execução para outra. Para mostrar em ordem alfabética, junte as chaves numa lista, ordene a lista e percorra a lista:</p>
+
+<pre class="file" data-file="chaves_sort.lua">local estoque = {pao = 40, leite = 0, cafe = 5, manteiga = 3}
+local nomes = {}
+for nome in pairs(estoque) do
+  table.insert(nomes, nome)
+end
+table.sort(nomes)
+for _, nome in ipairs(nomes) do
+  print(nome, estoque[nome])
+end
+</pre>
+
+<pre class="term">$ lua chaves_sort.lua
+cafe	5
+leite	0
+manteiga	3
+pao	40</pre>
+
+<p>Esse é um truque que você vai usar sempre que um relatório precisar sair igual toda vez.</p>
+
+<hr>
+
+<h2 id="formas">Formas diferentes de fazer a mesma coisa</h2>
+
+<h3>Ordenar sem perder a ordem original</h3>
+<p>O <code>sort</code> muda a lista. Para ter as duas ordens, copie primeiro:</p>
+
+<pre class="file" data-file="copia.lua">local chegada = {"Caio", "Ana", "Bia"}
+local ordem_alfabetica = {}
+for i, nome in ipairs(chegada) do
+  ordem_alfabetica[i] = nome
+end
+table.sort(ordem_alfabetica)
+print("chegada:    " .. table.concat(chegada, ", "))
+print("alfabética: " .. table.concat(ordem_alfabetica, ", "))
+</pre>
+
+<pre class="term">$ lua copia.lua
+chegada:    Caio, Ana, Bia
+alfabética: Ana, Bia, Caio</pre>
+
+<p>Por que copiar item por item, e não <code>local ordem_alfabetica = chegada</code>? Porque isso não copia: as duas variáveis apontariam para a <strong>mesma</strong> tabela, e ordenar uma ordenaria a outra (veja <a href="tabelas-referencia.html">Tabelas São Referências</a>).</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Quero</th><th>Escreva</th></tr>
+<tr><td>Números do menor para o maior / textos na ordem dos bytes</td><td><code>table.sort(t)</code></td></tr>
+<tr><td>Do maior para o menor</td><td><code>table.sort(t, function(a, b) return a &gt; b end)</code></td></tr>
+<tr><td>Fichas por um campo</td><td><code>table.sort(t, function(a, b) return a.preco &lt; b.preco end)</code></td></tr>
+<tr><td>Com desempate</td><td><code>if a.x ~= b.x then return a.x &gt; b.x end return a.nome &lt; b.nome</code></td></tr>
+<tr><td>Sem ligar para maiúsculas</td><td><code>return a:lower() &lt; b:lower()</code></td></tr>
+<tr><td>Textos que são números</td><td><code>return tonumber(a) &lt; tonumber(b)</code></td></tr>
+<tr><td>Chaves de um dicionário em ordem</td><td>Juntar as chaves numa lista com <code>pairs</code>, depois <code>table.sort</code></td></tr>
+<tr><td>Manter a ordem original</td><td>Copiar a lista antes de ordenar</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+
+<div class="cenario">
+<strong>Usou <code>&gt;=</code> (ou <code>&lt;=</code>) na comparação</strong>
+<pre class="file" data-file="ranking.lua">local notas = {7, 9, 7, 10, 7, 8, 7, 9, 7, 7, 6, 7}
+table.sort(notas, function(a, b)
+  return a &gt;= b
+end)
+print("Ordem: " .. table.concat(notas, " "))
+print("Maior nota: " .. notas[1])
+</pre>
+<pre class="term">$ lua ranking.lua
+lua: ranking.lua:2: invalid order function for sorting
+stack traceback:
+	[C]: in field 'sort'
+	ranking.lua:2: in main chunk
+	[C]: in ?</pre>
+<p>Linha por linha:</p>
+<dl class="anatomy">
+  <dt>ranking.lua:2:</dt><dd>A linha do <code>table.sort</code> (não a do <code>return</code>): quem percebeu o problema foi o <code>sort</code>.</dd>
+  <dt>invalid order function for sorting</dt><dd>"Função de ordem inválida para ordenar." A sua função dá respostas que não fazem sentido juntas.</dd>
+  <dt>[C]: in field 'sort'</dt><dd>O erro aconteceu dentro do <code>sort</code> (escrito em C), chamado pela linha 2.</dd>
+</dl>
+<p>Por que "não fazem sentido"? A pergunta é "o <code>a</code> vem <strong>antes</strong> do <code>b</code>?". Com dois 7, o <code>7 &gt;= 7</code> diz <code>true</code>: "o primeiro 7 vem antes do segundo". E, trocando os dois de lugar, diz <code>true</code> de novo: "o segundo vem antes do primeiro". Os dois não podem vir antes um do outro, e o algoritmo se perde. O manual exige que a função defina uma "ordem fraca estrita": para itens <strong>iguais</strong>, ela tem de responder <code>false</code> nos dois sentidos. É isso que o <code>&gt;</code> e o <code>&lt;</code> fazem (<code>7 &gt; 7</code> é <code>false</code>).</p>
+<p>O mais traiçoeiro: com itens todos diferentes, a mesma função errada pode funcionar. No lab, <code>{7, 3, 9, 1}</code> com <code>a &lt;= b</code> saiu certinho (<code>1 3 7 9</code>); só a lista com notas repetidas deu o erro. O programa passa no teste com poucos dados e quebra com os dados de verdade. <strong>Como consertar:</strong> <code>return a &gt; b</code>.</p>
+</div>
+
+<div class="trylua" data-goal="semerro;;out:Maior nota: 10">
+<p class="try-task"><strong>Missão:</strong> este é o <code>ranking.lua</code>. Rode, veja o <code>invalid order function for sorting</code>, e conserte a função de comparação.</p>
+<pre class="script" data-file="main.lua">local notas = {7, 9, 7, 10, 7, 8, 7, 9, 7, 7, 6, 7}
+table.sort(notas, function(a, b)
+  return a &gt;= b
+end)
+print("Ordem: " .. table.concat(notas, " "))
+print("Maior nota: " .. notas[1])
+</pre>
+<pre class="solucao" data-file="main.lua">local notas = {7, 9, 7, 10, 7, 8, 7, 9, 7, 7, 6, 7}
+table.sort(notas, function(a, b)
+  return a &gt; b
+end)
+print("Ordem: " .. table.concat(notas, " "))
+print("Maior nota: " .. notas[1])
+</pre>
+</div>
+
+<div class="cenario">
+<strong>Ordenou fichas sem dizer como</strong>
+<pre class="file" data-file="fichas_sem.lua">local produtos = {
+  {nome = "Café", preco = 18.90},
+  {nome = "Pão", preco = 0.75},
+}
+table.sort(produtos)
+</pre>
+<pre class="term">$ lua fichas_sem.lua
+lua: attempt to compare two table values
+stack traceback:
+	[C]: in field 'sort'
+	fichas_sem.lua:5: in main chunk
+	[C]: in ?</pre>
+<p>"Tentativa de comparar dois valores do tipo tabela." Sem função, o <code>sort</code> usa o <code>&lt;</code>, e o <code>&lt;</code> não sabe comparar tabelas. Repare que a primeira linha não tem número de linha: o erro aconteceu dentro do <code>sort</code>, e a linha do seu programa (a 5) aparece no rastro. <strong>Como consertar:</strong> passe uma função que compare um campo: <code>function(a, b) return a.preco &lt; b.preco end</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Número e texto misturados</strong>
+<pre class="file" data-file="misturado.lua">local idades = {30, "25", 41}
+table.sort(idades)
+</pre>
+<pre class="term">$ lua misturado.lua
+lua: attempt to compare string with number
+stack traceback:
+	[C]: in field 'sort'
+	misturado.lua:2: in main chunk
+	[C]: in ?</pre>
+<p>"Tentativa de comparar texto com número." O <code>"25"</code> entre aspas é texto, e o <code>&lt;</code> não compara texto com número (embora a conta <code>"25" + 1</code> funcione). <strong>Como consertar:</strong> guarde todos como número (<code>tonumber</code> na hora de ler), ou compare com <code>tonumber(a) &lt; tonumber(b)</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>O nome do campo está errado</strong>
+<pre class="file" data-file="campo_errado.lua">local produtos = {
+  {nome = "Café", preco = 18.90},
+  {nome = "Pão", preco = 0.75},
+}
+table.sort(produtos, function(a, b)
+  return a.valor &lt; b.valor
+end)
+</pre>
+<pre class="term">$ lua campo_errado.lua
+lua: campo_errado.lua:6: attempt to compare two nil values
+stack traceback:
+	campo_errado.lua:6: in function &lt;campo_errado.lua:5&gt;
+	[C]: in field 'sort'
+	campo_errado.lua:5: in main chunk
+	[C]: in ?</pre>
+<p>O campo se chama <code>preco</code>, não <code>valor</code>: <code>a.valor</code> e <code>b.valor</code> são <code>nil</code>, e "comparar dois valores nil" não dá. O rastro conta o caminho de baixo para cima: a linha 5 (o <code>sort</code>) chamou o <code>sort</code> em C, que chamou a sua função (<code>function &lt;campo_errado.lua:5&gt;</code>, a função criada na linha 5), que deu erro na linha 6. <strong>Como consertar:</strong> o nome certo do campo.</p>
+</div>
+
+<div class="cenario">
+<strong>Guardou o resultado do <code>sort</code></strong>
+<pre class="file" data-file="resultado.lua">local notas = {7, 9, 6}
+local ordenadas = table.sort(notas)
+print(ordenadas)
+print(notas[1], notas[2], notas[3])
+</pre>
+<pre class="term">$ lua resultado.lua
+nil
+6	7	9</pre>
+<p>O <code>sort</code> não devolve a lista ordenada: ele ordena a própria <code>notas</code> e devolve nada (<code>nil</code>). <strong>Como consertar:</strong> chame <code>table.sort(notas)</code> sozinho e use <code>notas</code> depois.</p>
+</div>
+
+<div class="cenario">
+<strong>A lista tinha um buraco</strong>
+<pre class="file" data-file="com_nil.lua">local notas = {7, 9, nil, 6}
+print(#notas)
+table.sort(notas)
+print(notas[1], notas[2], notas[3], notas[4])
+</pre>
+<pre class="term">$ lua com_nil.lua
+2
+7	9	nil	6</pre>
+<p>Nenhum erro, mas o 6 não foi ordenado. O <code>sort</code> ordena de <code>t[1]</code> até <code>t[#t]</code>, e com o buraco o <code>#notas</code> deu 2: ele só olhou o 7 e o 9. <strong>Como consertar:</strong> não deixe buracos na lista (use <a href="table-insert-remove.html">table.remove</a> para tirar itens; veja <a href="sequencias.html">Sequências e Buracos</a>).</p>
+</div>
+
+<hr>
+
+<h2>Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>O que faz</th></tr>
+<tr><td><code>table.sort(t)</code></td><td>Ordena <code>t[1]</code> … <code>t[#t]</code> com <code>&lt;</code> (crescente), na própria lista; devolve nada</td></tr>
+<tr><td><code>table.sort(t, comp)</code></td><td>Ordena usando <code>comp(a, b)</code>: <code>true</code> quando <code>a</code> vem antes de <code>b</code></td></tr>
+<tr><td><code>function(a, b) return a &gt; b end</code></td><td>Decrescente</td></tr>
+<tr><td><code>function(a, b) return a.campo &lt; b.campo end</code></td><td>Fichas por um campo</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Mensagem</th><th>Causa provável</th></tr>
+<tr><td><code>invalid order function for sorting</code></td><td><code>&lt;=</code> ou <code>&gt;=</code> na comparação, ou uma função que não decide direito (sempre <code>true</code>, devolve número)</td></tr>
+<tr><td><code>attempt to compare two table values</code></td><td>Lista de fichas sem função de comparação</td></tr>
+<tr><td><code>attempt to compare string with number</code></td><td>Números e textos misturados</td></tr>
+<tr><td><code>attempt to compare two nil values</code></td><td>Nome de campo errado na função</td></tr>
+<tr><td><code>nil</code> no lugar da lista</td><td>Guardou o resultado: <code>x = table.sort(t)</code></td></tr>
+<tr><td>Parte da lista não foi ordenada</td><td>Buraco (<code>nil</code>) no meio da lista</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. Complete a ordem decrescente</h3>
+<div class="ex-code">table.sort(precos, function(a, b)<br>&nbsp;&nbsp;return a <input data-answer="&gt;" aria-label="operador"> b<br>end)</div>
+</div>
+
+<div class="exercise">
+<h3>2. Qual vem primeiro?</h3>
+<p>Depois de <code>table.sort(t)</code> com <code>t = {"banana", "Uva", "maçã"}</code>, qual é <code>t[1]</code>?</p>
+<div class="ex-code">t[1] é <input data-answer="Uva|&quot;Uva&quot;" aria-label="primeiro item"></div>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">3. O que <code>table.sort(t)</code> devolve?</p>
+<label><input type="radio" name="q3"> Uma lista nova, ordenada</label>
+<label><input type="radio" name="q3"> Nada: ele ordena a própria <code>t</code></label>
+<label><input type="radio" name="q3"> <code>true</code> se deu certo</label>
+<label><input type="radio" name="q3"> O tamanho da lista</label>
+</div>
+
+<div class="mc" data-answer="3">
+<p class="mc-q">4. Qual destas funções de comparação pode dar <code>invalid order function for sorting</code>?</p>
+<label><input type="radio" name="q4"> <code>function(a, b) return a &lt; b end</code></label>
+<label><input type="radio" name="q4"> <code>function(a, b) return a &gt; b end</code></label>
+<label><input type="radio" name="q4"> <code>function(a, b) return a &gt;= b end</code></label>
+<label><input type="radio" name="q4"> <code>function(a, b) return a.nome &lt; b.nome end</code></label>
+</div>
+
+<div class="mc" data-answer="1">
+<p class="mc-q">5. Para mostrar as chaves de um dicionário sempre na mesma ordem, o que se faz?</p>
+<label><input type="radio" name="q5"> Junta as chaves numa lista e usa <code>table.sort</code> nela</label>
+<label><input type="radio" name="q5"> <code>table.sort(dicionario)</code></label>
+<label><input type="radio" name="q5"> Usa <code>pairs</code>, que já vai em ordem alfabética</label>
+<label><input type="radio" name="q5"> Não tem como</label>
+</div>
+
+<h3>Missão final: a vitrine em ordem alfabética</h3>
+
+<div class="trylua" data-goal="outre:1\. Café[\s\S]*2\. Leite[\s\S]*3\. Manteiga[\s\S]*4\. Pão;;src:table\.sort">
+<p class="try-task"><strong>Missão:</strong> no lugar do comentário, ordene os produtos pelo <strong>nome</strong>, em ordem alfabética, com <code>table.sort</code> e uma função de comparação. Deve sair Café, Leite, Manteiga, Pão.</p>
+<pre class="script" data-file="main.lua">local produtos = {
+  {nome = "Pão", preco = 0.75},
+  {nome = "Manteiga", preco = 12.30},
+  {nome = "Café", preco = 18.90},
+  {nome = "Leite", preco = 5.49},
+}
+-- ordene pelo nome aqui
+
+for i, p in ipairs(produtos) do
+  print(i .. ". " .. p.nome .. ": R$ " .. string.format("%.2f", p.preco))
+end
+</pre>
+<pre class="solucao" data-file="main.lua">local produtos = {
+  {nome = "Pão", preco = 0.75},
+  {nome = "Manteiga", preco = 12.30},
+  {nome = "Café", preco = 18.90},
+  {nome = "Leite", preco = 5.49},
+}
+table.sort(produtos, function(a, b)
+  return a.nome &lt; b.nome
+end)
+for i, p in ipairs(produtos) do
+  print(i .. ". " .. p.nome .. ": R$ " .. string.format("%.2f", p.preco))
+end
+</pre>
+</div>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li><code>table.sort(t)</code> ordena a própria lista, do menor para o maior, e não devolve nada. Para guardar a ordem antiga, copie antes.</li>
+  <li>Textos são comparados pelos códigos das letras: maiúsculas antes de minúsculas, acentuadas depois de todas.</li>
+  <li><code>table.sort(t, function(a, b) return … end)</code>: a função responde "o <code>a</code> vem antes do <code>b</code>?". <code>a &gt; b</code> dá a ordem decrescente; <code>a.campo &lt; b.campo</code> ordena fichas.</li>
+  <li>Na função, use <code>&lt;</code> ou <code>&gt;</code>, <strong>nunca</strong> <code>&lt;=</code>/<code>&gt;=</code>: com itens repetidos, sai <code>invalid order function for sorting</code>.</li>
+  <li>O <code>sort</code> não é estável: para empates, faça um desempate.</li>
+  <li>Para ordenar um dicionário, ordene uma lista com as chaves dele.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
