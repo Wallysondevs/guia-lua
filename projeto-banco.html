@@ -724,7 +724,7 @@ Conta de Ana: R$ 300.00
 table: 0x55f5af8e4620
 Rendeu R$ 10.00
 …</pre>
-<p>A conta comum continua aparecendo bem, mas a poupança virou <code>table: 0x55f5af8e4620</code> (o endereço na memória; muda a cada execução). O motivo: para achar um metamétodo como o <code>__tostring</code>, o Lua olha <strong>direto</strong> na metatabela do objeto (a <code>Poupanca</code>), sem seguir o <code>__index</code>. O <code>__index</code> serve para os campos <strong>do objeto</strong> (<code>cofrinho.sacar</code>), não para os da metatabela. Cada classe filha precisa ter os seus metamétodos (<code>__tostring</code>, <code>__eq</code>, <code>__add</code>…), nem que seja copiando os da mãe. Veja <a href="ref-metametodos.html">Metamétodos</a>.</p>
+<p>A conta comum continua aparecendo bem, mas a poupança virou <code>table: 0x55f5af8e4620</code> (o endereço na memória; muda a cada execução, e no editor do guia sai mais curto). O motivo: para achar um metamétodo como o <code>__tostring</code>, o Lua olha <strong>direto</strong> na metatabela do objeto (a <code>Poupanca</code>), sem seguir o <code>__index</code>. O <code>__index</code> serve para os campos <strong>do objeto</strong> (<code>cofrinho.sacar</code>), não para os da metatabela. Cada classe filha precisa ter os seus metamétodos (<code>__tostring</code>, <code>__eq</code>, <code>__add</code>…), nem que seja copiando os da mãe. Veja <a href="ref-metametodos.html">Metamétodos</a>.</p>
 </div>
 
 <div class="trylua" data-goal="out:Rendeu R$ 10.00;;out:Conta de Ana: R$ 1010.00">
