@@ -1,0 +1,551 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua Seu Primeiro Programa — o Olá, mundo! e o recibo da padaria | Guia Lua</title>
+<meta name="description" content="O primeiro programa em Lua para quem nunca programou: o Olá, mundo! com print, textos entre aspas duplas ou simples, várias linhas na ordem, linha em branco, números e contas, a vírgula (que separa com tabulação) e o .. (que junta textos), o recibo da padaria e os erros reais do primeiro dia no Lua 5.5 (unfinished string, ')' expected, attempt to call a nil value, aspas curvas) explicados em português.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">Seu Primeiro Programa</span></h1>
+
+<p class="intro">Chegou a hora de escrever um programa de verdade, do começo ao fim. Ele vai começar com uma linha só, o famoso <strong>"Olá, mundo!"</strong>, e crescer aos poucos até virar o recibo da padaria do bairro. No caminho, você vai usar a função <code>print</code> (que mostra coisas na tela), escrever textos entre aspas, fazer as primeiras contas, juntar texto com número e, principalmente, ver os erros que todo mundo comete no primeiro dia, com as mensagens reais do Lua e o jeito de consertar cada um.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>A escrever o "Olá, mundo!" com <code>print</code>, e o que é cada parte da linha.</li>
+  <li>A escrever <strong>textos</strong> entre aspas duplas ou simples, e quando usar cada uma.</li>
+  <li>Que várias linhas de <code>print</code> aparecem na ordem em que foram escritas, e como deixar uma linha em branco.</li>
+  <li>A diferença entre <code>print(2 + 3)</code> e <code>print("2 + 3")</code>.</li>
+  <li>Dois jeitos de mostrar texto e número juntos: a vírgula e o <code>..</code>.</li>
+  <li>Os erros mais comuns do primeiro programa: aspas e parênteses sem fechar, <code>Print</code> com maiúscula, aspas "curvas" copiadas de um documento, a vírgula esquecida e a vírgula no lugar do ponto.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>A ideia: o recado no quadro de avisos</h2>
+<p>Imagine que você deixa recados para alguém num quadro de avisos, um embaixo do outro. A pessoa chega e lê de cima para baixo, na ordem. O <code>print</code> é o seu jeito de "escrever no quadro": cada <code>print</code> põe uma linha na tela, e o Lua segue as linhas do arquivo na ordem em que você escreveu.</p>
+
+<p>Você vai precisar de um lugar para escrever e rodar. Use o que for mais cômodo:</p>
+<ul>
+  <li>as <strong>caixas Experimente</strong> desta página (é só editar e clicar em Rodar; a aula <a href="simulador.html">O Editor do Guia</a> explica tudo o que elas fazem);</li>
+  <li>ou o seu computador: crie o arquivo com o <code>nano</code> e rode com <code>lua</code>, como na aula <a href="executar.html">Rodando um Programa (.lua)</a>. Os exemplos desta aula foram rodados na pasta <code>~/programas</code> da Ana.</li>
+</ul>
+
+<hr>
+
+<h2>1. Olá, mundo!</h2>
+<p>Desde os anos 1970, o primeiro programa de quem aprende uma linguagem nova é o que escreve "Olá, mundo!" na tela. É uma tradição: ele é curto, e mostra que tudo está funcionando. Em Lua, ele tem uma linha:</p>
+
+<pre class="file" data-file="ola.lua">print("Olá, mundo!")
+</pre>
+
+<pre class="term" data-cwd="~/programas">$ lua ola.lua
+Olá, mundo!
+</pre>
+
+<dl class="anatomy">
+  <dt>print</dt><dd>"Imprimir", no sentido de "mostrar na tela". É uma <strong>função</strong> que vem pronta no Lua: um "ajudante" que faz um trabalho quando você chama o nome dele. Escreve-se assim, tudo em minúsculas.</dd>
+  <dt>(</dt><dd>Abre os parênteses. É o jeito de <strong>chamar</strong> (usar) a função; o que vai dentro deles é o que você entrega ao <code>print</code> para ele mostrar.</dd>
+  <dt>"Olá, mundo!"</dt><dd>Um <strong>texto</strong>. As aspas marcam onde ele começa e onde termina. Elas não aparecem na tela: são a embalagem, não o conteúdo.</dd>
+  <dt>)</dt><dd>Fecha os parênteses. Todo parêntese aberto precisa ser fechado.</dd>
+</dl>
+
+<p>Repare no que <strong>não</strong> tem: não tem ponto e vírgula obrigatório no fim, não tem nada antes do <code>print</code>, não tem "começo" e "fim" de programa. O arquivo inteiro é o programa. Os textos podem ter acentos e cedilha à vontade: o Lua guarda e mostra do jeito que você escreveu.</p>
+
+<div class="trylua" data-goal="out:Olá, Ana!;;semerro">
+<p class="try-task"><strong>Missão:</strong> rode o "Olá, mundo!" e depois troque <code>mundo</code> por <code>Ana</code>, para aparecer <code>Olá, Ana!</code>. Mude só o que está entre as aspas.</p>
+<pre class="script" data-file="main.lua">print("Olá, mundo!")
+</pre>
+<pre class="solucao" data-file="main.lua">print("Olá, Ana!")
+</pre>
+</div>
+
+<hr>
+
+<h2>2. Aspas duplas ou simples</h2>
+<p>Em Lua, um texto pode ir entre aspas <strong>duplas</strong> (<code>"</code>) ou <strong>simples</strong> (<code>'</code>). As duas formas dão exatamente o mesmo texto. A escolha fica útil quando o texto tem aspas dentro:</p>
+
+<pre class="file" data-file="aspas.lua">print("Olá, mundo!")
+print('Olá, mundo!')
+print("Um copo d'água, por favor.")
+print('A placa dizia "Fechado".')
+</pre>
+
+<pre class="term" data-cwd="~/programas">$ lua aspas.lua
+Olá, mundo!
+Olá, mundo!                                        « o mesmo texto
+Um copo d'água, por favor.
+A placa dizia "Fechado".
+</pre>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>O texto tem…</th><th>Use</th><th>Exemplo</th></tr>
+<tr><td>Nenhuma aspa dentro</td><td>Qualquer uma (o guia usa a dupla)</td><td><code>"Olá, mundo!"</code></td></tr>
+<tr><td>Um apóstrofo (<code>'</code>), como em "d'água"</td><td>Aspas duplas por fora</td><td><code>"Um copo d'água"</code></td></tr>
+<tr><td>Aspas duplas dentro, como uma citação</td><td>Aspas simples por fora</td><td><code>'A placa dizia "Fechado".'</code></td></tr>
+</table>
+</div>
+
+<p>A regra é uma só: o texto termina na primeira aspa <strong>igual</strong> à que o abriu. Por isso uma aspa simples dentro de aspas duplas não atrapalha, e vice-versa. Os textos (que o Lua chama de <em>strings</em>, "cordões" de letras) têm uma aula inteira: <a href="strings.html">Strings (Textos)</a>, e existe ainda um terceiro jeito de escrever textos, com colchetes duplos, para textos de várias linhas (<a href="strings-longas.html">Textos Longos</a>).</p>
+
+<hr>
+
+<h2>3. Várias linhas, na ordem</h2>
+<p>Cada <code>print</code> mostra uma linha, e o Lua faz um de cada vez, de cima para baixo. Com cinco <code>print</code>, a Ana montou um cartão de visita:</p>
+
+<pre class="file" data-file="cartao.lua">print("==========================")
+print("Ana Souza")
+print("Confeiteira")
+print("Teresina - PI")
+print("==========================")
+</pre>
+
+<pre class="term" data-cwd="~/programas">$ lua cartao.lua
+==========================
+Ana Souza
+Confeiteira
+Teresina - PI
+==========================
+</pre>
+
+<p>A tela mostra as linhas na <strong>mesma ordem</strong> do arquivo. Para o Lua, os sinais de <code>=</code> dentro das aspas são só texto, como qualquer outro; o efeito de "moldura" é coisa sua.</p>
+
+<h3>Uma linha em branco: <code>print()</code></h3>
+<p>Com os parênteses vazios, o <code>print</code> não tem nada para mostrar, e escreve só a quebra de linha. O resultado é uma linha em branco, ótima para separar partes:</p>
+
+<pre class="file" data-file="vazio.lua">print("Lista de compras")
+print()
+print("arroz")
+print("feijão")
+</pre>
+
+<pre class="term" data-cwd="~/programas">$ lua vazio.lua
+Lista de compras
+                                                   « a linha em branco do print()
+arroz
+feijão
+</pre>
+
+<div class="trylua" data-goal="src:^print\(\s*\)\s*$;;outre:Ana Souza\n\nConfeiteira;;semerro">
+<p class="try-task"><strong>Missão:</strong> acrescente uma linha com <code>print()</code> vazio entre o nome e a profissão, para separar os dois, e rode. Depois, se quiser, troque o nome, a profissão e a cidade pelos seus e faça o seu cartão de visita.</p>
+<pre class="script" data-file="main.lua">print("==========================")
+print("Ana Souza")
+print("Confeiteira")
+print("Teresina - PI")
+print("==========================")
+</pre>
+<pre class="solucao" data-file="main.lua">print("==========================")
+print("Ana Souza")
+print()
+print("Confeiteira")
+print("Teresina - PI")
+print("==========================")
+</pre>
+</div>
+
+<hr>
+
+<h2>4. Números e contas</h2>
+<p>O <code>print</code> não mostra só textos. Sem aspas, o Lua <strong>calcula</strong> antes de mostrar:</p>
+
+<pre class="file" data-file="contas.lua">print(2 + 3)
+print("2 + 3")
+print("Total:", 2 + 3)
+print("Pães:", 10, "unidades")
+print("Preço de 10 pães:", 10 * 0.75)
+</pre>
+
+<pre class="term" data-cwd="~/programas">$ lua contas.lua
+5                                                  « sem aspas: a conta
+2 + 3                                              « com aspas: o texto, do jeito que está
+Total:	5
+Pães:	10	unidades
+Preço de 10 pães:	7.5
+</pre>
+
+<dl class="anatomy">
+  <dt>print(2 + 3)</dt><dd>Sem aspas, <code>2 + 3</code> é uma <strong>conta</strong>: o Lua calcula, e o <code>print</code> recebe o resultado, <code>5</code>.</dd>
+  <dt>print("2 + 3")</dt><dd>Com aspas, <code>"2 + 3"</code> é um <strong>texto</strong> que, por acaso, tem números. O Lua não faz conta nenhuma: mostra os cinco caracteres como estão.</dd>
+  <dt>print("Total:", 2 + 3)</dt><dd>A <strong>vírgula</strong> separa as coisas que você quer mostrar na mesma linha. O <code>print</code> mostra uma, uma <strong>tabulação</strong> (aquele espaço largo, o mesmo da tecla <kbd>Tab</kbd>) e a outra.</dd>
+  <dt>print("Pães:", 10, "unidades")</dt><dd>Quantas coisas você quiser, separadas por vírgulas. Cada vírgula vira uma tabulação na tela.</dd>
+  <dt>10 * 0.75</dt><dd>O <code>*</code> é a multiplicação, e os decimais usam <strong>ponto</strong>: <code>0.75</code>, nunca <code>0,75</code> (a vírgula, você acabou de ver, separa valores).</dd>
+</dl>
+
+<p>A tabulação é ótima para ver valores rapidinho, mas deixa as frases com buracos largos (veja a linha dos pães, acima). Para escrever uma frase bonita, com texto e número grudados do jeito que você quer, o Lua tem outro jeito.</p>
+
+<h3>Juntando texto e número: o <code>..</code></h3>
+<p>Dois pontos seguidos, <code>..</code>, <strong>juntam</strong> dois valores num texto só (em programação, isso se chama <strong>concatenar</strong>). O espaço entre eles é você quem põe, dentro das aspas:</p>
+
+<pre class="file" data-file="juntar.lua">print("Total: " .. 2 + 3)
+print("Pães: " .. 10 .. " unidades")
+print("Total:", 5)
+</pre>
+
+<pre class="term" data-cwd="~/programas">$ lua juntar.lua
+Total: 5                                           « com .. : um espaço, o que você escreveu
+Pães: 10 unidades
+Total:	5                                            « com vírgula: a tabulação
+</pre>
+
+<dl class="anatomy">
+  <dt>"Total: " .. 2 + 3</dt><dd>O Lua faz a conta primeiro (<code>2 + 3</code> dá <code>5</code>) e depois junta o texto <code>"Total: "</code> com o <code>5</code>. Repare no espaço <strong>dentro</strong> das aspas, depois do dois-pontos: sem ele, sairia <code>Total:5</code>.</dd>
+  <dt>"Pães: " .. 10 .. " unidades"</dt><dd>Dá para juntar vários pedaços em fila. O número <code>10</code> vira texto sozinho na hora de juntar.</dd>
+</dl>
+
+<p>O <code>..</code> tem aula própria (<a href="concatenacao.html">Juntando Textos (..)</a>), e o <code>print</code> também (<a href="print.html">print()</a>). As contas estão em <a href="operadores-aritmeticos.html">Operadores Aritméticos</a>.</p>
+
+<hr>
+
+<h2>5. Juntando tudo: o recibo da padaria</h2>
+<p>A Padaria Pão Quente vende o pão a R$ 0,75 e o litro de leite a R$ 6,50. Com o que você já sabe, a Ana escreveu um recibo:</p>
+
+<pre class="file" data-file="recibo.lua">print("Padaria Pão Quente")
+print("------------------")
+print("10 pães: " .. 10 * 0.75)
+print("1 leite: " .. 6.50)
+print("Total: " .. 10 * 0.75 + 6.50)
+print("------------------")
+print("Obrigado e volte sempre!")
+</pre>
+
+<pre class="term" data-cwd="~/programas">$ lua recibo.lua
+Padaria Pão Quente
+------------------
+10 pães: 7.5
+1 leite: 6.5                                       « o zero do fim sumiu
+Total: 14.0
+------------------
+Obrigado e volte sempre!
+</pre>
+
+<p>Funciona, mas repare em dois detalhes: o <code>6.50</code> apareceu como <code>6.5</code>, e o total como <code>14.0</code>. Para o Lua, <code>6.50</code> e <code>6.5</code> são o mesmo número, e ele mostra do jeito mais curto; e uma conta com número decimal dá resultado decimal, mesmo quando é redondo (por isso o <code>.0</code>: aula <a href="numeros.html">Números</a>). Um recibo de verdade mostraria <code>R$ 6,50</code>; você vai aprender a formatar assim na aula <a href="string-format.html">string.format</a>. Por enquanto, o importante é que a conta está certa: 7,50 + 6,50 = 14.</p>
+
+<div class="trylua" data-goal="out:2 cafés: 7.0;;out:Total: 21.0;;semerro">
+<p class="try-task"><strong>Missão:</strong> a cliente também levou <strong>2 cafés</strong> de R$ 3,50. Acrescente uma linha <code>print("2 cafés: " .. 2 * 3.50)</code> depois do leite e some o café no total (<code>+ 2 * 3.50</code>). O total deve ficar <code>21.0</code>.</p>
+<pre class="script" data-file="main.lua">print("Padaria Pão Quente")
+print("------------------")
+print("10 pães: " .. 10 * 0.75)
+print("1 leite: " .. 6.50)
+print("Total: " .. 10 * 0.75 + 6.50)
+print("------------------")
+print("Obrigado e volte sempre!")
+</pre>
+<pre class="solucao" data-file="main.lua">print("Padaria Pão Quente")
+print("------------------")
+print("10 pães: " .. 10 * 0.75)
+print("1 leite: " .. 6.50)
+print("2 cafés: " .. 2 * 3.50)
+print("Total: " .. 10 * 0.75 + 6.50 + 2 * 3.50)
+print("------------------")
+print("Obrigado e volte sempre!")
+</pre>
+</div>
+
+<hr>
+
+<h2>6. Duas liberdades do Lua: sem parênteses e o <code>;</code></h2>
+<p>Você vai encontrar essas duas coisas em código dos outros, então é bom conhecer:</p>
+
+<pre class="file" data-file="semparenteses.lua">print "Olá, mundo!"
+print("Olá, mundo!");
+</pre>
+
+<pre class="term" data-cwd="~/programas">$ lua semparenteses.lua
+Olá, mundo!
+Olá, mundo!
+</pre>
+
+<ul>
+  <li><strong>Sem parênteses:</strong> quando você entrega à função <strong>um único texto</strong> entre aspas, o Lua deixa omitir os parênteses: <code>print "Olá"</code>. Com dois valores, ou com um número, não funciona (o erro está logo abaixo, em <a href="#errado">Quando dá errado</a>). O guia sempre usa os parênteses: é mais claro, e funciona em todos os casos.</li>
+  <li><strong>O ponto e vírgula:</strong> o <code>;</code> no fim da linha é permitido, mas não é obrigatório. Ele serve para separar duas instruções escritas na mesma linha (<code>print("a"); print("b")</code>). O guia não usa no fim das linhas, que é o costume da comunidade Lua.</li>
+</ul>
+
+<hr>
+
+<h2>Formas diferentes de mostrar a mesma coisa</h2>
+<p>As quatro linhas abaixo mostram o total 5:</p>
+
+<pre class="file" data-file="formas.lua">print("Total: 5")
+print("Total: " .. 5)
+print("Total: " .. 2 + 3)
+print("Total:", 5)
+</pre>
+
+<pre class="term" data-cwd="~/programas">$ lua formas.lua
+Total: 5
+Total: 5
+Total: 5
+Total:	5                                            « a única diferente: tabulação
+</pre>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Forma</th><th>Quando usar</th></tr>
+<tr><td><code>print("Total: 5")</code></td><td>Quando o texto é fixo e você já sabe o número</td></tr>
+<tr><td><code>print("Total: " .. 5)</code></td><td>Para montar uma frase com texto e número, com o espaço que você escolher. É o jeito mais comum nas primeiras aulas</td></tr>
+<tr><td><code>print("Total: " .. 2 + 3)</code></td><td>Quando o Lua precisa calcular. É o caso de um programa de verdade: você não faz a conta de cabeça, o Lua faz</td></tr>
+<tr><td><code>print("Total:", 5)</code></td><td>Para conferir valores rapidinho, sem se importar com a aparência (sai com tabulação)</td></tr>
+</table>
+</div>
+
+<p>Mais adiante você vai conhecer o <a href="string-format.html">string.format</a>, o jeito mais caprichado de misturar texto e valores: <code>string.format("Total: %.2f", 14)</code> dá <code>Total: 14.00</code>.</p>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+<p>Todo mundo erra no primeiro programa. Os erros abaixo são os mais comuns, com a mensagem real do Lua. Para todos eles, o conselho é o mesmo: olhe primeiro o <strong>arquivo e a linha</strong> (<code>e1.lua:1:</code>), depois leia a explicação.</p>
+
+<div class="cenario">
+<strong>Esqueceu de fechar as aspas</strong>
+<pre class="file" data-file="e1.lua">print("Olá, mundo!)
+</pre>
+<pre class="term" data-cwd="~/programas">$ lua e1.lua
+lua: e1.lua:1: unfinished string near '"Olá, mundo!)'
+</pre>
+<p><strong>O que aconteceu:</strong> "texto não terminado perto de <code>"Olá, mundo!)</code>". As aspas abriram antes de <code>Olá</code> e nunca fecharam, então o Lua achou que o <code>)</code> também fazia parte do texto, e chegou ao fim da linha sem achar o fim do texto. Repare que ele mostra o pedaço do texto que ficou aberto.</p>
+<p><strong>Como resolver:</strong> feche as aspas: <code>print("Olá, mundo!")</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Aspas que não combinam</strong>
+<pre class="file" data-file="e6.lua">print("Olá, mundo!')
+</pre>
+<pre class="term" data-cwd="~/programas">$ lua e6.lua
+lua: e6.lua:1: unfinished string near '"Olá, mundo!')'
+</pre>
+<p><strong>O que aconteceu:</strong> o mesmo erro. O texto abriu com aspa <strong>dupla</strong>, e a aspa <strong>simples</strong> do fim não fecha um texto aberto com dupla (ela é só mais uma letra do texto). <strong>Como resolver:</strong> use o mesmo tipo de aspa nos dois lados.</p>
+</div>
+
+<div class="cenario">
+<strong>Esqueceu de fechar o parêntese</strong>
+<pre class="file" data-file="e2.lua">print("Olá, mundo!"
+</pre>
+<pre class="term" data-cwd="~/programas">$ lua e2.lua
+lua: e2.lua:2: ')' expected (to close '(' at line 1) near &lt;eof&gt;
+</pre>
+<p><strong>O que aconteceu:</strong> "era esperado um <code>)</code> (para fechar o <code>(</code> da linha 1) perto de <code>&lt;eof&gt;</code>". <code>&lt;eof&gt;</code> é a sigla em inglês de "fim do arquivo" (<em>end of file</em>): o Lua chegou ao fim do arquivo, já na linha 2, ainda esperando o parêntese. <strong>Como resolver:</strong> feche-o: <code>print("Olá, mundo!")</code>. Quando o programa tem várias linhas, procure a linha do <code>(</code> que a mensagem indica (<code>at line 1</code>): o parêntese esquecido está lá, mesmo que o erro apareça mais embaixo.</p>
+</div>
+
+<div class="cenario">
+<strong><code>Print</code> com P maiúsculo</strong>
+<pre class="file" data-file="e3.lua">Print("Olá, mundo!")
+</pre>
+<pre class="term" data-cwd="~/programas">$ lua e3.lua
+lua: e3.lua:1: attempt to call a nil value (global 'Print')
+stack traceback:
+	e3.lua:1: in main chunk
+	[C]: in ?
+</pre>
+<p><strong>O que aconteceu:</strong> para o Lua, maiúsculas e minúsculas são letras diferentes. <code>print</code> existe; <code>Print</code>, não, então vale <code>nil</code>, e não dá para chamar <code>nil</code>: "tentativa de chamar um valor nil (o nome <code>Print</code>)". Os celulares e alguns editores de texto põem a primeira letra da linha em maiúscula sozinhos, e esse erro aparece muito por isso. <strong>Como resolver:</strong> <code>print</code>, tudo em minúsculas.</p>
+</div>
+
+<div class="cenario">
+<strong>Aspas "curvas", copiadas de um documento</strong>
+<p>A Ana copiou a linha de um documento do editor de textos e colou no programa:</p>
+<pre class="file" data-file="e4.lua">print(“Olá, mundo!”)
+</pre>
+<pre class="term" data-cwd="~/programas">$ lua e4.lua
+lua: e4.lua:1: unexpected symbol near '&lt;\226&gt;'
+</pre>
+<p><strong>O que aconteceu:</strong> "símbolo inesperado perto de <code>&lt;\226&gt;</code>". Olhe de perto: as aspas são <strong>curvas</strong> (<code>“ ”</code>), as aspas "bonitas" que o LibreOffice, o Word e muitos sites colocam sozinhos. Para o Lua, só valem as aspas <strong>retas</strong> do teclado (<code>"</code> e <code>'</code>). E o que é <code>&lt;\226&gt;</code>? A aspa curva é guardada no arquivo como três bytes (números de 0 a 255), e o Lua mostra o primeiro deles, o 226, entre <code>&lt; &gt;</code>, porque não sabe que letra é.</p>
+<p><strong>Como resolver:</strong> apague as aspas curvas e digite as retas no teclado. E escreva os programas num editor de código (aula <a href="instalar.html">Instalar o Lua</a>), nunca num editor de documentos.</p>
+</div>
+
+<div class="cenario">
+<strong>Esqueceu a vírgula</strong>
+<pre class="file" data-file="e5.lua">print("Total:" 5)
+</pre>
+<pre class="term" data-cwd="~/programas">$ lua e5.lua
+lua: e5.lua:1: ')' expected near '5'
+</pre>
+<p><strong>O que aconteceu:</strong> depois do texto <code>"Total:"</code>, o Lua esperava uma vírgula (mais um valor) ou o <code>)</code> (o fim). Veio o <code>5</code>, e ele reclamou: "era esperado um <code>)</code> perto de <code>5</code>". <strong>Como resolver:</strong> <code>print("Total:", 5)</code> ou <code>print("Total: " .. 5)</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Vírgula no lugar do ponto decimal: não dá erro, dá resultado errado</strong>
+<pre class="file" data-file="e7.lua">print("Preço:", 10 * 0,75)
+</pre>
+<pre class="term" data-cwd="~/programas">$ lua e7.lua
+Preço:	0	75
+</pre>
+<p><strong>O que aconteceu:</strong> a Ana queria 10 vezes 0,75. Saiu <code>0</code> e <code>75</code>, sem nenhuma mensagem de erro. Para o Lua, a vírgula separa valores: ele entendeu <strong>três</strong> coisas, o texto, a conta <code>10 * 0</code> (que dá <code>0</code>) e o número <code>75</code>, e mostrou as três com tabulação. Esse é o pior tipo de erro, o que não avisa. <strong>Como resolver:</strong> decimal com ponto: <code>10 * 0.75</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Juntar texto e número com <code>+</code></strong>
+<pre class="file" data-file="e8.lua">print("Total: " + 5)
+</pre>
+<pre class="term" data-cwd="~/programas">$ lua e8.lua
+lua: e8.lua:1: attempt to add a 'string' with a 'number'
+stack traceback:
+	[C]: in metamethod 'add'
+	e8.lua:1: in main chunk
+	[C]: in ?
+</pre>
+<p><strong>O que aconteceu:</strong> quem vem de outras linguagens tenta juntar textos com <code>+</code>. No Lua, o <code>+</code> é <strong>só</strong> para somar números: "tentativa de somar (<em>add</em>) uma <em>string</em> (texto) com um <em>number</em> (número)". O texto <code>"Total: "</code> não é um número, então não dá para somar. A linha <code>[C]: in metamethod 'add'</code> é o Lua tentando, por dentro, transformar o texto em número; pode ignorar por enquanto. <strong>Como resolver:</strong> para juntar, use o <code>..</code>: <code>print("Total: " .. 5)</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Sem parênteses, com dois valores</strong>
+<pre class="file" data-file="e9.lua">print "Total:", 5
+</pre>
+<pre class="term" data-cwd="~/programas">$ lua e9.lua
+lua: e9.lua:1: syntax error near ','
+</pre>
+<p><strong>O que aconteceu:</strong> o atalho sem parênteses (seção 6) só vale para <strong>um</strong> texto. O Lua leu <code>print "Total:"</code> como uma chamada completa e não soube o que fazer com a vírgula que veio depois: "erro de sintaxe perto de <code>,</code>". <strong>Como resolver:</strong> use os parênteses: <code>print("Total:", 5)</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Dois erros no mesmo arquivo</strong>
+<pre class="file" data-file="e10.lua">print("Olá, mundo!")
+Print("Tchau!")
+print("fim"
+</pre>
+<pre class="term" data-cwd="~/programas">$ lua e10.lua
+lua: e10.lua:4: ')' expected (to close '(' at line 3) near &lt;eof&gt;
+</pre>
+<p><strong>O que aconteceu:</strong> o arquivo tem um erro de execução (o <code>Print</code> da linha 2) e um de sintaxe (o parêntese da linha 3). O Lua só reclamou do de sintaxe, e não mostrou nem o <code>Olá, mundo!</code> da linha 1. Lembre da aula <a href="executar.html">Rodando um Programa</a>: o Lua <strong>confere a escrita do arquivo inteiro primeiro</strong>, e só roda se estiver tudo certo. Depois de você consertar o parêntese, o programa roda, mostra <code>Olá, mundo!</code> e para no <code>Print</code>. Conserte um erro de cada vez, rodando de novo depois de cada conserto.</p>
+</div>
+
+<div class="trylua" data-goal="semerro;;out:Pão saindo às 7h">
+<p class="try-task"><strong>Missão:</strong> este programa tem <strong>dois</strong> erros e não roda. Clique em Rodar, leia a mensagem, conserte e rode de novo até aparecer o recado inteiro.</p>
+<pre class="script" data-file="main.lua">print("Padaria do Bairro")
+Print("Pão saindo às 7h)
+</pre>
+<pre class="solucao" data-file="main.lua">print("Padaria do Bairro")
+print("Pão saindo às 7h")
+</pre>
+</div>
+
+<p>Repare na ordem em que os erros aparecem. Primeiro vem o <code>unfinished string</code> da aspa (erro de sintaxe: nada roda). Só depois de consertar a aspa o programa começa a rodar, mostra a primeira linha e para no <code>attempt to call a nil value (global 'Print')</code>.</p>
+
+<hr>
+
+<h2>Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>O que mostra</th></tr>
+<tr><td><code>print("Olá")</code> / <code>print('Olá')</code></td><td><code>Olá</code> (o texto, sem as aspas)</td></tr>
+<tr><td><code>print("d'água")</code> / <code>print('ele disse "oi"')</code></td><td>Texto com aspas dentro: use o outro tipo de aspa por fora</td></tr>
+<tr><td><code>print()</code></td><td>Uma linha em branco</td></tr>
+<tr><td><code>print(2 + 3)</code></td><td><code>5</code> (o resultado da conta)</td></tr>
+<tr><td><code>print("2 + 3")</code></td><td><code>2 + 3</code> (texto, sem conta)</td></tr>
+<tr><td><code>print("Total:", 5)</code></td><td><code>Total:</code>, uma tabulação e <code>5</code></td></tr>
+<tr><td><code>print("Total: " .. 5)</code></td><td><code>Total: 5</code> (texto e número juntos num texto só)</td></tr>
+<tr><td><code>print "Olá"</code></td><td><code>Olá</code> (sem parênteses: só com um único texto)</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Mensagem</th><th>Causa provável</th></tr>
+<tr><td><code>unfinished string near '"…'</code></td><td>Aspa que não fecha, ou fechada com a aspa do outro tipo</td></tr>
+<tr><td><code>')' expected (to close '(' at line N) near &lt;eof&gt;</code></td><td>Faltou fechar o parêntese da linha N</td></tr>
+<tr><td><code>')' expected near '5'</code></td><td>Faltou a vírgula (ou o <code>..</code>) entre dois valores</td></tr>
+<tr><td><code>attempt to call a nil value (global 'Print')</code></td><td>Nome da função escrito errado (maiúscula, letra trocada)</td></tr>
+<tr><td><code>unexpected symbol near '&lt;\226&gt;'</code></td><td>Aspas curvas (ou outro símbolo estranho) copiadas de um documento</td></tr>
+<tr><td><code>attempt to add a 'string' with a 'number'</code></td><td><code>+</code> entre texto e número: para juntar, use <code>..</code></td></tr>
+<tr><td><code>syntax error near ','</code></td><td><code>print</code> sem parênteses com mais de um valor</td></tr>
+<tr><td>Saiu <code>0</code> e <code>75</code> em vez de <code>7.5</code>, sem erro</td><td>Vírgula no lugar do ponto decimal</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. Complete o comando</h3>
+<p>Complete para mostrar o texto <code>Bom dia</code> na tela:</p>
+<div class="ex-code"><input data-answer="print" aria-label="nome da função">("Bom dia")</div>
+</div>
+
+<div class="exercise">
+<h3>2. Qual é a saída?</h3>
+<p>O que aparece na tela com <code>print(7 * 3)</code>?</p>
+<div class="ex-code">Saída: <input data-answer="21" aria-label="saída"></div>
+</div>
+
+<div class="exercise">
+<h3>3. E agora?</h3>
+<p>O que aparece na tela com <code>print("7 * 3")</code>?</p>
+<div class="ex-code">Saída: <input data-answer="7 * 3" aria-label="saída"></div>
+</div>
+
+<div class="exercise">
+<h3>4. Juntando</h3>
+<p>Complete para aparecer <code>Bolos: 3</code>, com um espaço depois do dois-pontos:</p>
+<div class="ex-code">print("Bolos: " <input data-answer=".." aria-label="operador"> 3)</div>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">5. O que separa os valores na saída de <code>print("Pães:", 6)</code>?</p>
+<label><input type="radio" name="q5"> Nada: sai <code>Pães:6</code>.</label>
+<label><input type="radio" name="q5"> Uma tabulação: o <code>print</code> põe uma entre cada valor.</label>
+<label><input type="radio" name="q5"> Uma vírgula: sai <code>Pães:, 6</code>.</label>
+<label><input type="radio" name="q5"> Dá erro, porque mistura texto e número.</label>
+</div>
+
+<div class="mc" data-answer="3">
+<p class="mc-q">6. Qual destas linhas mostra <code>Um copo d'água</code> sem erro?</p>
+<label><input type="radio" name="q6"> <code>print('Um copo d'água')</code></label>
+<label><input type="radio" name="q6"> <code>print(Um copo d'água)</code></label>
+<label><input type="radio" name="q6"> <code>print("Um copo d'água")</code></label>
+<label><input type="radio" name="q6"> <code>Print("Um copo d'água")</code></label>
+</div>
+
+<div class="mc" data-answer="4">
+<p class="mc-q">7. Um arquivo tem um <code>Print</code> na linha 2 e uma aspa sem fechar na linha 5. O que aparece ao rodar?</p>
+<label><input type="radio" name="q7"> A linha 1 roda, e depois aparece o erro do <code>Print</code>.</label>
+<label><input type="radio" name="q7"> As duas mensagens de erro, uma embaixo da outra.</label>
+<label><input type="radio" name="q7"> O Lua conserta os dois sozinho.</label>
+<label><input type="radio" name="q7"> Só o erro da aspa (<code>unfinished string</code>), e nenhuma linha roda.</label>
+</div>
+
+<h3>Missão final: o quadro da padaria</h3>
+
+<div class="trylua" data-goal="outre:^Padaria do Bairro\n\nPão francês: 12\nBolo de fubá: 3\n$;;src:\.\.\s*12;;semerro">
+<p class="try-task"><strong>Missão:</strong> monte o quadro de avisos da padaria. Ele deve mostrar <code>Padaria do Bairro</code>, depois <strong>uma linha em branco</strong>, depois <code>Pão francês: 12</code> e, na última linha, <code>Bolo de fubá: 3</code>. Os números devem ir como números (sem aspas), juntados ao texto com <code>..</code>.</p>
+<pre class="script" data-file="main.lua">print("Padaria do Bairro")
+</pre>
+<pre class="solucao" data-file="main.lua">print("Padaria do Bairro")
+print()
+print("Pão francês: " .. 12)
+print("Bolo de fubá: " .. 3)
+</pre>
+</div>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li><code>print(...)</code> mostra na tela o que está dentro dos parênteses e depois pula para a próxima linha. Cada <code>print</code> é uma linha da saída, na ordem do arquivo.</li>
+  <li>Textos vão entre aspas, duplas ou simples (feche com a mesma que abriu); as aspas não aparecem na tela. Use sempre as aspas retas do teclado.</li>
+  <li>Números e contas vão sem aspas, e o Lua calcula antes de mostrar. Decimal com ponto: <code>0.75</code>.</li>
+  <li>Com aspas é texto (<code>"2 + 3"</code>); sem aspas é valor (<code>2 + 3</code> → <code>5</code>).</li>
+  <li>Vários valores separados por vírgula saem na mesma linha, com uma <strong>tabulação</strong> entre eles. Para montar uma frase, junte com <code>..</code>: <code>"Total: " .. 5</code>. O <code>+</code> só soma números.</li>
+  <li><code>print()</code> vazio mostra uma linha em branco. <code>print "texto"</code> (sem parênteses) funciona só com um único texto; o <code>;</code> no fim é opcional.</li>
+  <li>Erros de escrita (<code>unfinished string</code>, <code>')' expected</code>, <code>unexpected symbol</code>) impedem o programa inteiro de rodar; erros de execução (<code>attempt to call a nil value</code>) param o programa na linha. Comece a ler pelo arquivo e a linha da mensagem.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
