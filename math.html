@@ -1,0 +1,476 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua math — a biblioteca de matemática | Guia Lua</title>
+<meta name="description" content="A biblioteca math do Lua 5.5 para quem nunca programou: arredondar para baixo e para cima (math.floor e math.ceil), arredondar para o mais perto, math.abs, math.max e math.min, raiz e potência, math.pi, inteiros e floats (math.type, math.tointeger, math.maxinteger), infinito e nan, math.fmod e math.modf, e os erros reais (bad argument, math.round que não existe).">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">math</span></h1>
+
+<p class="intro">Somar, subtrair, multiplicar e dividir você já sabe fazer com os <a href="operadores-aritmeticos.html">operadores</a>. Mas a Ana logo precisa de mais: quantas caixas de ovos levar, qual foi a maior nota da turma, quanto mede uma pizza, como mostrar um preço arredondado. Para isso o Lua tem a biblioteca <code>math</code> ("matemática"): uma tabela, que já vem carregada, cheia de funções e valores prontos. Você escreve <code>math.</code> e o nome da ferramenta.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>Arredondar para baixo e para cima: <code>math.floor</code> e <code>math.ceil</code>, e como arredondar para o mais perto (o Lua não tem <code>math.round</code>).</li>
+  <li>O maior, o menor e a distância: <code>math.max</code>, <code>math.min</code> e <code>math.abs</code>.</li>
+  <li>Raiz, potência e o <code>math.pi</code>.</li>
+  <li>Inteiros e floats: <code>math.type</code>, <code>math.tointeger</code>, <code>math.maxinteger</code> e o que acontece quando passa do limite.</li>
+  <li>O infinito (<code>math.huge</code>) e o estranho <code>nan</code>.</li>
+  <li><code>math.fmod</code> e <code>math.modf</code>, e por que <code>0.1 + 0.2</code> não dá exatamente <code>0.3</code>.</li>
+  <li>Os erros reais: <code>bad argument #1 to 'floor'</code>, o <code>Math</code> com maiúscula e o <code>math.round</code> que não existe.</li>
+</ul>
+</div>
+
+<p>As saídas são do <strong>Lua 5.5</strong> da máquina da Ana. Os sorteios (<code>math.random</code>) têm uma aula só para eles: <a href="math-random.html">Números Aleatórios</a>. A lista completa de funções está em <a href="ref-math.html">Referência: a Biblioteca math</a>.</p>
+
+<hr>
+
+<h2>A ideia: a calculadora científica da gaveta</h2>
+<p>A calculadora simples do caixa da padaria faz as quatro contas. A calculadora científica, que a Ana guardou da escola, tem teclas a mais: raiz quadrada, π, potência, arredondar. Você não precisa saber como ela calcula uma raiz por dentro: aperta a tecla e pronto. A biblioteca <code>math</code> é essa calculadora: cada função é uma tecla.</p>
+<p>Ela é uma <a href="tabelas.html">tabela</a> comum, guardada na variável global <code>math</code>, que o Lua carrega antes do seu programa começar (como as outras bibliotecas padrão; veja <a href="modulos.html">Módulos e require</a>). Por isso não precisa de <code>require</code>.</p>
+
+<hr>
+
+<h2>1. Arredondar para baixo e para cima: <code>floor</code> e <code>ceil</code></h2>
+
+<pre class="file" data-file="arredondar.lua">print(math.floor(3.7), math.ceil(3.2))
+print(math.floor(-3.7), math.ceil(-3.2))
+print(math.floor(5), math.type(math.floor(3.7)))
+</pre>
+
+<pre class="term">$ lua arredondar.lua
+3	4
+-4	-3
+5	integer</pre>
+
+<dl class="anatomy">
+  <dt>math.floor(3.7) → 3</dt><dd><em>floor</em> é "chão": desce até o inteiro de baixo. Não importa se faltava pouco (3,7 vira 3, não 4).</dd>
+  <dt>math.ceil(3.2) → 4</dt><dd><em>ceil</em> (de <em>ceiling</em>) é "teto": sobe até o inteiro de cima.</dd>
+  <dt>math.floor(-3.7) → -4</dt><dd>Cuidado com os negativos: "para baixo" é na direção do menos infinito, então −3,7 desce para −4 (e não para −3).</dd>
+  <dt>math.floor(5) → 5</dt><dd>Um número que já é inteiro fica como está.</dd>
+  <dt>math.type(…) → integer</dt><dd>O resultado é um <strong>inteiro</strong> de verdade (sem <code>.0</code>), pronto para contar coisas ou servir de posição numa lista (veja <a href="numeros.html">Números</a>).</dd>
+</dl>
+
+<h3>Para que serve: as caixas de ovos</h3>
+<p>A Ana tem 50 ovos para vender e cada caixa leva 12. Quantas caixas ficam cheias? E quantas caixas ela precisa levar para carregar todos os ovos?</p>
+
+<pre class="file" data-file="ovos.lua">local ovos = 50
+local por_caixa = 12
+print("Divisão:", ovos / por_caixa)
+print("Caixas cheias:", math.floor(ovos / por_caixa))
+print("Caixas para levar tudo:", math.ceil(ovos / por_caixa))
+</pre>
+
+<pre class="term">$ lua ovos.lua
+Divisão:	4.166666666666667
+Caixas cheias:	4
+Caixas para levar tudo:	5</pre>
+
+<p>A divisão dá 4,17 caixas, que não existe. <strong>Cheias</strong> são 4 (arredonda para baixo: a quinta não completa). Mas para <strong>levar</strong> os 50 ovos, a quinta caixa é necessária, mesmo meio vazia: arredonda para cima. Repare que <code>math.floor(a / b)</code> é o mesmo que a divisão inteira <code>a // b</code> (veja <a href="divisao.html">Divisão: /, // e %</a>).</p>
+
+<div class="trylua" data-goal="out:Pacotes: 8;;src:math\.ceil">
+<p class="try-task"><strong>Missão:</strong> a padaria vende pães de queijo em pacotes de 6. Um cliente encomendou 45. O programa usa <code>math.floor</code> e diz 7 pacotes, mas aí faltariam pães! Troque pela função que arredonda <strong>para cima</strong>.</p>
+<pre class="script" data-file="main.lua">local paes = 45
+local por_pacote = 6
+local pacotes = math.floor(paes / por_pacote)
+print("Pacotes: " .. pacotes)
+</pre>
+<pre class="solucao" data-file="main.lua">local paes = 45
+local por_pacote = 6
+local pacotes = math.ceil(paes / por_pacote)
+print("Pacotes: " .. pacotes)
+</pre>
+</div>
+
+<hr>
+
+<h2>2. Arredondar para o mais perto</h2>
+<p>Quem vem de outras linguagens procura um <code>math.round</code>. <strong>No Lua ele não existe</strong> (o erro está em <a href="#errado">Quando dá errado</a>). Há dois caminhos, e eles servem para coisas diferentes:</p>
+
+<pre class="file" data-file="casas.lua">local function arredondar(x, casas)
+  local fator = 10 ^ (casas or 0)
+  return math.floor(x * fator + 0.5) / fator
+end
+print(arredondar(2.5), arredondar(2.4), arredondar(-2.5))
+print(arredondar(3.14159, 2), arredondar(19.995, 2))
+print(string.format("%.2f", 3.14159), string.format("%.0f", 2.5), string.format("%.0f", 3.5))
+</pre>
+
+<pre class="term">$ lua casas.lua
+3.0	2.0	-2.0
+3.14	20.0
+3.14	2	4</pre>
+
+<dl class="anatomy">
+  <dt>math.floor(x + 0.5)</dt><dd>O truque clássico: somar meio e arredondar para baixo. 2,4 + 0,5 = 2,9 → 2. 2,5 + 0,5 = 3,0 → 3. O "meio" sempre sobe (por isso −2,5 virou −2).</dd>
+  <dt>10 ^ (casas or 0)</dt><dd>Para 2 casas, o fator é 100: multiplica por 100, arredonda, divide por 100. Sem o segundo argumento, <code>casas</code> é <code>nil</code>, e o <code>or 0</code> usa 0 casas. O resultado sai como float (<code>3.0</code>) porque <code>^</code> e <code>/</code> sempre dão float.</dd>
+  <dt>string.format("%.2f", x)</dt><dd>Não muda o número: <strong>escreve</strong> um texto com 2 casas (veja <a href="string-format.html">string.format</a>). É o certo para <strong>mostrar</strong> dinheiro.</dd>
+  <dt>"%.0f" com 2.5 → 2, com 3.5 → 4</dt><dd>Surpresa: o <code>string.format</code> arredonda o "meio exato" para o <strong>par</strong> mais perto (2,5 → 2; 3,5 → 4). É uma regra usada em contabilidade, e vem da linguagem C. Se você precisa que o meio sempre suba, use a função <code>arredondar</code>.</dd>
+</dl>
+
+<div class="tip">
+<strong>Qual usar?</strong>
+<p>Para <strong>mostrar</strong> na tela: <code>string.format("%.2f", valor)</code>. Para <strong>continuar fazendo contas</strong> com o número arredondado: a função com <code>math.floor(x + 0.5)</code>. E para dinheiro de verdade, muitos programadores guardam os <strong>centavos</strong> como inteiros (R$ 19,99 = 1999), que nunca têm problema de arredondamento.</p>
+</div>
+
+<hr>
+
+<h2>3. O maior, o menor e a distância: <code>max</code>, <code>min</code> e <code>abs</code></h2>
+
+<pre class="file" data-file="notas.lua">local notas = {7.5, 9, 4, 8.5}
+print("Maior:", math.max(table.unpack(notas)))
+print("Menor:", math.min(table.unpack(notas)))
+print("Diferença da meta:", math.abs(6 - 4), math.abs(6 - 9))
+</pre>
+
+<pre class="term">$ lua notas.lua
+Maior:	9
+Menor:	4
+Diferença da meta:	2	3</pre>
+
+<dl class="anatomy">
+  <dt>math.max(a, b, c, …)</dt><dd>Devolve o <strong>maior</strong> dos números que você passar, quantos forem (pelo menos um).</dd>
+  <dt>math.min(…)</dt><dd>O <strong>menor</strong>.</dd>
+  <dt>table.unpack(notas)</dt><dd>O <code>max</code> não recebe uma lista: recebe os números soltos. O <code>table.unpack</code> "desempacota" a lista em <code>7.5, 9, 4, 8.5</code> (veja <a href="table-unpack.html">table.unpack</a>). Para listas enormes (milhares de itens), prefira um laço.</dd>
+  <dt>math.abs(x)</dt><dd>O valor <strong>absoluto</strong>: o número sem o sinal. <code>6 - 9</code> dá −3, mas a distância até a meta é 3. Serve para "quanto falta ou quanto passou", sem importar o lado.</dd>
+</dl>
+
+<hr>
+
+<h2>4. Raiz, potência e o <code>math.pi</code></h2>
+<p>Qual é a área de uma pizza de 30 cm? A área de um círculo é π × raio²:</p>
+
+<pre class="file" data-file="pizza.lua">local diametro = 30
+local raio = diametro / 2
+local area = math.pi * raio ^ 2
+print(math.pi)
+print(area)
+print(string.format("Área: %.1f cm²", area))
+print(math.sqrt(16), 16 ^ 0.5, 27 ^ (1/3))
+</pre>
+
+<pre class="term">$ lua pizza.lua
+3.1415926535897931
+706.85834705770344
+Área: 706.9 cm²
+4.0	4.0	3.0</pre>
+
+<dl class="anatomy">
+  <dt>math.pi</dt><dd>Não é uma função (não tem parênteses): é um <strong>valor</strong> guardado na tabela, o π, com toda a precisão que o computador guarda.</dd>
+  <dt>raio ^ 2</dt><dd>A potência é o operador <code>^</code>: <code>raio ^ 2</code> = raio ao quadrado. (O Lua 5.1 tinha também <code>math.pow</code>; no 5.5 ela não existe mais: <code>print(math.pow)</code> mostra <code>nil</code>.)</dd>
+  <dt>math.sqrt(16)</dt><dd><em>Square root</em>, a raiz quadrada. O mesmo que <code>16 ^ 0.5</code>. A raiz cúbica é <code>27 ^ (1/3)</code>.</dd>
+  <dt>4.0</dt><dd>A raiz sempre devolve float, mesmo quando o resultado é "redondo".</dd>
+</dl>
+
+<hr>
+
+<h2>5. Inteiros e floats: <code>type</code>, <code>tointeger</code> e os limites</h2>
+<p>Desde o Lua 5.3, há dois tipos de número: o <strong>inteiro</strong> (<code>10</code>) e o <strong>float</strong>, com vírgula (<code>10.0</code>). A <code>math</code> tem ferramentas para lidar com os dois:</p>
+
+<pre class="file" data-file="inteiros.lua">print(math.maxinteger, math.mininteger)
+print(math.maxinteger + 1)
+print(math.type(10), math.type(10.0), math.type("10"))
+print(math.tointeger(8.0), math.tointeger(8.5))
+print(10 // 3, 10.0 // 3, 7 / 7)
+</pre>
+
+<pre class="term">$ lua inteiros.lua
+9223372036854775807	-9223372036854775808
+-9223372036854775808
+integer	float	nil
+8	nil
+3	3.0	1.0</pre>
+
+<dl class="anatomy">
+  <dt>math.maxinteger, math.mininteger</dt><dd>O maior e o menor inteiro que cabem: mais de 9 quintilhões, para cada lado.</dd>
+  <dt>math.maxinteger + 1</dt><dd>Passou do limite, <strong>dá a volta</strong> e vira o menor de todos, sem aviso nenhum (como o hodômetro de um carro velho, que volta a 00000). Na prática, você só chega lá com contas gigantes; mas se um total "virou negativo do nada", lembre disso.</dd>
+  <dt>math.type(x)</dt><dd><code>"integer"</code> (inteiro), <code>"float"</code>, ou <code>nil</code> se não for número (o texto <code>"10"</code> não é número). O <code>type</code> comum diria só <code>"number"</code> para os dois (veja <a href="type.html">type</a>).</dd>
+  <dt>math.tointeger(8.0) → 8</dt><dd>Converte um float "redondo" em inteiro. Se tiver parte quebrada (8,5), devolve <code>nil</code>, porque não dá para converter sem perder informação.</dd>
+  <dt>10 // 3 → 3, 10.0 // 3 → 3.0, 7 / 7 → 1.0</dt><dd>Um lembrete: a divisão <code>/</code> sempre dá float; a <code>//</code> dá inteiro se os dois lados forem inteiros.</dd>
+</dl>
+
+<div class="note">
+<strong>No Lua 5.1 e no LuaJIT</strong>
+<p>Lá não existe essa separação: todo número é float. Não há <code>math.type</code>, <code>math.tointeger</code> nem <code>math.maxinteger</code> (no lab, <code>lua5.1 -e 'print(math.maxinteger)'</code> mostra <code>nil</code>), e <code>10 / 2</code> aparece como <code>5</code>, sem <code>.0</code>. Veja <a href="versoes.html">as diferenças entre versões</a>.</p>
+</div>
+
+<hr>
+
+<h2>6. Infinito e "não é número": <code>math.huge</code> e <code>nan</code></h2>
+
+<pre class="file" data-file="infinito.lua">print(math.huge, -math.huge)
+print(1 / 0, -1 / 0)
+print(0 / 0, math.sqrt(-1))
+local nan = 0 / 0
+print(nan == nan)
+local menor = math.huge
+for _, p in ipairs({4.5, 2.25, 3}) do
+  menor = math.min(menor, p)
+end
+print("Mais barato:", menor)
+</pre>
+
+<pre class="term">$ lua infinito.lua
+inf	-inf
+inf	-inf
+-nan	-nan
+false
+Mais barato:	2.25</pre>
+
+<dl class="anatomy">
+  <dt>math.huge → inf</dt><dd>O "infinito" dos floats: maior que qualquer número. <code>1 / 0</code> com floats também dá <code>inf</code> (não é erro). Já a divisão <strong>inteira</strong> por zero, <code>1 // 0</code>, é erro (veja <a href="divisao.html">Divisão</a>).</dd>
+  <dt>0 / 0 → -nan</dt><dd><em>NaN</em> é "<em>not a number</em>", "não é um número": o resultado de uma conta sem resposta, como zero dividido por zero ou a raiz de um negativo. O sinal de menos na frente vem da biblioteca C que escreve o número (no lab e no editor do guia sai <code>-nan</code>); em outros sistemas pode sair <code>nan</code>. Não dependa do sinal.</dd>
+  <dt>nan == nan → false</dt><dd>O <code>nan</code> não é igual nem a ele mesmo. É o único valor assim, e é o jeito de testar se uma conta deu <code>nan</code>: <code>if x ~= x then</code>.</dd>
+  <dt>local menor = math.huge</dt><dd>Um uso prático: para achar o menor preço num laço, comece com o infinito. Qualquer preço de verdade é menor que ele, então o primeiro já ganha.</dd>
+</dl>
+
+<hr>
+
+<h2>7. Restos e partes: <code>fmod</code> e <code>modf</code></h2>
+
+<pre class="file" data-file="restos.lua">print(math.fmod(7, 3), 7 % 3)
+print(math.fmod(-7, 3), -7 % 3)
+print(math.modf(3.75))
+print(math.modf(-3.75))
+</pre>
+
+<pre class="term">$ lua restos.lua
+1	1
+-1	2
+3	0.75
+-3	-0.75</pre>
+
+<ul>
+  <li><code>math.fmod(a, b)</code> é o resto da divisão, como o <code>%</code>, mas com o sinal de <code>a</code>: com −7, o <code>fmod</code> dá −1 e o <code>%</code> dá 2. Para números positivos, os dois são iguais; no dia a dia, use <code>%</code>.</li>
+  <li><code>math.modf(x)</code> devolve <strong>dois</strong> valores: a parte inteira e a parte quebrada (veja <a href="retornos-multiplos.html">Vários Retornos</a>). De 3,75 sai 3 e 0,75. Ele corta na direção do zero: −3,75 dá −3 (o <code>floor</code> daria −4).</li>
+</ul>
+
+<hr>
+
+<h2>8. Por que <code>0.1 + 0.2</code> não é <code>0.3</code></h2>
+
+<pre class="file" data-file="decimal.lua">print(0.1 + 0.2)
+print(0.1 + 0.2 == 0.3)
+print(math.abs((0.1 + 0.2) - 0.3) &lt; 1e-9)
+</pre>
+
+<pre class="term">$ lua decimal.lua
+0.30000000000000004
+false
+true</pre>
+
+<p>Não é defeito do Lua: o computador guarda os floats em <strong>binário</strong>, e 0,1 em binário é uma dízima sem fim (como 1/3 = 0,333… em decimal). Ele guarda uma aproximação muito boa, mas não exata, e o errinho aparece na 17ª casa. Python, JavaScript e quase todas as linguagens dão o mesmo resultado.</p>
+<p>Por isso, <strong>não compare floats com <code>==</code></strong>. Compare a <strong>distância</strong> entre eles com um número bem pequeno: <code>math.abs(a - b) &lt; 1e-9</code> (<code>1e-9</code> é 0,000000001). E, para mostrar, o <code>string.format("%.2f", …)</code> esconde o errinho.</p>
+
+<hr>
+
+<h2>9. As outras teclas da calculadora</h2>
+<p>A <code>math</code> também tem as funções de trigonometria e de logaritmo, para quem precisa (jogos usam muito seno e cosseno para mover coisas em círculo). Todas as saídas abaixo são do lab:</p>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>Resultado no Lua 5.5</th><th>O que é</th></tr>
+<tr><td><code>math.sin(math.pi / 2)</code>, <code>math.cos(0)</code></td><td><code>1.0</code>, <code>1.0</code></td><td>Seno e cosseno; o ângulo vai em <strong>radianos</strong></td></tr>
+<tr><td><code>math.rad(180)</code>, <code>math.deg(math.pi)</code></td><td><code>3.1415926535897931</code>, <code>180.0</code></td><td>Graus → radianos, e de volta</td></tr>
+<tr><td><code>math.sin(math.rad(30))</code></td><td><code>0.49999999999999994</code></td><td>O seno de 30° (0,5, com o errinho da seção 8)</td></tr>
+<tr><td><code>math.exp(1)</code></td><td><code>2.7182818284590451</code></td><td>O número <em>e</em> elevado a 1</td></tr>
+<tr><td><code>math.log(100, 10)</code>, <code>math.log(8, 2)</code></td><td><code>2.0</code>, <code>3.0</code></td><td>Logaritmo na base que você escolher (sem a base: logaritmo natural)</td></tr>
+<tr><td><code>math.ult(1, -1)</code></td><td><code>true</code></td><td>Compara inteiros "sem sinal" (raro; coisa de quem mexe com <a href="operadores-bits.html">bits</a>)</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+
+<div class="cenario">
+<strong>Procurou o <code>math.round</code></strong>
+<pre class="term">$ lua -e 'print(math.round(2.5))'
+lua: (command line):1: attempt to call a nil value (field 'round')
+stack traceback:
+	(command line):1: in main chunk
+	[C]: in ?</pre>
+<p>"Tentar chamar um valor nil (o campo <code>round</code>)": a tabela <code>math</code> não tem nada com esse nome. O mesmo acontece com <code>math.pow</code>, que existiu no 5.1 e saiu. <strong>Como consertar:</strong> <code>math.floor(x + 0.5)</code> (seção 2), ou <code>x ^ y</code> no lugar do <code>pow</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Escreveu <code>Math</code> com maiúscula</strong>
+<pre class="term">$ lua -e 'print(Math.floor(2.5))'
+lua: (command line):1: attempt to index a nil value (global 'Math')
+stack traceback:
+	(command line):1: in main chunk
+	[C]: in ?</pre>
+<p>O Lua diferencia maiúsculas de minúsculas: <code>Math</code> é outro nome, uma variável global que não existe (<code>nil</code>), e pegar <code>.floor</code> de <code>nil</code> é "tentar indexar um valor nil". <strong>Como consertar:</strong> é tudo em minúsculas: <code>math.floor</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Passou um texto que não é número</strong>
+<pre class="term">$ lua -e 'print(math.floor("3.7"))'
+3
+$ lua -e 'print(math.floor("abc"))'
+lua: (command line):1: bad argument #1 to 'floor' (number expected, got string)
+stack traceback:
+	[C]: in field 'floor'
+	(command line):1: in main chunk
+	[C]: in ?</pre>
+<dl class="anatomy">
+  <dt>math.floor("3.7") → 3</dt><dd>Um texto que <strong>parece</strong> número é convertido sozinho (o mesmo vale para o que vem do <a href="io-read.html">io.read</a>). Funciona, mas não conte com isso: converta antes com <a href="conversao.html">tonumber</a>.</dd>
+  <dt>bad argument #1 to 'floor'</dt><dd>"Argumento ruim, o nº 1, para a função <code>floor</code>": o problema é o <strong>primeiro</strong> valor entre os parênteses.</dd>
+  <dt>(number expected, got string)</dt><dd>"Era esperado um número, veio um texto (string)". O <code>"abc"</code> não vira número.</dd>
+  <dt>[C]: in field 'floor'</dt><dd>O erro foi descoberto <strong>dentro</strong> do <code>floor</code>, que é escrito em C; a linha culpada é a de baixo, a sua.</dd>
+</dl>
+</div>
+
+<div class="cenario">
+<strong>A variável com nome errado chegou como <code>nil</code></strong>
+<pre class="term">$ lua -e 'local precco = 10 print(math.floor(preco))'
+lua: (command line):1: bad argument #1 to 'floor' (number expected, got nil)
+stack traceback:
+	[C]: in field 'floor'
+	(command line):1: in main chunk
+	[C]: in ?</pre>
+<p>A variável foi criada como <code>precco</code> (dois "c") e usada como <code>preco</code>, que não existe e vale <code>nil</code>: "veio nil". Quando aparecer <code>got nil</code>, confira o nome da variável que você passou.</p>
+</div>
+
+<div class="cenario">
+<strong>Chamou <code>math.max</code> sem nada</strong>
+<pre class="term">$ lua -e 'print(math.max())'
+lua: (command line):1: bad argument #1 to 'max' (value expected)
+stack traceback:
+	[C]: in field 'max'
+	(command line):1: in main chunk
+	[C]: in ?</pre>
+<p>"Era esperado um valor": o maior de nenhum número não existe. Acontece de verdade com <code>math.max(table.unpack(lista))</code> quando a lista está <strong>vazia</strong>. <strong>Como consertar:</strong> confira antes: <code>if #lista &gt; 0 then … end</code>.</p>
+</div>
+
+<div class="trylua" data-goal="out:Arredondado: 8;;semerro;;src:math\.floor">
+<p class="try-task"><strong>Missão:</strong> o programa tenta usar <code>math.round</code>, que não existe. Rode, veja o erro e troque pela forma do Lua de arredondar para o mais perto (dica: <code>math.floor</code> e <code>+ 0.5</code>). A nota 7,6 deve virar 8.</p>
+<pre class="script" data-file="main.lua">local nota = 7.6
+print("Arredondado: " .. math.round(nota))
+</pre>
+<pre class="solucao" data-file="main.lua">local nota = 7.6
+print("Arredondado: " .. math.floor(nota + 0.5))
+</pre>
+</div>
+
+<hr>
+
+<h2>Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>O que faz</th><th>Exemplo (lab)</th></tr>
+<tr><td><code>math.floor(x)</code></td><td>Arredonda para baixo (inteiro)</td><td><code>math.floor(3.7)</code> → <code>3</code></td></tr>
+<tr><td><code>math.ceil(x)</code></td><td>Arredonda para cima (inteiro)</td><td><code>math.ceil(3.2)</code> → <code>4</code></td></tr>
+<tr><td><code>math.floor(x + 0.5)</code></td><td>Arredonda para o mais perto (não há <code>math.round</code>)</td><td><code>2.5</code> → <code>3</code></td></tr>
+<tr><td><code>math.abs(x)</code></td><td>Valor sem sinal</td><td><code>math.abs(-12)</code> → <code>12</code></td></tr>
+<tr><td><code>math.max(…)</code>, <code>math.min(…)</code></td><td>O maior / o menor (pelo menos 1 valor)</td><td><code>math.max(3, 9, 2)</code> → <code>9</code></td></tr>
+<tr><td><code>math.sqrt(x)</code>, <code>x ^ y</code></td><td>Raiz quadrada; potência</td><td><code>math.sqrt(16)</code> → <code>4.0</code></td></tr>
+<tr><td><code>math.pi</code></td><td>O π</td><td><code>3.1415926535897931</code></td></tr>
+<tr><td><code>math.huge</code></td><td>Infinito</td><td><code>inf</code></td></tr>
+<tr><td><code>math.maxinteger</code>, <code>math.mininteger</code></td><td>Limites dos inteiros</td><td><code>9223372036854775807</code></td></tr>
+<tr><td><code>math.type(x)</code></td><td><code>"integer"</code>, <code>"float"</code> ou <code>nil</code></td><td><code>math.type(10.0)</code> → <code>float</code></td></tr>
+<tr><td><code>math.tointeger(x)</code></td><td>Float redondo → inteiro; senão <code>nil</code></td><td><code>math.tointeger(8.0)</code> → <code>8</code></td></tr>
+<tr><td><code>math.fmod(a, b)</code></td><td>Resto com o sinal de <code>a</code></td><td><code>math.fmod(-7, 3)</code> → <code>-1</code></td></tr>
+<tr><td><code>math.modf(x)</code></td><td>Parte inteira e parte quebrada</td><td><code>math.modf(3.75)</code> → <code>3  0.75</code></td></tr>
+<tr><td><code>math.sin</code>, <code>cos</code>, <code>tan</code>, <code>asin</code>, <code>acos</code>, <code>atan</code></td><td>Trigonometria (radianos)</td><td><code>math.cos(0)</code> → <code>1.0</code></td></tr>
+<tr><td><code>math.rad(g)</code>, <code>math.deg(r)</code></td><td>Graus ↔ radianos</td><td><code>math.deg(math.pi)</code> → <code>180.0</code></td></tr>
+<tr><td><code>math.exp(x)</code>, <code>math.log(x [, base])</code></td><td>Exponencial e logaritmo</td><td><code>math.log(8, 2)</code> → <code>3.0</code></td></tr>
+<tr><td><code>math.random</code>, <code>math.randomseed</code></td><td>Sorteios</td><td>aula <a href="math-random.html">math.random</a></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. Para baixo e para cima</h3>
+<p>Quanto dá cada um?</p>
+<div class="ex-code">math.floor(9.9) → <input data-answer="9" aria-label="resultado do floor"><br>math.ceil(9.1) → <input data-answer="10" aria-label="resultado do ceil"><br>math.floor(-1.5) → <input data-answer="-2" aria-label="resultado do floor negativo"></div>
+</div>
+
+<div class="exercise">
+<h3>2. Complete</h3>
+<p>Complete para mostrar a maior das três temperaturas:</p>
+<div class="ex-code">print(math.<input data-answer="max" aria-label="função">(28, 31, 25))</div>
+</div>
+
+<div class="mc" data-answer="3">
+<p class="mc-q">3. Qual destas linhas arredonda <code>x</code> para o inteiro mais perto no Lua 5.5?</p>
+<label><input type="radio" name="q3"> <code>math.round(x)</code></label>
+<label><input type="radio" name="q3"> <code>math.floor(x)</code></label>
+<label><input type="radio" name="q3"> <code>math.floor(x + 0.5)</code></label>
+<label><input type="radio" name="q3"> <code>math.ceil(x - 1)</code></label>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">4. <code>print(0.1 + 0.2 == 0.3)</code> mostra…</p>
+<label><input type="radio" name="q4"> <code>true</code></label>
+<label><input type="radio" name="q4"> <code>false</code>, por causa do jeito que o computador guarda floats</label>
+<label><input type="radio" name="q4"> Um erro</label>
+<label><input type="radio" name="q4"> <code>0.3</code></label>
+</div>
+
+<div class="mc" data-answer="4">
+<p class="mc-q">5. A mensagem <code>bad argument #1 to 'floor' (number expected, got nil)</code> quer dizer…</p>
+<label><input type="radio" name="q5"> A função <code>floor</code> não existe</label>
+<label><input type="radio" name="q5"> Faltou o <code>require("math")</code></label>
+<label><input type="radio" name="q5"> O número é grande demais</label>
+<label><input type="radio" name="q5"> O valor passado ao <code>floor</code> era <code>nil</code> (uma variável que não existe?)</label>
+</div>
+
+<h3>Missão final: qual pizza compensa?</h3>
+
+<div class="trylua" data-goal="out:Grande: 962.1 cm²;;out:Duas médias: 981.7 cm²;;src:math\.pi">
+<p class="try-task"><strong>Missão:</strong> a pizzaria oferece pelo mesmo preço uma pizza <strong>grande</strong> de 35 cm ou <strong>duas médias</strong> de 25 cm. Complete a função <code>area(diametro)</code>: o raio é metade do diâmetro, e a área é <code>math.pi</code> vezes o raio ao quadrado. O resto do programa já mostra o resultado com uma casa.</p>
+<pre class="script" data-file="main.lua">local function area(diametro)
+  -- calcule e devolva a área do círculo
+  return 0
+end
+
+print(string.format("Grande: %.1f cm²", area(35)))
+print(string.format("Duas médias: %.1f cm²", 2 * area(25)))
+</pre>
+<pre class="solucao" data-file="main.lua">local function area(diametro)
+  local raio = diametro / 2
+  return math.pi * raio ^ 2
+end
+
+print(string.format("Grande: %.1f cm²", area(35)))
+print(string.format("Duas médias: %.1f cm²", 2 * area(25)))
+</pre>
+</div>
+
+<p>No lab, as contas deram 962,11 cm² para a grande e 981,75 cm² para as duas médias: as duas médias têm um pouquinho mais de pizza.</p>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li><code>math</code> é uma tabela de funções e valores que já vem carregada: <code>math.nome(…)</code>.</li>
+  <li><code>math.floor</code> arredonda para baixo, <code>math.ceil</code> para cima (os dois dão inteiro). Para o mais perto, <code>math.floor(x + 0.5)</code>; para mostrar, <code>string.format("%.2f", x)</code>. Não há <code>math.round</code>.</li>
+  <li><code>math.max</code> e <code>math.min</code> recebem os números soltos (<code>table.unpack</code> para uma lista); <code>math.abs</code> tira o sinal.</li>
+  <li><code>math.sqrt</code> é a raiz, <code>^</code> é a potência, <code>math.pi</code> é o π.</li>
+  <li><code>math.type</code> diz se é inteiro ou float; <code>math.tointeger</code> converte; passar de <code>math.maxinteger</code> dá a volta sem aviso.</li>
+  <li><code>math.huge</code> é o infinito; <code>nan</code> é "não é número" e é diferente até dele mesmo. Não compare floats com <code>==</code>.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
