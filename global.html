@@ -396,8 +396,13 @@ luajit: g2.lua:1: '=' expected near 'print'</pre>
 local global = 1
 print(global)
 $ lua g17.lua
-1</pre>
-<p>Funciona porque o Lua só entende <code>global</code> como declaração quando ele vem seguido de um nome, de <code>&lt;</code>, de <code>*</code> ou de <code>function</code>. Mesmo assim, <strong>não use <code>global</code> como nome</strong> em código novo: o manual avisa que essas opções de compatibilidade vão sumir, e num Lua compilado sem ela essa linha é erro.</p>
+1
+$ cat g22.lua
+global = 5
+print(global)
+$ lua g22.lua
+5</pre>
+<p>No editor do guia é igual: ele foi compilado com o mesmo <code>luaconf.h</code> do Ubuntu, e o <code>local global = 1</code> também roda lá. Funciona porque, com essa opção, o Lua só entende <code>global</code> como declaração quando ele vem seguido de um nome, de <code>&lt;</code>, de <code>*</code> ou de <code>function</code> (é o que está no código-fonte do Lua 5.5.0, no arquivo <code>lparser.c</code>); seguido de <code>=</code> ou de <code>(</code>, é um nome comum. Mesmo assim, <strong>não use <code>global</code> como nome</strong> em código novo: o manual avisa que as opções de compatibilidade vão ser removidas no futuro, e, segundo o manual, num Lua compilado sem ela <code>global</code> é palavra reservada (não deu para conferir no lab: os dois Lua 5.5 do guia têm a opção ligada). Veja também <a href="nomes-variaveis.html">Nomes de Variáveis</a>.</p>
 </div>
 
 <hr>
