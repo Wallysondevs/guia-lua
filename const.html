@@ -1,0 +1,427 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua &lt;const&gt; — variáveis que não podem mudar | Guia Lua</title>
+<meta name="description" content="Constantes no Lua 5.5 para quem está começando: local NOME &lt;const&gt; = valor, o erro real attempt to assign to const variable (que aparece antes de o programa rodar), tabela constante que ainda pode ganhar itens, a forma nova do 5.5 local &lt;const&gt; a, b, e o que acontece no Lua 5.4, 5.1 e LuaJIT.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">&lt;const&gt;</span></h1>
+
+<p class="intro">Alguns valores de um programa <strong>não deveriam mudar nunca</strong> depois de definidos: a taxa de entrega da padaria, o número de dias da semana, o limite de itens do carrinho. Se alguma linha, lá no meio do programa, trocar esse valor sem querer, o resultado sai errado e ninguém percebe. O Lua tem uma proteção para isso: escrever <code>&lt;const&gt;</code> (de <em>constant</em>, "constante") depois do nome da variável. A partir daí, qualquer tentativa de trocar o valor é <strong>erro</strong>, e o Lua avisa antes mesmo de o programa começar.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O que é uma <strong>constante</strong> e como se escreve: <code>local TAXA &lt;const&gt; = 7.50</code>.</li>
+  <li>A mensagem real <code>attempt to assign to const variable</code> e por que ela aparece <strong>antes</strong> de o programa rodar.</li>
+  <li>Por que uma tabela <code>&lt;const&gt;</code> ainda pode ganhar e perder itens.</li>
+  <li>A forma nova do Lua 5.5 (<code>local &lt;const&gt; A, B = 1, 2</code>) e o que acontece nas versões mais antigas.</li>
+  <li>Os erros mais comuns: o atributo com nome errado, o parâmetro de função e o <code>+=</code> que não existe.</li>
+</ul>
+</div>
+
+<p>Todos os programas desta aula rodaram no <strong>Lua 5.5</strong> da máquina da Ana (usuária <code>ana</code>, computador <code>notebook</code>), salvos na pasta pessoal dela e executados com <code>lua arquivo.lua</code>. Você precisa já conhecer as variáveis <code>local</code> (aula <a href="local.html">local</a>).</p>
+
+<hr>
+
+<h2>A ideia: o preço pintado na parede</h2>
+<p>Na padaria do bairro, os preços do dia ficam num <strong>quadro de giz</strong>: o padeiro apaga e escreve de novo quando quiser. Isso é uma variável comum. Mas o horário de funcionamento está <strong>pintado na parede</strong> da entrada: para mudar, só repintando a parede inteira. Ninguém troca por engano, passando o dedo.</p>
+<p>Uma variável com <code>&lt;const&gt;</code> é a parede pintada: você escolhe o valor uma vez, quando cria a variável, e depois o Lua não deixa nenhuma linha trocar. Se alguém tentar, o programa nem começa.</p>
+
+<hr>
+
+<h2>1. A primeira constante</h2>
+
+<pre class="file" data-file="taxa.lua">local TAXA_ENTREGA &lt;const&gt; = 7.50
+local pedido = 32.40
+print("Pedido:", pedido)
+print("Total:", pedido + TAXA_ENTREGA)
+</pre>
+
+<dl class="anatomy">
+  <dt>local</dt><dd>Uma constante é sempre uma variável <strong>local</strong> (o caso das globais fica para a aula <a href="global.html">A Declaração global</a>).</dd>
+  <dt>TAXA_ENTREGA</dt><dd>O nome. É costume escrever constantes em <strong>MAIÚSCULAS_COM_SUBLINHADO</strong>, para quem lê saber de longe que aquele valor não muda. O Lua não exige isso; é só um combinado entre programadores.</dd>
+  <dt>&lt;const&gt;</dt><dd>O <strong>atributo</strong> (uma "etiqueta" entre os sinais <code>&lt;</code> e <code>&gt;</code>), logo depois do nome. Ele diz: esta variável é só para leitura.</dd>
+  <dt>= 7.50</dt><dd>O valor, que é dado <strong>uma vez só</strong>, aqui na criação.</dd>
+</dl>
+
+<pre class="term">$ lua taxa.lua
+Pedido:	32.4
+Total:	39.9</pre>
+
+<p>Para <strong>ler</strong> a constante, nada muda: <code>pedido + TAXA_ENTREGA</code> funciona como com qualquer variável. A diferença só aparece quando alguém tenta <strong>escrever</strong> nela.</p>
+
+<hr>
+
+<h2>2. Tentando mudar uma constante</h2>
+
+<pre class="file" data-file="muda.lua">print("começou")
+local TAXA_ENTREGA &lt;const&gt; = 7.50
+TAXA_ENTREGA = 10
+print(TAXA_ENTREGA)
+</pre>
+
+<pre class="term">$ lua muda.lua
+lua: muda.lua:3: attempt to assign to const variable 'TAXA_ENTREGA'
+$ echo $?
+1</pre>
+
+<dl class="anatomy">
+  <dt>lua: muda.lua:3:</dt><dd>O problema está no arquivo <code>muda.lua</code>, <strong>linha 3</strong>: a linha <code>TAXA_ENTREGA = 10</code>.</dd>
+  <dt>attempt to assign to const variable 'TAXA_ENTREGA'</dt><dd>"Tentativa de atribuir a uma variável constante 'TAXA_ENTREGA'". <strong>Atribuir</strong> é dar um valor com o <code>=</code>.</dd>
+  <dt>echo $? → 1</dt><dd>O programa terminou com o código de erro 1.</dd>
+</dl>
+
+<p>Repare em duas coisas:</p>
+<ul>
+  <li>O <code>começou</code> da linha 1 <strong>não apareceu</strong>. O Lua lê o arquivo inteiro e o traduz antes de rodar a primeira linha (essa etapa se chama <strong>compilação</strong>). A constante foi pega nessa etapa, e o programa nem começou.</li>
+  <li>Não há <code>stack traceback:</code>. Um erro de compilação não tem "rastro de chamadas", porque nenhuma função chegou a ser chamada. É o mesmo jeito dos erros de sintaxe (veja <a href="erros.html">Lendo uma Mensagem de Erro</a>).</li>
+</ul>
+
+<p>Por isso dá até para conferir sem rodar, com o <code>luac -p</code> (o "verificador" que vem junto com o Lua: o <code>-p</code> quer dizer "só analise"):</p>
+
+<pre class="term">$ luac -p muda.lua
+luac: muda.lua:3: attempt to assign to const variable 'TAXA_ENTREGA'</pre>
+
+<div class="tip">
+<strong>Por que isso é bom</strong>
+<p>Um erro que aparece <strong>antes</strong> de rodar é o melhor tipo de erro: você não precisa testar todos os caminhos do programa para achá-lo. Sem o <code>&lt;const&gt;</code>, a linha <code>TAXA_ENTREGA = 10</code> rodaria quietinha, e todas as entregas depois dela sairiam com a taxa errada.</p>
+</div>
+
+<h3>E se eu precisar de um valor novo?</h3>
+<p>Então você não quer mudar a constante: você quer <strong>outra variável</strong>, calculada a partir dela. A padaria vai reajustar o pão em 10%. O preço antigo continua sendo o preço antigo; o novo ganha um nome próprio:</p>
+
+<pre class="file" data-file="reajuste.lua">local PRECO_PAO &lt;const&gt; = 0.75
+local REAJUSTE &lt;const&gt; = 1.10
+local novo_preco = PRECO_PAO * REAJUSTE
+print(string.format("Pão: R$ %.2f", PRECO_PAO))
+print(string.format("Pão com reajuste: R$ %.2f", novo_preco))
+</pre>
+
+<pre class="term">$ lua reajuste.lua
+Pão: R$ 0.75
+Pão com reajuste: R$ 0.83</pre>
+
+<p>(O <code>%.2f</code> do <a href="string-format.html">string.format</a> mostra 2 casas decimais.)</p>
+
+<div class="trylua" data-goal="out:Pão com reajuste: R$ 0.83;;semerro;;src:&lt;const&gt;">
+<p class="try-task"><strong>Missão:</strong> este programa tenta mudar uma constante e para com <code>attempt to assign to const variable 'PRECO_PAO'</code>. Rode para ver o erro. Depois conserte <strong>sem tirar</strong> o <code>&lt;const&gt;</code>: crie uma variável nova, <code>local novo_preco = …</code>, e mostre ela no <code>print</code>.</p>
+<pre class="script" data-file="main.lua">local PRECO_PAO &lt;const&gt; = 0.75
+local REAJUSTE &lt;const&gt; = 1.10
+PRECO_PAO = PRECO_PAO * REAJUSTE
+print(string.format("Pão com reajuste: R$ %.2f", PRECO_PAO))
+</pre>
+<pre class="solucao" data-file="main.lua">local PRECO_PAO &lt;const&gt; = 0.75
+local REAJUSTE &lt;const&gt; = 1.10
+local novo_preco = PRECO_PAO * REAJUSTE
+print(string.format("Pão com reajuste: R$ %.2f", novo_preco))
+</pre>
+</div>
+
+<hr>
+
+<h2>3. Constante não é "congelada": o caso das tabelas</h2>
+<p>O <code>&lt;const&gt;</code> protege a <strong>variável</strong>, e não o que está dentro dela. Com números e textos, dá na mesma. Com tabelas, não: lembre que a variável guarda só uma <strong>referência</strong> para a tabela (aula <a href="tabelas-referencia.html">Tabelas São Referências</a>).</p>
+
+<pre class="file" data-file="tabela.lua">local CORES &lt;const&gt; = { "vermelho", "verde" }
+CORES[3] = "azul"
+print(#CORES, CORES[3])
+</pre>
+
+<pre class="term">$ lua tabela.lua
+3	azul</pre>
+
+<p>Funcionou! <code>CORES[3] = "azul"</code> não muda a variável <code>CORES</code>: ela continua apontando para a <strong>mesma</strong> tabela. O que mudou foi o conteúdo da tabela. Agora tente trocar a tabela inteira:</p>
+
+<pre class="file" data-file="tabela2.lua">local CORES &lt;const&gt; = { "vermelho", "verde" }
+CORES = { "azul" }
+</pre>
+
+<pre class="term">$ lua tabela2.lua
+lua: tabela2.lua:2: attempt to assign to const variable 'CORES'</pre>
+
+<p>Esse sim é proibido: seria fazer a variável apontar para <strong>outra</strong> tabela. Voltando à padaria: a parede pintada diz "Cardápio: veja o quadro ao lado". Ninguém pode repintar a parede para apontar para outro quadro, mas o que está escrito no quadro continua mudando. Para impedir que alguém mexa <strong>dentro</strong> de uma tabela, é preciso outra técnica, com metatabelas (o <code>__newindex</code> da aula <a href="index-newindex.html">__index e __newindex</a>).</p>
+
+<hr>
+
+<h2>4. O valor pode vir de qualquer lugar</h2>
+<p>A constante não precisa ser um número escrito no código. Pode ser o resultado de uma conta, de uma função, até do que a pessoa digitou. O que não pode é mudar <strong>depois</strong>:</p>
+
+<pre class="file" data-file="hora.lua">local INICIO &lt;const&gt; = os.time()
+local NOME &lt;const&gt; = io.read()
+print("Olá, " .. NOME)
+print(type(INICIO))
+</pre>
+
+<pre class="term">$ echo Ana | lua hora.lua
+Olá, Ana
+number</pre>
+
+<p>E uma constante criada sem valor fica <code>nil</code> para sempre (o que quase nunca é útil):</p>
+
+<pre class="file" data-file="semvalor.lua">local X &lt;const&gt;
+print(X)
+</pre>
+
+<pre class="term">$ lua semvalor.lua
+nil</pre>
+
+<hr>
+
+<h2>5. Constantes dentro de funções</h2>
+<p>Uma função criada depois da constante pode <strong>usá-la</strong> (é uma closure: veja <a href="closures.html">Closures</a>):</p>
+
+<pre class="file" data-file="closure2.lua">local LIMITE &lt;const&gt; = 3
+local function pode(n)
+  return n &lt;= LIMITE
+end
+print(pode(2), pode(5))
+</pre>
+
+<pre class="term">$ lua closure2.lua
+true	false</pre>
+
+<p>Mas a função também não pode mudá-la. Este arquivo nem chama a função, e mesmo assim não roda:</p>
+
+<pre class="file" data-file="closure.lua">local LIMITE &lt;const&gt; = 3
+local function pode(n)
+  LIMITE = n
+  return n &lt;= LIMITE
+end
+</pre>
+
+<pre class="term">$ lua closure.lua
+lua: closure.lua:3: attempt to assign to const variable 'LIMITE'</pre>
+
+<p>De novo: o erro é de compilação. O Lua olha o texto inteiro, achou a linha 3, e recusou o arquivo, sem precisar chamar <code>pode</code>.</p>
+
+<h3>Um nome igual, mais para dentro</h3>
+<p>Num bloco mais interno, você pode criar uma <strong>outra</strong> variável com o mesmo nome (veja <a href="escopo.html">Escopo e Blocos</a>). Ela é uma variável nova, comum, que esconde a constante só dentro do bloco:</p>
+
+<pre class="file" data-file="sombra.lua">local PRECO &lt;const&gt; = 10
+do
+  local PRECO = 20
+  PRECO = 25
+  print(PRECO)
+end
+print(PRECO)
+</pre>
+
+<pre class="term">$ lua sombra.lua
+25
+10</pre>
+
+<p>Dentro do <code>do … end</code>, <code>PRECO</code> é a variável nova (sem <code>&lt;const&gt;</code>), e pode mudar. Fora dele, a constante continua 10. Funciona, mas confunde quem lê: evite repetir o nome de uma constante.</p>
+
+<div class="note">
+<strong><span class="versao">5.5</span> A variável do <code>for</code> também é constante</strong>
+<p>No Lua 5.5, a variável de controle do <code>for</code> é só para leitura, como se tivesse um <code>&lt;const&gt;</code> invisível. Tentar mudá-la dá a mesma mensagem desta aula: <code>lua -e 'for i = 1, 3 do i = i * 2 print(i) end'</code> → <code>lua: (command line):1: attempt to assign to const variable 'i'</code>. No Lua 5.4, o mesmo código roda e mostra <code>2</code>, <code>4</code>, <code>6</code>. Detalhes na aula <a href="for-numerico.html">for Numérico</a>.</p>
+</div>
+
+<hr>
+
+<h2 id="formas">Formas diferentes de fazer a mesma coisa</h2>
+<p>Para criar várias constantes de uma vez, você pode pôr o <code>&lt;const&gt;</code> depois de <strong>cada</strong> nome:</p>
+
+<pre class="file" data-file="posfixo.lua">local LARGURA &lt;const&gt;, ALTURA &lt;const&gt; = 80, 24
+local nome &lt;const&gt;, idade = "Ana", 30
+idade = idade + 1
+print(LARGURA * ALTURA, nome, idade)
+</pre>
+
+<pre class="term">$ lua posfixo.lua
+1920	Ana	31</pre>
+
+<p>Na segunda linha, só <code>nome</code> é constante; <code>idade</code> é uma variável comum, e pôde mudar.</p>
+
+<p><span class="versao">5.5</span> No Lua 5.5 há uma forma nova: o atributo <strong>antes</strong> da lista vale para todos os nomes dela:</p>
+
+<pre class="file" data-file="prefixo.lua">local &lt;const&gt; LARGURA, ALTURA = 80, 24
+print(LARGURA * ALTURA)
+</pre>
+
+<pre class="term">$ lua prefixo.lua
+1920</pre>
+
+<p>O espaço em volta do atributo não importa: <code>local a&lt;const&gt; = 1</code> e <code>local b &lt; const &gt; = 2</code> também funcionaram no lab. Mas a forma mais comum (e mais fácil de ler) é a desta aula: <code>NOME &lt;const&gt;</code>, com um espaço antes.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Situação</th><th>Qual usar</th></tr>
+<tr><td>Um valor que nunca muda (taxa, limite, nome de arquivo de configuração)</td><td><code>local NOME &lt;const&gt; = valor</code></td></tr>
+<tr><td>Vários valores fixos de uma vez, só no 5.5</td><td><code>local &lt;const&gt; A, B = 1, 2</code></td></tr>
+<tr><td>Vários de uma vez, funcionando também no 5.4</td><td><code>local A &lt;const&gt;, B &lt;const&gt; = 1, 2</code></td></tr>
+<tr><td>Um valor que muda durante o programa (contador, total)</td><td>uma variável <code>local</code> comum</td></tr>
+<tr><td>Uma tabela cujo conteúdo não pode mudar</td><td><code>&lt;const&gt;</code> não basta: use uma metatabela com <code>__newindex</code></td></tr>
+</table>
+</div>
+
+<div class="note">
+<strong>E nas outras versões?</strong>
+<p>O <code>&lt;const&gt;</code> surgiu no <strong>Lua 5.4</strong>. No lab, o <code>posfixo.lua</code> rodou igual no <code>lua5.4</code>. Mas a forma com o atributo na frente é só do 5.5: <code>lua5.4 prefixo.lua</code> → <code>lua5.4: prefixo.lua:1: &lt;name&gt; expected near '&lt;'</code> ("era esperado um nome perto de '&lt;'"). No <strong>Lua 5.1</strong> e no <strong>LuaJIT</strong> (o do Neovim e do LÖVE) não existe <code>&lt;const&gt;</code> nenhum: <code>luajit posfixo.lua</code> → <code>luajit: posfixo.lua:1: unexpected symbol near '&lt;'</code>. Lá, a constante é só um combinado: o nome em MAIÚSCULAS. Veja <a href="versoes.html">as diferenças entre as versões</a>.</p>
+</div>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+
+<div class="cenario">
+<strong>Escreveu o nome do atributo errado</strong>
+<pre class="file" data-file="desconhecido.lua">local PI &lt;constante&gt; = 3.14
+</pre>
+<pre class="term">$ lua desconhecido.lua
+lua: desconhecido.lua:1: unknown attribute 'constante'</pre>
+<p>"Atributo desconhecido 'constante'". O Lua só conhece dois atributos: <code>const</code> e <code>close</code> (este é da próxima aula, <a href="close.html">&lt;close&gt;</a>). Tem de ser em inglês e em minúsculas. <strong>Como consertar:</strong> <code>local PI &lt;const&gt; = 3.14</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Tentou pôr <code>&lt;const&gt;</code> num parâmetro de função</strong>
+<pre class="file" data-file="param.lua">local function f(x &lt;const&gt;)
+  return x
+end
+</pre>
+<pre class="term">$ lua param.lua
+lua: param.lua:1: ')' expected near '&lt;'</pre>
+<p>"Era esperado ')' perto de '&lt;'". Os parâmetros de uma função não aceitam atributos. <strong>Como consertar:</strong> se quiser garantir que a função não mude o valor, copie para uma constante logo na primeira linha: <code>local X &lt;const&gt; = x</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Usou <code>+=</code>, que não existe no Lua</strong>
+<pre class="file" data-file="comp.lua">local ITENS &lt;const&gt; = 3
+ITENS += 1
+</pre>
+<pre class="term">$ lua comp.lua
+lua: comp.lua:2: syntax error near '+'</pre>
+<p>Aqui a mensagem <strong>não</strong> fala de constante: o Lua nem chegou a esse ponto. É que o Lua não tem <code>+=</code> (quem vem de outras linguagens estranha). O jeito do Lua é <code>ITENS = ITENS + 1</code>, e aí sim, como <code>ITENS</code> é constante, apareceria o <code>attempt to assign to const variable 'ITENS'</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Rodou num Lua antigo</strong>
+<pre class="term">$ lua5.1 posfixo.lua
+lua5.1: posfixo.lua:1: unexpected symbol near '&lt;'</pre>
+<p>"Símbolo inesperado perto de '&lt;'". O Lua 5.1 e o LuaJIT não conhecem atributos. Se o seu programa precisa rodar neles (um plugin do Neovim, um jogo no LÖVE), não use <code>&lt;const&gt;</code>: use o nome em MAIÚSCULAS e cuidado.</p>
+</div>
+
+<hr>
+
+<h2>Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>O que faz</th></tr>
+<tr><td><code>local NOME &lt;const&gt; = valor</code></td><td>Cria uma constante local</td></tr>
+<tr><td><code>local A &lt;const&gt;, b = 1, 2</code></td><td>Só <code>A</code> é constante</td></tr>
+<tr><td><code>local &lt;const&gt; A, B = 1, 2</code> <span class="versao">5.5</span></td><td>As duas são constantes</td></tr>
+<tr><td><code>CONST_TABELA[1] = x</code></td><td>Permitido: muda o conteúdo, não a variável</td></tr>
+<tr><td><code>luac -p arquivo.lua</code></td><td>Confere o arquivo sem rodar (acha esse erro)</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Mensagem</th><th>Causa provável</th></tr>
+<tr><td><code>attempt to assign to const variable 'X'</code></td><td>Alguma linha faz <code>X = …</code> e <code>X</code> é <code>&lt;const&gt;</code> (ou é a variável do <code>for</code>, no 5.5)</td></tr>
+<tr><td><code>unknown attribute '…'</code></td><td>O atributo não é <code>const</code> nem <code>close</code></td></tr>
+<tr><td><code>&lt;name&gt; expected near '&lt;'</code></td><td><code>local &lt;const&gt; …</code> rodando no Lua 5.4</td></tr>
+<tr><td><code>unexpected symbol near '&lt;'</code></td><td>Atributo rodando no Lua 5.1 ou LuaJIT</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. Complete a constante</h3>
+<div class="ex-code">local DIAS_SEMANA <input data-answer="&lt;const&gt;" aria-label="atributo"> = 7</div>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">2. O arquivo tem <code>print("oi")</code> na linha 1 e, na linha 5, uma atribuição a uma constante. O que aparece ao rodar?</p>
+<label><input type="radio" name="q2"> <code>oi</code> e depois o erro</label>
+<label><input type="radio" name="q2"> Só o erro: o programa nem começa</label>
+<label><input type="radio" name="q2"> Só <code>oi</code>: o Lua ignora a linha 5</label>
+<label><input type="radio" name="q2"> Um aviso, e o programa continua</label>
+</div>
+
+<div class="mc" data-answer="1">
+<p class="mc-q">3. <code>local LISTA &lt;const&gt; = {}</code>. Qual destas linhas é permitida?</p>
+<label><input type="radio" name="q3"> <code>LISTA[1] = "pão"</code></label>
+<label><input type="radio" name="q3"> <code>LISTA = { "pão" }</code></label>
+<label><input type="radio" name="q3"> <code>LISTA = nil</code></label>
+<label><input type="radio" name="q3"> Nenhuma</label>
+</div>
+
+<div class="mc" data-answer="4">
+<p class="mc-q">4. Em qual destes o código <code>local A &lt;const&gt; = 1</code> dá erro de sintaxe?</p>
+<label><input type="radio" name="q4"> Lua 5.5</label>
+<label><input type="radio" name="q4"> Lua 5.4</label>
+<label><input type="radio" name="q4"> Nos dois</label>
+<label><input type="radio" name="q4"> LuaJIT</label>
+</div>
+
+<h3>Missão final: o limite que mudou sozinho</h3>
+
+<p>Este programa deveria parar no 3º item do carrinho, mas no lab ele mostrou os 4 itens: uma linha lá embaixo troca o <code>LIMITE</code> para 10 quando passa pelo café. Num programa grande, achar uma linha dessas dá trabalho.</p>
+
+<pre class="term">$ lua limite.lua
+Item 1: pão
+Item 2: leite
+Item 3: café
+Item 4: açúcar</pre>
+
+<div class="trylua" data-goal="erro:attempt to assign to const variable 'LIMITE'">
+<p class="try-task"><strong>Missão:</strong> faça o Lua <strong>achar a linha culpada para você</strong>: transforme o <code>LIMITE</code> numa constante e rode. A mensagem de erro vai dizer o número da linha que tenta mudá-lo. (Depois, por conta própria, apague essa linha e veja o programa parar no café.)</p>
+<pre class="script" data-file="main.lua">local LIMITE = 3
+local carrinho = { "pão", "leite", "café", "açúcar" }
+for i = 1, #carrinho do
+  if i &gt; LIMITE then
+    print("Limite de " .. LIMITE .. " itens atingido!")
+    break
+  end
+  print("Item " .. i .. ": " .. carrinho[i])
+  if carrinho[i] == "café" then LIMITE = 10 end
+end
+</pre>
+<pre class="solucao" data-file="main.lua">local LIMITE &lt;const&gt; = 3
+local carrinho = { "pão", "leite", "café", "açúcar" }
+for i = 1, #carrinho do
+  if i &gt; LIMITE then
+    print("Limite de " .. LIMITE .. " itens atingido!")
+    break
+  end
+  print("Item " .. i .. ": " .. carrinho[i])
+  if carrinho[i] == "café" then LIMITE = 10 end
+end
+</pre>
+</div>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li><code>local NOME &lt;const&gt; = valor</code> cria uma variável que só pode ser lida. O valor é dado uma vez, na criação, e pode vir de qualquer expressão.</li>
+  <li>Qualquer <code>NOME = …</code> depois disso dá <code>attempt to assign to const variable 'NOME'</code>, na <strong>compilação</strong>: o programa nem começa, e não há <code>stack traceback</code>.</li>
+  <li>O <code>&lt;const&gt;</code> protege a variável, não o conteúdo: uma tabela constante ainda pode ganhar e perder itens.</li>
+  <li>Costume: constantes em MAIÚSCULAS_COM_SUBLINHADO.</li>
+  <li>O <code>&lt;const&gt;</code> existe desde o Lua 5.4; a forma <code>local &lt;const&gt; A, B</code> é nova do 5.5; o 5.1 e o LuaJIT não têm atributos.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
