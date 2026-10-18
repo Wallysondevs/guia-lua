@@ -1,0 +1,383 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua no mundo — onde o Lua é usado: Roblox, LÖVE, Neovim, Redis… | Guia Lua</title>
+<meta name="description" content="Onde o Lua é usado de verdade e qual versão cada um usa: Roblox (Luau), World of Warcraft (5.1), LÖVE e Defold (LuaJIT), Neovim (5.1/LuaJIT), Redis (5.1), OpenResty/nginx (LuaJIT), Wireshark (5.3/5.4), Pandoc (5.4) e Adobe Lightroom. O que é uma linguagem embutida, com um exemplo real em C.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Onde o <span class="hl">Lua</span> É Usado</h1>
+
+<p class="intro">Você passou o guia inteiro aprendendo Lua no terminal e no editor. Mas a maior parte do Lua que existe no mundo não roda assim: ele roda <strong>dentro</strong> de outros programas. Um jogo, um editor de texto, um banco de dados ou um servidor de sites "carrega um Lua dentro de si" para que as pessoas possam escrever pedaços do comportamento dele. Esta aula mostra onde o Lua aparece, <strong>qual versão</strong> cada um usa (isso importa muito, como você vai ver) e como é esse "Lua por dentro" de um programa.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O que é uma linguagem <strong>embutida</strong> (de extensão), com um exemplo real: um programa em C que roda um script em Lua.</li>
+  <li>Onde o Lua é usado: jogos (Roblox, World of Warcraft, LÖVE, Defold), ferramentas (Neovim, Wireshark, Pandoc, Lightroom) e servidores (Redis, OpenResty/nginx).</li>
+  <li><strong>Qual versão</strong> cada um usa: Lua 5.1, LuaJIT, Luau, 5.3, 5.4.</li>
+  <li>O que muda para você quando o lugar onde o seu código vai rodar não é o Lua 5.5.</li>
+</ul>
+</div>
+
+<p>Os programas desta aula rodaram na máquina da Ana (usuária <code>ana</code>, computador <code>notebook</code>), que tem o <strong>Lua 5.5</strong> e também o <code>lua5.4</code>, o <code>lua5.1</code> e o <code>luajit</code>. Os fatos sobre cada produto foram conferidos nas páginas oficiais deles em outubro de 2026 (os links estão em cada item); produtos mudam, então confira de novo antes de começar um projeto.</p>
+
+<hr>
+
+<h2>A ideia: o motor dentro do carro</h2>
+<p>Pense num motor de liquidificador. Sozinho, em cima da mesa, ele só gira. Ninguém compra "um motor"; compra um liquidificador, uma batedeira, um ventilador, que têm um motor <strong>dentro</strong>. O Lua foi pensado assim desde o começo: ele nasceu em <strong>1993</strong>, no Tecgraf da <strong>PUC-Rio</strong>, no Rio de Janeiro (o nome quer dizer "Lua", o astro, em português), como uma linguagem para <strong>ser colocada dentro de outros programas</strong>. A página oficial (<a href="https://www.lua.org/about.html">lua.org/about.html</a>) diz que ele é "um motor de linguagem rápido e pequeno, que você embute facilmente na sua aplicação" e que é hoje "a principal linguagem de script em jogos".</p>
+<p>Por que um programa quer um Lua dentro de si? Porque assim a parte "pesada" (o desenho 3D do jogo, a rede do servidor) fica escrita numa linguagem rápida como C ou C++, e a parte que muda o tempo todo (as regras da fase, a configuração do editor, um filtro de dados) fica em Lua, que qualquer pessoa consegue escrever e trocar sem recompilar nada.</p>
+
+<hr>
+
+<h2>1. Como é um Lua "por dentro" de um programa</h2>
+<p>Para ver isso de perto, a Ana escreveu um programa em C bem pequeno, a "loja", que cria um Lua, entrega a ele uma função própria (<code>preco_do_dia</code>) e roda um script com as regras da loja. Não precisa entender o C: olhe só os comentários.</p>
+
+<pre class="file" data-file="loja.c">#include &lt;stdio.h&gt;
+#include &lt;lua.h&gt;
+#include &lt;lualib.h&gt;
+#include &lt;lauxlib.h&gt;
+
+/* Uma função em C que o script em Lua vai poder chamar */
+static int preco_do_dia(lua_State *L) {
+  const char *produto = luaL_checkstring(L, 1);
+  lua_pushnumber(L, produto[0] == 'p' ? 0.75 : 5.0);
+  return 1;
+}
+
+int main(void) {
+  lua_State *L = luaL_newstate();      /* cria um Lua novinho */
+  luaL_openlibs(L);                    /* põe as bibliotecas (print, string...) */
+  lua_pushcfunction(L, preco_do_dia);  /* entrega a função ao Lua */
+  lua_setglobal(L, "preco_do_dia");
+  if (luaL_dofile(L, "regras.lua") != LUA_OK) {
+    printf("erro no script: %s\n", lua_tostring(L, -1));
+  }
+  lua_close(L);
+  return 0;
+}
+</pre>
+
+<pre class="file" data-file="regras.lua">local quantidade = 6
+local total = quantidade * preco_do_dia("pao")
+print(string.format("6 pães custam R$ %.2f", total))
+print("Este script roda dentro de um programa em C, com o " .. _VERSION)
+</pre>
+
+<pre class="term">$ gcc loja.c -o loja -I/usr/include/lua5.5 -llua5.5
+$ ./loja
+6 pães custam R$ 4.50
+Este script roda dentro de um programa em C, com o Lua 5.5</pre>
+
+<dl class="anatomy">
+  <dt>gcc loja.c -o loja …</dt><dd>Compila o programa em C e o liga à biblioteca do Lua 5.5 (o pacote <code>liblua5.5-dev</code> do Ubuntu; veja <a href="instalar.html">Instalar o Lua</a>). Não há <code>lua</code> no comando que roda: quem roda o script é o <code>./loja</code>.</dd>
+  <dt>luaL_newstate()</dt><dd>Cria um Lua inteiro, novinho, dentro do programa. Um jogo pode até criar vários.</dd>
+  <dt>lua_setglobal(L, "preco_do_dia")</dt><dd>O programa "dono" (o <strong>hospedeiro</strong>) decide o que o script enxerga. Aqui ele entregou uma função que não existe no Lua normal.</dd>
+  <dt>preco_do_dia("pao")</dt><dd>Do lado do Lua, ela é uma função como outra qualquer.</dd>
+  <dt>_VERSION</dt><dd>O script usa o Lua que o hospedeiro escolheu. Aqui, o 5.5. Num jogo, pode ser outro.</dd>
+</dl>
+
+<p>Todos os produtos desta aula funcionam com essa mesma ideia: o hospedeiro cria o Lua, escolhe <strong>a versão</strong>, escolhe <strong>quais bibliotecas</strong> o script recebe (muitos tiram o <code>io</code> e o <code>os</code>, por segurança) e entrega <strong>funções próprias</strong> (as "APIs" do produto: <code>vim.*</code> no Neovim, <code>redis.call</code> no Redis, <code>love.*</code> no LÖVE).</p>
+
+<hr>
+
+<h2>2. Jogos</h2>
+
+<h3>Roblox: o Luau</h3>
+<p>O Roblox é uma plataforma onde as pessoas criam e jogam jogos; os criadores programam os jogos no <strong>Roblox Studio</strong>. A linguagem de lá é o <strong>Luau</strong>. Na documentação oficial (<a href="https://create.roblox.com/docs/luau">create.roblox.com/docs/luau</a>), o Roblox diz que o Luau é "a linguagem de script que os criadores usam no Roblox Studio" e "uma linguagem de script embutível, rápida, pequena, segura e com tipagem gradual, <strong>derivada do Lua 5.1</strong>". O site do próprio Luau (<a href="https://luau.org/">luau.org</a>) completa: ele tenta ser compatível com o Lua 5.1 sempre que possível, pegou algumas coisas das versões seguintes, mas <strong>não</strong> é um Lua 5.4 ou 5.5.</p>
+<p>"Tipagem gradual" quer dizer que, no Luau, dá para escrever o <strong>tipo</strong> de uma variável (<code>local nome: string = "Ana"</code>), e o Studio avisa se você misturar as coisas. Isso não existe no Lua do guia: lá, essa linha é erro de sintaxe. Quase todo o resto que você aprendeu (tabelas, funções, <code>if</code>, <code>for</code>, metatabelas) vale no Luau.</p>
+
+<h3>World of Warcraft: Lua 5.1</h3>
+<p>Os <em>addons</em> do World of Warcraft (complementos que mudam a tela e o comportamento do jogo) são escritos em Lua. A Blizzard não mantém uma página técnica pública sobre a linguagem; segundo a wiki da comunidade (<a href="https://warcraft.wiki.gg/wiki/Lua">warcraft.wiki.gg/wiki/Lua</a>), o jogo usa um <strong>subconjunto do Lua 5.1</strong> desde 2006 (antes era o 5.0). Fóruns de criadores de addons contam que bibliotecas como <code>io</code> e <code>os</code> não existem lá (o addon não pode mexer nos arquivos do computador), o que faz sentido pelo que você viu na seção 1. Trate esses detalhes como informação da comunidade, não da Blizzard.</p>
+
+<h3>LÖVE: LuaJIT</h3>
+<p>O LÖVE é um programa gratuito para fazer jogos 2D em Lua, para Windows, macOS, Linux, Android e iOS. No código-fonte oficial (<a href="https://github.com/love2d/love">github.com/love2d/love</a>), ele lista a dependência "Lua / LuaJIT / LLVM-lua" e, na compilação, liga o <strong>LuaJIT por padrão</strong> (no macOS, o padrão é o Lua 5.1 comum). Na prática: escreva para o <strong>Lua 5.1</strong>. Um jogo do LÖVE é uma pasta com um <code>main.lua</code> que define funções como <code>love.draw</code>, que o LÖVE chama a cada quadro da tela.</p>
+
+<h3>Defold: LuaJIT</h3>
+<p>O Defold é um motor de jogos gratuito. O manual oficial (<a href="https://defold.com/manuals/lua/">defold.com/manuals/lua</a>) diz que ele usa o <strong>LuaJIT</strong>, "totalmente compatível com o Lua 5.1", que na versão para navegador (HTML5) ele usa o <strong>Lua 5.1.4</strong> no lugar do LuaJIT, e recomenda com todas as letras: para o jogo funcionar em todas as plataformas, use <strong>só recursos do Lua 5.1</strong>.</p>
+
+<hr>
+
+<h2>3. Ferramentas</h2>
+
+<h3>Neovim: Lua 5.1 (com LuaJIT)</h3>
+<p>O Neovim é um editor de texto muito usado por programadores, e a configuração dele (o arquivo <code>init.lua</code>) e boa parte dos <em>plugins</em> são escritos em Lua. A documentação oficial (<a href="https://neovim.io/doc/user/lua/">neovim.io/doc/user/lua</a>) é bem direta: "Lua 5.1 é a interface permanente do Lua no Nvim. Os plugins devem usar o Lua 5.1; versões posteriores (que são, essencialmente, dialetos diferentes e incompatíveis) não são suportadas". Ela pede que o Neovim seja compilado com o <strong>LuaJIT</strong>, por desempenho, mas avisa que os extras do LuaJIT não estão garantidos, e mostra como o código deve conferir:</p>
+
+<pre class="file" data-file="qual.lua">if jit then
+  print("LuaJIT: " .. jit.version)
+else
+  print("Lua comum: " .. _VERSION)
+end
+</pre>
+
+<pre class="term">$ lua qual.lua
+Lua comum: Lua 5.5
+$ luajit qual.lua
+LuaJIT: LuaJIT 2.1.1761786044
+$ lua5.1 qual.lua
+Lua comum: Lua 5.1</pre>
+
+<p>A variável global <code>jit</code> só existe no LuaJIT. No Lua comum ela é <code>nil</code>, e o <code>if</code> vai para o <code>else</code> (veja <a href="nil.html">O Valor nil</a>).</p>
+
+<div class="trylua" data-goal="out:Lua comum: Lua 5.5;;src:\bjit\b">
+<p class="try-task"><strong>Missão:</strong> este programa só mostra a versão. Faça como o Neovim recomenda: se existir a variável <code>jit</code>, mostre <code>"LuaJIT: "</code> com o <code>jit.version</code>; senão, mostre <code>"Lua comum: "</code> com o <code>_VERSION</code>. (O editor do guia roda o Lua 5.5, então deve aparecer <code>Lua comum: Lua 5.5</code>.)</p>
+<pre class="script" data-file="main.lua">print(_VERSION)
+</pre>
+<pre class="solucao" data-file="main.lua">if jit then
+  print("LuaJIT: " .. jit.version)
+else
+  print("Lua comum: " .. _VERSION)
+end
+</pre>
+</div>
+
+<h3>Wireshark: Lua 5.3 e 5.4 (antes, 5.1 e 5.2)</h3>
+<p>O Wireshark é um programa que mostra, pacote por pacote, o que passa pela rede. Em Lua dá para escrever <em>dissectors</em> (que ensinam o Wireshark a entender um protocolo novo) e outras extensões. O guia oficial de desenvolvimento (<a href="https://www.wireshark.org/docs/wsdg_html_chunked/wsluarm.html">wireshark.org, capítulo "Lua Support in Wireshark"</a>) diz: as versões <strong>4.2.x e anteriores</strong> usam o <strong>Lua 5.1 e 5.2</strong>; as <strong>mais novas</strong> usam o <strong>Lua 5.3 e 5.4</strong>. É um dos poucos grandes produtos que acompanharam as versões novas do Lua. E um <em>dissector</em> lê bytes: o assunto de <a href="string-pack.html">Dados Binários (string.pack)</a>.</p>
+
+<h3>Pandoc: Lua 5.4</h3>
+<p>O Pandoc converte documentos de um formato para outro (Markdown para Word, HTML para PDF…). Com os "filtros Lua", você muda o documento no meio da conversão (trocar todas as imagens, numerar as tabelas). A documentação oficial (<a href="https://pandoc.org/lua-filters.html">pandoc.org/lua-filters.html</a>) diz que o Pandoc vem com um interpretador <strong>Lua 5.4</strong> embutido.</p>
+
+<h3>Adobe Lightroom Classic: Lua (versão não divulgada)</h3>
+<p>O Lightroom é um programa de fotógrafos para organizar e revelar fotos. Os <em>plug-ins</em> dele são escritos em Lua: a página oficial para desenvolvedores (<a href="https://developer.adobe.com/lightroom-classic/">developer.adobe.com/lightroom-classic</a>) diz "crie plug-ins em Lua, a linguagem de script embutida no Lightroom" e que a Adobe "estende o Lua com uma infraestrutura orientada a objetos própria". A própria página "sobre" do Lua cita o Lightroom como exemplo de uso industrial. <strong>Qual versão do Lua</strong> ele usa, a página oficial não diz; não deu para conferir, então esta aula não afirma.</p>
+
+<hr>
+
+<h2>4. Servidores</h2>
+
+<h3>Redis: Lua 5.1</h3>
+<p>O Redis é um banco de dados muito rápido, que guarda tudo na memória. Em Lua, dá para mandar um pequeno programa para rodar <strong>dentro</strong> do Redis (com o comando <code>EVAL</code>), que faz várias operações de uma vez. A documentação oficial (<a href="https://redis.io/docs/latest/develop/programmability/lua-api/">redis.io, "Redis Lua API reference"</a>) diz que o Redis "inclui um interpretador <strong>Lua 5.1</strong> embutido", que roda os scripts num ambiente fechado (sem <code>require</code>, com só algumas bibliotecas: <code>string</code>, <code>table</code>, <code>math</code>, um <code>os</code> só com o <code>os.clock</code>, e algumas extras como <code>cjson</code>) e, o mais curioso para quem fez este guia, <strong>proíbe variáveis globais</strong>: um script com <code>my_global_variable = 'some value'</code> é recusado com o erro <code>Script attempted to create global variable 'my_global_variable'</code>. A própria documentação manda declarar tudo com <code>local</code>. É o "<code>local</code> sempre" de <a href="estilo.html">Estilo de Código</a>, virando regra obrigatória.</p>
+
+<h3>OpenResty (nginx): LuaJIT</h3>
+<p>O nginx é um dos servidores de sites mais usados do mundo. O OpenResty (<a href="https://openresty.org/en/">openresty.org</a>) se descreve como "uma plataforma web de código aberto que junta um núcleo nginx melhorado com o <strong>LuaJIT</strong>" (uma versão do LuaJIT mantida pelo próprio projeto). Com ele, cada pedido que chega ao site pode passar por código Lua: conferir uma senha, decidir para qual servidor mandar, montar a resposta. O LuaJIT que está na máquina da Ana, aliás, é justamente o do OpenResty (o pacote do Ubuntu é o <code>2.1.0+openresty</code>).</p>
+
+<hr>
+
+<h2>5. Resumo das versões</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Onde</th><th>Para quê</th><th>Versão do Lua</th><th>Fonte</th></tr>
+<tr><td>Roblox</td><td>jogos no Roblox Studio</td><td><strong>Luau</strong> (derivado do 5.1, com tipos)</td><td>create.roblox.com, luau.org</td></tr>
+<tr><td>World of Warcraft</td><td>addons</td><td>subconjunto do <strong>5.1</strong></td><td>warcraft.wiki.gg (comunidade)</td></tr>
+<tr><td>LÖVE</td><td>jogos 2D</td><td><strong>LuaJIT</strong> por padrão (5.1)</td><td>github.com/love2d/love</td></tr>
+<tr><td>Defold</td><td>jogos</td><td><strong>LuaJIT</strong>; 5.1.4 no HTML5</td><td>defold.com</td></tr>
+<tr><td>Neovim</td><td>configuração e plugins</td><td><strong>5.1</strong> (compilado com LuaJIT)</td><td>neovim.io</td></tr>
+<tr><td>Wireshark</td><td>dissectors e extensões</td><td>4.2 e antes: 5.1/5.2; depois: <strong>5.3/5.4</strong></td><td>wireshark.org</td></tr>
+<tr><td>Pandoc</td><td>filtros de documentos</td><td><strong>5.4</strong></td><td>pandoc.org</td></tr>
+<tr><td>Adobe Lightroom Classic</td><td>plug-ins</td><td>não divulgada</td><td>developer.adobe.com</td></tr>
+<tr><td>Redis</td><td>scripts no banco de dados</td><td><strong>5.1</strong>, sem globais</td><td>redis.io</td></tr>
+<tr><td>OpenResty (nginx)</td><td>servidores de sites</td><td><strong>LuaJIT</strong> (do OpenResty)</td><td>openresty.org</td></tr>
+</table>
+</div>
+
+<p>Repare na coluna da versão: <strong>quase ninguém usa o Lua 5.5</strong>. O 5.1 (com o LuaJIT, que é compatível com ele) é, de longe, o mais espalhado, porque muitos produtos escolheram uma versão anos atrás e não podem trocar sem quebrar o código de milhares de pessoas. Isso não torna o que você aprendeu inútil: a <strong>maior parte</strong> do Lua é igual em todas as versões.</p>
+
+<hr>
+
+<h2 id="formas">O que muda para você</h2>
+<p>Um programa que só usa o "miolo" comum da linguagem roda em todas as versões. Este aqui rodou igual nas quatro que a Ana tem:</p>
+
+<pre class="file" data-file="portatil.lua">local nomes = { "Ana", "Bia", "Caio" }
+local total = 0
+for i, nome in ipairs(nomes) do
+  total = total + #nome
+end
+print(_VERSION, "letras:", total)
+</pre>
+
+<pre class="term">$ lua portatil.lua
+Lua 5.5	letras:	10
+$ lua5.4 portatil.lua
+Lua 5.4	letras:	10
+$ lua5.1 portatil.lua
+Lua 5.1	letras:	10
+$ luajit portatil.lua
+Lua 5.1	letras:	10</pre>
+
+<p>(Repare que o LuaJIT responde <code>Lua 5.1</code> no <code>_VERSION</code>: ele é compatível com o 5.1.) O que <strong>não</strong> é igual, e que você vai sentir ao levar código do guia para o Neovim, o Roblox ou o Redis:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Do guia (5.5)</th><th>No 5.1 / LuaJIT / Luau</th><th>Aula</th></tr>
+<tr><td><code>3 // 2</code>, <code>&amp;</code>, <code>|</code>, <code>&lt;&lt;</code></td><td>não existem no 5.1 nem no LuaJIT (o LuaJIT tem a biblioteca <code>bit</code>)</td><td><a href="divisao.html">Divisão</a>, <a href="operadores-bits.html">Bits</a></td></tr>
+<tr><td>inteiro × float (<code>math.type</code>, <code>10 / 2</code> dá <code>5.0</code>)</td><td>no 5.1, todo número é float (e <code>10 / 2</code> mostra <code>5</code>)</td><td><a href="numeros.html">Números</a></td></tr>
+<tr><td><code>table.unpack</code></td><td>no 5.1 é <code>unpack</code></td><td><a href="table-unpack.html">table.unpack</a></td></tr>
+<tr><td><code>goto</code></td><td>não existe no 5.1 (o LuaJIT aceita; o Neovim pede para não usar)</td><td><a href="goto.html">goto</a></td></tr>
+<tr><td><code>&lt;const&gt;</code>, <code>&lt;close&gt;</code>, <code>global</code></td><td>não existem</td><td><a href="const.html">const</a>, <a href="global.html">global</a></td></tr>
+<tr><td><code>string.pack</code>, <code>utf8</code></td><td>não existem no 5.1 nem no LuaJIT</td><td><a href="string-pack.html">string.pack</a>, <a href="utf8.html">utf8</a></td></tr>
+<tr><td><code>io</code>, <code>os</code>, <code>require</code></td><td>muitas vezes tirados pelo hospedeiro (Redis, WoW)</td><td>a documentação de cada produto</td></tr>
+</table>
+</div>
+
+<p>Os detalhes, com as saídas reais de cada versão, estão em <a href="versoes.html">Lua 5.1, LuaJIT, 5.4 e 5.5: as Diferenças</a>.</p>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+
+<div class="cenario">
+<strong>Uma global num lugar que proíbe globais</strong>
+<p>Não dá para rodar o Redis de verdade nesta aula, mas dá para <strong>imitar</strong> a trava dele em Lua puro, com uma <a href="metatabelas.html">metatabela</a> no <code>_G</code> (veja <a href="index-newindex.html">__newindex</a>). A mensagem foi copiada da documentação do Redis; o resto é uma imitação simples:</p>
+<pre class="file" data-file="trava.lua">-- Uma imitação simples da trava do Redis (não é o Redis de verdade)
+setmetatable(_G, { __newindex = function (_, nome)
+  error("Script attempted to create global variable '" .. nome .. "'", 2)
+end })
+
+-- O script de quem usa:
+contador = 0
+for i = 1, 3 do
+  contador = contador + 1
+end
+print("Total: " .. contador)
+</pre>
+<pre class="term">$ lua trava.lua
+lua: trava.lua:7: Script attempted to create global variable 'contador'
+stack traceback:
+	[C]: in global 'error'
+	trava.lua:3: in metamethod 'newindex'
+	trava.lua:7: in main chunk
+	[C]: in ?</pre>
+<p>"O script tentou criar a variável global <code>contador</code>". O rastro mostra o caminho: a linha 7 tentou criar a global, isso acionou o metamétodo <code>newindex</code> da linha 3, que chamou o <code>error</code>. <strong>Como consertar:</strong> <code>local contador = 0</code>. É a missão final.</p>
+</div>
+
+<div class="cenario">
+<strong>Código do guia num lugar que usa o 5.1</strong>
+<p>Levar um <code>7 // 2</code> para o LuaJIT (o do Neovim, do LÖVE, do OpenResty) dá erro de sintaxe:</p>
+<pre class="term">$ luajit -e 'print(7 // 2)'
+luajit: (command line):1: unexpected symbol near '/'</pre>
+<p>Não é defeito do seu código: é outra versão da linguagem. Antes de escrever para um produto, descubra a versão dele (a tabela da seção 5) e confira em <a href="versoes.html">versoes.html</a> o que muda. Para dividir sem a parte decimal no 5.1, use <code>math.floor(7 / 2)</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Tipos do Luau no Lua comum</strong>
+<p>Uma linha do Luau como <code>local nome: string = "Ana"</code> não funciona no Lua 5.5 (nem no 5.1): os dois-pontos depois do nome não fazem parte da linguagem:</p>
+<pre class="term">$ lua -e 'local nome: string = "Ana"'
+lua: (command line):1: unexpected symbol near ':'</pre>
+<p>O contrário quase sempre funciona: código Lua 5.1 comum, sem tipos, roda no Luau, porque lá os tipos são opcionais e o Luau tenta ser compatível com o 5.1 sempre que possível.</p>
+</div>
+
+<hr>
+
+<h2>Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Termo</th><th>O que quer dizer</th></tr>
+<tr><td>linguagem embutida / de extensão</td><td>uma linguagem que roda <strong>dentro</strong> de outro programa, o hospedeiro</td></tr>
+<tr><td>hospedeiro (<em>host</em>)</td><td>o programa que cria o Lua e decide versão, bibliotecas e funções extras</td></tr>
+<tr><td>API do produto</td><td>as funções que o hospedeiro entrega ao Lua (<code>vim.*</code>, <code>redis.call</code>, <code>love.*</code>)</td></tr>
+<tr><td>Lua 5.1</td><td>a versão de 2006; a mais espalhada (WoW, Neovim, Redis)</td></tr>
+<tr><td>LuaJIT</td><td>outra implementação, muito rápida, compatível com o 5.1 (LÖVE, Defold, OpenResty, Neovim); <code>_VERSION</code> diz <code>Lua 5.1</code></td></tr>
+<tr><td>Luau</td><td>a linguagem do Roblox, derivada do 5.1, com tipos opcionais</td></tr>
+<tr><td><code>if jit then … end</code></td><td>o jeito de saber se está no LuaJIT</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. A versão mais espalhada</h3>
+<p>Qual versão do Lua (ou compatível com ela) o Neovim, o Redis e o World of Warcraft usam? Escreva só o número.</p>
+<div class="ex-code">Lua <input data-answer="5.1" aria-label="versão"></div>
+</div>
+
+<div class="exercise">
+<h3>2. A linguagem do Roblox</h3>
+<p>Como se chama a linguagem dos jogos do Roblox, derivada do Lua 5.1?</p>
+<div class="ex-code"><input data-answer="Luau|luau" aria-label="nome da linguagem"></div>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">3. O que quer dizer que o Lua é uma linguagem "embutida"?</p>
+<label><input type="radio" name="q3"> Que ele só funciona em celulares</label>
+<label><input type="radio" name="q3"> Que ele é feito para rodar dentro de outro programa, que decide o que o script pode usar</label>
+<label><input type="radio" name="q3"> Que ele não tem tabelas</label>
+<label><input type="radio" name="q3"> Que ele precisa de internet</label>
+</div>
+
+<div class="mc" data-answer="4">
+<p class="mc-q">4. No LuaJIT, quanto vale <code>_VERSION</code>?</p>
+<label><input type="radio" name="q4"> <code>LuaJIT 2.1</code></label>
+<label><input type="radio" name="q4"> <code>Lua 5.5</code></label>
+<label><input type="radio" name="q4"> <code>nil</code></label>
+<label><input type="radio" name="q4"> <code>Lua 5.1</code></label>
+</div>
+
+<div class="mc" data-answer="1">
+<p class="mc-q">5. Você vai escrever um plugin para o Neovim. Qual conselho segue a documentação dele?</p>
+<label><input type="radio" name="q5"> Usar só recursos do Lua 5.1 e conferir <code>jit</code> antes de usar extras do LuaJIT</label>
+<label><input type="radio" name="q5"> Usar a declaração <code>global</code> do 5.5</label>
+<label><input type="radio" name="q5"> Usar <code>goto</code> à vontade</label>
+<label><input type="radio" name="q5"> Usar <code>string.pack</code></label>
+</div>
+
+<div class="mc" data-answer="3">
+<p class="mc-q">6. Qual destes produtos já usa o Lua 5.3/5.4 nas versões novas?</p>
+<label><input type="radio" name="q6"> World of Warcraft</label>
+<label><input type="radio" name="q6"> Redis</label>
+<label><input type="radio" name="q6"> Wireshark</label>
+<label><input type="radio" name="q6"> Neovim</label>
+</div>
+
+<h3>Missão final: um script que o "Redis" aceita</h3>
+
+<div class="trylua" data-goal="out:Total: 3;;semerro">
+<p class="try-task"><strong>Missão:</strong> a imitação da trava do Redis recusa o script porque ele cria uma variável global. Sem mexer na trava (as 4 primeiras linhas), conserte o script para ele rodar e mostrar <code>Total: 3</code>.</p>
+<pre class="script" data-file="main.lua">-- Uma imitação simples da trava do Redis (não é o Redis de verdade)
+setmetatable(_G, { __newindex = function (_, nome)
+  error("Script attempted to create global variable '" .. nome .. "'", 2)
+end })
+
+-- O script de quem usa:
+contador = 0
+for i = 1, 3 do
+  contador = contador + 1
+end
+print("Total: " .. contador)
+</pre>
+<pre class="solucao" data-file="main.lua">-- Uma imitação simples da trava do Redis (não é o Redis de verdade)
+setmetatable(_G, { __newindex = function (_, nome)
+  error("Script attempted to create global variable '" .. nome .. "'", 2)
+end })
+
+-- O script de quem usa:
+local contador = 0
+for i = 1, 3 do
+  contador = contador + 1
+end
+print("Total: " .. contador)
+</pre>
+</div>
+
+<p>Com <code>local</code>, a variável não passa pelo <code>_G</code>, a trava nem fica sabendo, e o script mostra <code>Total: 3</code>.</p>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li>O Lua nasceu em 1993 na PUC-Rio para ser <strong>embutido</strong> em outros programas: o hospedeiro cria o Lua, escolhe a versão, as bibliotecas e entrega funções próprias.</li>
+  <li>Jogos: Roblox (<strong>Luau</strong>, derivado do 5.1), World of Warcraft (<strong>5.1</strong>), LÖVE e Defold (<strong>LuaJIT</strong>).</li>
+  <li>Ferramentas: Neovim (<strong>5.1</strong>/LuaJIT), Wireshark (<strong>5.3/5.4</strong> nas versões novas), Pandoc (<strong>5.4</strong>), Lightroom (versão não divulgada).</li>
+  <li>Servidores: Redis (<strong>5.1</strong>, sem globais) e OpenResty/nginx (<strong>LuaJIT</strong>).</li>
+  <li>Quase ninguém usa o 5.5 ainda. O miolo da linguagem é igual em todas; o que muda (inteiros, <code>//</code>, bits, <code>goto</code>, <code>&lt;const&gt;</code>, <code>global</code>…) está em <a href="versoes.html">versoes.html</a>.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
