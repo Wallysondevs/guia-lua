@@ -11,7 +11,7 @@ Atualizado em 18/10/2026 pelo agente do simulador.
 | Web Worker | `assets/lua/lua-worker.mjs` (baixa e compila o `lua.wasm` uma vez; cada Rodar é uma instância nova) | pronto |
 | Interface | `assets/luasim.js` (cópia adaptada do `pysim.js` do Guia Python; usa as classes `.ts-*`/`.tc-*`/`.tp` do `style.css` e injeta a moldura da `.trylua`) | pronto |
 | Ferramentas | `tools/sim.js`, `tools/testar-missoes.js` (`--nativo` via `tools/lab-nativo.js`), `tools/testar-navegador.js`, `tools/motor-node.mjs`, `tools/construir-lua.sh` | prontas |
-| Página de teste | `simulador-teste-interno.html` (fora da NIVEIS, `noindex`): 16 caixas que exercitam tudo | pronta |
+| Página de teste | `simulador-teste-interno.html` (fora da NIVEIS, `noindex`): 18 caixas que exercitam tudo (inclusive o modo interativo) | pronta |
 | Documentação | §4 do `CONTRIBUINDO.md` | pronta |
 
 ## Como o editor funciona (resumo; detalhes na §4 do CONTRIBUINDO)
@@ -20,6 +20,8 @@ Atualizado em 18/10/2026 pelo agente do simulador.
 - `io.read` sem `data-stdin`: **JSPI** (Chrome/Edge: o programa fica parado de verdade no `fd_read`) ou, sem JSPI, **por repetição** (roda de novo do começo com as linhas já digitadas; o relógio e os sorteios se repetem iguais em todas as repetições).
 - "Terminou com erro" (metas `semerro`/`erro:`) = o `lua.c` escreveu a mensagem `lua: …` (o `lua_writestringerror` do `lua.c` avisa o editor antes de escrever). `os.exit(1)` não conta como erro.
 - Atributos de teste (o editor ignora): `data-digitar="Bia\n30"` (o que os testadores digitam) e `data-sem-fim` (laço infinito de propósito).
+- `data-repl`: o modo interativo (`lua` sem programa, ou `lua -i main.lua` com `pre.script`), igual ao lab `-t` (sem setas/histórico do readline).
+- Rodar uma caixa enquanto outra roda (ou espera o teclado) para a outra e reinicia o Lua (corrigido em 18/10; o `pysim.js` do Guia Python tem o mesmo defeito: `TypeError … postMessage`).
 
 ## Como rodar (na VPS, em `~/guia-lua`, depois de `. ~/.profile`)
 ```bash
@@ -31,7 +33,8 @@ timeout 900 node tools/testar-missoes.js -q --todas
 timeout 900 node tools/testar-missoes.js --nativo pagina.html      # + lua do lab; diferenças em tools/DIFERENCAS.md
 timeout 600 node tools/testar-navegador.js [-q] [--semjspi] [--fotos DIR] pagina.html…
 ```
-- `testar-navegador.js` precisa do puppeteer-core de `~/rascunho/coord/cdp/node_modules` (ou `PUPPETEER_DIR`) e do `/usr/bin/chromium` (ou `CHROMIUM`). Na `simulador-teste-interno.html` ele clica de verdade: Rodar, Ctrl+Enter, indentação automática (2 espaços depois de `do`/`then`/`function(…)`/`{`), Tab, Restaurar, abas, Ver solução (cancelar/sim), `io.read` digitado, Ctrl+D, campo Entrada, Argumentos, Parar, a trava de 10 s, erro em vermelho, erro de sintaxe, `os.execute`, cores ANSI. Também mede os tempos.
+- `testar-navegador.js` precisa do puppeteer-core de `~/rascunho/coord/cdp/node_modules` (ou `PUPPETEER_DIR`) e do `/usr/bin/chromium` (ou `CHROMIUM`). Na `simulador-teste-interno.html` ele clica de verdade: Rodar, Ctrl+Enter, indentação automática (2 espaços depois de `do`/`then`/`function(…)`/`{`), Tab, Restaurar, abas, Ver solução (cancelar/sim), `io.read` digitado, Ctrl+D, campo Entrada, Argumentos, Parar, a trava de 10 s, erro em vermelho, erro de sintaxe, `os.execute`, cores ANSI, o modo interativo, trocar de caixa no meio. Também mede os tempos.
+- Em 18/10 (110 páginas): `testar-missoes.js --todas` 0 FALHA; `testar-navegador.js --todas` 0 problema.
 - `--semjspi` testa o modo por repetição (Safari/Firefox sem JSPI).
 - `--nativo` usa `~/guia-lua-lab/lab` (ou `LUA_LAB=…`): roda `lua main.lua` lá dentro com `stdbuf -oL` (stdout em linhas, como no terminal).
 
