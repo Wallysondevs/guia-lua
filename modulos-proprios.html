@@ -1,0 +1,485 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua Criando seu Módulo — local M = {} … return M | Guia Lua</title>
+<meta name="description" content="Como escrever o seu próprio módulo no Lua 5.5: a receita local M = {} … return M, funções públicas e privadas (local function), outras formas de montar a tabela, módulo que guarda estado, módulos em pastas (require(&quot;loja.estoque&quot;) e init.lua), um módulo que usa outro, e os erros reais: função que vaza como global, dois-pontos no lugar do ponto, require circular e o arquivo com nome de biblioteca padrão.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">Criando seu Módulo</span></h1>
+
+<p class="intro">Na aula <a href="modulos.html">Módulos e require</a> você <strong>usou</strong> um módulo pronto. Agora é a sua vez de <strong>escrever</strong> um. A boa notícia: não há nada novo para decorar. Um módulo é um arquivo comum que monta uma tabela com funções e a devolve com <code>return</code>. O que esta aula ensina é a <strong>receita</strong> que a comunidade usa, e os cuidados que fazem um módulo ser fácil de usar e difícil de quebrar.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>A receita de todo módulo: <code>local M = {}</code>, as funções, <code>return M</code>.</li>
+  <li>A diferença entre o que o módulo <strong>mostra</strong> (funções públicas, dentro da tabela) e o que ele <strong>esconde</strong> (funções e variáveis <code>local</code>, privadas).</li>
+  <li>Outras formas de montar a tabela, e um módulo que devolve uma função só.</li>
+  <li>Um módulo que <strong>guarda informação</strong> entre as chamadas, compartilhada por todo o programa.</li>
+  <li>Como organizar módulos em <strong>pastas</strong>: <code>require("loja.estoque")</code> e o <code>init.lua</code>.</li>
+  <li>Os erros reais: a função que "vaza" como global, o <code>:</code> no lugar do <code>.</code>, dois módulos que se pedem um ao outro, e o arquivo com nome de biblioteca padrão.</li>
+</ul>
+</div>
+
+<p>Os exemplos rodaram no <strong>Lua 5.5</strong> da máquina da Ana, numa pasta chamada <code>proj</code>. Nas caixas "Experimente", cada módulo é uma <strong>aba</strong>: clique nela para ver e editar o arquivo.</p>
+
+<hr>
+
+<h2>A ideia: a gaveta com etiqueta e o fundo falso</h2>
+<p>Pense no módulo como uma <strong>gaveta de cozinha</strong> que a Ana arruma para emprestar. Na frente da gaveta ficam as ferramentas que qualquer um pode pegar: a faca, a colher, o abridor. Mas a Ana também tem coisas que só ela usa para manter a gaveta funcionando (a pedra de afiar a faca, por exemplo), e essas ficam num <strong>fundo falso</strong>: quem pega a gaveta emprestada nem sabe que existem.</p>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Na gaveta</th><th>No módulo</th></tr>
+<tr><td>A gaveta</td><td>A tabela <code>local M = {}</code></td></tr>
+<tr><td>As ferramentas da frente (públicas)</td><td>As funções guardadas <strong>dentro</strong> da tabela: <code>function M.somar(…)</code></td></tr>
+<tr><td>O fundo falso (privado)</td><td>Funções e variáveis <code>local</code> do arquivo, fora da tabela</td></tr>
+<tr><td>Entregar a gaveta</td><td><code>return M</code>, na última linha</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>1. A receita: <code>local M = {}</code> … <code>return M</code></h2>
+
+<pre class="file" data-file="contas.lua">local M = {}
+
+local function arredondar(valor)
+  return math.floor(valor * 100 + 0.5) / 100
+end
+
+function M.somar(a, b)
+  return a + b
+end
+
+function M.desconto(preco, porcento)
+  return arredondar(preco - preco * porcento / 100)
+end
+
+return M
+</pre>
+
+<dl class="anatomy">
+  <dt>local M = {}</dt><dd>A tabela do módulo, vazia no começo. O nome <code>M</code> (de "módulo") é um costume muito usado: em qualquer arquivo, <code>M.</code> quer dizer "isto vai para fora". Você também pode usar o nome do módulo (<code>local contas = {}</code>), como na aula anterior; as duas formas são comuns.</dd>
+  <dt>local function arredondar(valor)</dt><dd>Uma função <strong>privada</strong>: ela é <code>local</code> e <strong>não</strong> foi colocada na tabela <code>M</code>. Só o próprio arquivo <code>contas.lua</code> consegue chamá-la. (Ela arredonda para 2 casas: multiplica por 100, soma 0,5, corta a parte quebrada com <code>math.floor</code> e divide por 100. Veja <a href="math.html">A Biblioteca math</a>.)</dd>
+  <dt>function M.somar(a, b)</dt><dd>Uma função <strong>pública</strong>: fica dentro da tabela, no campo <code>somar</code>. Quem fizer <code>require("contas")</code> recebe a tabela e chega nela.</dd>
+  <dt>return arredondar(…)</dt><dd>Uma função pública pode usar a privada à vontade: as duas moram no mesmo arquivo (é um <a href="closures.html">closure</a>).</dd>
+  <dt>return M</dt><dd>Entrega a gaveta. Sem esta linha, o <code>require</code> devolveria só <code>true</code> (você viu esse erro na aula anterior).</dd>
+</dl>
+
+<p>Um programa que usa o módulo e, de curiosidade, tenta chegar na função privada:</p>
+
+<pre class="file" data-file="main.lua">local contas = require("contas")
+print(contas.desconto(19.99, 15))
+print(contas.arredondar)
+print(contas.arredondar(3.14159))
+</pre>
+
+<pre class="term" data-cwd="~/proj">$ lua main.lua
+16.99
+nil
+lua: main.lua:4: attempt to call a nil value (field 'arredondar')
+stack traceback:
+	main.lua:4: in main chunk
+	[C]: in ?</pre>
+
+<p>O desconto deu <code>16.99</code>, já arredondado (sem o arredondamento, a conta 19,99 − 15% daria 16,9915). Mas <code>contas.arredondar</code> é <code>nil</code>: de fora, essa função <strong>não existe</strong>. Chamá-la dá "tentar chamar um valor nil (o campo <code>arredondar</code>)". É exatamente o que a Ana queria: quem usa o módulo só vê <code>somar</code> e <code>desconto</code>.</p>
+
+<div class="tip">
+<strong>Por que esconder?</strong>
+<p>Tudo o que é público vira uma <strong>promessa</strong>: se outros programas usam <code>contas.arredondar</code>, a Ana não pode mais mudar o nome nem o jeito dela funcionar sem quebrar esses programas. O que é privado ela muda quando quiser. Regra prática: comece com tudo <code>local</code> e só ponha na tabela o que os outros realmente precisam.</p>
+</div>
+
+<div class="trylua" data-goal="out:Troco: 7.5;;semerro">
+<p class="try-task"><strong>Missão:</strong> o caixa quer calcular o troco, mas o módulo ainda não tem essa ferramenta: rode e veja o erro. Na aba <code>contas.lua</code>, crie a função pública <code>M.troco(pago, total)</code>, que devolve <code>pago - total</code> (escreva antes do <code>return M</code>).</p>
+<pre class="script" data-file="main.lua">local contas = require("contas")
+local total = contas.somar(8, 4.5)
+print("Total: " .. total)
+print("Troco: " .. contas.troco(20, total))
+</pre>
+<pre class="script" data-file="contas.lua">local M = {}
+
+function M.somar(a, b)
+  return a + b
+end
+
+-- crie aqui a função M.troco
+
+return M
+</pre>
+<pre class="solucao" data-file="contas.lua">local M = {}
+
+function M.somar(a, b)
+  return a + b
+end
+
+function M.troco(pago, total)
+  return pago - total
+end
+
+return M
+</pre>
+</div>
+
+<hr>
+
+<h2>2. Outras formas de montar a tabela</h2>
+<p>A receita da seção 1 é a mais usada, mas você vai encontrar outras. Esta escreve as funções como <code>local</code> e monta a tabela <strong>só no final</strong>, no próprio <code>return</code>:</p>
+
+<pre class="file" data-file="literal.lua">local function somar(a, b)
+  return a + b
+end
+
+local function dobro(x)
+  return x * 2
+end
+
+return {
+  somar = somar,
+  dobro = dobro,
+}
+</pre>
+
+<pre class="term" data-cwd="~/proj">$ lua -e 'local l = require("literal") print(l.somar(2, 3), l.dobro(21))'
+5	42</pre>
+
+<p>A vantagem: a lista do <code>return</code> funciona como um <strong>índice</strong> do que o módulo oferece. A desvantagem: ao criar uma função nova, é preciso lembrar de pôr na lista. (A vírgula depois do último item, <code>dobro = dobro,</code>, é permitida e facilita acrescentar mais um.)</p>
+
+<p>E um módulo nem precisa devolver uma tabela. Pode devolver <strong>qualquer valor</strong>, por exemplo uma função só:</p>
+
+<pre class="file" data-file="saudacao.lua">return function (nome)
+  return "Olá, " .. nome .. "!"
+end
+</pre>
+
+<pre class="term" data-cwd="~/proj">$ lua -e 'local saudar = require("saudacao") print(saudar("Ana"))'
+Olá, Ana!</pre>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Forma</th><th>Quando usar</th></tr>
+<tr><td><code>local M = {}</code> + <code>function M.f() … end</code> + <code>return M</code></td><td>O padrão. Use esta quando estiver em dúvida.</td></tr>
+<tr><td>Funções <code>local</code> + <code>return { f = f, g = g }</code></td><td>Quando você quer ver numa olhada só tudo o que é público.</td></tr>
+<tr><td><code>return function (…) … end</code></td><td>Quando o módulo faz uma coisa só (é raro; uma tabela deixa espaço para crescer).</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>3. Um módulo que guarda informação</h2>
+<p>Lembra que o <code>require</code> roda o arquivo <strong>uma vez só</strong> e guarda a tabela em <code>package.loaded</code>? Isso tem uma consequência útil: as variáveis <code>local</code> do módulo <strong>continuam existindo</strong> entre uma chamada e outra, e todos os arquivos que pedem o módulo enxergam os mesmos valores. A Ana fez um caixa que conta as vendas do dia:</p>
+
+<pre class="file" data-file="caixa.lua">local caixa = {}
+local vendas = 0
+local total = 0
+
+function caixa.registrar(valor)
+  vendas = vendas + 1
+  total = total + valor
+end
+
+function caixa.resumo()
+  return string.format("%d vendas, R$ %.2f", vendas, total)
+end
+
+return caixa
+</pre>
+
+<p>O balcão de pães é outro módulo, que também registra vendas no caixa:</p>
+
+<pre class="file" data-file="balcao.lua">local caixa = require("caixa")
+local balcao = {}
+function balcao.vender_pao()
+  caixa.registrar(0.75)
+end
+return balcao
+</pre>
+
+<pre class="file" data-file="dia.lua">local caixa = require("caixa")
+local balcao = require("balcao")
+caixa.registrar(12.50)
+balcao.vender_pao()
+balcao.vender_pao()
+print(caixa.resumo())
+</pre>
+
+<pre class="term" data-cwd="~/proj">$ lua dia.lua
+3 vendas, R$ 14.00</pre>
+
+<p>Três vendas: uma feita direto pelo <code>dia.lua</code> e duas pelo <code>balcao.lua</code>. Os dois pediram <code>require("caixa")</code> e receberam <strong>a mesma tabela</strong>, com o mesmo <code>vendas</code> e o mesmo <code>total</code> escondidos lá dentro. E ninguém de fora consegue mexer nesses números sem passar pelo <code>registrar</code>: eles são <code>local</code>. (Esse jeito de esconder dados é o assunto de <a href="encapsulamento.html">Privacidade com Closures</a>.)</p>
+
+<hr>
+
+<h2>4. Módulos em pastas: <code>require("loja.estoque")</code></h2>
+<p>Quando os módulos ficam muitos, dá para organizá-los em pastas. A Ana criou a pasta <code>loja</code> e, dentro dela, o arquivo <code>estoque.lua</code>:</p>
+
+<pre class="file" data-file="loja/estoque.lua">local estoque = {}
+local itens = {pao = 30, leite = 12}
+function estoque.quantidade(item)
+  return itens[item] or 0
+end
+return estoque
+</pre>
+
+<pre class="file" data-file="usa_estoque.lua">local estoque, onde = require("loja.estoque")
+print(estoque.quantidade("pao"), estoque.quantidade("bolo"), onde)
+</pre>
+
+<pre class="term" data-cwd="~/proj">$ lua usa_estoque.lua
+30	0	./loja/estoque.lua</pre>
+
+<p>No nome do <code>require</code>, o <strong>ponto vira barra</strong>: <code>"loja.estoque"</code> vira <code>loja/estoque.lua</code>. O segundo valor do <code>require</code> confirma: ele carregou <code>./loja/estoque.lua</code>. (O <code>or 0</code> faz o bolo, que não está na tabela, contar como zero; veja <a href="operadores-logicos.html">and, or e not</a>.)</p>
+
+<div class="warning">
+<strong>Ponto no <code>require</code>, barra no sistema</strong>
+<p>Escreva <code>require("loja.estoque")</code>, e não <code>require("loja/estoque")</code>. No Linux a barra até funciona, por coincidência, mas o ponto é a forma oficial e é a que funciona em qualquer sistema.</p>
+</div>
+
+<h3>A pasta como módulo: <code>init.lua</code></h3>
+<p>E se você quiser que <code>require("relatorio")</code> carregue uma <strong>pasta</strong>? Ponha dentro dela um arquivo chamado <code>init.lua</code> ("init" de <em>initialize</em>, inicializar). Lembra da linha <code>no file './conta/init.lua'</code> na lista de lugares procurados? É isso:</p>
+
+<pre class="file" data-file="relatorio/init.lua">return { titulo = "Relatório do mês" }
+</pre>
+
+<pre class="term" data-cwd="~/proj">$ lua -e 'local r, onde = require("relatorio") print(r.titulo, onde)'
+Relatório do mês	./relatorio/init.lua</pre>
+
+<div class="trylua" data-goal="out:Leite no estoque: 12;;semerro">
+<p class="try-task"><strong>Missão:</strong> o módulo de estoque está na aba <code>loja/estoque.lua</code>, ou seja, dentro da pasta <code>loja</code>. Rode, leia a linha <code>no file './estoque.lua'</code> do erro e conserte o nome no <code>require</code>.</p>
+<pre class="script" data-file="main.lua">local estoque = require("estoque")
+print("Leite no estoque: " .. estoque.quantidade("leite"))
+</pre>
+<pre class="script" data-file="loja/estoque.lua">local estoque = {}
+local itens = {pao = 30, leite = 12}
+function estoque.quantidade(item)
+  return itens[item] or 0
+end
+return estoque
+</pre>
+<pre class="solucao" data-file="main.lua">local estoque = require("loja.estoque")
+print("Leite no estoque: " .. estoque.quantidade("leite"))
+</pre>
+</div>
+
+<hr>
+
+<h2>5. O que o módulo recebe: <code>...</code></h2>
+<p>Um detalhe que às vezes aparece em código de outras pessoas: o <code>require</code> passa ao arquivo do módulo <strong>dois valores</strong>, que chegam nos <code>...</code> (os <a href="varargs.html">três pontinhos</a>) do arquivo: o nome pedido e o caminho do arquivo.</p>
+
+<pre class="file" data-file="args.lua">print("recebi:", ...)
+return {}
+</pre>
+
+<pre class="term" data-cwd="~/proj">$ lua -e 'require("args")'
+recebi:	args	./args.lua</pre>
+
+<p>Alguns módulos grandes usam <code>local nome = ...</code> na primeira linha para saber com que nome foram carregados (e assim carregar os seus "irmãos" da mesma pasta). Para os seus primeiros módulos, você não vai precisar disso.</p>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+
+<div class="cenario">
+<strong>Esqueceu o <code>M.</code>: a função vazou como global</strong>
+<pre class="file" data-file="vaza.lua">local M = {}
+
+function somar(a, b)
+  return a + b
+end
+
+return M
+</pre>
+<pre class="file" data-file="usa_vaza.lua">local vaza = require("vaza")
+print(somar(2, 3))
+print(vaza.somar(2, 3))
+</pre>
+<pre class="term" data-cwd="~/proj">$ lua usa_vaza.lua
+5
+lua: usa_vaza.lua:3: attempt to call a nil value (field 'somar')
+stack traceback:
+	usa_vaza.lua:3: in main chunk
+	[C]: in ?</pre>
+<p>Sem o <code>M.</code> e sem <code>local</code>, <code>function somar</code> criou uma variável <strong>global</strong>. Ela não foi para a tabela do módulo (<code>vaza.somar</code> é <code>nil</code>, linha 3), mas apareceu, sem ninguém pedir, no programa inteiro (o <code>somar(2, 3)</code> da linha 2 funcionou!). Isso é perigoso: se outro módulo também tiver um <code>somar</code> global, um apaga o outro, e o erro aparece longe de onde nasceu (veja <a href="local.html">local × Global</a>). <strong>Como consertar:</strong> <code>function M.somar(a, b)</code> para a função pública, ou <code>local function somar(a, b)</code> para a privada. Num módulo, nunca deixe uma função sem um dos dois.</p>
+</div>
+
+<div class="cenario">
+<strong>Usou <code>:</code> no lugar do <code>.</code></strong>
+<pre class="file" data-file="ponto.lua">local contas = require("contas")
+print(contas:somar(2, 3))
+</pre>
+<pre class="term" data-cwd="~/proj">$ lua ponto.lua
+lua: ./contas.lua:8: attempt to perform arithmetic on a table value (local 'a')
+stack traceback:
+	./contas.lua:8: in method 'somar'
+	ponto.lua:2: in main chunk
+	[C]: in ?</pre>
+<p>O dois-pontos <code>contas:somar(2, 3)</code> quer dizer <code>contas.somar(contas, 2, 3)</code>: ele passa a <strong>própria tabela</strong> como primeiro argumento (isso é útil em objetos; veja <a href="metodos.html">Métodos e o Dois-Pontos</a>). Aí o <code>a</code> da função virou a tabela <code>contas</code>, e somar tabela com número dá "tentar fazer conta com um valor tabela (a local <code>a</code>)". O rastro até avisa: <code>in method 'somar'</code> (chamada como método). <strong>Como consertar:</strong> funções de módulo se chamam com <strong>ponto</strong>: <code>contas.somar(2, 3)</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Dois módulos que pedem um ao outro</strong>
+<pre class="file" data-file="a.lua">local b = require("b")
+return { nome = "a" }
+</pre>
+<pre class="file" data-file="b.lua">local a = require("a")
+return { nome = "b" }
+</pre>
+<pre class="term" data-cwd="~/proj">$ lua -e 'require("a")'
+lua: error loading module 'a' from file './a.lua':
+	C stack overflow
+stack traceback:
+	[C]: in ?
+	[C]: in global 'require'
+	./b.lua:1: in main chunk
+	[C]: in global 'require'
+	./a.lua:1: in main chunk
+	[C]: in global 'require'
+	./b.lua:1: in main chunk
+	...	(skipping 370 levels)                « o rastro segue por dezenas de linhas
+	[C]: in global 'require'
+	(command line):1: in main chunk
+	[C]: in ?</pre>
+<p>O <code>a</code> pede o <code>b</code>, que pede o <code>a</code>, que ainda não terminou (não chegou no <code>return</code>, então não está no caderninho <code>package.loaded</code>), e o <code>require</code> tenta carregá-lo de novo, que pede o <code>b</code>… até a pilha de chamadas estourar: <code>C stack overflow</code> ("estouro da pilha do C"). O rastro mostra o padrão <code>b.lua:1</code>, <code>a.lua:1</code>, <code>b.lua:1</code> se repetindo, e pula <code>370 levels</code> (370 níveis) para não encher a tela; no terminal, o rastro inteiro ainda aparece duas vezes. <strong>Como consertar:</strong> reorganize: tire o que os dois precisam para um terceiro módulo, que nenhum dos dois pede de volta.</p>
+</div>
+
+<div class="cenario">
+<strong>O arquivo com o nome de uma biblioteca padrão</strong>
+<pre class="file" data-file="math.lua">print("meu math.lua!")
+return { dobro = function (x) return 2 * x end }
+</pre>
+<pre class="term" data-cwd="~/proj">$ lua -e 'local m = require("math") print(m.dobro, m.pi)'
+nil	3.1415926535897931</pre>
+<p>Não apareceu o <code>meu math.lua!</code>, e <code>m.dobro</code> é <code>nil</code>: o <code>require</code> nem olhou o arquivo, porque <code>math</code> já estava no caderninho <code>package.loaded</code> (é a biblioteca padrão). Ele devolveu o <code>math</code> de sempre (com o <code>pi</code>). Nenhuma mensagem de erro: o seu arquivo simplesmente é ignorado. <strong>Como consertar:</strong> nunca dê ao seu módulo o nome de uma biblioteca que já vem com o Lua (<code>string</code>, <code>math</code>, <code>table</code>, <code>io</code>, <code>os</code>, <code>utf8</code>, <code>coroutine</code>, <code>debug</code>, <code>package</code>). Chame de <code>matematica.lua</code>, <code>contas.lua</code>…</p>
+</div>
+
+<hr>
+
+<h2>Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>O que faz</th></tr>
+<tr><td><code>local M = {}</code></td><td>Começa a tabela do módulo</td></tr>
+<tr><td><code>function M.nome(…) … end</code></td><td>Função pública (fica na tabela)</td></tr>
+<tr><td><code>local function nome(…) … end</code></td><td>Função privada (só o arquivo enxerga)</td></tr>
+<tr><td><code>local contador = 0</code> no topo do módulo</td><td>Dado privado, que dura enquanto o programa roda e é o mesmo para todos que pedem o módulo</td></tr>
+<tr><td><code>M.VERSAO = "1.0"</code></td><td>Um valor público (não só funções)</td></tr>
+<tr><td><code>return M</code></td><td>Entrega o módulo (última linha)</td></tr>
+<tr><td><code>require("pasta.nome")</code></td><td>Carrega <code>pasta/nome.lua</code></td></tr>
+<tr><td><code>pasta/init.lua</code></td><td>O arquivo carregado por <code>require("pasta")</code></td></tr>
+<tr><td><code>local nome, caminho = ...</code></td><td>Dentro do módulo: o nome pedido e o arquivo carregado</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. Complete o módulo</h3>
+<p>Complete o arquivo <code>saudar.lua</code> para que <code>require("saudar").oi("Ana")</code> devolva <code>"Oi, Ana"</code>:</p>
+<div class="ex-code">local M = {}<br>function <input data-answer="M.oi" aria-label="nome da função">(nome)<br>&nbsp;&nbsp;return "Oi, " .. nome<br>end<br><input data-answer="return M" aria-label="última linha"></div>
+</div>
+
+<div class="exercise">
+<h3>2. Qual arquivo?</h3>
+<p>Que arquivo o <code>require("jogo.fases")</code> procura na pasta atual (o primeiro da lista)? Escreva o caminho começando por <code>./</code>.</p>
+<div class="ex-code"><input data-answer="./jogo/fases.lua" aria-label="caminho"></div>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">3. No módulo, <code>local function limpar(texto) … end</code> não foi colocada na tabela <code>M</code>. Quem pode chamar <code>limpar</code>?</p>
+<label><input type="radio" name="q3"> Qualquer programa que fizer <code>require</code> do módulo</label>
+<label><input type="radio" name="q3"> Só as funções do próprio arquivo do módulo</label>
+<label><input type="radio" name="q3"> Ninguém: ela dá erro</label>
+<label><input type="radio" name="q3"> Só quem escrever <code>M:limpar()</code></label>
+</div>
+
+<div class="mc" data-answer="4">
+<p class="mc-q">4. A Ana salvou um módulo como <code>string.lua</code> e fez <code>require("string")</code>. O que acontece?</p>
+<label><input type="radio" name="q4"> Carrega o arquivo dela</label>
+<label><input type="radio" name="q4"> Dá <code>module 'string' not found</code></label>
+<label><input type="radio" name="q4"> Dá erro de sintaxe</label>
+<label><input type="radio" name="q4"> Devolve a biblioteca padrão <code>string</code> e ignora o arquivo dela</label>
+</div>
+
+<div class="mc" data-answer="1">
+<p class="mc-q">5. Dois arquivos fazem <code>require("caixa")</code> e chamam <code>caixa.registrar(10)</code>. O total do caixa fica…</p>
+<label><input type="radio" name="q5"> 20: os dois usam a mesma tabela, com os mesmos dados</label>
+<label><input type="radio" name="q5"> 10 em cada um: cada <code>require</code> cria um caixa novo</label>
+<label><input type="radio" name="q5"> 0: os dados do módulo somem depois do <code>require</code></label>
+<label><input type="radio" name="q5"> Dá erro: um módulo só pode ser pedido uma vez</label>
+</div>
+
+<h3>Missão final: o módulo das notas</h3>
+
+<div class="trylua" data-goal="out:Média: 7.5;;out:Situação: aprovada;;semerro">
+<p class="try-task"><strong>Missão:</strong> a professora da Ana quer um módulo <code>notas</code>. Na aba <code>notas.lua</code>, crie duas funções <strong>públicas</strong>: <code>M.media(lista)</code>, que devolve a média dos números da lista, e <code>M.situacao(media)</code>, que devolve <code>"aprovada"</code> se a média for 7 ou mais, e <code>"reprovada"</code> se não for. Dica: some com um <code>for</code> e divida por <code>#lista</code>. O <code>main.lua</code> já está pronto.</p>
+<pre class="script" data-file="main.lua">local notas = require("notas")
+local media = notas.media({7, 8, 6.5, 8.5})
+print("Média: " .. media)
+print("Situação: " .. notas.situacao(media))
+</pre>
+<pre class="script" data-file="notas.lua">local M = {}
+
+-- crie aqui M.media(lista) e M.situacao(media)
+
+return M
+</pre>
+<pre class="solucao" data-file="notas.lua">local M = {}
+
+local function somar(lista)
+  local total = 0
+  for _, n in ipairs(lista) do
+    total = total + n
+  end
+  return total
+end
+
+function M.media(lista)
+  return somar(lista) / #lista
+end
+
+function M.situacao(media)
+  if media &gt;= 7 then
+    return "aprovada"
+  end
+  return "reprovada"
+end
+
+return M
+</pre>
+</div>
+
+<p>A solução tem uma função privada, <code>somar</code>, que só o módulo usa: um bom exemplo do "fundo falso". As notas 7, 8, 6,5 e 8,5 somam 30, e 30 / 4 = 7,5.</p>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li>A receita: <code>local M = {}</code>, as funções públicas como <code>function M.nome()</code>, e <code>return M</code> na última linha.</li>
+  <li>O que é <code>local</code> e fica fora da tabela é <strong>privado</strong>: só o arquivo do módulo enxerga. Deixe público só o necessário.</li>
+  <li>Num módulo, toda função é <code>M.algo</code> ou <code>local</code>: sem os dois, ela vaza como global.</li>
+  <li>Como o módulo roda uma vez só, as variáveis <code>local</code> dele duram o programa inteiro e são compartilhadas por todos que fazem <code>require</code>.</li>
+  <li>Pastas: <code>require("loja.estoque")</code> carrega <code>loja/estoque.lua</code>; <code>require("relatorio")</code> também acha <code>relatorio/init.lua</code>.</li>
+  <li>Funções de módulo se chamam com ponto (<code>contas.somar</code>), não com dois-pontos. Não dê ao módulo o nome de uma biblioteca padrão, e não faça dois módulos pedirem um ao outro.</li>
+  <li>Próxima aula: <a href="package-path.html">Onde o require Procura (package.path)</a>.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
