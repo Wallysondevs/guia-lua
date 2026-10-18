@@ -1,0 +1,548 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua Condições Aninhadas — if dentro de if | Guia Lua</title>
+<meta name="description" content="Condições aninhadas no Lua para quem nunca programou: if dentro de if, o login com usuário e senha, a venda com estoque e saldo, quando trocar o aninhado por and ou por elseif, a indentação que mente e os erros reais do Lua 5.5 (o end que falta no if de dentro).">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">Condições Aninhadas</span></h1>
+
+<p class="intro">Dentro do bloco de um <code>if</code> pode ir qualquer coisa: um <code>print</code>, uma conta, uma variável nova… e também <strong>outro <code>if</code></strong>. Isso se chama <strong>condição aninhada</strong> (como as bonecas russas, uma dentro da outra). Ela serve para as perguntas que só fazem sentido <strong>depois</strong> de outra: só vale a pena conferir a senha se o usuário existir; só vale a pena calcular o total se o produto estiver no estoque.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>Como pôr um <code>if</code> dentro de outro, e como o Lua decide qual <code>else</code> e qual <code>end</code> pertencem a qual <code>if</code>.</li>
+  <li>Dois exemplos completos: o login (usuário e senha) e a venda (estoque, quantidade e saldo).</li>
+  <li>Como o aninhado protege contra erros: testar se um valor existe antes de comparar.</li>
+  <li>Quando trocar o aninhado por <code>and</code> ou por <code>elseif</code>, e quando não dá.</li>
+  <li>Por que a indentação é tão importante aqui: ela pode <strong>mentir</strong> para quem lê.</li>
+  <li>Os erros reais do <code>end</code> que falta no <code>if</code> de dentro.</li>
+</ul>
+</div>
+
+<p>Todos os programas desta aula rodaram no <strong>Lua 5.5</strong> da máquina da Ana (usuária <code>ana</code>, computador <code>notebook</code>), com <code>lua arquivo.lua</code>. Você pode rodar cada um no editor do guia.</p>
+
+<hr>
+
+<h2>A ideia: o porteiro do prédio</h2>
+<p>A Ana mora num prédio com porteiro. Quando alguém chega, ele pensa assim:</p>
+<ol class="passo">
+  <li>Essa pessoa mora aqui (está no cadastro)?
+    <ul>
+      <li><strong>Sim</strong> → então eu pergunto a senha da portaria. A senha está certa?
+        <ul>
+          <li><strong>Sim</strong> → libero a entrada.</li>
+          <li><strong>Não</strong> → "Senha errada".</li>
+        </ul>
+      </li>
+      <li><strong>Não</strong> → "Não encontrei esse nome", e nem pergunto a senha.</li>
+    </ul>
+  </li>
+</ol>
+<p>A segunda pergunta (a senha) fica <strong>dentro</strong> do "sim" da primeira. Para quem não mora no prédio, ela nem é feita. No código, isso vira um <code>if</code> dentro do bloco de outro <code>if</code>.</p>
+
+<hr>
+
+<h2>1. O login: usuário e senha</h2>
+
+<pre class="file" data-file="login.lua">local usuario = "ana"
+local senha = "pao123"
+
+if usuario == "ana" then
+  if senha == "pao123" then
+    print("Bem-vinda, Ana!")
+  else
+    print("Senha errada.")
+  end
+else
+  print("Usuário não encontrado.")
+end
+</pre>
+
+<dl class="anatomy">
+  <dt>if usuario == "ana" then</dt><dd>O <code>if</code> <strong>de fora</strong>: a primeira pergunta.</dd>
+  <dt>if senha == "pao123" then</dt><dd>O <code>if</code> <strong>de dentro</strong>, no bloco do "sim" do de fora. Ele está 2 espaços mais para a direita, e o bloco dele, mais 2 (4 no total).</dd>
+  <dt>else (o primeiro) / print("Senha errada.")</dt><dd>O <code>else</code> do <code>if</code> de dentro: usuário certo, senha errada.</dd>
+  <dt>end (o primeiro)</dt><dd>Fecha o <code>if</code> de <strong>dentro</strong>. Ele está alinhado com o <code>if senha …</code> que fecha.</dd>
+  <dt>else (o segundo) / print("Usuário não encontrado.")</dt><dd>O <code>else</code> do <code>if</code> de <strong>fora</strong>: o usuário não existe. A senha nem é olhada.</dd>
+  <dt>end (o último)</dt><dd>Fecha o <code>if</code> de fora. São dois <code>if</code>s, então são dois <code>end</code>s.</dd>
+</dl>
+
+<p>A Ana rodou o programa três vezes: com tudo certo, depois com a senha trocada para <code>"1234"</code>, depois com o usuário trocado para <code>"bia"</code>:</p>
+
+<pre class="term">$ lua login.lua
+Bem-vinda, Ana!
+$ lua login.lua                « senha = "1234"
+Senha errada.
+$ lua login.lua                « usuario = "bia"
+Usuário não encontrado.
+</pre>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th><code>usuario</code></th><th><code>senha</code></th><th>Pergunta de fora</th><th>Pergunta de dentro</th><th>Saída</th></tr>
+<tr><td><code>"ana"</code></td><td><code>"pao123"</code></td><td>sim</td><td>sim</td><td><code>Bem-vinda, Ana!</code></td></tr>
+<tr><td><code>"ana"</code></td><td><code>"1234"</code></td><td>sim</td><td>não</td><td><code>Senha errada.</code></td></tr>
+<tr><td><code>"bia"</code></td><td>(qualquer)</td><td>não</td><td>(nem é feita)</td><td><code>Usuário não encontrado.</code></td></tr>
+</table>
+</div>
+
+<div class="tip">
+<strong>Como o Lua sabe qual <code>end</code> é de qual <code>if</code>?</strong>
+<p>Pela <strong>ordem</strong>, não pelos espaços. Cada <code>end</code> (e cada <code>else</code>) pertence ao <code>if</code> <strong>mais próximo que ainda está aberto</strong>. Por isso o primeiro <code>end</code> fecha o <code>if</code> de dentro: ele foi o último a abrir. É como empilhar pratos: o último que você põe é o primeiro que você tira.</p>
+</div>
+
+<div class="trylua" data-goal="out:Senha errada.;;src:^\s+else\s*$">
+<p class="try-task"><strong>Missão:</strong> este login só sabe dizer "Bem-vinda". Com a senha errada, ele fica calado. Acrescente o <code>else</code> do <code>if</code> <strong>de dentro</strong> para mostrar <code>Senha errada.</code>.</p>
+<pre class="script" data-file="main.lua">local usuario = "ana"
+local senha = "1234"
+
+if usuario == "ana" then
+  if senha == "pao123" then
+    print("Bem-vinda, Ana!")
+  end
+else
+  print("Usuário não encontrado.")
+end
+</pre>
+<pre class="solucao" data-file="main.lua">local usuario = "ana"
+local senha = "1234"
+
+if usuario == "ana" then
+  if senha == "pao123" then
+    print("Bem-vinda, Ana!")
+  else
+    print("Senha errada.")
+  end
+else
+  print("Usuário não encontrado.")
+end
+</pre>
+</div>
+
+<hr>
+
+<h2>2. Três níveis: a venda da lojinha</h2>
+<p>Dá para aninhar mais de um nível. Na lojinha da Ana, para vender é preciso: ter o produto; ter a <strong>quantidade</strong> pedida; e o cliente ter <strong>saldo</strong> para o total. Cada pergunta só faz sentido se a anterior deu "sim":</p>
+
+<pre class="file" data-file="venda.lua">local estoque = 4
+local quantidade = 6
+local saldo = 100
+local preco = 12
+
+if estoque &gt; 0 then
+  print("Temos o produto.")
+  if quantidade &lt;= estoque then
+    local total = quantidade * preco
+    if saldo &gt;= total then
+      print("Venda feita: R$ " .. total)
+    else
+      print("Saldo insuficiente para R$ " .. total)
+    end
+  else
+    print("Só temos " .. estoque .. " unidades.")
+  end
+else
+  print("Produto esgotado.")
+end
+</pre>
+
+<pre class="term">$ lua venda.lua
+Temos o produto.
+Só temos 4 unidades.
+</pre>
+
+<p>O cliente pediu 6 e só havia 4: a segunda pergunta deu "não", e o programa nem calculou o total. A Ana trocou os valores e rodou de novo (cada linha <code>$</code> abaixo é uma versão do programa com os valores do comentário):</p>
+
+<pre class="term">$ lua venda.lua                « quantidade = 3
+Temos o produto.
+Venda feita: R$ 36
+$ lua venda.lua                « quantidade = 3, saldo = 20
+Temos o produto.
+Saldo insuficiente para R$ 36
+$ lua venda.lua                « estoque = 0
+Produto esgotado.
+</pre>
+
+<p>Repare na <code>local total</code>: ela foi criada dentro do segundo nível, porque só ali ela é necessária. Ela existe nesse bloco e no <code>if</code> de dentro dele (que é parte do bloco), e some no <code>end</code> que o fecha. Com três níveis, os <strong>2 espaços</strong> por nível fazem toda a diferença para enxergar o que está dentro de quê.</p>
+
+<hr>
+
+<h2>3. Testar se existe antes de comparar</h2>
+<p>Um uso muito comum do aninhado: <strong>proteger</strong> uma comparação. O <code>tonumber</code> devolve <code>nil</code> quando o texto não é um número, e comparar <code>nil</code> com um número dá erro:</p>
+
+<pre class="file" data-file="numero.lua">local texto = "abc"
+local n = tonumber(texto)
+if n &gt; 0 then
+  print("positivo")
+end
+</pre>
+
+<pre class="term">$ lua numero.lua
+lua: numero.lua:3: attempt to compare number with nil
+stack traceback:
+	numero.lua:3: in main chunk
+	[C]: in ?
+</pre>
+
+<p>A solução é perguntar <strong>primeiro</strong> se o número existe e, só dentro do "sim", comparar:</p>
+
+<pre class="file" data-file="numero2.lua">local texto = "abc"
+local n = tonumber(texto)
+if n then
+  if n &gt; 0 then
+    print(n .. " é positivo")
+  else
+    print(n .. " não é positivo")
+  end
+else
+  print("'" .. texto .. "' não é um número")
+end
+</pre>
+
+<pre class="term">$ lua numero2.lua
+'abc' não é um número
+</pre>
+
+<p>Com <code>texto = "5"</code>, saiu <code>5 é positivo</code>; com <code>"-2"</code>, <code>-2 não é positivo</code>. O <code>if n &gt; 0</code> agora só roda quando <code>n</code> é um número de verdade.</p>
+
+<div class="trylua">
+<p class="try-task"><strong>Experimente:</strong> troque o <code>texto</code> por <code>"5"</code>, <code>"-2"</code>, <code>"0"</code>, <code>"3.7"</code>, <code>""</code> (vazio) e <code>"10 reais"</code>. Qual dos três blocos roda em cada caso?</p>
+<pre class="script" data-file="main.lua">local texto = "abc"
+local n = tonumber(texto)
+if n then
+  if n &gt; 0 then
+    print(n .. " é positivo")
+  else
+    print(n .. " não é positivo")
+  end
+else
+  print("'" .. texto .. "' não é um número")
+end
+</pre>
+</div>
+
+<hr>
+
+<h2 id="formas">Formas diferentes de fazer a mesma coisa</h2>
+
+<h3>Quando o aninhado vira um <code>and</code></h3>
+<p>Se o <code>if</code> de dentro e o de fora <strong>não têm <code>else</code></strong>, as duas perguntas podem virar uma só, com <code>and</code> (veja <a href="operadores-logicos.html">and, or e not</a>):</p>
+
+<pre class="file" data-file="comand.lua">local idade = 20
+local tem_titulo = true
+
+-- aninhado
+if idade &gt;= 18 then
+  if tem_titulo then
+    print("Pode votar (aninhado).")
+  end
+end
+
+-- com and
+if idade &gt;= 18 and tem_titulo then
+  print("Pode votar (and).")
+end
+</pre>
+
+<pre class="term">$ lua comand.lua
+Pode votar (aninhado).
+Pode votar (and).
+</pre>
+
+<p>Os dois fazem o mesmo, e o do <code>and</code> é mais curto. Ele também é seguro para a proteção da seção 3: o <code>and</code> só olha o lado direito se o esquerdo for verdadeiro, então <code>if n and n &gt; 0 then</code> nunca compara um <code>nil</code>.</p>
+
+<h3>Quando <strong>não</strong> dá para usar <code>and</code></h3>
+<p>Se cada "não" precisa de uma resposta diferente, o <code>and</code> perde informação. Aqui cada situação tem a sua mensagem:</p>
+
+<pre class="file" data-file="mensagens.lua">local idade = 20
+local tem_titulo = false
+
+if idade &gt;= 18 then
+  if tem_titulo then
+    print("Pode votar.")
+  else
+    print("Tem idade, mas precisa tirar o título.")
+  end
+else
+  print("Ainda não tem idade para votar.")
+end
+</pre>
+
+<pre class="term">$ lua mensagens.lua
+Tem idade, mas precisa tirar o título.
+</pre>
+
+<p>Com <code>if idade &gt;= 18 and tem_titulo then … else … end</code>, o <code>else</code> não saberia dizer <strong>qual</strong> das duas condições falhou.</p>
+
+<h3>Quando o aninhado vira um <code>elseif</code></h3>
+<p>Se o <code>if</code> de dentro é a <strong>única coisa</strong> dentro de um <code>else</code>, ele pode virar um <code>elseif</code> (veja <a href="elseif.html">elseif</a>). Estas duas formas são iguais:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Aninhado (dois <code>end</code>)</th><th>Com <code>elseif</code> (um <code>end</code>)</th></tr>
+<tr><td><pre class="file" data-file="a.lua">if nota &gt;= 7 then
+  print("aprovada")
+else
+  if nota &gt;= 5 then
+    print("recuperação")
+  else
+    print("reprovada")
+  end
+end
+</pre></td><td><pre class="file" data-file="b.lua">if nota &gt;= 7 then
+  print("aprovada")
+elseif nota &gt;= 5 then
+  print("recuperação")
+else
+  print("reprovada")
+end
+</pre></td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Situação</th><th>Qual usar</th></tr>
+<tr><td>A segunda pergunta só faz sentido depois da primeira, e cada "não" tem a sua resposta</td><td><code>if</code> dentro de <code>if</code></td></tr>
+<tr><td>As duas perguntas precisam ser "sim", e não há resposta para o "não"</td><td><code>if a and b then</code></td></tr>
+<tr><td>O <code>if</code> de dentro é a única coisa no <code>else</code></td><td><code>elseif</code></td></tr>
+<tr><td>Proteger uma comparação de um <code>nil</code></td><td><code>if n then if n &gt; 0 …</code> ou <code>if n and n &gt; 0 then</code></td></tr>
+<tr><td>Mais de três níveis</td><td>Repense: talvez dê para separar em funções (aula <a href="funcoes.html">Funções</a>)</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>4. A indentação que mente</h2>
+<p>O Lua <strong>não olha os espaços</strong>: quem decide de quem é cada <code>else</code> e cada <code>end</code> é a ordem. Então uma indentação errada pode enganar quem lê. Olhe este programa com atenção:</p>
+
+<pre class="file" data-file="mentira.lua">local tem_cadastro = false
+local senha_certa = false
+
+if tem_cadastro then
+  if senha_certa then
+    print("Entrou.")
+else
+  print("Usuário não encontrado.")
+  end
+end
+print("fim")
+</pre>
+
+<p>Pelo jeito como está escrito, parece que o <code>else</code> é do <code>if tem_cadastro</code> (estão alinhados). Então, com <code>tem_cadastro = false</code>, deveria aparecer <code>Usuário não encontrado.</code>. Mas:</p>
+
+<pre class="term">$ lua mentira.lua
+fim
+</pre>
+
+<p>Na hora do <code>else</code>, o <code>if</code> mais próximo ainda aberto é o <code>if senha_certa</code>: o <code>else</code> é <strong>dele</strong>. E com <code>tem_cadastro = true</code> (e a senha errada) a mensagem aparece no caso errado:</p>
+
+<pre class="term">$ lua mentira.lua                « tem_cadastro = true
+Usuário não encontrado.
+fim
+</pre>
+
+<p>O Lua não deu erro nenhum: o programa é válido, só não faz o que a indentação sugere. Indentado do jeito que o Lua o enxerga, o problema salta aos olhos:</p>
+
+<pre class="file" data-file="mentira_indentado.lua">if tem_cadastro then
+  if senha_certa then
+    print("Entrou.")
+  else
+    print("Usuário não encontrado.")
+  end
+end
+</pre>
+
+<div class="warning">
+<strong>Deixe o editor de texto indentar por você</strong>
+<p>Editores de código (VS Code, Neovim, ZeroBrane Studio…) têm um comando para reindentar o arquivo de acordo com os <code>if</code>/<code>end</code> de verdade. Use-o quando a lógica parecer não bater com o que você lê: se as linhas "pularem" de lugar, achou o problema.</p>
+</div>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+
+<div class="cenario">
+<strong>Faltou o <code>end</code> do <code>if</code> de dentro</strong>
+<pre class="file" data-file="faltaend.lua">local usuario = "ana"
+local senha = "pao123"
+
+if usuario == "ana" then
+  if senha == "pao123" then
+    print("Bem-vinda, Ana!")
+  else
+    print("Senha errada.")
+else
+  print("Usuário não encontrado.")
+end
+</pre>
+<pre class="term">$ lua faltaend.lua
+lua: faltaend.lua:9: 'end' expected (to close 'if' at line 5) near 'else'
+</pre>
+<dl class="anatomy">
+  <dt>faltaend.lua:9:</dt><dd>A linha 9, a do segundo <code>else</code>.</dd>
+  <dt>'end' expected (to close 'if' at line 5)</dt><dd>"Era esperado um <code>end</code> para fechar o <code>if</code> da linha 5": o <code>if</code> <strong>de dentro</strong> (o da senha).</dd>
+  <dt>near 'else'</dt><dd>O <code>if</code> de dentro já tinha um <code>else</code> (linha 7). Quando veio outro <code>else</code>, ainda com ele aberto, o Lua entendeu que estava faltando o <code>end</code> antes.</dd>
+</dl>
+<p>Desta vez a mensagem aponta quase o lugar exato. <strong>Como consertar:</strong> ponha o <code>end</code> na linha 9, antes do segundo <code>else</code>, alinhado com o <code>if senha …</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Faltou um <code>end</code> no fim</strong>
+<pre class="file" data-file="faltaend2.lua">local usuario = "ana"
+local senha = "pao123"
+
+if usuario == "ana" then
+  if senha == "pao123" then
+    print("Bem-vinda, Ana!")
+  end
+</pre>
+<pre class="term">$ lua faltaend2.lua
+lua: faltaend2.lua:8: 'end' expected (to close 'if' at line 4) near &lt;eof&gt;
+</pre>
+<p>O único <code>end</code> fechou o <code>if</code> de dentro (o mais recente); o de fora, da <strong>linha 4</strong>, chegou aberto ao fim do arquivo. <strong>Como consertar:</strong> mais um <code>end</code> no fim. A regra para conferir: conte os <code>if</code>s (sem contar os <code>elseif</code>) e os <code>end</code>s. Os números têm de bater.</p>
+</div>
+
+<div class="cenario">
+<strong>Comparou antes de testar se existe</strong>
+<p>É o erro da seção 3: <code>attempt to compare number with nil</code>. Ele aparece quando uma variável que <strong>pode</strong> ser <code>nil</code> (o resultado do <code>tonumber</code>, do <code>io.read()</code> no fim da entrada, um nome digitado errado) entra numa comparação com <code>&lt;</code>, <code>&gt;</code>, <code>&lt;=</code> ou <code>&gt;=</code>. <strong>Como consertar:</strong> teste primeiro (<code>if n then</code>) e compare dentro, ou junte as duas com <code>if n and n &gt; 0 then</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>O <code>else</code> foi parar no <code>if</code> errado</strong>
+<p>É o caso da seção 4: nenhuma mensagem de erro, mas a resposta aparece na situação errada (ou não aparece). <strong>Como achar:</strong> reindente o código seguindo a regra "cada <code>else</code> e cada <code>end</code> é do <code>if</code> aberto mais recente" e veja se ficou como você queria.</p>
+</div>
+
+<hr>
+
+<h2>Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>O que faz</th></tr>
+<tr><td><code>if a then if b then X else Y end else Z end</code></td><td><code>X</code>: a e b. <code>Y</code>: a e não b. <code>Z</code>: não a (b nem é testado)</td></tr>
+<tr><td>Cada <code>else</code>/<code>end</code></td><td>Pertence ao <code>if</code> aberto mais recente</td></tr>
+<tr><td>Número de <code>end</code></td><td>Um por <code>if</code> (os <code>elseif</code> não contam)</td></tr>
+<tr><td><code>if a and b then</code></td><td>Igual a um <code>if b</code> dentro de um <code>if a</code>, quando não há <code>else</code></td></tr>
+<tr><td><code>if n and n &gt; 0 then</code></td><td>Compara só se <code>n</code> não for <code>nil</code></td></tr>
+<tr><td>2 espaços por nível</td><td>Para enxergar o que está dentro de quê</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Sintoma</th><th>Causa provável</th></tr>
+<tr><td><code>'end' expected (to close 'if' at line N) near 'else'</code></td><td>Faltou o <code>end</code> do <code>if</code> de dentro, antes do <code>else</code> do de fora</td></tr>
+<tr><td><code>'end' expected (to close 'if' at line N) near &lt;eof&gt;</code></td><td>Faltou um <code>end</code>; a linha N diz qual <code>if</code> ficou aberto</td></tr>
+<tr><td><code>attempt to compare number with nil</code></td><td>Comparou um valor que pode ser <code>nil</code> sem testar antes</td></tr>
+<tr><td>A mensagem aparece no caso errado, sem erro</td><td>Um <code>else</code> ou <code>end</code> no lugar errado (a indentação está mentindo)</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. Quantos <code>end</code>?</h3>
+<p>Um programa tem um <code>if</code> com outro <code>if</code> dentro, e esse tem um terceiro <code>if</code> dentro. Quantos <code>end</code> são necessários?</p>
+<div class="ex-code"><input data-answer="3" aria-label="número de end"> end</div>
+</div>
+
+<div class="exercise">
+<h3>2. Troque por <code>and</code></h3>
+<p>Complete a versão curta de <code>if chovendo then if tem_guarda_chuva then print("Pode sair") end end</code>:</p>
+<div class="ex-code">if chovendo <input data-answer="and" aria-label="operador"> tem_guarda_chuva then print("Pode sair") end</div>
+</div>
+
+<div class="mc" data-answer="3">
+<p class="mc-q">3. No programa <code>login.lua</code> da seção 1, com <code>usuario = "bia"</code> e <code>senha = "pao123"</code>, o que aparece?</p>
+<label><input type="radio" name="q3"> <code>Bem-vinda, Ana!</code></label>
+<label><input type="radio" name="q3"> <code>Senha errada.</code></label>
+<label><input type="radio" name="q3"> <code>Usuário não encontrado.</code></label>
+<label><input type="radio" name="q3"> Nada</label>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">4. Num <code>if</code> aninhado, um <code>else</code> pertence a qual <code>if</code>?</p>
+<label><input type="radio" name="q4"> Ao que estiver alinhado com ele</label>
+<label><input type="radio" name="q4"> Ao <code>if</code> aberto mais recente</label>
+<label><input type="radio" name="q4"> Sempre ao primeiro <code>if</code> do arquivo</label>
+<label><input type="radio" name="q4"> O Lua escolhe ao acaso</label>
+</div>
+
+<div class="mc" data-answer="4">
+<p class="mc-q">5. Qual condição nunca dá o erro <code>attempt to compare number with nil</code>, mesmo com <code>n = nil</code>?</p>
+<label><input type="radio" name="q5"> <code>if n &gt; 0 then</code></label>
+<label><input type="radio" name="q5"> <code>if n &gt; 0 and n then</code></label>
+<label><input type="radio" name="q5"> <code>if 0 &lt; n then</code></label>
+<label><input type="radio" name="q5"> <code>if n and n &gt; 0 then</code></label>
+</div>
+
+<div class="mc" data-answer="1">
+<p class="mc-q">6. Quando um <code>if</code> aninhado <strong>não</strong> pode virar um único <code>if a and b</code>?</p>
+<label><input type="radio" name="q6"> Quando o "não" de cada pergunta precisa de uma resposta diferente</label>
+<label><input type="radio" name="q6"> Quando as condições usam <code>==</code></label>
+<label><input type="radio" name="q6"> Quando há mais de duas linhas no bloco</label>
+<label><input type="radio" name="q6"> Sempre pode</label>
+</div>
+
+<h3>Missão final: o ingresso do cinema</h3>
+
+<div class="trylua" data-goal="out:Ingresso: meia, R$ 15;;src:\bif\s+estudante\b">
+<p class="try-task"><strong>Missão:</strong> no cinema do bairro, criança com menos de 3 anos não paga. Os outros pagam inteira (R$ 30), mas <strong>estudante</strong> paga meia (R$ 15). O programa já trata a criança; dentro do <code>else</code>, troque o <code>print</code> por um <code>if estudante then … else … end</code>, para a Ana (25 anos, estudante) ver <code>Ingresso: meia, R$ 15</code>.</p>
+<pre class="script" data-file="main.lua">local idade = 25
+local estudante = true
+if idade &lt; 3 then
+  print("Ingresso: grátis")
+else
+  print("Ingresso: inteira, R$ 30")
+end
+</pre>
+<pre class="solucao" data-file="main.lua">local idade = 25
+local estudante = true
+if idade &lt; 3 then
+  print("Ingresso: grátis")
+else
+  if estudante then
+    print("Ingresso: meia, R$ 15")
+  else
+    print("Ingresso: inteira, R$ 30")
+  end
+end
+</pre>
+</div>
+
+<p>Teste depois com <code>estudante = false</code> (inteira) e com <code>idade = 2</code> (grátis, sem nem olhar o <code>estudante</code>). Desafio: como ficaria com <code>elseif</code>? (Dica: <code>elseif estudante then</code>.)</p>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li>Um <code>if</code> pode ter outro <code>if</code> dentro do seu bloco: é a condição <strong>aninhada</strong>, para perguntas que só fazem sentido depois de outra.</li>
+  <li>Cada <code>else</code> e cada <code>end</code> pertence ao <code>if</code> aberto <strong>mais recente</strong>. Os espaços não contam para o Lua, mas indentar 2 espaços por nível evita que o código "minta" para quem lê.</li>
+  <li>Um <code>end</code> por <code>if</code>. O erro <code>'end' expected (to close 'if' at line N)</code> diz qual ficou aberto.</li>
+  <li>Teste se um valor existe antes de compará-lo: <code>if n then if n &gt; 0 …</code> ou <code>if n and n &gt; 0 then</code>.</li>
+  <li>Sem <code>else</code>, dois <code>if</code>s aninhados viram <code>if a and b then</code>. Um <code>if</code> sozinho dentro de um <code>else</code> vira <code>elseif</code>.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
