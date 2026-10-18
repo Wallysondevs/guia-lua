@@ -1,0 +1,636 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua Classes com Metatabelas — Classe.__index = Classe e Classe.new | Guia Lua</title>
+<meta name="description" content="Classes no Lua para quem nunca programou: o padrão Conta.__index = Conta e Conta.new, objetos que guardam só os dados e encontram os métodos na classe, metamétodos na classe (__tostring, __lt), valores padrão da classe, as formas Conta.new, Conta:new e Conta(), a classe Retangulo, e os erros reais do Lua 5.5.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">Classes com Metatabelas</span></h1>
+
+<p class="intro">O banco da Ana tem milhares de contas, e todas sabem fazer as mesmas coisas: depositar, sacar, mostrar o extrato. Em muitas linguagens, isso se escreve com uma <strong>classe</strong>: um molde que descreve o que todo objeto daquele tipo tem e faz. O Lua não tem uma palavra <code>class</code>, mas tem tudo o que é preciso para montar uma: <a href="metatabelas.html">metatabelas</a>, o <a href="index-newindex.html"><code>__index</code></a> e os <a href="metodos.html">métodos com dois-pontos</a>. Nesta aula você junta as três peças num padrão de duas linhas que todo programador Lua conhece: <code>Conta.__index = Conta</code> e <code>Conta.new</code>.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O que é uma classe e um objeto, com a comparação da fôrma de bolo.</li>
+  <li>Por que copiar os métodos para cada objeto não é uma boa ideia.</li>
+  <li>O padrão completo: <code>local Conta = {}</code>, <code>Conta.__index = Conta</code>, <code>Conta.new(…)</code> e <code>function Conta:metodo(…)</code>.</li>
+  <li>O caminho que o Lua faz para achar <code>conta_ana:depositar</code>.</li>
+  <li>Metamétodos e valores padrão na classe (<code>__tostring</code>, <code>__lt</code>, <code>limite_saque</code>).</li>
+  <li>As formas <code>Conta.new</code>, <code>Conta:new</code> e <code>Conta(…)</code>, e qual escolher.</li>
+  <li>Os erros reais: esquecer o <code>__index</code>, o <code>setmetatable</code> ou o <code>return</code>, e chamar o método na classe.</li>
+</ul>
+</div>
+
+<p>Todos os programas rodaram no <strong>Lua 5.5</strong> da máquina da Ana (usuária <code>ana</code>, computador <code>notebook</code>) com <code>lua arquivo.lua</code>. Esta aula usa tudo das quatro anteriores: <a href="metatabelas.html">Metatabelas</a>, <a href="index-newindex.html">__index e __newindex</a>, <a href="tostring-call-len.html">__tostring</a> e <a href="metodos.html">Métodos</a>.</p>
+
+<hr>
+
+<h2>A ideia: a fôrma e os bolos</h2>
+<p>Na padaria, a Ana tem <strong>uma</strong> fôrma de bolo e a receita colada nela. Com ela, faz quantos bolos quiser. Cada bolo tem o seu sabor e o seu recheio (os <strong>dados</strong>), mas todos foram feitos do mesmo jeito e seguem a mesma receita (os <strong>métodos</strong>).</p>
+<ul>
+  <li>A <strong>classe</strong> é a fôrma com a receita: a tabela <code>Conta</code>, onde ficam os métodos <code>depositar</code>, <code>sacar</code>, <code>extrato</code>.</li>
+  <li>Cada <strong>objeto</strong> (ou <strong>instância</strong>) é um bolo: a conta da Ana, a conta da Bia. Cada um guarda só os <strong>seus</strong> dados (titular, saldo).</li>
+  <li>A <strong>metatabela</strong> com <code>__index</code> é a ligação "este bolo saiu desta fôrma": quando você pede ao objeto um método que ele não tem, o Lua vai procurar na classe.</li>
+</ul>
+
+<hr>
+
+<h2>1. O jeito sem classe: copiar os métodos</h2>
+<p>Com o que você aprendeu em <a href="metodos.html">Métodos</a>, já dá para criar várias contas com os mesmos métodos: uma função que monta a tabela e põe as funções em cada uma.</p>
+
+<pre class="file" data-file="copias.lua">local function depositar(self, valor) self.saldo = self.saldo + valor end
+local function extrato(self) print(self.titular .. ": " .. self.saldo) end
+
+local function nova_conta(titular, saldo)
+  return { titular = titular, saldo = saldo, depositar = depositar, extrato = extrato }
+end
+
+local a = nova_conta("Ana", 100)
+local b = nova_conta("Bia", 20)
+a:depositar(50)
+b:depositar(30)
+a:extrato()
+b:extrato()
+local campos = 0
+for _ in pairs(a) do campos = campos + 1 end
+print("campos em cada conta:", campos)
+</pre>
+
+<pre class="term">$ lua copias.lua
+Ana: 150
+Bia: 50
+campos em cada conta:	4</pre>
+
+<p>Funciona, mas cada conta carrega 4 campos: 2 de dados e 2 de métodos. Com 10 métodos, seriam 12 campos por conta, repetidos em milhares de contas. E, se a Ana criar um método novo depois, as contas que já existem não ficam sabendo dele. O jeito com classe resolve as duas coisas: os métodos ficam num lugar só.</p>
+
+<hr>
+
+<h2>2. A primeira classe: <code>Conta</code></h2>
+
+<pre class="file" data-file="conta.lua">local Conta = {}
+Conta.__index = Conta
+
+function Conta.new(titular, saldo)
+  local self = setmetatable({}, Conta)
+  self.titular = titular
+  self.saldo = saldo or 0
+  return self
+end
+
+function Conta:depositar(valor)
+  self.saldo = self.saldo + valor
+end
+
+function Conta:extrato()
+  print(string.format("%s: R$ %.2f", self.titular, self.saldo))
+end
+
+local conta_ana = Conta.new("Ana", 100)
+local conta_bia = Conta.new("Bia")
+conta_ana:depositar(50)
+conta_bia:depositar(30)
+conta_ana:extrato()
+conta_bia:extrato()
+</pre>
+
+<pre class="term">$ lua conta.lua
+Ana: R$ 150.00
+Bia: R$ 30.00</pre>
+
+<dl class="anatomy">
+  <dt>local Conta = {}</dt><dd>A classe é uma tabela comum. O nome começa com <strong>maiúscula</strong> por convenção: assim quem lê sabe que <code>Conta</code> é a fôrma, e <code>conta_ana</code> é um bolo.</dd>
+  <dt>Conta.__index = Conta</dt><dd>A linha mais importante. A tabela <code>Conta</code> vai ter <strong>dois papéis</strong>: guardar os métodos e ser a metatabela dos objetos. Com <code>__index</code> apontando para ela mesma, o recado é: "o que faltar no objeto, procure na <code>Conta</code>".</dd>
+  <dt>function Conta.new(titular, saldo)</dt><dd>O <strong>construtor</strong>: a função que fabrica objetos. O nome <code>new</code> ("novo") é tradição, não regra. Ela é chamada com ponto, porque não trabalha num objeto que já existe.</dd>
+  <dt>local self = setmetatable({}, Conta)</dt><dd>Cria uma tabela vazia, liga a metatabela <code>Conta</code> e chama o resultado de <code>self</code> (poderia ser <code>obj</code>, <code>nova</code>…). A partir daqui, ela já "saiu da fôrma".</dd>
+  <dt>self.saldo = saldo or 0</dt><dd>Guarda os dados <strong>no objeto</strong>. Se o saldo não veio (como na conta da Bia), começa em 0.</dd>
+  <dt>return self</dt><dd>Entrega o objeto pronto para quem chamou <code>Conta.new</code>.</dd>
+  <dt>function Conta:depositar(valor)</dt><dd>Os métodos ficam na classe, com dois-pontos. O <code>self</code> de cada chamada será o objeto que veio antes do <code>:</code>.</dd>
+</dl>
+
+<h3>Passo a passo: como o Lua acha <code>conta_ana:depositar</code></h3>
+<ol class="passo">
+  <li><code>conta_ana:depositar(50)</code> é <code>conta_ana.depositar(conta_ana, 50)</code>. Primeiro, o Lua precisa do valor de <code>conta_ana.depositar</code>.</li>
+  <li>Ele procura <code>depositar</code> na própria <code>conta_ana</code>. Ela só tem <code>titular</code> e <code>saldo</code>: não acha.</li>
+  <li>A <code>conta_ana</code> tem metatabela? Tem: <code>Conta</code>. E <code>Conta.__index</code> existe? Existe: é a própria <code>Conta</code>.</li>
+  <li>Ele procura <code>depositar</code> em <code>Conta</code>, acha a função, e a chama com <code>(conta_ana, 50)</code>. O <code>self</code> é a <code>conta_ana</code>: o depósito cai no lugar certo.</li>
+</ol>
+
+<p>Vamos conferir que os objetos guardam <strong>só</strong> os dados:</p>
+
+<pre class="file" data-file="olhar.lua">local conta_ana = Conta.new("Ana", 100)
+print(rawget(conta_ana, "depositar"))
+print(conta_ana.depositar == Conta.depositar)
+print(getmetatable(conta_ana) == Conta)
+local nomes = {}
+for chave in pairs(conta_ana) do nomes[#nomes + 1] = chave end
+table.sort(nomes)
+print("campos da conta:", table.concat(nomes, ", "))
+local metodos = {}
+for chave in pairs(Conta) do metodos[#metodos + 1] = chave end
+table.sort(metodos)
+print("campos da classe:", table.concat(metodos, ", "))
+</pre>
+
+<pre class="term">$ lua olhar.lua
+nil
+true
+true
+campos da conta:	saldo, titular
+campos da classe:	__index, depositar, new</pre>
+
+<p>(O começo do arquivo, com a classe <code>Conta</code>, o <code>new</code> e o <code>depositar</code>, é igual ao de <code>conta.lua</code>.) O <code>rawget</code> confirma que <code>depositar</code> <strong>não</strong> está no objeto (veja <a href="rawget-rawset.html">rawget</a>); mesmo assim, <code>conta_ana.depositar</code> é a função da classe. O objeto tem só <code>saldo</code> e <code>titular</code>; a classe tem o <code>__index</code>, o <code>depositar</code> e o <code>new</code>. Os nomes foram ordenados com <a href="table-sort.html">table.sort</a> para a saída não depender da ordem do <code>pairs</code>. E <code>getmetatable(conta_ana) == Conta</code> é o jeito de perguntar "este objeto é uma Conta?".</p>
+
+<h3>Método novo, objetos antigos</h3>
+<p>Como os objetos procuram os métodos na classe <strong>na hora</strong> da chamada, um método criado depois do objeto também funciona nele:</p>
+
+<pre class="file" data-file="novo_metodo.lua">local conta_ana = Conta.new("Ana", 100)
+
+function Conta:dobrar()
+  self.saldo = self.saldo * 2
+end
+
+conta_ana:dobrar()
+print(conta_ana.saldo)
+</pre>
+
+<pre class="term">$ lua novo_metodo.lua
+200</pre>
+
+<div class="trylua" data-goal="out:Ana: R$ 70.00;;out:Bia: R$ 30.00;;semerro">
+<p class="try-task"><strong>Missão:</strong> as duas contas chamam <code>:sacar</code>, mas a classe não tem esse método (<code>attempt to call a nil value (method 'sacar')</code>). Escreva <code>function Conta:sacar(valor)</code> na classe, tirando o valor de <code>self.saldo</code>. Uma função só, para as duas contas.</p>
+<pre class="script" data-file="main.lua">local Conta = {}
+Conta.__index = Conta
+
+function Conta.new(titular, saldo)
+  local self = setmetatable({}, Conta)
+  self.titular = titular
+  self.saldo = saldo or 0
+  return self
+end
+
+function Conta:extrato()
+  print(string.format("%s: R$ %.2f", self.titular, self.saldo))
+end
+
+local conta_ana = Conta.new("Ana", 100)
+local conta_bia = Conta.new("Bia", 50)
+conta_ana:sacar(30)
+conta_bia:sacar(20)
+conta_ana:extrato()
+conta_bia:extrato()
+</pre>
+<pre class="solucao" data-file="main.lua">local Conta = {}
+Conta.__index = Conta
+
+function Conta.new(titular, saldo)
+  local self = setmetatable({}, Conta)
+  self.titular = titular
+  self.saldo = saldo or 0
+  return self
+end
+
+function Conta:extrato()
+  print(string.format("%s: R$ %.2f", self.titular, self.saldo))
+end
+
+function Conta:sacar(valor)
+  self.saldo = self.saldo - valor
+end
+
+local conta_ana = Conta.new("Ana", 100)
+local conta_bia = Conta.new("Bia", 50)
+conta_ana:sacar(30)
+conta_bia:sacar(20)
+conta_ana:extrato()
+conta_bia:extrato()
+</pre>
+</div>
+
+<hr>
+
+<h2>3. Metamétodos e valores padrão na classe</h2>
+<p>Como a classe <strong>é</strong> a metatabela dos objetos, os metamétodos que você aprendeu nas aulas anteriores entram nela direto: <code>Conta.__tostring</code> vale para todas as contas. E um campo comum na classe vira um <strong>valor padrão</strong> para todos os objetos (graças ao <code>__index</code>), que cada objeto pode trocar só para si:</p>
+
+<pre class="file" data-file="tostring.lua">local Conta = {}
+Conta.__index = Conta
+Conta.limite_saque = 500
+
+function Conta.new(titular, saldo)
+  return setmetatable({ titular = titular, saldo = saldo or 0 }, Conta)
+end
+
+function Conta:sacar(valor)
+  if valor &gt; self.limite_saque then
+    return false, "acima do limite de R$ " .. self.limite_saque
+  end
+  if valor &gt; self.saldo then
+    return false, "saldo insuficiente"
+  end
+  self.saldo = self.saldo - valor
+  return true
+end
+
+Conta.__tostring = function (c)
+  return string.format("Conta(%s, R$ %.2f)", c.titular, c.saldo)
+end
+
+Conta.__lt = function (a, b)
+  return a.saldo &lt; b.saldo
+end
+
+local ana = Conta.new("Ana", 1000)
+local bia = Conta.new("Bia", 3000)
+bia.limite_saque = 2000
+
+print(ana, bia)
+print(ana:sacar(800))
+print(bia:sacar(800))
+print(ana, bia)
+print(ana &lt; bia)
+</pre>
+
+<pre class="term">$ lua tostring.lua
+Conta(Ana, R$ 1000.00)	Conta(Bia, R$ 3000.00)
+false	acima do limite de R$ 500
+true
+Conta(Ana, R$ 1000.00)	Conta(Bia, R$ 2200.00)
+true</pre>
+
+<dl class="anatomy">
+  <dt>Conta.limite_saque = 500</dt><dd>Um <strong>dado da classe</strong>: todas as contas enxergam <code>self.limite_saque</code> como 500, pelo <code>__index</code>, sem guardar uma cópia.</dd>
+  <dt>bia.limite_saque = 2000</dt><dd>A Bia ganhou um limite maior. A gravação cria o campo <strong>no objeto</strong> <code>bia</code>; a classe continua com 500, e a Ana também. É a mesma regra das configurações padrão em <a href="index-newindex.html">__index e __newindex</a>.</dd>
+  <dt>ana:sacar(800) → false, acima do limite…</dt><dd>Para a Ana, 800 passa do limite de 500. Para a Bia, não: o saque foi feito, e o saldo dela foi a 2200.</dd>
+  <dt>Conta.__tostring e Conta.__lt</dt><dd>Metamétodos na classe: o <code>print</code> mostra as contas de um jeito legível, e <code>ana &lt; bia</code> compara os saldos (o que também permitiria ordenar uma lista de contas com <code>table.sort</code>).</dd>
+</dl>
+
+<div class="warning">
+<strong>Dado da classe que é tabela: cuidado</strong>
+<p>Valores simples (números, textos) na classe funcionam bem como padrão, porque gravar no objeto cria uma cópia só dele. Mas se a classe tiver uma <strong>tabela</strong>, como <code>Conta.historico = {}</code>, e um método fizer <code>table.insert(self.historico, …)</code>, todos os objetos vão escrever <strong>na mesma</strong> tabela da classe (o <code>__index</code> devolve a mesma tabela para todos). No lab, com a conta da Ana em <code>a</code> e a da Bia em <code>b</code>, depois de <code>a:registrar("depósito da Ana")</code>, o <code>#b.historico</code> deu <code>1</code>, e o item era <code>depósito da Ana</code>: o histórico da Bia mostrava o depósito da Ana. Tabelas de cada objeto devem ser criadas no <code>new</code>: <code>self.historico = {}</code>.</p>
+</div>
+
+<hr>
+
+<h2>4. Outra classe: <code>Retangulo</code></h2>
+<p>O padrão é sempre o mesmo, para qualquer tipo de coisa. As figuras da Ana:</p>
+
+<pre class="file" data-file="retangulo.lua">local Retangulo = {}
+Retangulo.__index = Retangulo
+
+function Retangulo.new(largura, altura)
+  return setmetatable({ largura = largura, altura = altura }, Retangulo)
+end
+
+function Retangulo:area()
+  return self.largura * self.altura
+end
+
+Retangulo.__tostring = function (r)
+  return "Retângulo " .. r.largura .. "x" .. r.altura
+end
+
+local porta = Retangulo.new(1, 2)
+local mesa = Retangulo.new(3, 4)
+print(porta, porta:area())
+print(mesa, mesa:area())
+</pre>
+
+<pre class="term">$ lua retangulo.lua
+Retângulo 1x2	2
+Retângulo 3x4	12</pre>
+
+<p>Aqui o <code>new</code> cria e liga a metatabela numa linha só (<code>return setmetatable({ … }, Retangulo)</code>), o que é muito comum quando o construtor não precisa fazer mais nada. Na próxima aula, <a href="heranca.html">Herança</a>, o quadrado vai aproveitar tudo do retângulo.</p>
+
+<hr>
+
+<h2 id="formas">Formas diferentes de fazer a mesma coisa</h2>
+<p>Você vai encontrar três jeitos de escrever o construtor em códigos por aí:</p>
+
+<pre class="file" data-file="formas.lua">-- forma 1 (desta aula): Conta.new, com ponto
+function Conta.new(titular, saldo)
+  local self = setmetatable({}, Conta)
+  …
+  return self
+end
+local a = Conta.new("Ana", 100)
+
+-- forma 2: Conta:new, com dois-pontos (o self é a classe)
+function Conta:new(titular, saldo)
+  local obj = setmetatable({}, self)
+  obj.titular = titular
+  obj.saldo = saldo or 0
+  return obj
+end
+local a = Conta:new("Ana", 100)
+
+-- forma 3: chamar a classe como função, com __call na metatabela da classe
+setmetatable(Conta, {
+  __call = function (classe, ...)
+    return classe:new(...)
+  end,
+})
+local b = Conta("Bia", 20)
+</pre>
+
+<p>No lab, as formas 2 e 3 juntas (um programa com <code>Conta:new</code> e o <code>__call</code>) criaram as duas contas certinho: <code>Ana 100 true</code> e <code>Bia 20 true</code>, o <code>true</code> sendo o <code>getmetatable(…) == Conta</code>. O <code>...</code> repassa todos os argumentos (veja <a href="varargs.html">Funções Variádicas</a>), e o <code>__call</code> é o da aula <a href="tostring-call-len.html">__tostring, __call e __len</a>.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Forma</th><th>Vantagem</th><th>Cuidado</th></tr>
+<tr><td><code>Conta.new(…)</code></td><td>A mais simples de entender: o <code>new</code> é uma função comum</td><td>Chame com ponto, sempre</td></tr>
+<tr><td><code>Conta:new(…)</code></td><td>Usa <code>self</code> como metatabela, o que facilita a <a href="heranca.html">herança</a> (o livro <em>Programming in Lua</em> usa esta forma)</td><td>Chame com dois-pontos, sempre; dentro do <code>new</code>, <code>self</code> é a <strong>classe</strong>, não o objeto</td></tr>
+<tr><td><code>Conta(…)</code></td><td>Parece com outras linguagens</td><td>Uma metatabela a mais (a da classe), com <code>__call</code></td></tr>
+</table>
+</div>
+
+<p>Escolha uma e use sempre a mesma no programa inteiro. Neste guia, usamos <code>Conta.new</code>.</p>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+
+<div class="cenario">
+<strong>Esqueceu o <code>Conta.__index = Conta</code></strong>
+<pre class="file" data-file="sem_index.lua">local Conta = {}
+
+function Conta.new(titular, saldo)
+  return setmetatable({ titular = titular, saldo = saldo or 0 }, Conta)
+end
+
+function Conta:depositar(valor)
+  self.saldo = self.saldo + valor
+end
+
+local conta_ana = Conta.new("Ana", 100)
+conta_ana:depositar(50)
+</pre>
+<pre class="term">$ lua sem_index.lua
+lua: sem_index.lua:12: attempt to call a nil value (method 'depositar')
+stack traceback:
+	sem_index.lua:12: in main chunk
+	[C]: in ?</pre>
+<p>"Tentativa de chamar um valor <code>nil</code> (o método <code>depositar</code>)". O objeto tem a metatabela <code>Conta</code>, mas a metatabela não tem <code>__index</code>: o Lua não sabe que deve procurar os métodos nela, e <code>conta_ana.depositar</code> dá <code>nil</code>. <strong>Como consertar:</strong> <code>Conta.__index = Conta</code> logo depois do <code>local Conta = {}</code>. É o erro mais comum com classes.</p>
+</div>
+
+<div class="cenario">
+<strong>Esqueceu o <code>setmetatable</code> no <code>new</code></strong>
+<pre class="file" data-file="sem_setmt.lua">local Conta = {}
+Conta.__index = Conta
+
+function Conta.new(titular, saldo)
+  return { titular = titular, saldo = saldo or 0 }
+end
+
+function Conta:depositar(valor)
+  self.saldo = self.saldo + valor
+end
+
+local conta_ana = Conta.new("Ana", 100)
+conta_ana:depositar(50)
+</pre>
+<pre class="term">$ lua sem_setmt.lua
+lua: sem_setmt.lua:13: attempt to call a nil value (method 'depositar')
+stack traceback:
+	sem_setmt.lua:13: in main chunk
+	[C]: in ?</pre>
+<p>A mesma mensagem, outra causa: agora a classe está certa, mas o objeto nem tem metatabela. Ele é só uma tabela com titular e saldo, sem ligação com a fôrma. <strong>Como consertar:</strong> <code>return setmetatable({ … }, Conta)</code>. Quando aparecer <code>(method '…')</code> com <code>nil</code>, confira as duas coisas: o <code>__index</code> da classe e o <code>setmetatable</code> do construtor.</p>
+</div>
+
+<div class="cenario">
+<strong>Esqueceu o <code>return self</code></strong>
+<pre class="file" data-file="sem_return.lua">local Conta = {}
+Conta.__index = Conta
+
+function Conta.new(titular, saldo)
+  local self = setmetatable({}, Conta)
+  self.titular = titular
+  self.saldo = saldo or 0
+end
+
+function Conta:depositar(valor)
+  self.saldo = self.saldo + valor
+end
+
+local conta_ana = Conta.new("Ana", 100)
+conta_ana:depositar(50)
+</pre>
+<pre class="term">$ lua sem_return.lua
+lua: sem_return.lua:15: attempt to index a nil value (local 'conta_ana')
+stack traceback:
+	sem_return.lua:15: in main chunk
+	[C]: in ?</pre>
+<p>O objeto foi criado dentro do <code>new</code>, mas ninguém o entregou: <code>Conta.new</code> devolveu nada, e <code>conta_ana</code> ficou <code>nil</code>. O erro aparece só na linha seguinte: "tentativa de indexar um valor <code>nil</code> (a local <code>conta_ana</code>)". <strong>Como consertar:</strong> <code>return self</code> no fim do construtor.</p>
+</div>
+
+<div class="cenario">
+<strong>Chamou o método na classe, e não no objeto</strong>
+<pre class="file" data-file="na_classe.lua">local Conta = {}
+Conta.__index = Conta
+
+function Conta.new(titular, saldo)
+  return setmetatable({ titular = titular, saldo = saldo or 0 }, Conta)
+end
+
+function Conta:depositar(valor)
+  self.saldo = self.saldo + valor
+end
+
+local conta_ana = Conta.new("Ana", 100)
+Conta:depositar(50)
+</pre>
+<pre class="term">$ lua na_classe.lua
+lua: na_classe.lua:9: attempt to perform arithmetic on a nil value (field 'saldo')
+stack traceback:
+	na_classe.lua:9: in method 'depositar'
+	na_classe.lua:13: in main chunk
+	[C]: in ?</pre>
+<p><code>Conta:depositar(50)</code> passou a <strong>classe</strong> como <code>self</code>. A fôrma não tem saldo (quem tem é cada bolo), então <code>self.saldo</code> é <code>nil</code>: "tentativa de fazer conta com um valor <code>nil</code> (o campo <code>saldo</code>)". <strong>Como consertar:</strong> <code>conta_ana:depositar(50)</code>, com o objeto antes do dois-pontos.</p>
+</div>
+
+<div class="cenario">
+<strong>Construtor definido com <code>.</code> e chamado com <code>:</code></strong>
+<pre class="file" data-file="new_dois_pontos.lua">local Conta = {}
+Conta.__index = Conta
+
+function Conta.new(titular, saldo)
+  return setmetatable({ titular = titular, saldo = saldo or 0 }, Conta)
+end
+
+function Conta:extrato()
+  print(string.format("%s: R$ %.2f", self.titular, self.saldo))
+end
+
+local conta_ana = Conta:new("Ana", 100)
+conta_ana:extrato()
+</pre>
+<pre class="term">$ lua new_dois_pontos.lua
+lua: new_dois_pontos.lua:9: bad argument #3 to 'format' (number expected, got string)
+stack traceback:
+	[C]: in field 'format'
+	new_dois_pontos.lua:9: in method 'extrato'
+	new_dois_pontos.lua:13: in main chunk
+	[C]: in ?</pre>
+<p>Este é traiçoeiro, porque o erro aparece longe da causa. <code>Conta:new("Ana", 100)</code> é <code>Conta.new(Conta, "Ana", 100)</code>: o <code>titular</code> recebeu a tabela <code>Conta</code>, o <code>saldo</code> recebeu o texto <code>"Ana"</code>, e o <code>100</code> se perdeu. O objeto foi criado "torto", e só quebrou no <code>extrato</code>, quando o <code>%.2f</code> (o 3º argumento do <code>format</code>) recebeu o texto <code>"Ana"</code> no lugar de um número. <strong>Como consertar:</strong> <code>Conta.new("Ana", 100)</code>. Regra de bolso: o construtor com ponto, os métodos com dois-pontos.</p>
+</div>
+
+<hr>
+
+<h2>Referência rápida: o molde de uma classe</h2>
+
+<pre class="file" data-file="molde.lua">local Classe = {}
+Classe.__index = Classe              -- objetos procuram os métodos aqui
+
+function Classe.new(a, b)            -- construtor (chame com ponto)
+  local self = setmetatable({}, Classe)
+  self.a = a                         -- dados ficam no objeto
+  self.b = b
+  return self
+end
+
+function Classe:metodo(x)            -- métodos com dois-pontos
+  return self.a + x
+end
+
+Classe.__tostring = function (obj)   -- metamétodos na própria classe
+  return "Classe(" .. obj.a .. ")"
+end
+
+local obj = Classe.new(1, 2)         -- criar
+print(obj:metodo(10))                -- usar
+</pre>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Peça</th><th>Para que serve</th></tr>
+<tr><td><code>local Classe = {}</code></td><td>A tabela dos métodos, que também será a metatabela dos objetos</td></tr>
+<tr><td><code>Classe.__index = Classe</code></td><td>"O que faltar no objeto, procure na classe"</td></tr>
+<tr><td><code>Classe.new(…)</code> com <code>setmetatable({}, Classe)</code> e <code>return</code></td><td>Fabrica e entrega um objeto ligado à classe</td></tr>
+<tr><td><code>function Classe:metodo(…)</code></td><td>Método compartilhado por todos os objetos</td></tr>
+<tr><td><code>Classe.campo = valor</code></td><td>Valor padrão para todos (cada objeto pode trocar o seu)</td></tr>
+<tr><td><code>getmetatable(obj) == Classe</code></td><td>"Este objeto é desta classe?"</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Mensagem</th><th>Causa provável</th></tr>
+<tr><td><code>attempt to call a nil value (method '…')</code></td><td>Falta <code>Classe.__index = Classe</code>, ou o <code>new</code> não fez <code>setmetatable</code>, ou o método não existe</td></tr>
+<tr><td><code>attempt to index a nil value (local 'obj')</code> logo depois do <code>new</code></td><td>Faltou <code>return self</code> no construtor</td></tr>
+<tr><td><code>attempt to perform arithmetic on a nil value (field '…')</code> dentro de um método</td><td>Chamou o método na classe (<code>Classe:metodo()</code>) em vez de no objeto</td></tr>
+<tr><td>Dados trocados de lugar, erro estranho mais tarde</td><td><code>Classe:new</code> com um construtor definido com ponto</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. Complete a classe</h3>
+<div class="ex-code">local Produto = {}<br>Produto.<input data-answer="__index" aria-label="campo"> = Produto<br><br>function Produto.new(nome, preco)<br>&nbsp;&nbsp;return <input data-answer="setmetatable" aria-label="função">({ nome = nome, preco = preco }, Produto)<br>end</div>
+</div>
+
+<div class="exercise">
+<h3>2. Ponto ou dois-pontos?</h3>
+<p>Complete as chamadas com <code>.</code> ou <code>:</code>:</p>
+<div class="ex-code">local p = Produto<input data-answer="." aria-label="pontuação do construtor">new("pão", 150)<br>print(p<input data-answer=":" aria-label="pontuação do método">preco_com_desconto(10))</div>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">3. Num objeto criado com <code>Conta.new</code>, onde está guardado o método <code>depositar</code>?</p>
+<label><input type="radio" name="q3"> Uma cópia em cada objeto</label>
+<label><input type="radio" name="q3"> Só na classe <code>Conta</code>; o objeto o encontra pelo <code>__index</code></label>
+<label><input type="radio" name="q3"> Numa variável global</label>
+<label><input type="radio" name="q3"> No <code>self</code></label>
+</div>
+
+<div class="mc" data-answer="4">
+<p class="mc-q">4. <code>conta_ana:depositar(50)</code> dá <code>attempt to call a nil value (method 'depositar')</code>, e o método está escrito na classe. O que conferir primeiro?</p>
+<label><input type="radio" name="q4"> Se o saldo é um número</label>
+<label><input type="radio" name="q4"> Se o <code>depositar</code> tem <code>return</code></label>
+<label><input type="radio" name="q4"> Se a chamada devia ser com ponto</label>
+<label><input type="radio" name="q4"> Se existe <code>Conta.__index = Conta</code> e se o <code>new</code> faz <code>setmetatable</code></label>
+</div>
+
+<div class="mc" data-answer="1">
+<p class="mc-q">5. A classe tem <code>Conta.limite_saque = 500</code>. Depois de <code>bia.limite_saque = 2000</code>, quanto vale <code>ana.limite_saque</code>?</p>
+<label><input type="radio" name="q5"> 500</label>
+<label><input type="radio" name="q5"> 2000</label>
+<label><input type="radio" name="q5"> <code>nil</code></label>
+<label><input type="radio" name="q5"> Dá erro</label>
+</div>
+
+<h3>Missão final: a classe Retangulo</h3>
+
+<div class="trylua" data-goal="out:Retângulo 3x4 tem área 12;;out:Retângulo 1x2 tem área 2;;semerro">
+<p class="try-task"><strong>Missão:</strong> escreva a classe <code>Retangulo</code> no lugar do comentário: o <code>Retangulo.__index = Retangulo</code>, o construtor <code>Retangulo.new(largura, altura)</code> e o método <code>Retangulo:area()</code> (largura vezes altura). O <code>__tostring</code> já está pronto.</p>
+<pre class="script" data-file="main.lua">local Retangulo = {}
+-- escreva aqui: o __index, o new e o area
+
+Retangulo.__tostring = function (r)
+  return "Retângulo " .. r.largura .. "x" .. r.altura
+end
+
+local mesa = Retangulo.new(3, 4)
+local porta = Retangulo.new(1, 2)
+print(tostring(mesa) .. " tem área " .. mesa:area())
+print(tostring(porta) .. " tem área " .. porta:area())
+</pre>
+<pre class="solucao" data-file="main.lua">local Retangulo = {}
+Retangulo.__index = Retangulo
+
+function Retangulo.new(largura, altura)
+  local self = setmetatable({}, Retangulo)
+  self.largura = largura
+  self.altura = altura
+  return self
+end
+
+function Retangulo:area()
+  return self.largura * self.altura
+end
+
+Retangulo.__tostring = function (r)
+  return "Retângulo " .. r.largura .. "x" .. r.altura
+end
+
+local mesa = Retangulo.new(3, 4)
+local porta = Retangulo.new(1, 2)
+print(tostring(mesa) .. " tem área " .. mesa:area())
+print(tostring(porta) .. " tem área " .. porta:area())
+</pre>
+</div>
+
+<p>Desafio extra: acrescente um método <code>Retangulo:perimetro()</code> (<code>2 * (largura + altura)</code>) e mostre o perímetro da mesa (deve dar 14). Para um projeto completo com uma classe, veja <a href="projeto-banco.html">Projeto: Conta Bancária</a>.</p>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li>Uma <strong>classe</strong> no Lua é uma tabela com os métodos, que também serve de metatabela para os objetos. Um <strong>objeto</strong> é uma tabela com os dados, ligada à classe.</li>
+  <li>O padrão: <code>local Conta = {}</code>, <code>Conta.__index = Conta</code>, um construtor <code>Conta.new</code> que faz <code>setmetatable({}, Conta)</code> e <code>return</code>, e métodos <code>function Conta:metodo()</code>.</li>
+  <li>Quando o objeto não tem o método, o <code>__index</code> leva o Lua até a classe; o <code>self</code> é o objeto da chamada.</li>
+  <li>Metamétodos (<code>__tostring</code>, <code>__lt</code>…) ficam na classe e valem para todos os objetos. Campos simples da classe são padrões que cada objeto pode trocar.</li>
+  <li><code>attempt to call a nil value (method '…')</code>: confira o <code>__index</code> e o <code>setmetatable</code>. Construtor com ponto, métodos com dois-pontos.</li>
+  <li>Próximo passo: uma classe que aproveita outra, em <a href="heranca.html">Herança</a>.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
