@@ -1,0 +1,500 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua io.read() — lendo o que a pessoa digita | Guia Lua</title>
+<meta name="description" content="A função io.read() do Lua para quem nunca programou: ler uma linha do teclado, os formatos &quot;l&quot;, &quot;L&quot;, &quot;n&quot;, &quot;a&quot; e um número de caracteres, o nil do fim da entrada (Ctrl-D), por que a resposta vem como texto, a armadilha do &quot;n&quot; seguido de uma linha, entrada por pipe e os erros reais do Lua 5.5 explicados em português.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">io.read()</span></h1>
+
+<p class="intro">Até agora, os programas só falavam. Um programa de verdade também <strong>ouve</strong>: pergunta o nome do cliente, a quantidade de pães, a nota da prova, e faz alguma coisa com a resposta. No Lua, quem escuta o teclado é o <code>io.read()</code> (em inglês, <em>read</em> = "ler"). Ele para o programa, espera a pessoa digitar e apertar Enter, e entrega o que foi digitado para o seu código.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>A ler uma linha do teclado com <code>io.read()</code> e guardar a resposta.</li>
+  <li>Por que a resposta vem sempre como <strong>texto</strong>, mesmo quando a pessoa digita um número, e como transformá-la em número.</li>
+  <li>Os formatos de leitura: <code>"l"</code> (uma linha), <code>"L"</code> (uma linha com o Enter), <code>"n"</code> (um número), <code>"a"</code> (tudo) e um número de caracteres.</li>
+  <li>A ler dois valores de uma vez.</li>
+  <li>O que o <code>io.read</code> devolve quando a entrada <strong>acaba</strong>: <code>nil</code>.</li>
+  <li>A armadilha do <code>"n"</code> seguido de uma leitura de linha.</li>
+  <li>A mandar a entrada "pronta" por um pipe (<code>|</code>), sem digitar.</li>
+  <li>Os erros reais: <code>nil</code> na hora de juntar ou somar, formato inválido, e o jeito antigo <code>"*l"</code>.</li>
+</ul>
+</div>
+
+<p>Todos os programas desta aula foram rodados com o <strong>Lua 5.5</strong> na máquina fictícia da Ana (usuária <code>ana</code>, computador <code>notebook</code>). Nas saídas, o que aparece depois de uma pergunta (<code>Ana</code>, <code>30</code>) foi <strong>digitado</strong> pela Ana no terminal. Nas caixas "Experimente", quando o programa pedir, você digita no terminal da própria caixa; em algumas, a entrada já vem pronta (está avisado nelas).</p>
+
+<hr>
+
+<h2>A ideia: o caderno de pedidos da padaria</h2>
+<p>No balcão da padaria, a atendente pergunta "O que vai ser?" e <strong>espera</strong>. Enquanto o cliente não responde, ela não faz mais nada. Quando ele responde, ela anota no caderno <strong>exatamente o que ouviu</strong>, como texto: "doze pães", "12", "sei lá". Só depois ela decide o que fazer com a anotação.</p>
+
+<p>O <code>io.read()</code> é essa atendente. A pergunta você já sabe escrever (com o <a href="io-write.html"><code>io.write</code></a>); o <code>io.read</code> espera a resposta, que termina quando a pessoa aperta <strong>Enter</strong>, e a entrega para o programa, que normalmente a guarda numa <a href="variaveis.html">variável</a>.</p>
+
+<hr>
+
+<h2>1. Lendo uma linha</h2>
+
+<pre class="file" data-file="nome.lua">io.write("Qual é o seu nome? ")
+local nome = io.read()
+print("Olá, " .. nome .. "!")
+</pre>
+
+<dl class="anatomy">
+  <dt>io.write("Qual é o seu nome? ")</dt><dd>A pergunta. Com <code>io.write</code>, o cursor fica esperando na mesma linha, logo depois do espaço.</dd>
+  <dt>io.read()</dt><dd>"Leia". O programa <strong>para</strong> aqui e espera. Quando a pessoa aperta Enter, o <code>io.read()</code> devolve o que foi digitado, <strong>sem</strong> o Enter.</dd>
+  <dt>local nome =</dt><dd>Guarda a resposta numa variável chamada <code>nome</code>, para usar depois. O <code>local</code> e o <code>=</code> são explicados nas próximas aulas (<a href="variaveis.html">Variáveis</a> e <a href="local.html">local × Global</a>); por enquanto, leia como "guarde a resposta em <code>nome</code>".</dd>
+  <dt>"Olá, " .. nome .. "!"</dt><dd>Junta (com <code>..</code>) o texto fixo, a resposta e a exclamação.</dd>
+</dl>
+
+<pre class="term">$ lua nome.lua
+Qual é o seu nome? Ana
+Olá, Ana!
+</pre>
+
+<p>O <code>Ana</code> da primeira linha foi digitado; o <code>Olá, Ana!</code> foi o programa. Se a Ana apertar Enter sem digitar nada, o <code>io.read()</code> devolve um texto <strong>vazio</strong> (<code>""</code>), e o programa responde <code>Olá, !</code>. Não é erro: é uma resposta vazia.</p>
+
+<div class="trylua" data-digitar="Bia" data-goal="out:Olá, Bia!">
+<p class="try-task"><strong>Missão:</strong> o programa pergunta o nome mas responde só "Oi!". Mude o último <code>print</code> para usar a resposta: <code>"Olá, " .. nome .. "!"</code>. Clique em Rodar e, quando ele perguntar, digite <code>Bia</code> e aperte Enter.</p>
+<pre class="script" data-file="main.lua">io.write("Qual é o seu nome? ")
+local nome = io.read()
+print("Oi!")
+</pre>
+<pre class="solucao" data-file="main.lua">io.write("Qual é o seu nome? ")
+local nome = io.read()
+print("Olá, " .. nome .. "!")
+</pre>
+</div>
+
+<hr>
+
+<h2>2. A resposta é sempre texto</h2>
+<p>Quando a Ana digita <code>30</code>, o que chega ao programa não é o número trinta: são os caracteres <code>3</code> e <code>0</code>, um texto. A função <code>type</code> (aula <a href="type.html">Descobrindo o Tipo</a>) mostra isso:</p>
+
+<pre class="file" data-file="texto.lua">io.write("Quantos anos você tem? ")
+local resposta = io.read()
+print(resposta, type(resposta))
+print(resposta + 10)
+print(resposta .. 10)
+local idade = tonumber(resposta)
+print(idade, type(idade))
+</pre>
+
+<pre class="term">$ lua texto.lua
+Quantos anos você tem? 30
+30      string
+40
+3010
+30      number
+</pre>
+
+<dl class="anatomy">
+  <dt>30 string</dt><dd>A resposta é uma <strong>string</strong> (texto) que só tem algarismos.</dd>
+  <dt>40</dt><dd>O <code>+</code> é só para contas, então o Lua tenta transformar o texto <code>"30"</code> em número, e consegue. Isso se chama <strong>coerção</strong> (conversão automática).</dd>
+  <dt>3010</dt><dd>O <code>..</code> é só para juntar textos: o <code>10</code> virou texto e grudou. A mesma resposta, dois resultados.</dd>
+  <dt>tonumber(resposta)</dt><dd>"Para número". Converte o texto <code>"30"</code> no número <code>30</code> de verdade (agora <code>number</code>). Se o texto não for um número (<code>"trinta"</code>), devolve <code>nil</code>. Aula própria: <a href="conversao.html">Conversão</a>.</dd>
+</dl>
+
+<p>Confiar na coerção do <code>+</code> funciona até o dia em que alguém digita uma letra. O jeito seguro é pedir o número de propósito: com <code>tonumber(io.read())</code> ou com o formato <code>"n"</code>, que você vai ver agora.</p>
+
+<hr>
+
+<h2>3. Os formatos: o que o <code>io.read</code> deve ler</h2>
+<p>Entre os parênteses do <code>io.read</code> você pode dizer <strong>o que</strong> ler. Cada pedido é um <strong>formato</strong>, escrito entre aspas:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Formato</th><th>Lê</th><th>Devolve</th><th>No fim da entrada</th></tr>
+<tr><td><code>"l"</code> (o padrão)</td><td>Uma linha (do inglês <em>line</em>)</td><td>O texto, <strong>sem</strong> o Enter</td><td><code>nil</code></td></tr>
+<tr><td><code>"L"</code></td><td>Uma linha</td><td>O texto, <strong>com</strong> o Enter no fim (<code>"Ana\n"</code>)</td><td><code>nil</code></td></tr>
+<tr><td><code>"n"</code></td><td>Um número (do inglês <em>number</em>)</td><td>O número já convertido (<code>30</code>, <code>4.5</code>)</td><td><code>nil</code> (também quando o que foi digitado não é número)</td></tr>
+<tr><td><code>"a"</code></td><td>Tudo o que falta (do inglês <em>all</em>, "tudo")</td><td>Um texto com todas as linhas</td><td><code>""</code> (texto vazio, nunca <code>nil</code>)</td></tr>
+<tr><td>um número, ex. <code>3</code></td><td>Essa quantidade de caracteres (bytes)</td><td>Um texto com até 3 caracteres</td><td><code>nil</code></td></tr>
+</table>
+</div>
+
+<p><code>io.read()</code> sem nada é o mesmo que <code>io.read("l")</code>. Este programa usa os formatos um depois do outro na mesma entrada, de cinco linhas: <code>Ana</code>, <code>Bia</code>, <code>42</code>, <code>Caio</code> e <code>Dani</code>. Em vez de digitar, a Ana mandou as cinco linhas prontas pelo comando <code>printf</code> e o <code>|</code> (seção 6). Os colchetes no <code>print</code> servem para enxergar onde cada texto começa e termina:</p>
+
+<pre class="file" data-file="formatos.lua">local a = io.read("l")
+local b = io.read("L")
+local n = io.read("n")
+local resto = io.read("a")
+print("[" .. a .. "]")
+print("[" .. b .. "]")
+print(n, n + 1)
+print("[" .. resto .. "]")
+print(io.read("l"), io.read("a"))
+</pre>
+
+<pre class="term">$ printf 'Ana\nBia\n42\nCaio\nDani\n' | lua formatos.lua
+[Ana]
+[Bia
+]
+42	43
+[
+Caio
+Dani
+]
+nil	
+</pre>
+
+<dl class="anatomy">
+  <dt>[Ana]</dt><dd>O <code>"l"</code> leu a primeira linha e jogou fora o Enter: o <code>]</code> ficou colado no <code>a</code>.</dd>
+  <dt>[Bia ⏎ ]</dt><dd>O <code>"L"</code> leu a segunda linha <strong>com</strong> o Enter: o <code>]</code> foi parar na linha de baixo. Útil quando você quer copiar linhas exatamente como vieram.</dd>
+  <dt>42 43</dt><dd>O <code>"n"</code> leu o <code>42</code> já como <strong>número</strong>: deu para somar 1 sem conversão nenhuma.</dd>
+  <dt>[ ⏎ Caio ⏎ Dani ⏎ ]</dt><dd>O <code>"a"</code> leu <strong>todo o resto</strong>. Repare que o texto começa com uma linha vazia: o <code>"n"</code> leu o <code>42</code> e <strong>parou antes do Enter</strong> que vinha depois dele. Esse Enter que sobrou é a origem da armadilha da seção 5.</dd>
+  <dt>nil (e um texto vazio)</dt><dd>A entrada acabou. Agora o <code>"l"</code> devolve <code>nil</code> ("não tem mais linha"), e o <code>"a"</code> devolve <code>""</code>, o texto vazio (por isso não aparece nada depois do TAB).</dd>
+</dl>
+
+<p>E o formato com um número lê uma quantidade de caracteres. Com a entrada <code>Anabela</code>:</p>
+
+<pre class="file" data-file="pedaco.lua">local tres = io.read(3)
+local resto = io.read("l")
+print(tres, resto)
+print(io.read(0))
+</pre>
+
+<pre class="term">$ printf 'Anabela\n' | lua pedaco.lua
+Ana	bela
+nil
+</pre>
+
+<p>O <code>io.read(3)</code> leu <code>Ana</code>, e o <code>"l"</code> continuou de onde ele parou (<code>bela</code>). Cada leitura continua do ponto em que a anterior parou, como um marcador de página. O <code>io.read(0)</code> é um truque: não lê nada, só responde se ainda há o que ler (<code>""</code>) ou se a entrada acabou (<code>nil</code>). Atenção: o número conta <strong>bytes</strong>, e letras com acento ocupam 2 (aula <a href="utf8.html">Acentos e a Biblioteca utf8</a>).</p>
+
+<hr>
+
+<h2>4. Lendo números com <code>"n"</code></h2>
+
+<pre class="file" data-file="idade.lua">io.write("Quantos anos você tem? ")
+local idade = io.read("n")
+print("Daqui a 10 anos: " .. idade + 10)
+</pre>
+
+<pre class="term">$ lua idade.lua
+Quantos anos você tem? 30
+Daqui a 10 anos: 40
+</pre>
+
+<p>O <code>"n"</code> pula os espaços e Enters que vierem antes e lê um número escrito do jeito do Lua: <code>30</code>, <code>-2</code>, <code>4.5</code> (com ponto, nunca com vírgula). Se o que vier não for um número, ele devolve <code>nil</code>, e o erro aparece logo na conta (veja <a href="#errado">Quando dá errado</a>).</p>
+
+<p>Dá até para pedir <strong>vários</strong> formatos de uma vez: o <code>io.read</code> devolve um valor para cada um, e você os guarda com uma <a href="atribuicao-multipla.html">atribuição múltipla</a>:</p>
+
+<pre class="file" data-file="dois.lua">io.write("Digite dois números: ")
+local a, b = io.read("n", "n")
+print("Soma:", a + b)
+</pre>
+
+<pre class="term">$ lua dois.lua
+Digite dois números: 3 4.5
+Soma:   7.5
+</pre>
+
+<p>A Ana digitou os dois números na mesma linha, separados por espaço; o primeiro <code>"n"</code> leu o <code>3</code>, e o segundo pulou o espaço e leu o <code>4.5</code>.</p>
+
+<hr>
+
+<h2>5. A armadilha: <code>"n"</code> e depois uma linha</h2>
+<p>A padaria anota a quantidade e o nome do cliente:</p>
+
+<pre class="file" data-file="armadilha.lua">io.write("Quantos pães? ")
+local qtd = io.read("n")
+io.write("Nome do cliente? ")
+local cliente = io.read()
+print(qtd .. " pães para [" .. cliente .. "]")
+</pre>
+
+<pre class="term">$ lua armadilha.lua
+Quantos pães? 12
+Nome do cliente? 12 pães para []
+</pre>
+
+<p>A Ana digitou <code>12</code>, apertou Enter... e o programa <strong>não esperou</strong> o nome: respondeu na hora, com o cliente vazio. O que aconteceu: o <code>"n"</code> leu o <code>12</code> e deixou o Enter na fila (como você viu na seção 3). O <code>io.read()</code> seguinte encontrou esse Enter, entendeu "uma linha vazia" e devolveu <code>""</code> sem esperar ninguém.</p>
+
+<p><strong>O conserto mais simples:</strong> ler a linha inteira (com o Enter) e converter com <code>tonumber</code>:</p>
+
+<pre class="file" data-file="armadilha2.lua">io.write("Quantos pães? ")
+local qtd = tonumber(io.read())
+io.write("Nome do cliente? ")
+local cliente = io.read()
+print(qtd .. " pães para [" .. cliente .. "]")
+</pre>
+
+<pre class="term">$ lua armadilha2.lua
+Quantos pães? 12
+Nome do cliente? Ana
+12 pães para [Ana]
+</pre>
+
+<div class="tip">
+<strong>Regra prática</strong>
+<p>Num programa que conversa com a pessoa, leia sempre <strong>linhas</strong> (<code>io.read()</code>) e converta o que precisar com <code>tonumber</code>. O <code>"n"</code> é ótimo para ler vários números seguidos (de um arquivo, de uma linha com <code>3 4.5</code>), mas misturado com leituras de linha ele deixa esse Enter para trás.</p>
+</div>
+
+<div class="trylua" data-stdin="12\nAna" data-goal="out:12 pães para [Ana]">
+<p class="try-task"><strong>Missão:</strong> nesta caixa, a entrada já vem pronta: <code>12</code> e <code>Ana</code>, uma em cada linha (por isso ela não aparece digitada). Rode e veja o cliente sair vazio. Depois conserte a leitura da quantidade para que saia <code>12 pães para [Ana]</code>.</p>
+<pre class="script" data-file="main.lua">io.write("Quantos pães? ")
+local qtd = io.read("n")
+io.write("Nome do cliente? ")
+local cliente = io.read()
+print(qtd .. " pães para [" .. cliente .. "]")
+</pre>
+<pre class="solucao" data-file="main.lua">io.write("Quantos pães? ")
+local qtd = tonumber(io.read())
+io.write("Nome do cliente? ")
+local cliente = io.read()
+print(qtd .. " pães para [" .. cliente .. "]")
+</pre>
+</div>
+
+<hr>
+
+<h2>6. Quando a entrada acaba: <code>nil</code></h2>
+<p>O teclado não é a única fonte de entrada. Com o <code>|</code> (o "pipe", o cano do terminal), a saída de um comando vira a entrada do programa. O <code>printf</code> escreve o texto, e o <code>\n</code> dentro dele é o Enter:</p>
+
+<pre class="term">$ printf 'Ana\n' | lua nome.lua
+Qual é o seu nome? Olá, Ana!
+</pre>
+
+<p>Repare que o <code>Ana</code> <strong>não aparece</strong> depois da pergunta. Quem mostrava o que a Ana digitava era o terminal (o "eco" das teclas); com o pipe, ninguém digitou nada, então não há eco. O programa leu o <code>Ana</code> do mesmo jeito.</p>
+
+<p>E se não vier nada? Toda entrada tem um <strong>fim</strong>. No pipe, ela acaba quando o comando da esquerda termina. No teclado, a pessoa avisa "acabou" apertando <strong>Ctrl-D</strong> (no Linux e no macOS; no Windows, Ctrl-Z e Enter). Quando a entrada acabou, o <code>io.read()</code> devolve <code>nil</code>. A Ana rodou o programa e, em vez de digitar o nome, apertou Ctrl-D:</p>
+
+<pre class="term">$ lua nome.lua
+Qual é o seu nome? lua: nome.lua:3: attempt to concatenate a nil value (local 'nome')
+stack traceback:
+        nome.lua:3: in main chunk
+        [C]: in ?
+</pre>
+
+<p>O <code>nome</code> ficou <code>nil</code>, e o <code>..</code> não sabe juntar <code>nil</code> com texto. A mensagem saiu colada na pergunta porque o Ctrl-D não pula linha. O mesmo acontece se o programa recebe a entrada vazia de propósito, com <code>&lt; /dev/null</code> (o "arquivo vazio" do Linux).</p>
+
+<p>Esse <code>nil</code> é útil: é o jeito de um programa saber que não há mais o que ler. Mais adiante, com uma repetição, você vai ler linha por linha "até vir <code>nil</code>" (aulas <a href="while.html">while</a> e <a href="io-lines.html">Linha por Linha</a>).</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>A pessoa...</th><th><code>io.read()</code> devolve</th></tr>
+<tr><td>digitou <code>Ana</code> e apertou Enter</td><td><code>"Ana"</code></td></tr>
+<tr><td>apertou Enter sem digitar</td><td><code>""</code> (texto vazio)</td></tr>
+<tr><td>apertou Ctrl-D (fim da entrada)</td><td><code>nil</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Formas diferentes de ler um número</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Forma</th><th>O que faz</th><th>Quando usar</th></tr>
+<tr><td><code>tonumber(io.read())</code></td><td>Lê a linha inteira e converte; <code>nil</code> se não for número</td><td>A recomendada para conversar com a pessoa: não deixa Enter para trás</td></tr>
+<tr><td><code>io.read("n")</code></td><td>Lê só o número; <code>nil</code> se não for número</td><td>Vários números seguidos na mesma entrada (<code>io.read("n", "n")</code>)</td></tr>
+<tr><td><code>io.read()</code> e depois <code>+</code></td><td>Lê texto e confia na coerção</td><td>Evite: funciona com <code>30</code>, mas o <code>..</code> não converte e um erro de digitação vira erro de conta</td></tr>
+</table>
+</div>
+
+<div class="note">
+<strong>O jeito antigo: <code>"*l"</code>, <code>"*n"</code>, <code>"*a"</code></strong>
+<p>Em código antigo e em tutoriais, os formatos aparecem com asterisco: <code>io.read("*l")</code>, <code>io.read("*n")</code>. No Lua 5.5 o asterisco ainda é aceito (é ignorado): na máquina da Ana, <code>io.read("*l")</code> e <code>io.read("*n")</code> funcionaram igualzinho. Mas no <strong>Lua 5.1 e no LuaJIT</strong> (Neovim, LÖVE) o asterisco é obrigatório, e o jeito novo dá erro:</p>
+<pre class="term">$ printf 'Ana\n' | lua5.1 novo.lua
+lua5.1: novo.lua:1: bad argument #1 to 'read' (invalid option)
+stack traceback:
+	[C]: in function 'read'
+	novo.lua:1: in main chunk
+	[C]: ?
+</pre>
+<p>(O <code>novo.lua</code> tem só <code>local linha = io.read("l")</code> e <code>print(linha)</code>; no 5.5 ele mostra <code>Anabela</code> ou o que vier.) Se o seu código tiver de rodar nas duas versões, escreva com asterisco, ou use <code>io.read()</code> sem nada, que funciona em todas. Mais em <a href="versoes.html">Lua 5.1, LuaJIT, 5.4 e 5.5</a>.</p>
+</div>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+
+<div class="cenario">
+<strong>Letras onde se esperava um número</strong>
+<pre class="term">$ lua idade.lua
+Quantos anos você tem? trinta
+lua: idade.lua:3: attempt to perform arithmetic on a nil value (local 'idade')
+stack traceback:
+        idade.lua:3: in main chunk
+        [C]: in ?
+</pre>
+<dl class="anatomy">
+  <dt>idade.lua:3:</dt><dd>O erro estourou na linha 3, a da conta, e não na linha 2, a do <code>io.read</code>. O <code>io.read("n")</code> não reclama: ele só devolve <code>nil</code> quando não acha um número.</dd>
+  <dt>attempt to perform arithmetic on a nil value</dt><dd>"Tentativa de fazer conta com um valor nil". O <code>idade + 10</code> virou <code>nil + 10</code>.</dd>
+  <dt>(local 'idade')</dt><dd>O nome da variável que estava <code>nil</code>: a <code>idade</code>, criada com <code>local</code>.</dd>
+</dl>
+<p>A lição: quando um erro fala de <code>nil</code>, volte até o ponto onde a variável recebeu o valor. <strong>Como consertar:</strong> confira se a resposta é um número antes de usar (com <code>if</code>, aula <a href="if.html">if … then</a>). Por enquanto, saiba que <code>tonumber("trinta")</code> e <code>io.read("n")</code> com "trinta" dão <code>nil</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>A entrada acabou (Ctrl-D, pipe vazio)</strong>
+<pre class="term">$ lua nome.lua &lt; /dev/null
+lua: nome.lua:3: attempt to concatenate a nil value (local 'nome')
+stack traceback:
+	nome.lua:3: in main chunk
+	[C]: in ?
+Qual é o seu nome? ana@notebook:~$
+</pre>
+<p>"Tentativa de concatenar (juntar) um valor nil (a variável local <code>nome</code>)". É o mesmo caso da seção 6, agora com a entrada vazia vinda de <code>/dev/null</code>. A pergunta apareceu <strong>depois</strong> do erro: a saída normal esperou numa fila (a pergunta não termina com Enter), e a mensagem de erro saiu na hora (o mesmo efeito da aula <a href="io-write.html">io.write</a>). <strong>Como consertar:</strong> um programa que pode receber o fim da entrada precisa conferir se veio <code>nil</code> antes de usar a resposta (<a href="if.html">if</a>, ou o truque <code>local nome = io.read() or "visitante"</code> da aula <a href="operadores-logicos.html">and, or e not</a>).</p>
+</div>
+
+<div class="cenario">
+<strong>Formato que não existe</strong>
+<pre class="file" data-file="errado.lua">local x = io.read("x")
+</pre>
+<pre class="term">$ printf 'Ana\n' | lua errado.lua
+lua: errado.lua:1: bad argument #1 to 'read' (invalid format)
+stack traceback:
+	[C]: in field 'read'
+	errado.lua:1: in main chunk
+	[C]: in ?
+</pre>
+<p>"Argumento ruim, o número 1, para o <code>read</code> (formato inválido)". Só existem os formatos da tabela da seção 3 (<code>"l"</code>, <code>"L"</code>, <code>"n"</code>, <code>"a"</code> e números). <strong>Como consertar:</strong> use um deles; na dúvida, <code>io.read()</code> sem nada.</p>
+</div>
+
+<div class="cenario">
+<strong>Inventar um nome para a função</strong>
+<pre class="file" data-file="ler.lua">local nome = ler()
+</pre>
+<pre class="term">$ lua ler.lua
+lua: ler.lua:1: attempt to call a nil value (global 'ler')
+stack traceback:
+	ler.lua:1: in main chunk
+	[C]: in ?
+</pre>
+<p>Quem vem de outras linguagens procura um <code>input()</code>, um <code>ler()</code> ou um <code>leia()</code>. No Lua, a leitura mora na biblioteca <code>io</code>: o nome completo é <code>io.read</code>. <strong>Como consertar:</strong> <code>local nome = io.read()</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>O programa "não espera" a segunda resposta</strong>
+<p>Não há mensagem de erro: é a armadilha da seção 5. Se você usou <code>io.read("n")</code> e, logo depois, um <code>io.read()</code> que voltou vazio, o culpado é o Enter que o <code>"n"</code> deixou para trás. <strong>Como consertar:</strong> <code>tonumber(io.read())</code> no lugar do <code>io.read("n")</code>.</p>
+</div>
+
+<hr>
+
+<h2>Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>O que faz</th></tr>
+<tr><td><code>io.read()</code> / <code>io.read("l")</code></td><td>Lê uma linha, sem o Enter. Fim da entrada: <code>nil</code></td></tr>
+<tr><td><code>io.read("L")</code></td><td>Lê uma linha, com o Enter (<code>"Ana\n"</code>)</td></tr>
+<tr><td><code>io.read("n")</code></td><td>Lê um número (já convertido). Não é número ou fim: <code>nil</code>. Deixa o Enter na fila</td></tr>
+<tr><td><code>io.read("a")</code></td><td>Lê tudo o que falta. Fim da entrada: <code>""</code></td></tr>
+<tr><td><code>io.read(3)</code></td><td>Lê até 3 bytes</td></tr>
+<tr><td><code>io.read(0)</code></td><td><code>""</code> se ainda há o que ler, <code>nil</code> se acabou</td></tr>
+<tr><td><code>local a, b = io.read("n", "n")</code></td><td>Vários formatos: um valor para cada</td></tr>
+<tr><td><code>tonumber(io.read())</code></td><td>Lê a linha e converte em número (<code>nil</code> se não for)</td></tr>
+<tr><td><code>printf 'Ana\n30\n' | lua prog.lua</code></td><td>Manda a entrada pronta, sem digitar (sem eco)</td></tr>
+<tr><td>Ctrl-D (no terminal)</td><td>Avisa o fim da entrada</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Mensagem</th><th>Causa provável</th></tr>
+<tr><td><code>attempt to perform arithmetic on a nil value (local 'idade')</code></td><td>O <code>"n"</code> (ou o <code>tonumber</code>) não achou um número</td></tr>
+<tr><td><code>attempt to concatenate a nil value (local 'nome')</code></td><td>A entrada acabou (Ctrl-D, pipe vazio)</td></tr>
+<tr><td><code>bad argument #1 to 'read' (invalid format)</code></td><td>Formato que não existe</td></tr>
+<tr><td><code>bad argument #1 to 'read' (invalid option)</code> (no 5.1)</td><td>Formato sem asterisco num Lua antigo</td></tr>
+<tr><td><code>attempt to call a nil value (global 'ler')</code></td><td>Nome inventado: a função é <code>io.read</code></td></tr>
+<tr><td>O programa não esperou a resposta (veio <code>""</code>)</td><td>O Enter que sobrou de um <code>io.read("n")</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. Complete a leitura</h3>
+<p>Complete para ler uma linha do teclado:</p>
+<div class="ex-code">local resposta = <input data-answer="io.read" aria-label="função de leitura">()</div>
+</div>
+
+<div class="exercise">
+<h3>2. O formato do número</h3>
+<p>Qual formato faz o <code>io.read</code> ler um número? (Escreva só a letra.)</p>
+<div class="ex-code">io.read("<input data-answer="n" aria-label="formato" size="3">")</div>
+</div>
+
+<div class="exercise">
+<h3>3. O tipo da resposta</h3>
+<p>A pessoa digitou <code>25</code>. Qual é o tipo do valor que <code>io.read()</code> devolve? (Escreva como o <code>type</code> escreveria.)</p>
+<div class="ex-code">Tipo: <input data-answer="string" aria-label="tipo"></div>
+</div>
+
+<div class="mc" data-answer="4">
+<p class="mc-q">4. O que <code>io.read()</code> devolve quando a pessoa aperta Ctrl-D (fim da entrada)?</p>
+<label><input type="radio" name="q4"> <code>""</code> (texto vazio)</label>
+<label><input type="radio" name="q4"> <code>0</code></label>
+<label><input type="radio" name="q4"> Um erro na própria linha do <code>io.read</code></label>
+<label><input type="radio" name="q4"> <code>nil</code></label>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">5. Qual a diferença entre <code>"l"</code> e <code>"L"</code>?</p>
+<label><input type="radio" name="q5"> <code>"L"</code> lê em letras maiúsculas</label>
+<label><input type="radio" name="q5"> <code>"L"</code> devolve a linha com o Enter (<code>\n</code>) no fim; <code>"l"</code>, sem</label>
+<label><input type="radio" name="q5"> <code>"L"</code> lê todas as linhas</label>
+<label><input type="radio" name="q5"> Nenhuma</label>
+</div>
+
+<div class="mc" data-answer="1">
+<p class="mc-q">6. Depois de <code>local q = io.read("n")</code> (a pessoa digitou <code>5</code> e Enter), o <code>io.read()</code> seguinte devolve na hora um texto vazio. Por quê?</p>
+<label><input type="radio" name="q6"> O <code>"n"</code> deixou o Enter na fila, e o <code>io.read()</code> leu essa linha vazia</label>
+<label><input type="radio" name="q6"> O <code>io.read()</code> só funciona uma vez por programa</label>
+<label><input type="radio" name="q6"> O <code>5</code> foi lido duas vezes</label>
+<label><input type="radio" name="q6"> A entrada acabou</label>
+</div>
+
+<h3>Missão final: a média da Ana</h3>
+
+<div class="trylua" data-stdin="7\n9" data-goal="outre:Média:\s+8\.0;;src:n2\s*=\s*io\.read">
+<p class="try-task"><strong>Missão:</strong> o programa lê a primeira nota, mas a segunda está fixa em <code>0</code>: rode e veja a média errada. Troque o <code>0</code> pela leitura da segunda nota (como número, com <code>"n"</code>) para que saia <code>Média:</code> e <code>8.0</code>. A entrada já vem pronta: <code>7</code> e <code>9</code>.</p>
+<pre class="script" data-file="main.lua">io.write("Primeira nota: ")
+local n1 = io.read("n")
+io.write("Segunda nota: ")
+local n2 = 0  -- troque o 0 pela leitura da segunda nota
+print("Média:", (n1 + n2) / 2)
+</pre>
+<pre class="solucao" data-file="main.lua">io.write("Primeira nota: ")
+local n1 = io.read("n")
+io.write("Segunda nota: ")
+local n2 = io.read("n")
+print("Média:", (n1 + n2) / 2)
+</pre>
+</div>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li><code>io.read()</code> para o programa, espera a pessoa digitar e apertar Enter, e devolve a linha sem o Enter. Escreva a pergunta antes, com <code>io.write</code>.</li>
+  <li>A resposta é sempre <strong>texto</strong>. Para número: <code>tonumber(io.read())</code> ou <code>io.read("n")</code>.</li>
+  <li>Formatos: <code>"l"</code> linha (padrão), <code>"L"</code> linha com Enter, <code>"n"</code> número, <code>"a"</code> tudo, <code>3</code> três bytes. Vários de uma vez: <code>io.read("n", "n")</code>.</li>
+  <li>Fim da entrada (Ctrl-D, pipe que acabou): <code>nil</code> (e <code>""</code> no <code>"a"</code>). Enter sem nada: <code>""</code>.</li>
+  <li>O <code>"n"</code> deixa o Enter na fila: o <code>io.read()</code> seguinte volta vazio. Em conversa com a pessoa, prefira ler linhas e converter.</li>
+  <li><code>printf '...' | lua prog.lua</code> manda a entrada pronta, sem eco.</li>
+  <li>Erros com <code>nil</code> (<code>attempt to perform arithmetic</code>, <code>attempt to concatenate</code>) quase sempre vêm de uma resposta que não era número ou de uma entrada que acabou.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
