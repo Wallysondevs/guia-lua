@@ -1,0 +1,691 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua Laços Aninhados — um laço dentro de outro | Guia Lua</title>
+<meta name="description" content="Laços aninhados no Lua para quem nunca programou: um for dentro de outro, a ordem das voltas, a tabuada, desenhos com asteriscos, as médias de cada aluno, combinações e duplas, por que o break só sai do laço de dentro e as três formas de sair de todos, e os erros reais do Lua 5.5.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">Laços Aninhados</span></h1>
+
+<p class="intro">Um laço repete um bloco de código. E se dentro desse bloco houver <strong>outro laço</strong>? Aí, a cada volta do laço de fora, o laço de dentro roda <strong>inteiro</strong>, do começo ao fim. Isso se chama <strong>laços aninhados</strong> (um dentro do outro, como ninhos). É assim que se faz a tabuada inteira, se percorre cada nota de cada aluno, se desenha uma grade ou se testam todas as combinações de lanche e bebida.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>Como escrever um <code>for</code> dentro de outro e em que ordem as voltas acontecem.</li>
+  <li>Quantas vezes o laço de dentro roda (a conta "de fora × de dentro").</li>
+  <li>A tabuada, um retângulo e um triângulo de asteriscos, e um relógio de 15 em 15 minutos.</li>
+  <li>Como calcular a média de <strong>cada</strong> aluno, e onde zerar o acumulador.</li>
+  <li>Combinações (todo lanche com toda bebida) e duplas sem repetir.</li>
+  <li>Por que o <code>break</code> só sai do laço de dentro, e três formas de sair de todos: a variável "bandeira", o <code>goto</code> e o <code>return</code>.</li>
+  <li>Os erros reais: o mesmo nome nos dois laços, o <code>end</code> que faltou e os índices trocados.</li>
+</ul>
+</div>
+
+<p>Todos os programas desta aula rodaram no <strong>Lua 5.5</strong> da máquina da Ana (usuária <code>ana</code>, computador <code>notebook</code>), com <code>lua arquivo.lua</code>. Antes desta aula, vale ter visto <a href="for-numerico.html">for Numérico</a>, <a href="break.html">break</a> e <a href="goto.html">goto e Rótulos</a>.</p>
+
+<hr>
+
+<h2>A ideia: o relógio de ponteiros</h2>
+<p>Olhe um relógio. O ponteiro dos minutos dá uma volta <strong>inteira</strong> (de 0 a 59) e só então o ponteiro das horas anda <strong>um</strong> passo. Depois os minutos dão outra volta inteira, e as horas andam mais um. O ponteiro das horas é o <strong>laço de fora</strong>: ele anda devagar. O dos minutos é o <strong>laço de dentro</strong>: ele roda completo a cada passo do outro.</p>
+<p>Este programa faz um relógio que só mostra os minutos de 15 em 15, das 8h às 9h45:</p>
+
+<pre class="file" data-file="relogio.lua">for hora = 8, 9 do
+  for minuto = 0, 45, 15 do
+    print(string.format("%02d:%02d", hora, minuto))
+  end
+end
+</pre>
+
+<pre class="term">$ lua relogio.lua
+08:00
+08:15
+08:30
+08:45
+09:00
+09:15
+09:30
+09:45</pre>
+
+<p>Para <code>hora = 8</code>, o <code>minuto</code> passou por 0, 15, 30 e 45. Só então a <code>hora</code> virou 9, e o <code>minuto</code> <strong>recomeçou</strong> do 0. (O <code>%02d</code> do <a href="string-format.html">string.format</a> escreve o número com 2 dígitos, pondo um zero na frente: <code>8</code> vira <code>08</code>.)</p>
+
+<hr>
+
+<h2>1. Um <code>for</code> dentro de outro: a tabuada</h2>
+
+<pre class="file" data-file="tabuada.lua">for i = 1, 3 do
+  print("Tabuada do " .. i)
+  for j = 1, 5 do
+    print(i .. " x " .. j .. " = " .. i * j)
+  end
+end
+print("fim")
+</pre>
+
+<dl class="anatomy">
+  <dt>for i = 1, 3 do</dt><dd>O laço <strong>de fora</strong>. O <code>i</code> é o número da tabuada: 1, depois 2, depois 3.</dd>
+  <dt>print("Tabuada do " .. i)</dt><dd>Está dentro do laço de fora, mas <strong>fora</strong> do de dentro: roda uma vez por tabuada (3 vezes ao todo).</dd>
+  <dt>for j = 1, 5 do</dt><dd>O laço <strong>de dentro</strong>, com outra variável, o <code>j</code>. Ele roda inteiro (j = 1, 2, 3, 4, 5) a cada volta do de fora. Os nomes <code>i</code> e <code>j</code> são uma tradição dos programadores para contadores; com nomes que dizem o que são (<code>numero</code>, <code>vezes</code>) também fica ótimo.</dd>
+  <dt>print(i .. " x " .. j …)</dt><dd>O corpo do laço de dentro: aqui os <strong>dois</strong> contadores estão disponíveis.</dd>
+  <dt>end (o primeiro)</dt><dd>Fecha o laço de dentro.</dd>
+  <dt>end (o segundo)</dt><dd>Fecha o laço de fora. A indentação (2 espaços a mais em cada nível) mostra de olho qual <code>end</code> fecha qual <code>for</code>.</dd>
+</dl>
+
+<pre class="term">$ lua tabuada.lua
+Tabuada do 1
+1 x 1 = 1
+1 x 2 = 2
+1 x 3 = 3
+1 x 4 = 4
+1 x 5 = 5
+Tabuada do 2
+2 x 1 = 2
+2 x 2 = 4
+2 x 3 = 6
+2 x 4 = 8
+2 x 5 = 10
+Tabuada do 3
+3 x 1 = 3
+3 x 2 = 6
+3 x 3 = 9
+3 x 4 = 12
+3 x 5 = 15
+fim</pre>
+
+<div class="trylua" data-goal="out:5 x 10 = 50;;out:Tabuada do 4;;src:\bfor\b[\s\S]*\bfor\b">
+<p class="try-task"><strong>Missão:</strong> faça a tabuada <strong>completa</strong> do 1 ao 5, cada uma do 1 ao 10. Só dois números precisam mudar.</p>
+<pre class="script" data-file="main.lua">for i = 1, 3 do
+  print("Tabuada do " .. i)
+  for j = 1, 5 do
+    print(i .. " x " .. j .. " = " .. i * j)
+  end
+end
+print("fim")
+</pre>
+<pre class="solucao" data-file="main.lua">for i = 1, 5 do
+  print("Tabuada do " .. i)
+  for j = 1, 10 do
+    print(i .. " x " .. j .. " = " .. i * j)
+  end
+end
+print("fim")
+</pre>
+</div>
+
+<hr>
+
+<h2>2. A ordem das voltas, e quantas são</h2>
+<p>Este programa mostra o par <code>(i,j)</code> de cada volta do laço de dentro, sem pular linha (com <a href="io-write.html">io.write</a>), e só pula linha quando o laço de dentro termina. Ele também conta as voltas:</p>
+
+<pre class="file" data-file="ordem.lua">local voltas = 0
+for i = 1, 3 do
+  for j = 1, 4 do
+    io.write("(", i, ",", j, ") ")
+    voltas = voltas + 1
+  end
+  print()
+end
+print("voltas do laço de dentro: " .. voltas)
+</pre>
+
+<pre class="term">$ lua ordem.lua
+(1,1) (1,2) (1,3) (1,4)
+(2,1) (2,2) (2,3) (2,4)
+(3,1) (3,2) (3,3) (3,4)
+voltas do laço de dentro: 12</pre>
+
+<p>Cada linha é uma volta do laço de fora; cada par, uma volta do de dentro. O <code>print()</code> sem nada só pula a linha. A conta é sempre a mesma: <strong>3 voltas de fora × 4 voltas de dentro = 12</strong>. É uma multiplicação, e ela cresce rápido. Dois laços de 1 a 1000, um dentro do outro, dão um milhão de voltas:</p>
+
+<pre class="file" data-file="pequeno.lua">local vezes = 0
+for i = 1, 1000 do
+  for j = 1, 1000 do
+    vezes = vezes + 1
+  end
+end
+print(vezes)
+</pre>
+
+<pre class="term">$ lua pequeno.lua
+1000000</pre>
+
+<p>O Lua faz isso num piscar de olhos. Mas três laços de 1 a 1000 já seriam um <strong>bilhão</strong> de voltas: aí o programa demora. Antes de aninhar laços grandes, faça a conta.</p>
+
+<hr>
+
+<h2>3. Desenhando com asteriscos</h2>
+<p>Laços aninhados são ótimos para desenhar grades. O de fora cuida das <strong>linhas</strong>; o de dentro, das <strong>colunas</strong> de cada linha:</p>
+
+<pre class="file" data-file="retangulo.lua">for linha = 1, 3 do
+  for coluna = 1, 8 do
+    io.write("*")
+  end
+  io.write("\n")
+end
+</pre>
+
+<pre class="term">$ lua retangulo.lua
+********
+********
+********</pre>
+
+<p>O <code>io.write("*")</code> escreve um asterisco sem pular linha; o <code>io.write("\n")</code> depois do laço de dentro pula a linha (o <code>\n</code> é o "Enter"; veja <a href="strings-escape.html">Caracteres de Escape</a>).</p>
+
+<h3>O laço de dentro pode depender do de fora</h3>
+<p>O limite do laço de dentro não precisa ser um número fixo: pode ser a variável do laço de fora. Com <code>for coluna = 1, linha</code>, a linha 1 tem 1 asterisco, a linha 2 tem 2, e assim por diante:</p>
+
+<pre class="file" data-file="triangulo.lua">for linha = 1, 5 do
+  for coluna = 1, linha do
+    io.write("*")
+  end
+  io.write("\n")
+end
+</pre>
+
+<pre class="term">$ lua triangulo.lua
+*
+**
+***
+****
+*****</pre>
+
+<div class="trylua" data-goal="outre:^\*\n\*\*\n\*\*\*\n\*\*\*\*\n$;;src:\bfor\b[\s\S]*\bfor\b">
+<p class="try-task"><strong>Missão:</strong> transforme o retângulo num triângulo de <strong>4</strong> linhas (1, 2, 3 e 4 asteriscos). Dica: o laço de fora vai até 4, e o de dentro vai até <code>linha</code>.</p>
+<pre class="script" data-file="main.lua">for linha = 1, 3 do
+  for coluna = 1, 8 do
+    io.write("*")
+  end
+  io.write("\n")
+end
+</pre>
+<pre class="solucao" data-file="main.lua">for linha = 1, 4 do
+  for coluna = 1, linha do
+    io.write("*")
+  end
+  io.write("\n")
+end
+</pre>
+</div>
+
+<hr>
+
+<h2>4. A média de cada aluno</h2>
+<p>A professora da Ana guarda as notas de cada aluno numa <strong>lista dentro de outra lista</strong>: <code>notas[1]</code> são as notas da Ana, <code>notas[2]</code> as da Bia… e <code>notas[2][3]</code> é a terceira nota da Bia. (As listas têm aula própria em <a href="listas.html">Tabelas como Listas</a>, e as listas dentro de listas em <a href="tabelas-aninhadas.html">Tabelas Aninhadas</a>; aqui basta ler <code>notas[a][p]</code> como "aluno <code>a</code>, prova <code>p</code>", e <code>#lista</code> como "quantos itens tem".)</p>
+
+<pre class="file" data-file="turmas.lua">local alunos = {"Ana", "Bia", "Caio"}
+local notas = {
+  {7, 8, 9},
+  {5, 6, 10},
+  {9, 9, 6},
+}
+for a = 1, #alunos do
+  local soma = 0
+  for p = 1, #notas[a] do
+    soma = soma + notas[a][p]
+  end
+  print(alunos[a] .. ": média " .. soma / #notas[a])
+end
+</pre>
+
+<pre class="term">$ lua turmas.lua
+Ana: média 8.0
+Bia: média 7.0
+Caio: média 8.0</pre>
+
+<p>Repare <strong>onde</strong> está o <code>local soma = 0</code>: dentro do laço de fora, antes do de dentro. Assim cada aluno começa a sua soma do zero. O laço de dentro soma as provas; o <code>print</code>, depois dele, mostra a média daquele aluno. Na seção <a href="#errado">Quando dá errado</a> você vê o que acontece com a soma no lugar errado.</p>
+
+<hr>
+
+<h2>5. Combinações e duplas</h2>
+<p>A lanchonete da esquina quer um cartaz com todos os combos possíveis de lanche e bebida. Todo lanche com toda bebida é um laço dentro do outro:</p>
+
+<pre class="file" data-file="combos.lua">local lanches = {"misto", "coxinha"}
+local bebidas = {"café", "suco", "água"}
+local n = 0
+for l = 1, #lanches do
+  for b = 1, #bebidas do
+    n = n + 1
+    print(n .. ") " .. lanches[l] .. " + " .. bebidas[b])
+  end
+end
+</pre>
+
+<pre class="term">$ lua combos.lua
+1) misto + café
+2) misto + suco
+3) misto + água
+4) coxinha + café
+5) coxinha + suco
+6) coxinha + água</pre>
+
+<p>2 lanches × 3 bebidas = 6 combos. Agora, um campeonato de pingue-pongue: cada jogador enfrenta cada outro <strong>uma vez</strong>. "Ana x Bia" e "Bia x Ana" são o mesmo jogo, e ninguém joga contra si mesmo. O truque é o laço de dentro <strong>começar depois</strong> do de fora: <code>j = i + 1</code>.</p>
+
+<pre class="file" data-file="duplas.lua">local jogadores = {"Ana", "Bia", "Caio", "Davi"}
+for i = 1, #jogadores do
+  for j = i + 1, #jogadores do
+    print(jogadores[i] .. " x " .. jogadores[j])
+  end
+end
+</pre>
+
+<pre class="term">$ lua duplas.lua
+Ana x Bia
+Ana x Caio
+Ana x Davi
+Bia x Caio
+Bia x Davi
+Caio x Davi</pre>
+
+<p>Quando <code>i</code> é 4 (Davi), o laço de dentro seria <code>for j = 5, 4</code>: o começo já passou do fim, e ele dá <strong>zero voltas</strong>. Por isso o Davi não aparece à esquerda, e mesmo assim jogou contra todos.</p>
+
+<div class="trylua">
+<p class="try-task"><strong>Experimente:</strong> ponha mais um jogador na lista (<code>"Eva"</code>) e conte os jogos. Depois troque <code>i + 1</code> por <code>1</code> e veja os jogos repetidos e o "Ana x Ana" aparecerem.</p>
+<pre class="script" data-file="main.lua">local jogadores = {"Ana", "Bia", "Caio", "Davi"}
+for i = 1, #jogadores do
+  for j = i + 1, #jogadores do
+    print(jogadores[i] .. " x " .. jogadores[j])
+  end
+end
+</pre>
+</div>
+
+<hr>
+
+<h2 id="sair">6. O <code>break</code> só sai do laço de dentro</h2>
+<p>A Ana procura um aluno chamado Davi. Há um Davi na turma 2 e outro na turma 3. Ela usa <code>break</code> quando acha:</p>
+
+<pre class="file" data-file="break_dentro.lua">local turmas = {
+  {"Ana", "Bia", "Caio"},
+  {"Davi", "Eva"},
+  {"Davi", "Gil"},
+}
+for t = 1, #turmas do
+  for a = 1, #turmas[t] do
+    if turmas[t][a] == "Davi" then
+      print("Achei um Davi na turma " .. t)
+      break
+    end
+  end
+  print("terminei a turma " .. t)
+end
+</pre>
+
+<pre class="term">$ lua break_dentro.lua
+terminei a turma 1
+Achei um Davi na turma 2
+terminei a turma 2
+Achei um Davi na turma 3
+terminei a turma 3</pre>
+
+<p>O <a href="break.html">break</a> sai <strong>só do laço mais de dentro</strong>, aquele onde ele está. O laço das turmas continuou: mostrou "terminei a turma 2" e foi para a turma 3. Às vezes é isso mesmo que você quer (achar o <strong>primeiro</strong> Davi de <strong>cada</strong> turma). Mas se a ideia era parar a busca toda no primeiro Davi, há três jeitos.</p>
+
+<h3>Jeito 1: uma variável "bandeira"</h3>
+<p>Uma variável <code>achou</code> começa <code>false</code> e vira <code>true</code> quando acha. Depois do laço de dentro, o de fora confere a bandeira e dá o seu próprio <code>break</code>:</p>
+
+<pre class="file" data-file="bandeira.lua">local turmas = {
+  {"Ana", "Bia", "Caio"},
+  {"Davi", "Eva"},
+  {"Davi", "Gil"},
+}
+local achou = false
+for t = 1, #turmas do
+  for a = 1, #turmas[t] do
+    if turmas[t][a] == "Davi" then
+      print("Achei o Davi na turma " .. t)
+      achou = true
+      break
+    end
+  end
+  if achou then
+    break
+  end
+end
+print("fim da busca")
+</pre>
+
+<pre class="term">$ lua bandeira.lua
+Achei o Davi na turma 2
+fim da busca</pre>
+
+<h3>Jeito 2: <code>goto</code> para depois dos laços</h3>
+<p>O <a href="goto.html">goto</a> pode <strong>sair</strong> de quantos blocos for preciso de uma vez. Um rótulo depois dos dois laços, e pronto:</p>
+
+<pre class="file" data-file="gotofim.lua">local turmas = {
+  {"Ana", "Bia", "Caio"},
+  {"Davi", "Eva"},
+  {"Davi", "Gil"},
+}
+for t = 1, #turmas do
+  for a = 1, #turmas[t] do
+    if turmas[t][a] == "Davi" then
+      print("Achei o Davi na turma " .. t)
+      goto fim
+    end
+  end
+end
+::fim::
+print("fim da busca")
+</pre>
+
+<pre class="term">$ lua gotofim.lua
+Achei o Davi na turma 2
+fim da busca</pre>
+
+<h3>Jeito 3: pôr os laços numa função e usar <code>return</code></h3>
+<p>O <a href="return.html">return</a> sai da <a href="funcoes.html">função</a> inteira, com todos os laços que estiverem dentro dela. De quebra, a função pode <strong>devolver</strong> onde achou:</p>
+
+<pre class="file" data-file="funcao.lua">local turmas = {
+  {"Ana", "Bia", "Caio"},
+  {"Davi", "Eva"},
+  {"Davi", "Gil"},
+}
+local function procurar(nome)
+  for t = 1, #turmas do
+    for a = 1, #turmas[t] do
+      if turmas[t][a] == nome then
+        return t, a
+      end
+    end
+  end
+  return nil
+end
+print(procurar("Davi"))
+print(procurar("Gil"))
+print(procurar("Zeca"))
+</pre>
+
+<pre class="term">$ lua funcao.lua
+2	1
+3	2
+nil</pre>
+
+<p>O Davi está na turma 2, posição 1; o Gil, na turma 3, posição 2; o Zeca não foi achado, e a função chegou ao <code>return nil</code> do fim. (Devolver dois valores de uma vez é assunto de <a href="retornos-multiplos.html">Vários Retornos</a>.)</p>
+
+<h3><code>goto continue</code> em cada nível</h3>
+<p>Cada laço pode ter o seu próprio <code>::continue::</code>, mesmo um dentro do outro. Cada <code>goto continue</code> vai para o rótulo do laço onde ele está. Aqui, a turma vazia é pulada no laço de fora, e o nome em branco é pulado no de dentro:</p>
+
+<pre class="file" data-file="continue_aninhado.lua">local turmas = {
+  {"Ana", "", "Caio"},
+  {},
+  {"Eva", "Gil"},
+}
+for t = 1, #turmas do
+  if #turmas[t] == 0 then
+    print("turma " .. t .. " vazia")
+    goto continue
+  end
+  for a = 1, #turmas[t] do
+    if turmas[t][a] == "" then
+      goto continue
+    end
+    print("turma " .. t .. ": " .. turmas[t][a])
+    ::continue::
+  end
+  ::continue::
+end
+</pre>
+
+<pre class="term">$ lua continue_aninhado.lua
+turma 1: Ana
+turma 1: Caio
+turma 2 vazia
+turma 3: Eva
+turma 3: Gil</pre>
+
+<hr>
+
+<h2 id="formas">Formas diferentes de fazer a mesma coisa</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Situação</th><th>Qual usar</th></tr>
+<tr><td>Parar só o laço de dentro (ex.: o primeiro de cada turma)</td><td><code>break</code></td></tr>
+<tr><td>Parar tudo, com poucos laços e código simples</td><td><code>goto fim</code> com <code>::fim::</code> depois dos laços</td></tr>
+<tr><td>Parar tudo e ainda saber depois se achou</td><td>Variável bandeira (<code>achou = true</code>) + <code>break</code> nos dois laços</td></tr>
+<tr><td>Procurar algo e devolver onde está</td><td>Os laços numa função, com <code>return</code> (o jeito mais limpo)</td></tr>
+<tr><td>Pular um item e seguir</td><td><code>goto continue</code>, um <code>::continue::</code> por laço</td></tr>
+<tr><td>Todas as combinações</td><td>De dentro começando em 1</td></tr>
+<tr><td>Duplas sem repetir</td><td>De dentro começando em <code>i + 1</code></td></tr>
+</table>
+</div>
+
+<p>Os laços aninhados não precisam ser dois <code>for</code>: um <a href="while.html">while</a> pode ter um <code>for</code> dentro, ou o contrário. A regra é a mesma: a cada volta do de fora, o de dentro roda inteiro. E nada impede um terceiro nível (horas, minutos, segundos), mas acima de três a leitura fica difícil; nessa hora, uma função ajuda.</p>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+
+<div class="cenario">
+<strong>A soma ficou fora do laço de fora</strong>
+<pre class="file" data-file="soma_fora.lua">local alunos = {"Ana", "Bia", "Caio"}
+local notas = {
+  {7, 8, 9},
+  {5, 6, 10},
+  {9, 9, 6},
+}
+local soma = 0
+for a = 1, #alunos do
+  for p = 1, #notas[a] do
+    soma = soma + notas[a][p]
+  end
+  print(alunos[a] .. ": média " .. soma / #notas[a])
+end
+</pre>
+<pre class="term">$ lua soma_fora.lua
+Ana: média 8.0
+Bia: média 15.0
+Caio: média 23.0</pre>
+<p>O Lua não reclama de nada, mas a Bia tirou 15 de média numa prova que vai até 10? O <code>soma = 0</code> está <strong>antes</strong> dos dois laços: ele roda uma vez só. A soma da Bia começou com os 24 pontos da Ana (24 + 21 = 45; 45 / 3 = 15), e a do Caio, com os dois. <strong>Como consertar:</strong> zere o acumulador <strong>dentro</strong> do laço de fora, antes do de dentro. A missão final é exatamente isso.</p>
+</div>
+
+<div class="cenario">
+<strong>O mesmo nome nos dois laços</strong>
+<pre class="file" data-file="tabuada_i.lua">for i = 1, 3 do
+  for i = 1, 5 do
+    print(i .. " x " .. i .. " = " .. i * i)
+  end
+end
+</pre>
+<pre class="term">$ lua tabuada_i.lua
+1 x 1 = 1
+2 x 2 = 4
+3 x 3 = 9
+4 x 4 = 16
+5 x 5 = 25
+1 x 1 = 1
+2 x 2 = 4
+3 x 3 = 9
+4 x 4 = 16
+5 x 5 = 25
+1 x 1 = 1
+2 x 2 = 4
+3 x 3 = 9
+4 x 4 = 16
+5 x 5 = 25</pre>
+<p>Também sem mensagem de erro. Cada <code>for</code> cria a sua própria variável, e o <code>i</code> de dentro <strong>esconde</strong> o de fora: lá dentro, <code>i</code> é sempre o de dentro, e o número da tabuada some. O de fora continua existindo e contando (por isso a lista se repete 3 vezes), só não dá para enxergá-lo. Este programa mostra os dois:</p>
+<pre class="file" data-file="mesmo_i.lua">for i = 1, 2 do
+  for i = 1, 3 do
+    io.write(i, " ")
+  end
+  print("| de fora:", i)
+end
+</pre>
+<pre class="term">$ lua mesmo_i.lua
+1 2 3 | de fora:	1
+1 2 3 | de fora:	2</pre>
+<p><strong>Como consertar:</strong> um nome diferente para cada laço (<code>i</code> e <code>j</code>, ou <code>linha</code> e <code>coluna</code>).</p>
+</div>
+
+<div class="cenario">
+<strong>Faltou um <code>end</code></strong>
+<pre class="file" data-file="sem_end.lua">for i = 1, 3 do
+  for j = 1, 3 do
+    print(i * j)
+end
+</pre>
+<pre class="term">$ lua sem_end.lua
+lua: sem_end.lua:5: 'end' expected (to close 'for' at line 1) near &lt;eof&gt;</pre>
+<p>"Era esperado um <code>end</code> (para fechar o <code>for</code> da linha 1) perto do fim do arquivo (<code>&lt;eof&gt;</code>, <em>end of file</em>)." Com dois laços, são dois <code>end</code>. O único <code>end</code> que existe fechou o laço de dentro (o mais recente), e o Lua chegou ao fim do arquivo com o da linha 1 ainda aberto. A linha 5 é a linha depois da última. <strong>Como consertar:</strong> mais um <code>end</code>. Com a indentação certa, dá para ver: cada <code>end</code> fica na mesma coluna do seu <code>for</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Trocou a ordem dos índices</strong>
+<pre class="file" data-file="troca.lua">local notas = {
+  {7, 8, 9},
+  {5, 6, 10},
+}
+for a = 1, #notas do
+  for p = 1, #notas[a] do
+    print(notas[p][a])
+  end
+end
+</pre>
+<pre class="term">$ lua troca.lua
+7
+5
+lua: troca.lua:7: attempt to index a nil value (field '?')
+stack traceback:
+	troca.lua:7: in main chunk
+	[C]: in ?</pre>
+<p>Linha por linha:</p>
+<dl class="anatomy">
+  <dt>7 e 5</dt><dd>As duas primeiras voltas funcionaram por sorte: <code>notas[1][1]</code> e <code>notas[2][1]</code> existem.</dd>
+  <dt>troca.lua:7: attempt to index a nil value</dt><dd>"Tentativa de indexar um valor nil", na linha 7. Na terceira volta, <code>p</code> vale 3, e <code>notas[3]</code> não existe (só há 2 alunos): é <code>nil</code>. Pedir <code>[a]</code> de um <code>nil</code> é o erro.</dd>
+  <dt>(field '?')</dt><dd>O Lua diz que o <code>nil</code> veio de um campo da tabela, mas não sabe dizer o nome (o índice era uma variável).</dd>
+  <dt>stack traceback:</dt><dd>O "rastro": o erro aconteceu na linha 7 do programa principal (<code>main chunk</code>), que foi chamado pelo próprio <code>lua</code> (<code>[C]: in ?</code>). Mais em <a href="erros.html">Lendo uma Mensagem de Erro</a>.</dd>
+</dl>
+<p><strong>Como consertar:</strong> o primeiro índice é o do laço de fora (o aluno, <code>a</code>), o segundo é o do laço de dentro (a prova, <code>p</code>): <code>notas[a][p]</code>.</p>
+</div>
+
+<hr>
+
+<h2>Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>O que faz</th></tr>
+<tr><td><code>for i = 1, n do for j = 1, m do … end end</code></td><td>O de dentro roda inteiro a cada volta do de fora: <code>n × m</code> voltas</td></tr>
+<tr><td><code>for j = 1, i do</code></td><td>O de dentro cresce com o de fora (triângulo)</td></tr>
+<tr><td><code>for j = i + 1, n do</code></td><td>Pares sem repetir e sem "consigo mesmo"</td></tr>
+<tr><td><code>local soma = 0</code> logo depois do <code>for</code> de fora</td><td>Um acumulador novo para cada volta do de fora</td></tr>
+<tr><td><code>break</code></td><td>Sai só do laço onde está</td></tr>
+<tr><td><code>goto fim</code> … <code>::fim::</code></td><td>Sai de todos os laços de uma vez</td></tr>
+<tr><td><code>return</code> dentro de uma função</td><td>Sai da função, com todos os laços</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. Quantas vezes?</h3>
+<p>Quantas vezes este programa mostra <code>Oi</code>?</p>
+<pre class="file" data-file="oi.lua">for i = 1, 4 do
+  for j = 1, 3 do
+    print("Oi")
+  end
+end
+</pre>
+<div class="ex-code">Mostra <input data-answer="12" aria-label="número de vezes"> vezes.</div>
+</div>
+
+<div class="exercise">
+<h3>2. E agora?</h3>
+<p>E este, em que o de dentro depende do de fora?</p>
+<pre class="file" data-file="oi2.lua">for i = 1, 4 do
+  for j = 1, i do
+    print("Oi")
+  end
+end
+</pre>
+<div class="ex-code">Mostra <input data-answer="10" aria-label="número de vezes"> vezes.</div>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">3. Há um <code>break</code> dentro do laço de dentro. O que ele faz?</p>
+<label><input type="radio" name="q3"> Para os dois laços</label>
+<label><input type="radio" name="q3"> Para só o laço de dentro; o de fora segue para a próxima volta</label>
+<label><input type="radio" name="q3"> Para o programa inteiro</label>
+<label><input type="radio" name="q3"> Dá erro: <code>break</code> não pode ficar em laço aninhado</label>
+</div>
+
+<div class="mc" data-answer="4">
+<p class="mc-q">4. Você quer a média de <strong>cada</strong> aluno. Onde fica o <code>local soma = 0</code>?</p>
+<label><input type="radio" name="q4"> Antes dos dois laços</label>
+<label><input type="radio" name="q4"> Dentro do laço de dentro</label>
+<label><input type="radio" name="q4"> Depois dos dois laços</label>
+<label><input type="radio" name="q4"> Dentro do laço de fora, antes do laço de dentro</label>
+</div>
+
+<div class="mc" data-answer="3">
+<p class="mc-q">5. Com 4 jogadores, quantos jogos faz o <code>duplas.lua</code> (o de dentro começando em <code>i + 1</code>)?</p>
+<label><input type="radio" name="q5"> 16</label>
+<label><input type="radio" name="q5"> 12</label>
+<label><input type="radio" name="q5"> 6</label>
+<label><input type="radio" name="q5"> 4</label>
+</div>
+
+<h3>Missão final: a média de cada aluno</h3>
+
+<div class="trylua" data-goal="out:Bia: média 7.0;;out:Caio: média 8.0;;semerro">
+<p class="try-task"><strong>Missão:</strong> este é o <code>soma_fora.lua</code>, que dá média 15 para a Bia. Mova o <code>local soma = 0</code> para o lugar certo, para cada aluno ter a sua média (Ana 8.0, Bia 7.0, Caio 8.0).</p>
+<pre class="script" data-file="main.lua">local alunos = {"Ana", "Bia", "Caio"}
+local notas = {
+  {7, 8, 9},
+  {5, 6, 10},
+  {9, 9, 6},
+}
+local soma = 0
+for a = 1, #alunos do
+  for p = 1, #notas[a] do
+    soma = soma + notas[a][p]
+  end
+  print(alunos[a] .. ": média " .. soma / #notas[a])
+end
+</pre>
+<pre class="solucao" data-file="main.lua">local alunos = {"Ana", "Bia", "Caio"}
+local notas = {
+  {7, 8, 9},
+  {5, 6, 10},
+  {9, 9, 6},
+}
+for a = 1, #alunos do
+  local soma = 0
+  for p = 1, #notas[a] do
+    soma = soma + notas[a][p]
+  end
+  print(alunos[a] .. ": média " .. soma / #notas[a])
+end
+</pre>
+</div>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li>Laços aninhados são um laço dentro de outro. A cada volta do de fora, o de dentro roda <strong>inteiro</strong>, como os ponteiros do relógio.</li>
+  <li>O número de voltas é uma multiplicação (de fora × de dentro): cuidado com laços grandes.</li>
+  <li>Use um nome diferente para a variável de cada laço; com o mesmo nome, o de dentro esconde o de fora.</li>
+  <li>O limite do de dentro pode depender do de fora: <code>1, i</code> faz triângulos; <code>i + 1, n</code> faz duplas sem repetir.</li>
+  <li>Acumulador "por item do de fora" (a soma de cada aluno) é zerado dentro do laço de fora.</li>
+  <li>O <code>break</code> só sai do laço de dentro. Para sair de todos: variável bandeira, <code>goto</code> para depois dos laços, ou uma função com <code>return</code>.</li>
+  <li>Cada <code>for</code> tem o seu <code>end</code>; a indentação de 2 espaços por nível mostra qual fecha qual.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
