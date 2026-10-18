@@ -1,0 +1,474 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua operadores aritméticos — + - * / // % ^ | Guia Lua</title>
+<meta name="description" content="Os operadores aritméticos do Lua 5.5 para quem nunca programou: soma, subtração, multiplicação, divisão (/ e //), resto (%), potência (^) e o menos unário; que subtipo cada um devolve, a ordem das contas e os parênteses, o x = x + 1 (o Lua não tem += nem ++), e os erros reais: syntax error near '+', unexpected symbol near '*', attempt to perform arithmetic.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">Operadores Aritméticos</span></h1>
+
+<p class="intro">O Lua é uma ótima calculadora. Com os <strong>operadores aritméticos</strong> (os sinais de conta) ele soma o total da compra, tira o troco, multiplica o preço pela quantidade e calcula a média da turma. Os sinais são quase os da escola, com três diferenças: a multiplicação é <code>*</code>, a divisão é <code>/</code> e a potência é <code>^</code>. Esta aula mostra todos, a ordem em que o Lua faz as contas, e um detalhe que pega quem vem de outras linguagens: <strong>o Lua não tem <code>+=</code> nem <code>++</code></strong>.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>Os oito operadores aritméticos: <code>+</code>, <code>-</code>, <code>*</code>, <code>/</code>, <code>//</code>, <code>%</code>, <code>^</code> e o menos unário (<code>-x</code>).</li>
+  <li>Que subtipo (inteiro ou float) sai de cada conta.</li>
+  <li>A ordem das contas (multiplicação antes da soma, potência antes de tudo) e como mudar com parênteses.</li>
+  <li>Como aumentar uma variável: <code>x = x + 1</code>, porque <code>x += 1</code> e <code>x++</code> não existem no Lua.</li>
+  <li>Os erros reais: <code>syntax error near '+'</code>, <code>unexpected symbol near '*'</code> (o <code>**</code>), <code>3 x 4</code>, <code>2x</code>, o <code>--</code> que vira comentário e a conta com <code>nil</code>.</li>
+</ul>
+</div>
+
+<p>Todos os programas desta aula rodaram no <strong>Lua 5.5</strong> da máquina da Ana (usuária <code>ana</code>, computador <code>notebook</code>), salvos na pasta pessoal dela e executados com <code>lua arquivo.lua</code> (veja <a href="executar.html">Rodando um Programa</a>). Você pode rodar cada um no editor do guia.</p>
+
+<hr>
+
+<h2>A ideia: a calculadora do caixa</h2>
+<p>A calculadora da papelaria tem as teclas <kbd>+</kbd> <kbd>−</kbd> <kbd>×</kbd> <kbd>÷</kbd>. No teclado do computador não existem as teclas <kbd>×</kbd> e <kbd>÷</kbd>, então as linguagens de programação usaram outros sinais: o asterisco <code>*</code> para "vezes" e a barra <code>/</code> para "dividido por". Fora isso, a conta é a mesma que você faz no papel. Um <strong>operador</strong> é o sinal; os números dos dois lados são os <strong>operandos</strong>. Em <code>12 * 3</code>, o operador é <code>*</code> e os operandos são <code>12</code> e <code>3</code>.</p>
+
+<hr>
+
+<h2>1. Os oito operadores</h2>
+
+<pre class="file" data-file="ops.lua">print(7 + 2)
+print(7 - 2)
+print(7 * 2)
+print(7 / 2)
+print(7 // 2)
+print(7 % 2)
+print(7 ^ 2)
+print(-7)
+</pre>
+
+<pre class="term">$ lua ops.lua
+9
+5
+14
+3.5
+3
+1
+49.0
+-7</pre>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Operador</th><th>Nome</th><th>Lê-se</th><th>Exemplo</th><th>Resultado</th></tr>
+<tr><td><code>+</code></td><td>soma (adição)</td><td>"mais"</td><td><code>7 + 2</code></td><td><code>9</code></td></tr>
+<tr><td><code>-</code></td><td>subtração</td><td>"menos"</td><td><code>7 - 2</code></td><td><code>5</code></td></tr>
+<tr><td><code>*</code></td><td>multiplicação</td><td>"vezes"</td><td><code>7 * 2</code></td><td><code>14</code></td></tr>
+<tr><td><code>/</code></td><td>divisão</td><td>"dividido por"</td><td><code>7 / 2</code></td><td><code>3.5</code></td></tr>
+<tr><td><code>//</code></td><td>divisão inteira (para baixo)</td><td>"divisão inteira"</td><td><code>7 // 2</code></td><td><code>3</code></td></tr>
+<tr><td><code>%</code></td><td>resto da divisão (módulo)</td><td>"resto de"</td><td><code>7 % 2</code></td><td><code>1</code></td></tr>
+<tr><td><code>^</code></td><td>potência (exponenciação)</td><td>"elevado a"</td><td><code>7 ^ 2</code></td><td><code>49.0</code></td></tr>
+<tr><td><code>-</code> (na frente)</td><td>menos unário (troca o sinal)</td><td>"menos"</td><td><code>-7</code></td><td><code>-7</code></td></tr>
+</table>
+</div>
+
+<p>Os três de divisão (<code>/</code>, <code>//</code> e <code>%</code>) têm tantos detalhes (números negativos, divisão por zero, par ou ímpar) que ganharam uma aula só para eles: <a href="divisao.html">Divisão: /, // e %</a>. Aqui eles aparecem só de passagem.</p>
+
+<h3>Uma conta de verdade: a papelaria</h3>
+<p>A Ana comprou 3 cadernos de R$ 12 e 4 canetas de R$ 2,50, e pagou com uma nota de R$ 50:</p>
+
+<pre class="file" data-file="lojinha.lua">local preco_caderno = 12
+local preco_caneta = 2.5
+local cadernos = 3
+local canetas = 4
+local total = preco_caderno * cadernos + preco_caneta * canetas
+print("Total:", total)
+local pago = 50
+print("Troco:", pago - total)
+</pre>
+
+<pre class="term">$ lua lojinha.lua
+Total:	46.0
+Troco:	4.0</pre>
+
+<dl class="anatomy">
+  <dt>preco_caderno * cadernos</dt><dd>12 × 3 = 36. Os operadores funcionam com variáveis do mesmo jeito que com números escritos direto.</dd>
+  <dt>preco_caneta * canetas</dt><dd>2,5 × 4 = 10,0 (float, porque o 2,5 é float).</dd>
+  <dt>… + …</dt><dd>As duas multiplicações são feitas <strong>antes</strong> da soma (seção 3), e o total é 36 + 10,0 = <code>46.0</code>.</dd>
+  <dt>pago - total</dt><dd>50 − 46,0 = <code>4.0</code> de troco. Uma conta pode estar direto dentro do <code>print</code>.</dd>
+</dl>
+
+<p>Os espaços em volta dos operadores (<code>12 * 3</code> em vez de <code>12*3</code>) não mudam nada para o Lua, mas deixam o código mais fácil de ler. Use sempre.</p>
+
+<hr>
+
+<h2>2. Que subtipo sai de cada conta</h2>
+<p>Você viu na aula <a href="numeros.html">Números</a> que um número pode ser inteiro (<code>integer</code>) ou float. Cada operador segue uma regra:</p>
+
+<pre class="file" data-file="tipos_ops.lua">print(10 + 5, 10 + 5.0, 10 - 5, 10 * 5)
+print(10 / 5, 2 ^ 2, 10 // 5, 10 % 5)
+print(math.type(10 * 5), math.type(10 / 5), math.type(2 ^ 2))
+</pre>
+
+<pre class="term">$ lua tipos_ops.lua
+15	15.0	5	50
+2.0	4.0	2	0
+integer	float	float</pre>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Operadores</th><th>Dois inteiros</th><th>Algum float</th></tr>
+<tr><td><code>+</code> <code>-</code> <code>*</code> <code>//</code> <code>%</code></td><td><strong>inteiro</strong> (<code>10 * 5</code> → <code>50</code>)</td><td>float (<code>10 + 5.0</code> → <code>15.0</code>)</td></tr>
+<tr><td><code>/</code> <code>^</code></td><td><strong>float, sempre</strong> (<code>10 / 5</code> → <code>2.0</code>, <code>2 ^ 2</code> → <code>4.0</code>)</td><td>float</td></tr>
+</table>
+</div>
+
+<p>Por isso a conta da papelaria deu <code>46.0</code>: bastou o preço da caneta (2,5) ser float. Nas contas com inteiros, lembre que um inteiro muito grande pode <strong>estourar</strong> e dar a volta (<code>math.maxinteger * 2</code> dá <code>-2</code>, sem erro; veja <a href="numeros.html">Números</a>).</p>
+
+<div class="note">
+<strong>Em outras versões</strong>
+<p>No Lua 5.1 e no LuaJIT (usado no Neovim e no LÖVE) não existem inteiros: todo número é float por dentro, e o <code>print</code> esconde o <code>.0</code> (<code>10 / 2</code> mostra <code>5</code>). O operador <code>//</code> também não existe lá. Veja <a href="versoes.html">Lua 5.1, LuaJIT, 5.4 e 5.5</a>.</p>
+</div>
+
+<hr>
+
+<h2>3. A ordem das contas</h2>
+<p>Quanto é 2 + 3 × 4? Na escola você aprendeu: <strong>primeiro a multiplicação</strong>, depois a soma. Dá 14, e não 20. O Lua segue a mesma regra, e chama essa ordem de <strong>precedência</strong>:</p>
+
+<pre class="file" data-file="ordem.lua">print(2 + 3 * 4)
+print((2 + 3) * 4)
+print(10 - 4 - 3)
+print(2 ^ 3 ^ 2)
+print((2 ^ 3) ^ 2)
+print(-2 ^ 2)
+print((-2) ^ 2)
+print(100 / 10 * 2)
+</pre>
+
+<pre class="term">$ lua ordem.lua
+14
+20
+3
+512.0
+64.0
+-4.0
+4.0
+20.0</pre>
+
+<dl class="anatomy">
+  <dt>2 + 3 * 4 → 14</dt><dd>A multiplicação vem antes: 3 × 4 = 12, depois 2 + 12.</dd>
+  <dt>(2 + 3) * 4 → 20</dt><dd>Os <strong>parênteses</strong> mandam: o que está dentro deles é feito primeiro. 5 × 4.</dd>
+  <dt>10 - 4 - 3 → 3</dt><dd>Operadores do mesmo nível são feitos da <strong>esquerda para a direita</strong>: (10 − 4) − 3.</dd>
+  <dt>2 ^ 3 ^ 2 → 512.0</dt><dd>A exceção: a potência é feita da <strong>direita para a esquerda</strong>, como na matemática. 3² = 9, depois 2⁹ = 512.</dd>
+  <dt>-2 ^ 2 → -4.0</dt><dd>A potência vem antes até do sinal de menos: é −(2²). Para elevar o −2 ao quadrado, use parênteses: <code>(-2) ^ 2</code> → <code>4.0</code>.</dd>
+  <dt>100 / 10 * 2 → 20.0</dt><dd><code>/</code> e <code>*</code> estão no mesmo nível: da esquerda para a direita, (100 ÷ 10) × 2.</dd>
+</dl>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Ordem</th><th>Operadores</th><th>Agrupa</th></tr>
+<tr><td>1º (primeiro)</td><td><code>^</code></td><td>da direita para a esquerda</td></tr>
+<tr><td>2º</td><td><code>-</code> unário (<code>-x</code>)</td><td></td></tr>
+<tr><td>3º</td><td><code>*</code> <code>/</code> <code>//</code> <code>%</code></td><td>da esquerda para a direita</td></tr>
+<tr><td>4º (por último)</td><td><code>+</code> <code>-</code></td><td>da esquerda para a direita</td></tr>
+</table>
+</div>
+
+<p>A tabela completa, com <code>..</code>, comparações e <code>and</code>/<code>or</code>, está em <a href="precedencia.html">Precedência dos Operadores</a>.</p>
+
+<div class="tip">
+<strong>Na dúvida, parênteses</strong>
+<p>Parênteses a mais não fazem mal nenhum, e deixam a conta clara para quem lê. <code>(preco * quantidade) + frete</code> dá o mesmo que <code>preco * quantidade + frete</code>, mas ninguém precisa lembrar da regra.</p>
+</div>
+
+<div class="trylua" data-goal="out:Média: 8.0;;semerro">
+<p class="try-task"><strong>Missão:</strong> a média das notas 7, 8 e 9 é 8, mas o programa mostra <code>Média: 18.0</code>. Ele dividiu só o <code>n3</code> por 3 (a divisão vem antes da soma). Ponha parênteses para dividir a <strong>soma</strong> das três notas.</p>
+<pre class="script" data-file="main.lua">local n1, n2, n3 = 7, 8, 9
+local media = n1 + n2 + n3 / 3
+print("Média: " .. media)
+</pre>
+<pre class="solucao" data-file="main.lua">local n1, n2, n3 = 7, 8, 9
+local media = (n1 + n2 + n3) / 3
+print("Média: " .. media)
+</pre>
+</div>
+
+<hr>
+
+<h2>4. O sinal de menos e a potência</h2>
+
+<pre class="file" data-file="menos.lua">local temperatura = 5
+print(-temperatura, - -temperatura, -(-3))
+print(2 ^ -1, 9 ^ 0.5, 27 ^ (1/3))
+print(5 - -2)
+</pre>
+
+<pre class="term">$ lua menos.lua
+-5	5	3
+0.5	3.0	3.0
+7</pre>
+
+<dl class="anatomy">
+  <dt>-temperatura</dt><dd>O menos <strong>na frente</strong> de um valor (o "menos unário", porque só tem um operando) troca o sinal: 5 vira −5.</dd>
+  <dt>- -temperatura e -(-3)</dt><dd>Dois menos se anulam. Mas repare no <strong>espaço</strong> entre eles: <code>--</code> grudado é o começo de um <strong>comentário</strong> (veja <a href="comentarios.html">Comentários</a>), e o resto da linha seria ignorado (o erro está em <a href="#errado">Quando dá errado</a>). Prefira <code>-(-3)</code>, com parênteses.</dd>
+  <dt>2 ^ -1 → 0.5</dt><dd>Expoente negativo: 2⁻¹ = 1/2.</dd>
+  <dt>9 ^ 0.5 → 3.0</dt><dd>Elevar a 0,5 é tirar a <strong>raiz quadrada</strong>. A biblioteca <code>math</code> também tem <code>math.sqrt(9)</code>.</dd>
+  <dt>27 ^ (1/3) → 3.0</dt><dd>Elevar a 1/3 é a raiz cúbica. Os parênteses são necessários, senão a potência viria antes da divisão.</dd>
+  <dt>5 - -2 → 7</dt><dd>Subtrair um negativo é somar.</dd>
+</dl>
+
+<hr>
+
+<h2>5. Aumentando uma variável: <code>x = x + 1</code></h2>
+<p>Contar visitas, juntar o total, descontar do saldo: é muito comum mudar uma variável com base no valor <strong>dela mesma</strong>. No Lua, isso se escreve por extenso:</p>
+
+<pre class="file" data-file="incremento.lua">local visitas = 0
+visitas = visitas + 1
+visitas = visitas + 1
+print("visitas:", visitas)
+local saldo = 100
+saldo = saldo - 30
+saldo = saldo * 2
+print("saldo:", saldo)
+</pre>
+
+<pre class="term">$ lua incremento.lua
+visitas:	2
+saldo:	140</pre>
+
+<p>Leia <code>visitas = visitas + 1</code> da direita para a esquerda: "pegue o valor atual de <code>visitas</code>, some 1, e guarde o resultado de volta em <code>visitas</code>". O <code>=</code> não é "igual" da matemática; é "guarde em" (veja <a href="variaveis.html">Variáveis</a>).</p>
+
+<div class="warning">
+<strong>O Lua não tem <code>+=</code>, <code>-=</code>, <code>*=</code> nem <code>++</code></strong>
+<p>Em muitas linguagens (Python, JavaScript, C) existe o atalho <code>x += 1</code> ("some 1 em x") e, em algumas, <code>x++</code>. <strong>No Lua, não</strong>: os dois são erro de sintaxe (veja <a href="#errado">Quando dá errado</a>). Escreva sempre <code>x = x + 1</code>. (O Luau, a variante do Lua usada no Roblox, aceita o <code>+=</code>, segundo a documentação dele; o Lua oficial, não.)</p>
+</div>
+
+<hr>
+
+<h2 id="formas">Formas diferentes de fazer a mesma coisa</h2>
+<p>Algumas contas têm mais de um jeito de escrever:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Conta</th><th>Com operador</th><th>Com a biblioteca <code>math</code></th><th>Qual usar</th></tr>
+<tr><td>Raiz quadrada de 16</td><td><code>16 ^ 0.5</code> → <code>4.0</code></td><td><code>math.sqrt(16)</code> → <code>4.0</code></td><td><code>math.sqrt</code>: o nome diz o que faz</td></tr>
+<tr><td>Valor sem sinal de −7</td><td><code>-(-7)</code> (só se já souber que é negativo)</td><td><code>math.abs(-7)</code> → <code>7</code></td><td><code>math.abs</code></td></tr>
+<tr><td>Quadrado de <code>x</code></td><td><code>x ^ 2</code> (float) ou <code>x * x</code> (inteiro, se <code>x</code> for inteiro)</td><td>—</td><td><code>x * x</code> para manter o inteiro</td></tr>
+<tr><td>O maior de vários</td><td>(com <code>if</code>)</td><td><code>math.max(3, 9, 4)</code> → <code>9</code></td><td><code>math.max</code> / <code>math.min</code></td></tr>
+</table>
+</div>
+
+<p>No lab: <code>lua -e 'print(math.abs(-7), math.max(3, 9, 4), math.min(3, 9, 4), math.sqrt(16))'</code> mostrou <code>7</code>, <code>9</code>, <code>3</code> e <code>4.0</code>. A biblioteca inteira está em <a href="math.html">A Biblioteca math</a>.</p>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+
+<div class="cenario">
+<strong>Usou <code>+=</code> ou <code>++</code></strong>
+<pre class="term">$ cat maisigual.lua
+local x = 1
+x += 1
+print(x)
+$ lua maisigual.lua
+lua: maisigual.lua:2: syntax error near '+'
+$ cat maismais.lua
+local x = 1
+x++
+print(x)
+$ lua maismais.lua
+lua: maismais.lua:2: syntax error near '+'</pre>
+<p>"Erro de sintaxe perto do <code>+</code>", na linha 2. Para o Lua, depois de um nome no começo de uma linha vem um <code>=</code> (atribuição) ou um <code>(</code> (chamada de função); um <code>+</code> ali não faz sentido. É um erro de sintaxe: o programa nem começa (o <code>print(x)</code> não rodou). <strong>Como consertar:</strong> <code>x = x + 1</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Usou <code>**</code> para potência</strong>
+<pre class="term">$ cat potencia.lua
+print(10 ** 2)
+$ lua potencia.lua
+lua: potencia.lua:1: unexpected symbol near '*'</pre>
+<p>"Símbolo inesperado perto do <code>*</code>". Em Python, a potência é <code>**</code>; no Lua, é <code>^</code>. O primeiro <code>*</code> foi aceito como "vezes", e o segundo apareceu onde devia vir um número. <strong>Como consertar:</strong> <code>10 ^ 2</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Escreveu "x" para vezes, ou esqueceu o <code>*</code></strong>
+<pre class="term">$ cat vezes.lua
+local area = 3 x 4
+$ lua vezes.lua
+lua: vezes.lua:1: syntax error near '4'
+$ cat dois.lua
+local x = 5
+print(2x)
+$ lua dois.lua
+lua: dois.lua:2: malformed number near '2x'</pre>
+<p>No primeiro, o Lua leu <code>local area = 3</code>, achou que o <code>x</code> era o começo de outro comando, e se perdeu no <code>4</code>: "erro de sintaxe perto do <code>4</code>". No segundo, <code>2x</code> (como se escreve na matemática) parece um número com uma letra grudada: "número mal formado" (veja <a href="numeros.html">Números</a>). <strong>Como consertar:</strong> a multiplicação sempre tem o <code>*</code>: <code>3 * 4</code> e <code>2 * x</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Dois sinais de menos grudados: virou comentário</strong>
+<pre class="term">$ cat comentario.lua
+local x = 5
+print(--x)
+$ lua comentario.lua
+lua: comentario.lua:3: unexpected symbol near &lt;eof&gt;</pre>
+<p>O <code>--</code> começa um comentário, então o Lua leu só <code>print(</code> e ignorou o resto da linha. Ele continuou procurando o que fecharia o parêntese, chegou ao fim do arquivo (<code>&lt;eof&gt;</code>, de <em>end of file</em>, "fim do arquivo"; por isso a linha 3, depois da última) e reclamou: "símbolo inesperado perto do fim do arquivo". <strong>Como consertar:</strong> <code>print(-(-x))</code>, ou <code>- -x</code> com espaço. (E se a ideia era "diminuir 1", como o <code>--x</code> de outras linguagens: <code>x = x - 1</code>.)</p>
+</div>
+
+<div class="cenario">
+<strong>Conta com algo que não é número</strong>
+<pre class="term">$ lua -e 'print(5 + nil)'
+lua: (command line):1: attempt to perform arithmetic on a nil value
+stack traceback:
+	(command line):1: in main chunk
+	[C]: in ?
+$ lua -e 'print({} + 1)'
+lua: (command line):1: attempt to perform arithmetic on a table value
+stack traceback:
+	(command line):1: in main chunk
+	[C]: in ?</pre>
+<p>"Tentativa de fazer conta com um valor <code>nil</code>" e "… com um valor tabela". Os operadores aritméticos só funcionam com números (e com textos que parecem números, pela conversão automática; veja <a href="conversao.html">Conversão</a>). Num programa de verdade, a mensagem diz também o nome da variável, como <code>(global 'totl')</code>: veja <a href="nil.html">O Valor nil</a>. (O <code>lua -e '…'</code> roda um programa de uma linha, sem arquivo: por isso aparece <code>(command line):1:</code>.)</p>
+</div>
+
+<div class="trylua" data-goal="out:Troco: 4.0;;semerro">
+<p class="try-task"><strong>Missão:</strong> a Ana escreveu o caixa da papelaria com o <code>+=</code> de outra linguagem, e o Lua responde <code>syntax error near '+'</code>. Troque cada <code>total += …</code> por <code>total = total + …</code> para o programa mostrar o total e o troco (<code>Troco: 4.0</code>).</p>
+<pre class="script" data-file="main.lua">local total = 0
+total += 12 * 3   -- 3 cadernos
+total += 2.5 * 4  -- 4 canetas
+print("Total: " .. total)
+print("Troco: " .. 50 - total)
+</pre>
+<pre class="solucao" data-file="main.lua">local total = 0
+total = total + 12 * 3   -- 3 cadernos
+total = total + 2.5 * 4  -- 4 canetas
+print("Total: " .. total)
+print("Troco: " .. 50 - total)
+</pre>
+</div>
+
+<p>Repare na última linha: <code>"Troco: " .. 50 - total</code> funciona porque a conta (<code>-</code>) vem antes do <code>..</code> na ordem do Lua. Mesmo assim, <code>"Troco: " .. (50 - total)</code> fica mais claro.</p>
+
+<hr>
+
+<h2>Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>O que faz</th><th>Exemplo → resultado</th></tr>
+<tr><td><code>a + b</code></td><td>soma</td><td><code>7 + 2</code> → <code>9</code></td></tr>
+<tr><td><code>a - b</code></td><td>subtração</td><td><code>7 - 2</code> → <code>5</code></td></tr>
+<tr><td><code>a * b</code></td><td>multiplicação</td><td><code>7 * 2</code> → <code>14</code></td></tr>
+<tr><td><code>a / b</code></td><td>divisão (sempre float)</td><td><code>7 / 2</code> → <code>3.5</code></td></tr>
+<tr><td><code>a // b</code></td><td>divisão arredondada para baixo</td><td><code>7 // 2</code> → <code>3</code></td></tr>
+<tr><td><code>a % b</code></td><td>resto da divisão</td><td><code>7 % 2</code> → <code>1</code></td></tr>
+<tr><td><code>a ^ b</code></td><td>potência (sempre float)</td><td><code>7 ^ 2</code> → <code>49.0</code></td></tr>
+<tr><td><code>-a</code></td><td>troca o sinal</td><td><code>-(-3)</code> → <code>3</code></td></tr>
+<tr><td><code>( … )</code></td><td>faz primeiro o que está dentro</td><td><code>(2 + 3) * 4</code> → <code>20</code></td></tr>
+<tr><td><code>x = x + 1</code></td><td>aumenta <code>x</code> em 1 (não existe <code>x += 1</code> nem <code>x++</code>)</td><td></td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Sintoma</th><th>Causa provável</th></tr>
+<tr><td><code>syntax error near '+'</code></td><td>Usou <code>x += 1</code> ou <code>x++</code></td></tr>
+<tr><td><code>unexpected symbol near '*'</code></td><td>Usou <code>**</code> para potência: no Lua é <code>^</code></td></tr>
+<tr><td><code>malformed number near '2x'</code></td><td>Faltou o <code>*</code>: <code>2 * x</code></td></tr>
+<tr><td><code>unexpected symbol near &lt;eof&gt;</code> numa conta com <code>--</code></td><td><code>--</code> grudado virou comentário</td></tr>
+<tr><td>Resultado diferente do esperado</td><td>Ordem das contas: ponha parênteses</td></tr>
+<tr><td><code>attempt to perform arithmetic on a nil value</code></td><td>Uma das variáveis da conta está <code>nil</code> (nome errado?)</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. Faça as contas</h3>
+<p>Escreva o que o Lua 5.5 mostra:</p>
+<div class="ex-code">print(6 * 7) → <input data-answer="42" aria-label="6 vezes 7"><br>print(2 + 3 * 2) → <input data-answer="8" aria-label="2 mais 3 vezes 2"><br>print((2 + 3) * 2) → <input data-answer="10" aria-label="2 mais 3, vezes 2"><br>print(3 ^ 2) → <input data-answer="9.0" aria-label="3 elevado a 2"></div>
+</div>
+
+<div class="exercise">
+<h3>2. Aumente o contador</h3>
+<p>Complete a linha para somar 1 na variável <code>clientes</code>:</p>
+<div class="ex-code">clientes = <input data-answer="clientes" aria-label="nome da variável"> + 1</div>
+</div>
+
+<div class="mc" data-answer="3">
+<p class="mc-q">3. Qual é o operador de potência no Lua?</p>
+<label><input type="radio" name="q3"> <code>**</code></label>
+<label><input type="radio" name="q3"> <code>pow</code></label>
+<label><input type="radio" name="q3"> <code>^</code></label>
+<label><input type="radio" name="q3"> <code>%</code></label>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">4. O que <code>print(10 - 2 - 3)</code> mostra?</p>
+<label><input type="radio" name="q4"> <code>11</code></label>
+<label><input type="radio" name="q4"> <code>5</code></label>
+<label><input type="radio" name="q4"> <code>5.0</code></label>
+<label><input type="radio" name="q4"> Um erro</label>
+</div>
+
+<div class="mc" data-answer="1">
+<p class="mc-q">5. O que acontece com <code>pontos += 10</code> no Lua 5.5?</p>
+<label><input type="radio" name="q5"> Erro de sintaxe: o Lua não tem <code>+=</code></label>
+<label><input type="radio" name="q5"> <code>pontos</code> aumenta 10</label>
+<label><input type="radio" name="q5"> <code>pontos</code> vira 10</label>
+<label><input type="radio" name="q5"> Nada acontece</label>
+</div>
+
+<div class="mc" data-answer="4">
+<p class="mc-q">6. Qual linha calcula a média de <code>a</code> e <code>b</code>?</p>
+<label><input type="radio" name="q6"> <code>a + b / 2</code></label>
+<label><input type="radio" name="q6"> <code>a + b // 2</code></label>
+<label><input type="radio" name="q6"> <code>a / 2 + b</code></label>
+<label><input type="radio" name="q6"> <code>(a + b) / 2</code></label>
+</div>
+
+<h3>Missão final: a área da vitrine</h3>
+
+<div class="trylua" data-goal="out:Área: 7.5 m²;;out:Rodapé: 11.0 m;;semerro">
+<p class="try-task"><strong>Missão:</strong> a vitrine da padaria tem 3 m de largura e 2,5 m de altura. Complete as duas contas: a <strong>área</strong> é largura vezes altura, e o <strong>rodapé</strong> (a volta inteira) é duas vezes a soma da largura com a altura. Atenção aos parênteses no rodapé! O programa deve mostrar <code>Área: 7.5 m²</code> e <code>Rodapé: 11.0 m</code>.</p>
+<pre class="script" data-file="main.lua">local largura = 3
+local altura = 2.5
+local area = 0     -- troque o 0 pela conta
+local rodape = 0   -- troque o 0 pela conta
+print("Área: " .. area .. " m²")
+print("Rodapé: " .. rodape .. " m")
+</pre>
+<pre class="solucao" data-file="main.lua">local largura = 3
+local altura = 2.5
+local area = largura * altura
+local rodape = 2 * (largura + altura)
+print("Área: " .. area .. " m²")
+print("Rodapé: " .. rodape .. " m")
+</pre>
+</div>
+
+<p>Sem os parênteses, <code>2 * largura + altura</code> daria 6 + 2,5 = <code>8.5</code>: a largura dobrada, mas a altura uma vez só. Experimente para ver.</p>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li>Os operadores aritméticos são <code>+</code> <code>-</code> <code>*</code> <code>/</code> <code>//</code> <code>%</code> <code>^</code> e o menos unário <code>-x</code>. Multiplicação é <code>*</code>, potência é <code>^</code>.</li>
+  <li>Com dois inteiros, <code>+ - * // %</code> dão inteiro; <code>/</code> e <code>^</code> sempre dão float; um float na conta deixa o resultado float.</li>
+  <li>Ordem: <code>^</code> primeiro (da direita para a esquerda), depois o menos unário, depois <code>* / // %</code>, por último <code>+ -</code>. Parênteses mandam em tudo.</li>
+  <li><code>-2 ^ 2</code> é <code>-4.0</code>: use <code>(-2) ^ 2</code>. E <code>--</code> grudado é comentário.</li>
+  <li>Para aumentar uma variável: <code>x = x + 1</code>. O Lua não tem <code>+=</code>, <code>-=</code> nem <code>++</code>.</li>
+  <li>Divisão, divisão inteira e resto têm aula própria: <a href="divisao.html">Divisão: /, // e %</a>.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
