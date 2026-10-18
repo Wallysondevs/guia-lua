@@ -1,0 +1,563 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua Vários Retornos — return a, b e o ajuste de valores | Guia Lua</title>
+<meta name="description" content="Funções que devolvem vários valores em Lua: return a, b, receber com local q, r = f(), ignorar com _, o costume return nil, mensagem, as funções prontas que já fazem isso (string.find, string.gsub, io.open) e as regras de ajuste: só a última chamada da lista expande, os parênteses cortam para um valor. Com os erros reais do Lua 5.5.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">Vários Retornos</span></h1>
+
+<p class="intro">Na aula <a href="return.html">return</a>, cada função devolvia um valor. Mas às vezes a resposta tem duas partes: uma divisão tem o resultado <strong>e</strong> o resto; uma lista de notas tem a menor <strong>e</strong> a maior; uma busca tem o achado <strong>ou</strong> o motivo de não ter achado. Em muitas linguagens você precisaria embrulhar tudo numa lista. No Lua, não: o <code>return</code> devolve <strong>quantos valores quiser</strong>, separados por vírgula.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>A devolver vários valores com <code>return a, b</code> e a recebê-los com <code>local x, y = f()</code>.</li>
+  <li>O que acontece com variáveis a mais ou a menos, e o <code>_</code> para ignorar um valor.</li>
+  <li>O costume do Lua <code>return nil, "mensagem"</code> para avisar que algo deu errado.</li>
+  <li>As funções prontas que já devolvem vários valores: <code>string.find</code>, <code>string.gsub</code>, <code>math.modf</code>, <code>io.open</code>.</li>
+  <li>As <strong>regras de ajuste</strong>: quando os valores todos passam e quando só o primeiro passa (só a <strong>última</strong> chamada da lista expande; os <strong>parênteses</strong> cortam para um).</li>
+  <li>Os erros reais que essas regras causam, como <code>bad argument #2 to 'insert'</code>.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>A ideia: o troco com a nota fiscal</h2>
+<p>Quando a Ana paga na padaria, o caixa devolve <strong>duas coisas</strong>: o troco e a nota fiscal. Ela pode guardar as duas, guardar só o troco e jogar a nota fora, ou estender a mão esperando três coisas e ficar com uma mão vazia. Uma função com vários retornos é assim: ela entrega vários valores de uma vez, <strong>na ordem</strong>, e quem recebe decide quantos pega.</p>
+
+<hr>
+
+<h2>1. Devolvendo e recebendo dois valores</h2>
+<p>A divisão inteira tem duas respostas: quantas vezes o 5 cabe no 17 (3) e quanto sobra (2). Uma função pode devolver as duas:</p>
+
+<pre class="file" data-file="dividir.lua">local function dividir(a, b)
+  return a // b, a % b
+end
+
+local q, r = dividir(17, 5)
+print("17 dividido por 5 dá " .. q .. " e sobra " .. r)
+</pre>
+
+<pre class="term">$ lua dividir.lua
+17 dividido por 5 dá 3 e sobra 2
+</pre>
+
+<dl class="anatomy">
+  <dt>return a // b, a % b</dt><dd>Dois valores, separados por vírgula: o quociente (<code>//</code>, divisão inteira) e o resto (<code>%</code>), da aula <a href="divisao.html">Divisão</a>.</dd>
+  <dt>local q, r = dividir(17, 5)</dt><dd>Duas variáveis do lado esquerdo, separadas por vírgula, como na <a href="atribuicao-multipla.html">Atribuição Múltipla</a>. O 1º valor devolvido vai para <code>q</code>, o 2º para <code>r</code>.</dd>
+</dl>
+
+<h3>Variáveis a menos, a mais, e o <code>_</code></h3>
+<p>A regra é a mesma dos argumentos (aula <a href="parametros.html">Parâmetros e Argumentos</a>): o que sobra é descartado; o que falta vira <code>nil</code>.</p>
+
+<pre class="file" data-file="receber.lua">local function dividir(a, b)
+  return a // b, a % b
+end
+
+local q = dividir(17, 5)
+print("só uma variável:", q)
+
+local x, y, z = dividir(17, 5)
+print("três variáveis:", x, y, z)
+
+local _, resto = dividir(17, 5)
+print("só o resto:", resto)
+</pre>
+
+<pre class="term">$ lua receber.lua
+só uma variável:	3
+três variáveis:	3	2	nil
+só o resto:	2
+</pre>
+
+<dl class="anatomy">
+  <dt>local q = dividir(17, 5)</dt><dd>Uma variável só: ela fica com o 1º valor, e o resto (<code>2</code>) é jogado fora. A Ana pegou o troco e deixou a nota.</dd>
+  <dt>local x, y, z = …</dt><dd>Três variáveis para dois valores: <code>z</code> fica <code>nil</code>. A mão vazia.</dd>
+  <dt>local _, resto = …</dt><dd>Para pegar <strong>só o segundo</strong>, ponha um nome qualquer no primeiro. O costume é o <code>_</code> (sublinhado), que quer dizer "não vou usar este". Para o Lua, <code>_</code> é um nome de variável comum; é só um combinado entre programadores.</dd>
+</dl>
+
+<h3>Um exemplo útil: a menor e a maior nota</h3>
+
+<pre class="file" data-file="menor_maior.lua">local function menor_maior(lista)
+  local menor, maior = lista[1], lista[1]
+  for i = 2, #lista do
+    if lista[i] &lt; menor then menor = lista[i] end
+    if lista[i] &gt; maior then maior = lista[i] end
+  end
+  return menor, maior
+end
+
+local notas = {7.5, 9, 4, 8, 6.5}
+local pior, melhor = menor_maior(notas)
+print("Pior nota: " .. pior)
+print("Melhor nota: " .. melhor)
+</pre>
+
+<pre class="term">$ lua menor_maior.lua
+Pior nota: 4
+Melhor nota: 9
+</pre>
+
+<p>Uma passada só pela lista, e as duas respostas saem juntas.</p>
+
+<div class="trylua" data-goal="out:Cada um paga 16 e sobram 2;;semerro">
+<p class="try-task"><strong>Missão:</strong> três amigas vão dividir uma conta de 50 reais em notas inteiras. Rode e veja o erro: a função só devolve quanto cada uma paga. Faça ela devolver <strong>também</strong> o que sobra (<code>total % pessoas</code>).</p>
+<pre class="script" data-file="main.lua">local function dividir_conta(total, pessoas)
+  return total // pessoas
+end
+
+local cada, sobra = dividir_conta(50, 3)
+print("Cada um paga " .. cada .. " e sobram " .. sobra)
+</pre>
+<pre class="solucao" data-file="main.lua">local function dividir_conta(total, pessoas)
+  return total // pessoas, total % pessoas
+end
+
+local cada, sobra = dividir_conta(50, 3)
+print("Cada um paga " .. cada .. " e sobram " .. sobra)
+</pre>
+</div>
+
+<hr>
+
+<h2>2. O costume do Lua: <code>return nil, "mensagem"</code></h2>
+<p>Quando uma função pode falhar, o Lua tem um costume: em caso de sucesso, devolve o resultado; em caso de falha, devolve <strong><code>nil</code> e uma mensagem</strong> explicando o motivo.</p>
+
+<pre class="file" data-file="nil_msg.lua">local precos = {pao = 0.80, leite = 5.50, bolo = 18}
+
+local function preco(produto)
+  local valor = precos[produto]
+  if valor == nil then
+    return nil, "não temos " .. produto
+  end
+  return valor
+end
+
+for _, produto in ipairs({"leite", "sonho", "pao"}) do
+  local valor, erro = preco(produto)
+  if valor then
+    print(produto .. ": R$ " .. string.format("%.2f", valor))
+  else
+    print("Erro: " .. erro)
+  end
+end
+</pre>
+
+<pre class="term">$ lua nil_msg.lua
+leite: R$ 5.50
+Erro: não temos sonho
+pao: R$ 0.80
+</pre>
+
+<p>Quem chama recebe duas variáveis (<code>valor, erro</code>) e testa a primeira: se ela tem valor, deu certo; se é <code>nil</code>, a segunda diz por quê. Repare que o <code>for _, produto in ipairs(…)</code> usa o mesmo <code>_</code> para ignorar a posição (aula <a href="ipairs.html">ipairs</a>).</p>
+
+<p>Esse é exatamente o jeito do <code>io.open</code>, que abre arquivos (aula <a href="io-open.html">io.open</a>). As funções prontas do Lua usam muito os vários retornos:</p>
+
+<pre class="file" data-file="prontas.lua">print(string.find("Padaria do bairro", "do"))
+print(string.gsub("banana", "a", "o"))
+print(math.modf(3.75))
+print(io.open("nao_existe.txt"))
+</pre>
+
+<pre class="term">$ lua prontas.lua
+9	10
+bonono	3
+3	0.75
+nil	nao_existe.txt: No such file or directory	2
+</pre>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Função</th><th>O que devolve</th><th>Aula</th></tr>
+<tr><td><code>string.find(texto, busca)</code></td><td>Onde o achado começa <strong>e</strong> onde termina (<code>9</code>, <code>10</code>)</td><td><a href="string-find.html">find e match</a></td></tr>
+<tr><td><code>string.gsub(texto, de, para)</code></td><td>O texto novo <strong>e</strong> quantas trocas fez (<code>bonono</code>, <code>3</code>)</td><td><a href="gsub.html">gsub</a></td></tr>
+<tr><td><code>math.modf(x)</code></td><td>A parte inteira <strong>e</strong> a parte depois da vírgula (<code>3</code>, <code>0.75</code>)</td><td><a href="math.html">math</a></td></tr>
+<tr><td><code>io.open(nome)</code></td><td>O arquivo, ou <code>nil</code> + a mensagem + o número do erro do sistema</td><td><a href="io-open.html">io.open</a></td></tr>
+</table>
+</div>
+
+<p>(O <code>string.gsub</code> com dois valores vai aparecer de novo, como armadilha, em <a href="#errado">Quando dá errado</a>.)</p>
+
+<hr>
+
+<h2>3. As regras de ajuste: quando todos os valores passam</h2>
+<p>Aqui está a parte que confunde até quem já programa há tempos. Uma chamada que devolve vários valores <strong>nem sempre</strong> entrega todos. O Lua "ajusta" a quantidade conforme o lugar onde a chamada aparece. Veja com uma função que devolve <code>"a", "b"</code>:</p>
+
+<pre class="file" data-file="ajuste.lua">local function dois()
+  return "a", "b"
+end
+
+print(dois())
+print(dois(), "fim")
+print("início", dois())
+print((dois()))
+print(dois() .. "!")
+local t1 = {dois()}
+local t2 = {dois(), "z"}
+print(#t1, #t2, t2[1], t2[2])
+local p, q, r = dois(), "x"
+print(p, q, r)
+local s, u, v = "x", dois()
+print(s, u, v)
+</pre>
+
+<pre class="term">$ lua ajuste.lua
+a	b
+a	fim
+início	a	b
+a
+a!
+2	2	a	z
+a	x	nil
+x	a	b
+</pre>
+
+<p>Linha por linha:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Código</th><th>Saída</th><th>Por quê</th></tr>
+<tr><td><code>print(dois())</code></td><td><code>a b</code></td><td>A chamada é a <strong>última</strong> (e única) da lista de argumentos: passam todos</td></tr>
+<tr><td><code>print(dois(), "fim")</code></td><td><code>a fim</code></td><td>A chamada <strong>não</strong> é a última da lista: é cortada para <strong>um</strong> valor. O <code>"b"</code> sumiu</td></tr>
+<tr><td><code>print("início", dois())</code></td><td><code>início a b</code></td><td>Agora ela é a última: passam todos</td></tr>
+<tr><td><code>print((dois()))</code></td><td><code>a</code></td><td>Os <strong>parênteses em volta</strong> da chamada cortam para um valor</td></tr>
+<tr><td><code>dois() .. "!"</code></td><td><code>a!</code></td><td>Numa conta ou num <code>..</code>, só o primeiro valor entra</td></tr>
+<tr><td><code>{dois()}</code></td><td>2 itens</td><td>Último item da tabela: entram todos</td></tr>
+<tr><td><code>{dois(), "z"}</code></td><td><code>a</code>, <code>z</code></td><td>Não é o último item: entra um</td></tr>
+<tr><td><code>local p, q, r = dois(), "x"</code></td><td><code>a x nil</code></td><td>Não é o último da lista: <code>p</code> fica com <code>"a"</code>, <code>q</code> com <code>"x"</code>, e <code>r</code> sobra vazio</td></tr>
+<tr><td><code>local s, u, v = "x", dois()</code></td><td><code>x a b</code></td><td>É o último: os dois valores ocupam <code>u</code> e <code>v</code></td></tr>
+</table>
+</div>
+
+<div class="tip">
+<strong>A regra numa frase</strong>
+<p>Numa lista separada por vírgulas (argumentos, valores de uma atribuição, itens de uma tabela, valores de um <code>return</code>), <strong>só a última chamada se abre em todos os valores</strong>. Qualquer outra chamada, ou uma chamada entre parênteses, ou uma chamada no meio de uma conta, entrega <strong>só o primeiro</strong>. E uma chamada que devolve zero valores, num desses lugares, vira um <code>nil</code>.</p>
+</div>
+
+<h3>Passando os valores adiante</h3>
+<p>Como a última chamada abre todos os valores, dá para mandar o resultado de uma função direto como argumentos de outra:</p>
+
+<pre class="file" data-file="repassar.lua">local function dividir(a, b)
+  return a // b, a % b
+end
+
+local function mostrar(quociente, resto)
+  print("quociente " .. quociente .. ", resto " .. resto)
+end
+
+mostrar(dividir(17, 5))
+</pre>
+
+<pre class="term">$ lua repassar.lua
+quociente 3, resto 2
+</pre>
+
+<p><code>mostrar(dividir(17, 5))</code> vira <code>mostrar(3, 2)</code>. E num <code>return</code>, a mesma regra: <code>return dividir(n, 5)</code> devolve os dois valores; <code>return (dividir(n, 5))</code>, só um:</p>
+
+<pre class="file" data-file="return_chamada.lua">local function dividir(a, b)
+  return a // b, a % b
+end
+
+local function dividir_por_5(n)
+  return dividir(n, 5)
+end
+
+local function so_quociente(n)
+  return (dividir(n, 5))
+end
+
+print(dividir_por_5(17))
+print(so_quociente(17))
+</pre>
+
+<pre class="term">$ lua return_chamada.lua
+3	2
+3
+</pre>
+
+<div class="trylua">
+<p class="try-task"><strong>Experimente:</strong> antes de rodar, tente adivinhar o que cada linha mostra. Depois troque a função para devolver três valores (<code>return "a", "b", "c"</code>) e compare.</p>
+<pre class="script" data-file="main.lua">local function dois()
+  return "a", "b"
+end
+
+print(dois())
+print(dois(), "fim")
+print("início", dois())
+print((dois()))
+local t = {dois(), dois()}
+print(#t, t[1], t[2], t[3])
+</pre>
+</div>
+
+<div class="note">
+<strong>E nas outras versões?</strong>
+<p>Os vários retornos e as regras de ajuste são iguais no Lua 5.1, no LuaJIT, no 5.4 e no 5.5: o mesmo <code>ajuste.lua</code> deu exatamente a mesma saída no <code>lua5.1</code> e no <code>luajit</code>. Para transformar uma tabela de volta em vários valores existe o <code>table.unpack</code> (no Lua 5.1 ele se chama só <code>unpack</code>; o LuaJIT aceita os dois nomes; no 5.5 só existe <code>table.unpack</code>): aula <a href="table-unpack.html">table.unpack e table.pack</a>.</p>
+</div>
+
+<hr>
+
+<h2>Formas diferentes de devolver mais de uma coisa</h2>
+
+<pre class="file" data-file="formas.lua">-- forma 1: vários valores
+local function dividir1(a, b)
+  return a // b, a % b
+end
+
+-- forma 2: uma tabela com campos
+local function dividir2(a, b)
+  return {quociente = a // b, resto = a % b}
+end
+
+local q, r = dividir1(17, 5)
+local res = dividir2(17, 5)
+print(q, r, res.quociente, res.resto)
+</pre>
+
+<pre class="term">$ lua formas.lua
+3	2	3	2
+</pre>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Forma</th><th>Quando usar</th></tr>
+<tr><td><code>return a, b</code></td><td>Duas ou três respostas, usadas logo em seguida. É o jeito do Lua (e das funções prontas)</td></tr>
+<tr><td><code>return {campo = …}</code></td><td>Muitas respostas, ou quando o resultado vai ser guardado e passado adiante: os nomes dos campos dizem o que é cada coisa, e as regras de ajuste não atrapalham</td></tr>
+<tr><td><code>return nil, "mensagem"</code></td><td>Quando a função pode falhar</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+
+<div class="cenario">
+<strong>Parênteses demais: o segundo valor sumiu</strong>
+<pre class="file" data-file="erro_parenteses.lua">local function dividir(a, b)
+  return a // b, a % b
+end
+
+local q, r = (dividir(17, 5))
+print("quociente " .. q .. ", resto " .. r)
+</pre>
+<pre class="term">$ lua erro_parenteses.lua
+lua: erro_parenteses.lua:6: attempt to concatenate a nil value (local 'r')
+stack traceback:
+	erro_parenteses.lua:6: in main chunk
+	[C]: in ?
+</pre>
+<p>Os parênteses em volta de <code>dividir(17, 5)</code> parecem inofensivos, mas cortaram o resultado para um valor. <code>r</code> ficou <code>nil</code>, e o <code>..</code> reclamou na linha 6: <code>attempt to concatenate a nil value (local 'r')</code>. <strong>Como consertar:</strong> tire os parênteses de fora: <code>local q, r = dividir(17, 5)</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>A chamada no meio da lista</strong>
+<pre class="file" data-file="erro_meio.lua">local function dividir(a, b)
+  return a // b, a % b
+end
+
+local function mostrar(quociente, resto, unidade)
+  print(quociente .. " " .. unidade .. ", sobram " .. resto)
+end
+
+mostrar(dividir(17, 5), "caixas")
+</pre>
+<pre class="term">$ lua erro_meio.lua
+lua: erro_meio.lua:6: attempt to concatenate a nil value (local 'unidade')
+stack traceback:
+	erro_meio.lua:6: in local 'mostrar'
+	erro_meio.lua:9: in main chunk
+	[C]: in ?
+</pre>
+<p>A ideia era <code>mostrar(3, 2, "caixas")</code>. Mas <code>dividir(17, 5)</code> não é o último argumento, então entregou só o <code>3</code>. A chamada virou <code>mostrar(3, "caixas")</code>: o <code>resto</code> recebeu <code>"caixas"</code> e a <code>unidade</code> ficou <code>nil</code>. O rastro aponta a linha 9 como a chamada culpada. <strong>Como consertar:</strong> guarde os valores antes (<code>local q, r = dividir(17, 5)</code> e <code>mostrar(q, r, "caixas")</code>), ou ponha a chamada no fim da lista, mudando a ordem dos parâmetros.</p>
+</div>
+
+<div class="cenario">
+<strong>O valor "escondido" do <code>string.gsub</code></strong>
+<pre class="file" data-file="erro_insert.lua">local nomes = {}
+table.insert(nomes, string.upper("ana"))
+table.insert(nomes, string.gsub("bia lima", " ", "_"))
+print(nomes[1], nomes[2])
+</pre>
+<pre class="term">$ lua erro_insert.lua
+lua: erro_insert.lua:3: bad argument #2 to 'insert' (number expected, got string)
+stack traceback:
+	[C]: in field 'insert'
+	erro_insert.lua:3: in main chunk
+	[C]: in ?
+</pre>
+<p>Este é um clássico. O <code>string.gsub</code> devolve <strong>dois</strong> valores: <code>"bia_lima"</code> e <code>1</code> (uma troca). Como ele é o último argumento, os dois passam, e a chamada vira <code>table.insert(nomes, "bia_lima", 1)</code>. Com três argumentos, o <code>table.insert</code> entende "insira o valor <code>1</code> na <strong>posição</strong> <code>"bia_lima"</code>" (aula <a href="table-insert-remove.html">table.insert e table.remove</a>), e a posição tem de ser um número.</p>
+<dl class="anatomy">
+  <dt>bad argument #2 to 'insert'</dt><dd>"Argumento nº 2 do <code>insert</code> inválido": o problema está no segundo argumento.</dd>
+  <dt>(number expected, got string)</dt><dd>"Esperava um número, veio um texto": no lugar da posição veio <code>"bia_lima"</code>.</dd>
+  <dt>[C]: in field 'insert'</dt><dd>O erro foi detectado dentro do <code>table.insert</code>, que é escrito em C; o nosso código culpado é a linha 3.</dd>
+</dl>
+<p><strong>Como consertar:</strong> parênteses em volta do <code>gsub</code>, para cortar para um valor:</p>
+<pre class="file" data-file="erro_insert_ok.lua">local nomes = {}
+table.insert(nomes, (string.gsub("bia lima", " ", "_")))
+print(nomes[1])
+</pre>
+<pre class="term">$ lua erro_insert_ok.lua
+bia_lima
+</pre>
+<p>Aqui os parênteses extras são exatamente o que se quer.</p>
+</div>
+
+<div class="cenario">
+<strong>Esperar mais valores do que a função devolve</strong>
+<pre class="file" data-file="erro_mais_vars.lua">local function dividir(a, b)
+  return a // b, a % b
+end
+
+local q, r, sobra = dividir(17, 5)
+print("sobraram " .. sobra)
+</pre>
+<pre class="term">$ lua erro_mais_vars.lua
+lua: erro_mais_vars.lua:6: attempt to concatenate a nil value (local 'sobra')
+stack traceback:
+	erro_mais_vars.lua:6: in main chunk
+	[C]: in ?
+</pre>
+<p>A função devolve dois valores; a terceira variável ficou <code>nil</code>, sem aviso. O erro só apareceu quando ela foi usada. <strong>Como consertar:</strong> confira quantos valores a função devolve (olhe o <code>return</code>) e use o mesmo número de variáveis: aqui, o resto já está em <code>r</code>.</p>
+</div>
+
+<hr>
+
+<h2>Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>O que faz</th></tr>
+<tr><td><code>return a, b, c</code></td><td>Devolve três valores, nessa ordem</td></tr>
+<tr><td><code>local x, y = f()</code></td><td>Recebe os dois primeiros valores</td></tr>
+<tr><td><code>local x = f()</code></td><td>Fica com o primeiro; os outros são descartados</td></tr>
+<tr><td><code>local _, y = f()</code></td><td>Ignora o primeiro (o <code>_</code> é um nome comum, usado por costume)</td></tr>
+<tr><td><code>return nil, "mensagem"</code></td><td>O costume para avisar uma falha</td></tr>
+<tr><td><code>g(f())</code>, <code>{f()}</code>, <code>return f()</code></td><td>Última da lista: passam <strong>todos</strong> os valores</td></tr>
+<tr><td><code>g(f(), 1)</code>, <code>{f(), 1}</code></td><td>Não é a última: passa <strong>só o primeiro</strong></td></tr>
+<tr><td><code>(f())</code></td><td>Corta para <strong>um</strong> valor (o primeiro, ou <code>nil</code>)</td></tr>
+<tr><td><code>f() + 1</code>, <code>f() .. "!"</code></td><td>Numa conta ou num <code>..</code>: só o primeiro</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Sintoma</th><th>Causa provável</th></tr>
+<tr><td>A segunda variável ficou <code>nil</code></td><td>Parênteses em volta da chamada, ou a chamada não era a última da lista</td></tr>
+<tr><td>Um argumento "escorregou" para o parâmetro errado</td><td>Uma chamada no meio da lista entregou um valor só</td></tr>
+<tr><td><code>bad argument #2 to 'insert' (number expected, got string)</code> com <code>gsub</code></td><td>O segundo valor do <code>gsub</code> entrou como argumento a mais: use <code>(string.gsub(…))</code></td></tr>
+<tr><td><code>attempt to concatenate a nil value (local '…')</code> numa variável a mais</td><td>A função devolve menos valores do que as variáveis</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. Devolvendo dois valores</h3>
+<p>Complete o que separa os dois valores devolvidos:</p>
+<div class="ex-code">return menor<input data-answer="," aria-label="separador"> maior</div>
+</div>
+
+<div class="exercise">
+<h3>2. Ignorando o primeiro</h3>
+<p>Complete o nome que, por costume, quer dizer "não vou usar":</p>
+<div class="ex-code">local <input data-answer="_" aria-label="nome">, resto = dividir(17, 5)</div>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">3. <code>f</code> devolve <code>1, 2</code>. O que mostra <code>print(f(), 10)</code>?</p>
+<label><input type="radio" name="q3"> <code>1 2 10</code></label>
+<label><input type="radio" name="q3"> <code>1 10</code></label>
+<label><input type="radio" name="q3"> <code>2 10</code></label>
+<label><input type="radio" name="q3"> <code>10</code></label>
+</div>
+
+<div class="mc" data-answer="3">
+<p class="mc-q">4. <code>f</code> devolve <code>1, 2</code>. O que mostra <code>print(10, f())</code>?</p>
+<label><input type="radio" name="q4"> <code>10 1</code></label>
+<label><input type="radio" name="q4"> <code>10</code></label>
+<label><input type="radio" name="q4"> <code>10 1 2</code></label>
+<label><input type="radio" name="q4"> Dá erro</label>
+</div>
+
+<div class="mc" data-answer="1">
+<p class="mc-q">5. <code>f</code> devolve <code>1, 2</code>. Quanto vale <code>b</code> depois de <code>local a, b = (f())</code>?</p>
+<label><input type="radio" name="q5"> <code>nil</code>, porque os parênteses cortaram para um valor</label>
+<label><input type="radio" name="q5"> <code>2</code></label>
+<label><input type="radio" name="q5"> <code>1</code></label>
+<label><input type="radio" name="q5"> Dá erro de sintaxe</label>
+</div>
+
+<div class="mc" data-answer="4">
+<p class="mc-q">6. Uma função pode falhar. Qual é o costume do Lua para avisar a falha a quem chamou?</p>
+<label><input type="radio" name="q6"> Mostrar a mensagem com <code>print</code> e devolver <code>0</code></label>
+<label><input type="radio" name="q6"> Devolver <code>false</code> sempre</label>
+<label><input type="radio" name="q6"> Devolver uma tabela vazia</label>
+<label><input type="radio" name="q6"> Devolver <code>nil</code> e uma mensagem: <code>return nil, "motivo"</code></label>
+</div>
+
+<h3>Missão final: a menor e a maior temperatura</h3>
+
+<div class="trylua" data-goal="out:menor = 3, maior = 9;;semerro">
+<p class="try-task"><strong>Missão:</strong> a função <code>menor_maior</code> deveria devolver a menor e a maior temperatura da semana, mas rode e veja: o programa quebra. Há <strong>dois</strong> problemas, um na função e um na linha que a chama. Conserte os dois para a saída ser <code>menor = 3, maior = 9</code>.</p>
+<pre class="script" data-file="main.lua">local function menor_maior(lista)
+  local menor, maior = lista[1], lista[1]
+  for i = 2, #lista do
+    if lista[i] &lt; menor then menor = lista[i] end
+    if lista[i] &gt; maior then maior = lista[i] end
+  end
+  return menor
+end
+
+local temperaturas = {5, 3, 8, 9, 4, 6, 7}
+local menor, maior = (menor_maior(temperaturas))
+print("menor = " .. menor .. ", maior = " .. maior)
+</pre>
+<pre class="solucao" data-file="main.lua">local function menor_maior(lista)
+  local menor, maior = lista[1], lista[1]
+  for i = 2, #lista do
+    if lista[i] &lt; menor then menor = lista[i] end
+    if lista[i] &gt; maior then maior = lista[i] end
+  end
+  return menor, maior
+end
+
+local temperaturas = {5, 3, 8, 9, 4, 6, 7}
+local menor, maior = menor_maior(temperaturas)
+print("menor = " .. menor .. ", maior = " .. maior)
+</pre>
+</div>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li><code>return a, b</code> devolve vários valores; <code>local x, y = f()</code> os recebe, na ordem.</li>
+  <li>Variáveis a menos: o que sobra é descartado. Variáveis a mais: ficam <code>nil</code>. Para pular um valor, <code>_</code>.</li>
+  <li>Costume para falhas: <code>return nil, "mensagem"</code>; é o que o <code>io.open</code> faz.</li>
+  <li>Só a <strong>última</strong> chamada de uma lista (argumentos, atribuição, tabela, <code>return</code>) entrega todos os valores; as outras entregam o primeiro.</li>
+  <li>Parênteses em volta, <code>(f())</code>, cortam para um valor; numa conta ou num <code>..</code>, também só o primeiro entra.</li>
+  <li>Cuidado com funções prontas de dois valores, como o <code>string.gsub</code>, como último argumento.</li>
+  <li>E se for a função que <strong>recebe</strong> uma quantidade variável de argumentos? Próxima aula: <a href="varargs.html">Funções Variádicas (...)</a>.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
