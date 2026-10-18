@@ -1,0 +1,533 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua Produtor e Consumidor — corrotinas na prática | Guia Lua</title>
+<meta name="description" content="Produtor e consumidor com corrotinas no Lua 5.5, para quem está começando: um produtor que lê pedidos de um arquivo ou do teclado e entrega um por vez com coroutine.yield, um consumidor que pede com coroutine.resume, as funções receber e enviar, um filtro no meio (a linha de montagem), o jeito com função de retorno, e o erro real que vira um laço infinito de cannot resume dead coroutine.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">Produtor e Consumidor</span></h1>
+
+<p class="intro">Muitos programas têm duas partes que trabalham em dupla: uma que <strong>produz</strong> dados (lê um arquivo, recebe o que a pessoa digita, gera números) e outra que <strong>consome</strong> esses dados (mostra na tela, soma, grava). O problema clássico é: quem manda em quem? Na aula anterior, <a href="corrotinas.html">Corrotinas</a>, você aprendeu a pausar e continuar uma função. Nesta aula, você vai usar isso para resolver esse problema de um jeito elegante: o produtor e o consumidor escritos cada um como um laço simples, conversando por <code>yield</code> e <code>resume</code>.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O que é o padrão <strong>produtor/consumidor</strong> e por que ele é difícil de escrever sem corrotinas.</li>
+  <li>Como fazer um produtor que entrega um item por vez com <code>coroutine.yield</code>, e um consumidor que pede com <code>coroutine.resume</code>.</li>
+  <li>As funções de apoio <code>receber</code> e <code>enviar</code>, que deixam o código fácil de ler.</li>
+  <li>Como pôr um <strong>filtro</strong> no meio, montando uma linha de produção.</li>
+  <li>O erro mais traiçoeiro desse padrão, e como evitá-lo.</li>
+</ul>
+</div>
+
+<p>Todos os programas desta aula rodaram no <strong>Lua 5.5</strong> da máquina da Ana (usuária <code>ana</code>, computador <code>notebook</code>), na pasta pessoal dela, com <code>lua arquivo.lua</code>. Leia antes a aula <a href="corrotinas.html">Corrotinas</a>.</p>
+
+<hr>
+
+<h2>A ideia: o padeiro e o balconista</h2>
+<p>Na padaria, o <strong>padeiro</strong> faz pães lá no fundo, e o <strong>balconista</strong> entrega aos clientes. Os dois trabalham num ritmo próprio, e cada um tem a sua rotina, que é um laço:</p>
+<ul>
+  <li>Padeiro: "enquanto houver massa: faço um pão, ponho na janelinha".</li>
+  <li>Balconista: "enquanto houver cliente: pego um pão na janelinha, entrego".</li>
+</ul>
+<p>Num programa comum, uma função tem de chamar a outra, e só uma delas pode ter o laço. Ou o padeiro chama o balconista a cada pão ("toma, entrega este"), ou o balconista chama o padeiro a cada cliente ("me dá um pão"). Quem é chamado perde a sua rotina e vira um pedaço da rotina do outro.</p>
+<p>Com uma corrotina, os dois mantêm o seu laço. O padeiro vira uma corrotina: ele faz um pão e <strong>pausa</strong> (<code>yield</code>), deixando o pão na janelinha. O balconista, quando precisa de um pão, <strong>retoma</strong> o padeiro (<code>resume</code>), que continua de onde estava e faz o próximo.</p>
+
+<hr>
+
+<h2>1. O primeiro produtor: pedidos de um arquivo</h2>
+<p>A Ana tem um arquivo com os pedidos do dia, <code>pedidos.txt</code>:</p>
+
+<pre class="file" data-file="pedidos.txt">3 pães
+1 bolo
+2 cafés
+</pre>
+
+<p>O produtor lê o arquivo e entrega um pedido por vez. O consumidor numera e mostra cada um:</p>
+
+<pre class="file" data-file="pc1.lua">local function produtor()
+  return coroutine.create(function ()
+    for linha in io.lines("pedidos.txt") do
+      coroutine.yield(linha)
+    end
+  end)
+end
+local function receber(prod)
+  local ok, valor = coroutine.resume(prod)
+  return valor
+end
+local function consumidor(prod)
+  local n = 0
+  while true do
+    local pedido = receber(prod)
+    if pedido == nil then break end
+    n = n + 1
+    print("Pedido " .. n .. ": " .. pedido)
+  end
+  print("Total de pedidos: " .. n)
+end
+consumidor(produtor())
+</pre>
+
+<dl class="anatomy">
+  <dt>produtor()</dt><dd>Cria e devolve a corrotina do padeiro. O corpo é um laço comum, <code>for linha in io.lines(…)</code> (aula <a href="io-lines.html">io.lines</a>), com um <code>yield</code> dentro: a cada linha lida, ele entrega a linha e <strong>pausa</strong>.</dd>
+  <dt>receber(prod)</dt><dd>"Me dá o próximo": retoma o produtor e devolve o que ele entregou no <code>yield</code>. Quando o produtor termina o laço e o corpo acaba, o <code>resume</code> devolve só <code>true</code>, sem valor, e <code>receber</code> devolve <code>nil</code>.</dd>
+  <dt>consumidor(prod)</dt><dd>O balconista, também com o seu laço: pede, e se veio <code>nil</code> é porque acabou; senão, numera e mostra.</dd>
+  <dt>consumidor(produtor())</dt><dd>Liga os dois: cria o produtor e o entrega ao consumidor.</dd>
+</dl>
+
+<pre class="term">$ lua pc1.lua
+Pedido 1: 3 pães
+Pedido 2: 1 bolo
+Pedido 3: 2 cafés
+Total de pedidos: 3</pre>
+
+<p>Repare: o produtor <strong>nunca</strong> leu o arquivo inteiro de uma vez. Ele leu a linha 1, pausou; o consumidor mostrou; o produtor leu a linha 2, pausou… Se o arquivo tivesse um milhão de pedidos, só um estaria na memória por vez. E nenhum dos dois sabe como o outro funciona: o consumidor só sabe "pedir o próximo"; o produtor só sabe "entregar o próximo".</p>
+
+<hr>
+
+<h2>2. O produtor pode ler o teclado</h2>
+<p>Trocar de onde vêm os dados é trocar só o produtor. Este lê o que a pessoa digita, até acabar a entrada (<code>io.read()</code> devolve <code>nil</code>; veja <a href="io-read.html">io.read</a>):</p>
+
+<pre class="file" data-file="pc2.lua">local function produtor()
+  return coroutine.create(function ()
+    while true do
+      local linha = io.read()
+      if linha == nil then break end
+      coroutine.yield(linha)
+    end
+  end)
+end
+local function receber(prod)
+  local ok, valor = coroutine.resume(prod)
+  return valor
+end
+local prod = produtor()
+while true do
+  local item = receber(prod)
+  if item == nil then break end
+  print("- " .. string.upper(item))
+end
+</pre>
+
+<pre class="term">$ printf 'leite\nqueijo\nmanteiga\n' | lua pc2.lua
+- LEITE
+- QUEIJO
+- MANTEIGA</pre>
+
+<p>(O <code>printf … |</code> "digita" as três linhas para o programa; veja <a href="io-read.html">io.read</a>. Num terminal, você digitaria e terminaria com <kbd>Ctrl</kbd>+<kbd>D</kbd>.)</p>
+
+<div class="trylua" data-stdin="leite\nqueijo\nmanteiga" data-goal="out:3. manteiga;;src:coroutine\.resume">
+<p class="try-task"><strong>Missão:</strong> a caixa já vai "digitar" <code>leite</code>, <code>queijo</code> e <code>manteiga</code>. Mude <strong>só o consumidor</strong> (o laço de baixo) para ele numerar os itens: <code>1. leite</code>, <code>2. queijo</code>, <code>3. manteiga</code>. O produtor não precisa saber de nada disso.</p>
+<pre class="script" data-file="main.lua">local function produtor()
+  return coroutine.create(function ()
+    while true do
+      local linha = io.read()
+      if linha == nil then break end
+      coroutine.yield(linha)
+    end
+  end)
+end
+local function receber(prod)
+  local ok, valor = coroutine.resume(prod)
+  return valor
+end
+local prod = produtor()
+while true do
+  local item = receber(prod)
+  if item == nil then break end
+  print("- " .. string.upper(item))
+end
+</pre>
+<pre class="solucao" data-file="main.lua">local function produtor()
+  return coroutine.create(function ()
+    while true do
+      local linha = io.read()
+      if linha == nil then break end
+      coroutine.yield(linha)
+    end
+  end)
+end
+local function receber(prod)
+  local ok, valor = coroutine.resume(prod)
+  return valor
+end
+local prod = produtor()
+local n = 0
+while true do
+  local item = receber(prod)
+  if item == nil then break end
+  n = n + 1
+  print(n .. ". " .. item)
+end
+</pre>
+</div>
+
+<hr>
+
+<h2>3. A linha de montagem: um filtro no meio</h2>
+<p>Agora o mais bonito: um <strong>filtro</strong> é, ao mesmo tempo, consumidor (do produtor) e produtor (para o consumidor). Ele recebe de um lado, decide, e envia para o outro. É uma esteira de fábrica: o padeiro põe os pães, o fiscal tira os que não servem, o balconista entrega os que sobraram.</p>
+
+<pre class="file" data-file="pc3.lua">local function receber(prod)
+  local ok, valor = coroutine.resume(prod)
+  return valor
+end
+local function enviar(valor)
+  coroutine.yield(valor)
+end
+local function produtor(lista)
+  return coroutine.create(function ()
+    for _, item in ipairs(lista) do
+      enviar(item)
+    end
+  end)
+end
+local function filtro(prod, minimo)
+  return coroutine.create(function ()
+    while true do
+      local p = receber(prod)
+      if p == nil then break end
+      if p.preco &gt;= minimo then
+        enviar(p.nome .. " (R$ " .. p.preco .. ")")
+      end
+    end
+  end)
+end
+local function consumidor(prod)
+  while true do
+    local texto = receber(prod)
+    if texto == nil then break end
+    print(texto)
+  end
+end
+local vendas = {
+  { nome = "pão", preco = 1 },
+  { nome = "bolo", preco = 25 },
+  { nome = "café", preco = 6 },
+  { nome = "torta", preco = 40 },
+}
+consumidor(filtro(produtor(vendas), 10))
+</pre>
+
+<pre class="term">$ lua pc3.lua
+bolo (R$ 25)
+torta (R$ 40)</pre>
+
+<dl class="anatomy">
+  <dt>enviar(valor)</dt><dd>Só um nome mais claro para <code>coroutine.yield(valor)</code>: "ponha na esteira". Junto com <code>receber</code>, deixa o código parecido com a frase em português.</dd>
+  <dt>filtro(prod, minimo)</dt><dd>Uma corrotina que <strong>recebe</strong> do produtor e <strong>envia</strong> só as vendas de <code>minimo</code> reais ou mais, já transformadas em texto.</dd>
+  <dt>consumidor(filtro(produtor(vendas), 10))</dt><dd>Lê de dentro para fora: o produtor alimenta o filtro, que alimenta o consumidor. É o consumidor que puxa tudo: cada <code>receber</code> dele retoma o filtro, que retoma o produtor quantas vezes precisar até achar uma venda que passe.</dd>
+</dl>
+
+<p>Para pôr mais uma etapa (por exemplo, numerar as linhas), basta escrever outra corrotina no mesmo formato e encaixá-la: <code>consumidor(numerar(filtro(produtor(vendas), 10)))</code>. Nenhuma das outras partes muda.</p>
+
+<hr>
+
+<h2>4. Ao contrário: o produtor manda</h2>
+<p>Nos exemplos acima, quem manda é o <strong>consumidor</strong>: ele pede, e o produtor entrega. Dá para inverter: o consumidor vira a corrotina, e o produtor o retoma a cada item, mandando o item no <code>resume</code>:</p>
+
+<pre class="file" data-file="pc7.lua">local function consumidor()
+  return coroutine.create(function (primeiro)
+    local item = primeiro
+    while item do
+      print("embalando " .. item)
+      item = coroutine.yield()
+    end
+    print("caixa fechada")
+  end)
+end
+local function produtor(cons)
+  for _, pao in ipairs({ "francês", "doce", "de queijo" }) do
+    coroutine.resume(cons, pao)
+  end
+  coroutine.resume(cons, nil)
+end
+produtor(consumidor())
+</pre>
+
+<pre class="term">$ lua pc7.lua
+embalando francês
+embalando doce
+embalando de queijo
+caixa fechada</pre>
+
+<p>O primeiro <code>resume</code> entrega <code>"francês"</code> como parâmetro do corpo (<code>primeiro</code>); os seguintes entregam o pão como resultado do <code>yield</code> (veja a seção 2 da aula <a href="corrotinas.html">Corrotinas</a>). O <code>resume(cons, nil)</code> do fim avisa "acabou", e o consumidor fecha a caixa. As duas direções funcionam; a mais comum é a da seção 1, em que o consumidor puxa.</p>
+
+<hr>
+
+<h2 id="formas">Formas diferentes de fazer a mesma coisa</h2>
+<p>O mesmo programa da seção 1 sem corrotina nenhuma: o produtor recebe uma <strong>função</strong> e a chama para cada pedido (uma "função de retorno", em inglês <em>callback</em>):</p>
+
+<pre class="file" data-file="pc8.lua">local function produtor(entregar)
+  for linha in io.lines("pedidos.txt") do
+    entregar(linha)
+  end
+end
+local n = 0
+produtor(function (pedido)
+  n = n + 1
+  print("Pedido " .. n .. ": " .. pedido)
+end)
+print("Total de pedidos: " .. n)
+</pre>
+
+<pre class="term">$ lua pc8.lua
+Pedido 1: 3 pães
+Pedido 2: 1 bolo
+Pedido 3: 2 cafés
+Total de pedidos: 3</pre>
+
+<p>Mais curto, e funciona. Mas aqui quem manda é o produtor: o consumidor perdeu o seu laço e virou um pedaço de código chamado de fora. Se o consumidor precisasse de <strong>dois</strong> produtores ao mesmo tempo (juntar os pedidos de duas lojas, um de cada vez), ou parar no meio e voltar depois, ficaria difícil. Com corrotinas, cada um continua com o seu laço.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Situação</th><th>Qual usar</th></tr>
+<tr><td>Um produtor simples, e o consumidor só precisa "fazer algo com cada item"</td><td>Função de retorno (callback)</td></tr>
+<tr><td>O consumidor tem a sua própria lógica de laço (pedir quando quiser, parar no meio, misturar fontes)</td><td>Produtor como corrotina, consumidor puxando com <code>receber</code></td></tr>
+<tr><td>Várias etapas em sequência (ler, filtrar, transformar, mostrar)</td><td>Uma corrotina por etapa, encaixadas como esteira</td></tr>
+<tr><td>Escrever o produtor com menos código</td><td><code>coroutine.wrap</code> (próxima aula: <a href="corrotinas-wrap.html">coroutine.wrap e Geradores</a>)</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+
+<div class="cenario">
+<strong>O produtor deu erro, e o erro virou "pedido"</strong>
+<p>Este é o erro mais traiçoeiro do padrão. O <code>receber</code> da seção 1 ignora o primeiro valor do <code>resume</code> (o <code>ok</code>). Veja o que acontece se o produtor tiver um defeito no segundo pedido:</p>
+<pre class="file" data-file="pc4.lua">local function produtor()
+  return coroutine.create(function ()
+    coroutine.yield("3 pães")
+    local x = nil
+    coroutine.yield(x.nome)
+    coroutine.yield("2 cafés")
+  end)
+end
+local function receber(prod)
+  local ok, valor = coroutine.resume(prod)
+  return valor
+end
+local prod = produtor()
+while true do
+  local pedido = receber(prod)
+  if pedido == nil then break end
+  print("Pedido: " .. pedido)
+end
+print("acabaram os pedidos?")
+</pre>
+<pre class="term">$ lua pc4.lua | head -4
+Pedido: 3 pães
+Pedido: pc4.lua:5: attempt to index a nil value (local 'x')
+Pedido: cannot resume dead coroutine
+Pedido: cannot resume dead coroutine</pre>
+<p>O programa <strong>não para nunca</strong> (o <code>| head -4</code> mostrou só as 4 primeiras linhas e encerrou; sem ele, só <kbd>Ctrl</kbd>+<kbd>C</kbd>). O que aconteceu:</p>
+<ol class="passo">
+  <li>O produtor deu erro na linha 5 e morreu. O <code>resume</code> devolveu <code>false</code> e a mensagem de erro.</li>
+  <li>O <code>receber</code> jogou fora o <code>false</code> e devolveu a mensagem, como se fosse um pedido.</li>
+  <li>Daí em diante, cada <code>resume</code> devolve <code>false</code> e <code>"cannot resume dead coroutine"</code>, que também não é <code>nil</code>. O laço nunca acaba.</li>
+</ol>
+<p><strong>Como consertar:</strong> o <code>receber</code> precisa olhar o <code>ok</code> e transformar a falha num erro de verdade:</p>
+<pre class="file" data-file="pc5.lua">local function receber(prod)
+  local ok, valor = coroutine.resume(prod)
+  if not ok then error("o produtor falhou: " .. valor, 2) end
+  return valor
+end
+</pre>
+<pre class="term">$ lua pc5.lua
+Pedido: 3 pães
+lua: pc5.lua:16: o produtor falhou: pc5.lua:5: attempt to index a nil value (local 'x')
+stack traceback:
+	[C]: in global 'error'
+	pc5.lua:11: in local 'receber'
+	pc5.lua:16: in main chunk
+	[C]: in ?</pre>
+<p>Agora o programa para, e a mensagem conta tudo: o erro apareceu na linha 16 (onde o laço chamou <code>receber</code>; é o <code>2</code> do <code>error</code>, veja <a href="error.html">error</a>), e a causa foi a linha 5 do produtor. (O <code>pc5.lua</code> é o <code>pc4.lua</code> com este <code>receber</code> no lugar do antigo e sem o último <code>print</code>.)</p>
+</div>
+
+<div class="cenario">
+<strong>O consumidor não parou no fim</strong>
+<pre class="file" data-file="pc6.lua">local prod = coroutine.create(function ()
+  coroutine.yield("3 pães")
+end)
+for i = 1, 4 do
+  print(coroutine.resume(prod))
+end
+</pre>
+<pre class="term">$ lua pc6.lua
+true	3 pães
+true
+false	cannot resume dead coroutine
+false	cannot resume dead coroutine</pre>
+<p>O produtor tinha <strong>um</strong> pedido. A 2ª chamada não trouxe pedido (<code>true</code> e nada: o corpo chegou ao fim), e a partir da 3ª ele já estava morto. Um consumidor que pede um número fixo de vezes, sem olhar se veio <code>nil</code>, recebe lixo. <strong>Como consertar:</strong> pare o laço no primeiro <code>nil</code>, como em todos os consumidores desta aula.</p>
+</div>
+
+<div class="cenario">
+<strong>Mandou um <code>nil</code> no meio dos dados</strong>
+<p>O <code>nil</code> é o sinal de "acabou". Se o produtor tiver um item que é <code>nil</code> de verdade (um campo vazio, uma conta que deu <code>nil</code>), o consumidor vai achar que a produção acabou ali e parar antes da hora, <strong>sem erro nenhum</strong>. Se os dados podem ter buracos, envie outra coisa no lugar (<code>false</code>, <code>""</code>, uma tabela) ou use <code>coroutine.status(prod) == "dead"</code> para saber o fim.</p>
+</div>
+
+<hr>
+
+<h2>Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Peça</th><th>Como se escreve</th></tr>
+<tr><td>Produtor</td><td><code>coroutine.create(function () … coroutine.yield(item) … end)</code></td></tr>
+<tr><td>Receber o próximo</td><td><code>local ok, v = coroutine.resume(prod)</code>, conferindo o <code>ok</code></td></tr>
+<tr><td>Enviar o próximo</td><td><code>coroutine.yield(v)</code></td></tr>
+<tr><td>Fim da produção</td><td>O corpo do produtor termina; o <code>receber</code> devolve <code>nil</code></td></tr>
+<tr><td>Filtro</td><td>Uma corrotina que faz <code>receber</code> de um lado e <code>enviar</code> do outro</td></tr>
+<tr><td>Encaixar as etapas</td><td><code>consumidor(filtro(produtor(dados)))</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. Complete o produtor</h3>
+<div class="ex-code">local prod = coroutine.create(function ()<br>&nbsp;&nbsp;for _, pao in ipairs({ "francês", "doce" }) do<br>&nbsp;&nbsp;&nbsp;&nbsp;coroutine.<input data-answer="yield" aria-label="função">(pao)<br>&nbsp;&nbsp;end<br>end)</div>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">2. No padrão da seção 1, quem chama <code>coroutine.resume</code>?</p>
+<label><input type="radio" name="q2"> O produtor</label>
+<label><input type="radio" name="q2"> O consumidor (pela função <code>receber</code>)</label>
+<label><input type="radio" name="q2"> Ninguém: o Lua chama sozinho</label>
+<label><input type="radio" name="q2"> O <code>io.lines</code></label>
+</div>
+
+<div class="mc" data-answer="3">
+<p class="mc-q">3. Um filtro, no meio da esteira, é…</p>
+<label><input type="radio" name="q3"> só um produtor</label>
+<label><input type="radio" name="q3"> só um consumidor</label>
+<label><input type="radio" name="q3"> consumidor de um lado e produtor do outro</label>
+<label><input type="radio" name="q3"> uma tabela com os itens filtrados</label>
+</div>
+
+<div class="mc" data-answer="1">
+<p class="mc-q">4. Por que o <code>receber</code> deve olhar o primeiro valor do <code>resume</code>?</p>
+<label><input type="radio" name="q4"> Porque, se o produtor der erro, a mensagem de erro chega no lugar do item</label>
+<label><input type="radio" name="q4"> Porque senão o produtor não começa</label>
+<label><input type="radio" name="q4"> Porque o primeiro valor é o item</label>
+<label><input type="radio" name="q4"> Não precisa olhar</label>
+</div>
+
+<h3>Missão final: o fiscal da esteira</h3>
+
+<div class="trylua" data-goal="outre:^bolo \(R\$ 25\)\ntorta \(R\$ 40\)\n;;semerro">
+<p class="try-task"><strong>Missão:</strong> o <code>filtro</code> está deixando passar tudo, até o pão de R$ 1. Faça ele <strong>enviar só</strong> as vendas com <code>preco</code> maior ou igual ao <code>minimo</code>. Devem sair só <code>bolo (R$ 25)</code> e <code>torta (R$ 40)</code>.</p>
+<pre class="script" data-file="main.lua">local function receber(prod)
+  local ok, valor = coroutine.resume(prod)
+  if not ok then error(valor, 2) end
+  return valor
+end
+local function enviar(valor)
+  coroutine.yield(valor)
+end
+local function produtor(lista)
+  return coroutine.create(function ()
+    for _, item in ipairs(lista) do
+      enviar(item)
+    end
+  end)
+end
+local function filtro(prod, minimo)
+  return coroutine.create(function ()
+    while true do
+      local p = receber(prod)
+      if p == nil then break end
+      enviar(p.nome .. " (R$ " .. p.preco .. ")")
+    end
+  end)
+end
+local function consumidor(prod)
+  while true do
+    local texto = receber(prod)
+    if texto == nil then break end
+    print(texto)
+  end
+end
+local vendas = {
+  { nome = "pão", preco = 1 },
+  { nome = "bolo", preco = 25 },
+  { nome = "café", preco = 6 },
+  { nome = "torta", preco = 40 },
+}
+consumidor(filtro(produtor(vendas), 10))
+</pre>
+<pre class="solucao" data-file="main.lua">local function receber(prod)
+  local ok, valor = coroutine.resume(prod)
+  if not ok then error(valor, 2) end
+  return valor
+end
+local function enviar(valor)
+  coroutine.yield(valor)
+end
+local function produtor(lista)
+  return coroutine.create(function ()
+    for _, item in ipairs(lista) do
+      enviar(item)
+    end
+  end)
+end
+local function filtro(prod, minimo)
+  return coroutine.create(function ()
+    while true do
+      local p = receber(prod)
+      if p == nil then break end
+      if p.preco &gt;= minimo then
+        enviar(p.nome .. " (R$ " .. p.preco .. ")")
+      end
+    end
+  end)
+end
+local function consumidor(prod)
+  while true do
+    local texto = receber(prod)
+    if texto == nil then break end
+    print(texto)
+  end
+end
+local vendas = {
+  { nome = "pão", preco = 1 },
+  { nome = "bolo", preco = 25 },
+  { nome = "café", preco = 6 },
+  { nome = "torta", preco = 40 },
+}
+consumidor(filtro(produtor(vendas), 10))
+</pre>
+</div>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li>No padrão <strong>produtor/consumidor</strong>, uma parte gera dados e a outra os usa. Com corrotinas, as duas ficam escritas como laços simples.</li>
+  <li>O produtor é uma corrotina que entrega cada item com <code>coroutine.yield</code>; o consumidor pede o próximo com <code>coroutine.resume</code> (dentro de um <code>receber</code>).</li>
+  <li>Quando o corpo do produtor termina, o <code>receber</code> devolve <code>nil</code>: é o sinal de fim.</li>
+  <li>Um filtro recebe de um lado e envia do outro; as etapas se encaixam: <code>consumidor(filtro(produtor(dados)))</code>.</li>
+  <li>Sempre confira o <code>ok</code> do <code>resume</code>: sem isso, um erro no produtor vira um "item" e o consumidor entra num laço infinito de <code>cannot resume dead coroutine</code>.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
