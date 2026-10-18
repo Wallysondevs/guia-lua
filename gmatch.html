@@ -1,0 +1,537 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua string.gmatch — percorrendo todos os achados | Guia Lua</title>
+<meta name="description" content="string.gmatch do Lua para quem nunca programou: o laço for … in que passa por cada palavra, número ou item de uma lista separada por vírgulas, capturas chave=valor, contar e somar, guardar numa tabela, campos vazios, o início opcional, por que o ^ não funciona, e os erros reais do Lua 5.5.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">gmatch</span></h1>
+
+<p class="intro">O <a href="string-find.html">match</a> devolve o <strong>primeiro</strong> pedaço que combina com o padrão. Mas e quando você quer <strong>todos</strong>? Todas as palavras de uma frase, todos os preços de um cupom, todos os itens de uma lista de compras separada por vírgulas. Para isso existe o <code>string.gmatch</code> (<em>global match</em>, "combinar em tudo"): ele entrega os achados <strong>um de cada vez</strong>, e um laço <code>for</code> passa por cada um deles.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>Como escrever o laço <code>for palavra in texto:gmatch(padrão) do … end</code>, peça por peça.</li>
+  <li>Como separar uma lista do tipo <code>"pão, leite, café"</code>.</li>
+  <li>Como usar capturas para pegar pares como <code>nome=Ana</code>.</li>
+  <li>Como contar, somar e guardar os achados numa tabela.</li>
+  <li>O que fazer com campos vazios (<code>"pão;;café"</code>) e com a posição de cada achado.</li>
+  <li>O terceiro argumento (onde começar) e por que o <code>^</code> não funciona no <code>gmatch</code>.</li>
+  <li>O que o <code>gmatch</code> devolve de verdade: um <strong>iterador</strong>.</li>
+  <li>Os erros reais: o <code>do</code> esquecido, o <code>find</code> no lugar do <code>gmatch</code>, o padrão malformado.</li>
+</ul>
+</div>
+
+<p>Todos os programas desta aula rodaram no <strong>Lua 5.5</strong> da máquina da Ana (usuária <code>ana</code>, computador <code>notebook</code>), salvos na pasta pessoal dela e executados com <code>lua arquivo.lua</code>. Você pode rodar cada um no editor do guia. Os padrões (<code>%a+</code>, <code>[^,]+</code>, capturas) estão explicados em <a href="padroes.html">Padrões</a>.</p>
+
+<hr>
+
+<h2>A ideia: a esteira do caixa</h2>
+<p>No caixa do supermercado, a cliente põe as compras na esteira e a esteira vai entregando <strong>um produto de cada vez</strong> para a moça do caixa. Ela pega o produto, passa no leitor, põe na sacola, e pega o próximo. Quando a esteira fica vazia, acabou.</p>
+<p>O <code>gmatch</code> é a esteira: ele vai entregando um achado de cada vez. O laço <code>for</code> é a moça do caixa: para cada achado, ele faz o que você mandar (mostrar, somar, guardar). E quando não há mais nada que combine com o padrão, o laço termina sozinho.</p>
+
+<hr>
+
+<h2>1. O primeiro laço: cada palavra de uma frase</h2>
+
+<pre class="file" data-file="palavras.lua">local frase = "a padaria abre cedo"
+for palavra in frase:gmatch("%a+") do
+  print(palavra)
+end
+print("fim")
+</pre>
+
+<pre class="term">$ lua palavras.lua
+a
+padaria
+abre
+cedo
+fim</pre>
+
+<p>Este é o seu primeiro laço <code>for … in</code> (os laços têm aulas próprias a partir de <a href="while.html">while</a> e <a href="for-numerico.html">for Numérico</a>; aqui você só precisa desta forma). Peça por peça:</p>
+
+<dl class="anatomy">
+  <dt>for</dt><dd>"Para": começa um laço, um pedaço de código que se repete.</dd>
+  <dt>palavra</dt><dd>Uma variável nova, criada pelo laço. A cada volta ela recebe <strong>o próximo achado</strong>: na 1ª volta, <code>"a"</code>; na 2ª, <code>"padaria"</code>; e assim por diante. Ela só existe dentro do laço (é local a ele).</dd>
+  <dt>in</dt><dd>"Em": "para cada palavra <strong>em</strong>…".</dd>
+  <dt>frase:gmatch("%a+")</dt><dd>A esteira: o mesmo que <code>string.gmatch(frase, "%a+")</code>. O padrão <code>%a+</code> é "uma ou mais letras".</dd>
+  <dt>do … end</dt><dd>"Faça" … "fim": o que fica entre os dois roda <strong>uma vez para cada achado</strong>. Os 2 espaços de recuo no <code>print(palavra)</code> não são obrigatórios, mas mostram a quem lê o que está dentro do laço.</dd>
+  <dt>print("fim")</dt><dd>Depois do <code>end</code>, fora do laço: roda uma vez só, quando os achados acabam.</dd>
+</dl>
+
+<p>Repare que o <code>%a+</code> não pegou os espaços: o laço deu 4 voltas, uma por palavra. Se o padrão não achar nada, o laço dá <strong>zero</strong> voltas e o programa segue para depois do <code>end</code>, sem erro.</p>
+
+<hr>
+
+<h2>2. Separar uma lista por vírgulas</h2>
+<p>A lista de compras da Ana chegou num texto só. O padrão <code>[^,]+</code> quer dizer "um ou mais caracteres que <strong>não</strong> são vírgula": cada pedaço entre vírgulas.</p>
+
+<pre class="file" data-file="lista.lua">local compras = "pão, leite, café, ovos"
+for item in compras:gmatch("[^,]+") do
+  print("[" .. item .. "]")
+end
+</pre>
+
+<pre class="term">$ lua lista.lua
+[pão]
+[ leite]
+[ café]
+[ ovos]</pre>
+
+<p>Os colchetes mostram um detalhe: depois de cada vírgula vem um espaço, e o espaço não é vírgula, então ele entrou no item. Para deixá-lo de fora, ponha <code>%s*</code> ("espaços, se houver") <strong>fora</strong> de uma captura:</p>
+
+<pre class="file" data-file="lista2.lua">local compras = "pão, leite, pão de queijo, ovos"
+for item in compras:gmatch("%s*([^,]+)") do
+  print("[" .. item .. "]")
+end
+</pre>
+
+<pre class="term">$ lua lista2.lua
+[pão]
+[leite]
+[pão de queijo]
+[ovos]</pre>
+
+<p>Com uma captura no padrão, o <code>gmatch</code> entrega só o que está entre parênteses. E o espaço <strong>dentro</strong> de "pão de queijo" continuou, porque o <code>[^,]+</code> aceita espaços; só os do começo de cada item ficaram com o <code>%s*</code>.</p>
+
+<div class="trylua" data-goal="out:4 notas;;out:Soma: 31.5;;src:gmatch">
+<p class="try-task"><strong>Missão:</strong> a professora digitou as notas num texto só. O programa conta e soma as notas, mas está errado: diz <code>5 notas</code>, porque o <code>%d+</code> partiu o <code>8.5</code> em dois. Troque o padrão por um que aceite algarismos <strong>e o ponto</strong> (um conjunto: <code>"[%d%.]+"</code>) para mostrar <code>4 notas</code> e <code>Soma: 31.5</code>.</p>
+<pre class="script" data-file="main.lua">local notas = "Notas: 7, 8.5, 10, 6"
+local quantas = 0
+local soma = 0
+for nota in notas:gmatch("%d+") do
+  quantas = quantas + 1
+  soma = soma + tonumber(nota)
+end
+print(quantas .. " notas")
+print("Soma: " .. soma)
+</pre>
+<pre class="solucao" data-file="main.lua">local notas = "Notas: 7, 8.5, 10, 6"
+local quantas = 0
+local soma = 0
+for nota in notas:gmatch("[%d%.]+") do
+  quantas = quantas + 1
+  soma = soma + tonumber(nota)
+end
+print(quantas .. " notas")
+print("Soma: " .. soma)
+</pre>
+</div>
+
+<p>O <code>quantas = quantas + 1</code> e o <code>soma = soma + …</code> são o jeito de <strong>acumular</strong> dentro de um laço: as variáveis são criadas com 0 <strong>antes</strong> do laço, e cada volta soma um pouco. O <code>tonumber</code> é necessário porque o <code>gmatch</code> sempre entrega texto (veja <a href="conversao.html">Conversão</a>).</p>
+
+<hr>
+
+<h2>3. Duas capturas, duas variáveis: pares <code>chave=valor</code></h2>
+<p>Com duas capturas no padrão, cada volta entrega <strong>dois</strong> valores, e o <code>for</code> pode ter duas variáveis:</p>
+
+<pre class="file" data-file="pares.lua">local ficha = "nome=Ana, idade=32, cidade=Recife"
+for chave, valor in ficha:gmatch("(%w+)=(%w+)") do
+  print(chave, valor)
+end
+</pre>
+
+<pre class="term">$ lua pares.lua
+nome	Ana
+idade	32
+cidade	Recife</pre>
+
+<p>Na 1ª volta, <code>chave</code> é <code>"nome"</code> e <code>valor</code> é <code>"Ana"</code>; na 2ª, <code>"idade"</code> e <code>"32"</code>. Esse é o formato de muitos arquivos de configuração. Para guardar os pares numa tabela (<code>dados[chave] = valor</code>), veja <a href="dicionarios.html">Tabelas como Dicionários</a>.</p>
+
+<hr>
+
+<h2>4. Contar, somar e guardar</h2>
+
+<pre class="file" data-file="juntar.lua">local cont = 0
+for _ in ("banana"):gmatch("a") do
+  cont = cont + 1
+end
+print("letras a:", cont)
+
+local total = 0
+for preco in ("pão 8, leite 6, café 20"):gmatch("%d+") do
+  total = total + tonumber(preco)
+end
+print("total:", total)
+
+local lista = {}
+for item in ("pão;leite;café"):gmatch("[^;]+") do
+  lista[#lista + 1] = item
+end
+print(#lista, lista[1], lista[3])
+</pre>
+
+<pre class="term">$ lua juntar.lua
+letras a:	3
+total:	34
+3	pão	café</pre>
+
+<dl class="anatomy">
+  <dt>for _ in …</dt><dd>Quando você não vai usar o achado, só contar as voltas, o costume é chamar a variável de <code>_</code> (sublinhado): "este valor não importa".</dd>
+  <dt>total = total + tonumber(preco)</dt><dd>Cada preço achado (texto) vira número e entra na soma: 8 + 6 + 20 = 34.</dd>
+  <dt>lista[#lista + 1] = item</dt><dd>Põe o item na próxima posição livre da tabela <code>lista</code> (veja <a href="listas.html">Tabelas como Listas</a>). Depois do laço, a tabela tem os 3 itens, e você pode usá-los quando quiser.</dd>
+</dl>
+
+<hr>
+
+<h2>5. Campos vazios e posições</h2>
+<p>Num arquivo do tipo "planilha" (CSV), um campo pode estar vazio: <code>"pão;leite;;café"</code> tem 4 campos, e o 3º está em branco. O <code>+</code> ("um ou mais") pula os vazios; o <code>*</code> ("zero ou mais") os mantém:</p>
+
+<pre class="file" data-file="vazios.lua">local linha = "pão;leite;;café"
+for campo in linha:gmatch("[^;]+") do io.write("&lt;", campo, "&gt;") end
+print()
+for campo in linha:gmatch("([^;]*)") do io.write("&lt;", campo, "&gt;") end
+print()
+</pre>
+
+<pre class="term">$ lua vazios.lua
+&lt;pão&gt;&lt;leite&gt;&lt;café&gt;
+&lt;pão&gt;&lt;leite&gt;&lt;&gt;&lt;café&gt;</pre>
+
+<p>O <code>io.write</code> escreve sem pular linha (veja <a href="io-write.html">io.write()</a>), e o <code>print()</code> vazio no fim pula a linha. Com <code>[^;]+</code>, o campo vazio sumiu, e o <code>café</code> pareceria ser o 3º campo. Com <code>([^;]*)</code>, ele aparece como <code>&lt;&gt;</code>: é o que você quer quando a <strong>posição</strong> do campo importa (3ª coluna = telefone, por exemplo).</p>
+
+<h3>Onde estava cada achado</h3>
+<p>A captura de posição <code>()</code> (veja <a href="padroes.html">Padrões</a>) também funciona no <code>gmatch</code>:</p>
+
+<pre class="file" data-file="posicoes.lua">for pos, nome in ("ana e bia"):gmatch("()(%a+)") do
+  print(pos, nome)
+end
+</pre>
+
+<pre class="term">$ lua posicoes.lua
+1	ana
+5	e
+7	bia</pre>
+
+<hr>
+
+<h2>6. Começar de outra posição, e o <code>^</code> que não funciona</h2>
+<p>Como no <code>find</code>, um terceiro argumento diz de onde começar <span class="versao">5.4+</span>:</p>
+
+<pre class="file" data-file="inicio.lua">for w in ("um dois tres"):gmatch("%a+", 4) do
+  print(w)
+end
+for w in ("um dois tres"):gmatch("^%a+") do
+  print("com ^:", w)
+end
+print("fim")
+</pre>
+
+<pre class="term">$ lua inicio.lua
+dois
+tres
+fim</pre>
+
+<p>A partir da posição 4 (o <code>d</code> de "dois"), o "um" ficou de fora. E o segundo laço não deu <strong>nenhuma</strong> volta: no <code>gmatch</code>, o <code>^</code> no começo do padrão <strong>não</strong> é âncora (o manual do Lua explica: uma âncora impediria a repetição), e o padrão não achou nada. Para pegar só o começo do texto, use <code>match("^%a+")</code>.</p>
+
+<div class="note">
+<strong>Em outras versões</strong>
+<p>O terceiro argumento do <code>gmatch</code> existe a partir do Lua 5.4. No Lua 5.1 (e no LuaJIT, usado pelo Neovim e pelo LÖVE), ele é <strong>ignorado</strong> sem aviso: no lab, <code>lua5.1 -e 'for w in ("um dois"):gmatch("%a+", 4) do print(w) end'</code> mostrou <code>um</code> e <code>dois</code>. Veja <a href="versoes.html">As Diferenças entre Versões</a>.</p>
+</div>
+
+<hr>
+
+<h2>7. Por dentro: o <code>gmatch</code> devolve uma função</h2>
+<p>O <code>gmatch</code> não devolve os achados de uma vez: ele devolve uma <strong>função</strong> que, cada vez que é chamada, entrega o próximo. Esse tipo de função se chama <strong>iterador</strong> ("o que repete"), e é exatamente o que o <code>for … in</code> espera. Dá para chamá-lo na mão:</p>
+
+<pre class="file" data-file="iterador.lua">local proxima = ("a b c"):gmatch("%a")
+print(type(proxima))
+print(proxima())
+print(proxima())
+print(proxima())
+print(proxima())
+print(proxima() == nil)
+</pre>
+
+<pre class="term">$ lua iterador.lua
+function
+a
+b
+c
+
+true</pre>
+
+<p>Quando os achados acabam, ele não devolve <strong>nada</strong>: o quarto <code>print</code> mostrou uma linha vazia. E "nada", quando se precisa de um valor, vale <code>nil</code> (a última linha confirma: <code>true</code>). É esse <code>nil</code> que avisa o <code>for</code> que é hora de parar. Você vai construir os seus próprios iteradores na aula <a href="iteradores.html">Iteradores Próprios</a>.</p>
+
+<hr>
+
+<h2>8. Acentos: a palavra partida</h2>
+
+<pre class="file" data-file="acento.lua">for palavra in ("Ana gosta de pão"):gmatch("%a+") do
+  io.write(palavra, "|")
+end
+print()
+for palavra in ("Ana gosta de pão"):gmatch("[%a\128-\255]+") do
+  io.write(palavra, "|")
+end
+print()
+</pre>
+
+<pre class="term">$ lua acento.lua
+Ana|gosta|de|p|o|
+Ana|gosta|de|pão|</pre>
+
+<p>O <code>%a</code> só conhece as letras sem acento, e partiu "pão" em <code>p</code> e <code>o</code>. Com o conjunto <code>[%a\128-\255]</code> ("letra ou byte de letra acentuada", explicado em <a href="padroes.html">Padrões</a>, seção 11), a palavra fica inteira. Outra saída, quando as palavras estão separadas por espaço, é <code>"%S+"</code>: "tudo que não é espaço" (mas aí a pontuação vem grudada: <code>"pão!"</code>).</p>
+
+<hr>
+
+<h2 id="formas">Formas diferentes de fazer a mesma coisa</h2>
+<p>Contar quantas vezes um número aparece numa frase, de três jeitos:</p>
+
+<pre class="file" data-file="contar.lua">local s = "mesa 1, mesa 22, mesa 5"
+-- 1. gmatch e um contador
+local n = 0
+for _ in s:gmatch("%d+") do n = n + 1 end
+print(n)
+-- 2. gsub, usando só o número de trocas
+local _, m = s:gsub("%d+", "%0")
+print(m)
+-- 3. find num laço, começando depois do achado anterior
+local k, pos = 0, 1
+while true do
+  local i, j = s:find("%d+", pos)
+  if not i then break end
+  k = k + 1
+  pos = j + 1
+end
+print(k)
+</pre>
+
+<pre class="term">$ lua contar.lua
+3
+3
+3</pre>
+
+<p>O terceiro jeito usa o <code>while</code>, o <code>if</code> e o <code>break</code>, que você vai ver nas próximas aulas: é o que o <code>gmatch</code> faz por você, por dentro.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Você quer…</th><th>Use</th></tr>
+<tr><td>Fazer algo com <strong>cada</strong> achado (mostrar, somar, guardar)</td><td><code>for x in s:gmatch(p) do … end</code></td></tr>
+<tr><td>Só o primeiro achado</td><td><code>s:match(p)</code></td></tr>
+<tr><td>Só a <strong>quantidade</strong> de achados</td><td>o segundo valor de <code>s:gsub(p, "%0")</code>, ou um contador com <code>gmatch</code></td></tr>
+<tr><td>Trocar cada achado</td><td><code>s:gsub(p, troca)</code> (aula <a href="gsub.html">gsub</a>)</td></tr>
+<tr><td>Achados <strong>e</strong> as posições</td><td><code>gmatch("()(…)")</code>, ou <code>find</code> num laço</td></tr>
+<tr><td>Separar campos mantendo os vazios</td><td><code>gmatch("([^;]*)")</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+
+<div class="cenario">
+<strong>Esqueceu o <code>do</code></strong>
+<pre class="file" data-file="sem-do.lua">for palavra in ("a b"):gmatch("%a+")
+  print(palavra)
+end
+</pre>
+<pre class="term">$ lua sem-do.lua
+lua: sem-do.lua:2: 'do' expected near 'print'</pre>
+<p>"Era esperado <code>do</code> perto de <code>print</code>". É erro de sintaxe: o programa nem começou (por isso não há traceback). O Lua leu a linha 1 inteira, chegou no <code>print</code> da linha 2 e percebeu que faltou o <code>do</code> antes dele. <strong>Como consertar:</strong> <code>for palavra in ("a b"):gmatch("%a+") do</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Usou <code>=</code> no lugar de <code>in</code></strong>
+<pre class="file" data-file="igual.lua">for palavra = ("a b"):gmatch("%a+") do
+  print(palavra)
+end
+</pre>
+<pre class="term">$ lua igual.lua
+lua: igual.lua:1: ',' expected near 'do'</pre>
+<p>"Era esperada uma <code>,</code> perto de <code>do</code>". O <code>for</code> com <code>=</code> é outro laço, o que conta números (<code>for i = 1, 10 do</code>, aula <a href="for-numerico.html">for Numérico</a>), e ele esperava uma vírgula e o número final. <strong>Como consertar:</strong> com <code>gmatch</code>, é sempre <code>for … in</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Usou o <code>find</code> no lugar do <code>gmatch</code></strong>
+<pre class="file" data-file="find.lua">for palavra in ("a b"):find("%a+") do
+  print(palavra)
+end
+</pre>
+<pre class="term">$ lua find.lua
+lua: find.lua:1: attempt to call a number value (for iterator 'for iterator')
+stack traceback:
+	find.lua:1: in main chunk
+	[C]: in ?</pre>
+<p>Linha por linha:</p>
+<dl class="anatomy">
+  <dt>attempt to call a number value</dt><dd>"Tentativa de chamar um valor numérico". O <code>for … in</code> espera uma <strong>função</strong> (um iterador) para chamar a cada volta. O <code>find</code> devolveu um número (a posição 1), e um número não pode ser chamado.</dd>
+  <dt>(for iterator 'for iterator')</dt><dd>O Lua diz quem ele tentou chamar: o iterador do <code>for</code>.</dd>
+  <dt>find.lua:1: in main chunk / [C]: in ?</dt><dd>Na linha 1 do programa principal, rodado pelo <code>lua</code>.</dd>
+</dl>
+<p><strong>Como consertar:</strong> no <code>for</code>, use <code>gmatch</code>. O <code>find</code> e o <code>match</code> devolvem resultados prontos, não iteradores.</p>
+</div>
+
+<div class="cenario">
+<strong>Chamou o iterador antes do <code>for</code></strong>
+<pre class="term">$ lua -e 'for w in ("a b"):gmatch("%a+")() do print(w) end'
+lua: (command line):1: attempt to call a string value (for iterator 'for iterator')
+stack traceback:
+	(command line):1: in main chunk
+	[C]: in ?</pre>
+<p>Os <code>()</code> a mais depois do <code>gmatch(…)</code> chamaram o iterador uma vez, ali mesmo: ele devolveu o primeiro achado, o <strong>texto</strong> <code>"a"</code>, e o <code>for</code> tentou chamar esse texto. (O <code>lua -e</code> roda o código direto do terminal: o lugar aparece como <code>(command line):1</code>.) <strong>Como consertar:</strong> deixe o <code>for</code> chamar o iterador; escreva só <code>gmatch("%a+")</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Padrão malformado: o erro aparece na primeira volta</strong>
+<pre class="term">$ lua -e 'for w in ("a b"):gmatch("(%a") do print(w) end'
+lua: (command line):1: unfinished capture
+stack traceback:
+	[C]: in for iterator 'for iterator'
+	(command line):1: in main chunk
+	[C]: in ?</pre>
+<p>"Captura não terminada": faltou o <code>)</code>. Repare no traceback: o erro não foi dentro do <code>gmatch</code>, mas dentro do <strong>iterador</strong> (<code>[C]: in for iterator</code>). O <code>gmatch</code> só prepara a esteira; o padrão é lido quando a primeira volta pede o primeiro achado. <strong>Como consertar:</strong> feche a captura, <code>"(%a)"</code>. As outras mensagens de padrão estão em <a href="padroes.html">Padrões</a>.</p>
+</div>
+
+<div class="cenario">
+<strong>O texto estava vazio (<code>nil</code>)</strong>
+<pre class="term">$ lua -e 'for w in string.gmatch(nil, "%a") do print(w) end'
+lua: (command line):1: bad argument #1 to 'gmatch' (string expected, got nil)
+stack traceback:
+	[C]: in field 'gmatch'
+	(command line):1: in main chunk
+	[C]: in ?</pre>
+<p>"Esperava um texto, recebeu <code>nil</code>". Acontece quando o texto deveria ter vindo de algum lugar (uma leitura de arquivo, um <code>match</code> que não achou) e não veio. Com o dois-pontos (<code>texto:gmatch(…)</code> e <code>texto</code> vazio), a mensagem seria <code>attempt to index a nil value</code>. <strong>Como consertar:</strong> confira o texto antes do laço.</p>
+</div>
+
+<hr>
+
+<h2>Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>O que faz</th></tr>
+<tr><td><code>for x in s:gmatch(p) do … end</code></td><td>Repete o bloco para cada achado de <code>p</code> em <code>s</code>; <code>x</code> recebe o achado</td></tr>
+<tr><td><code>for a, b in s:gmatch("(…)=(…)") do</code></td><td>Com capturas, uma variável para cada captura</td></tr>
+<tr><td><code>s:gmatch(p, inicio)</code></td><td>Começa a procurar em <code>inicio</code> (5.4+; negativo conta do fim)</td></tr>
+<tr><td><code>gmatch("%a+")</code> · <code>gmatch("%d+")</code> · <code>gmatch("%S+")</code></td><td>Cada palavra (sem acento) · cada número inteiro · cada pedaço sem espaço</td></tr>
+<tr><td><code>gmatch("[^,]+")</code> · <code>gmatch("%s*([^,]+)")</code></td><td>Cada item entre vírgulas · sem os espaços do começo</td></tr>
+<tr><td><code>gmatch("([^;]*)")</code></td><td>Cada campo, inclusive os vazios</td></tr>
+<tr><td><code>gmatch("()(%a+)")</code></td><td>A posição e o achado</td></tr>
+<tr><td><code>local f = s:gmatch(p)</code>; <code>f()</code></td><td>O iterador: cada chamada dá o próximo achado; no fim, nada (vale <code>nil</code>)</td></tr>
+<tr><td><code>^</code> no começo do padrão</td><td>Não é âncora no <code>gmatch</code>: use <code>match</code></td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Sintoma</th><th>Causa provável</th></tr>
+<tr><td><code>'do' expected near …</code></td><td>Faltou o <code>do</code> no fim da linha do <code>for</code></td></tr>
+<tr><td><code>',' expected near 'do'</code></td><td><code>for x = …</code> no lugar de <code>for x in …</code></td></tr>
+<tr><td><code>attempt to call a number value (for iterator …)</code></td><td><code>find</code> no lugar do <code>gmatch</code></td></tr>
+<tr><td><code>attempt to call a string value (for iterator …)</code></td><td><code>gmatch(…)()</code>, com parênteses a mais</td></tr>
+<tr><td>Erro de padrão com <code>[C]: in for iterator</code></td><td>Padrão malformado: descoberto na primeira volta</td></tr>
+<tr><td>O laço não dá nenhuma volta</td><td>Nada combina com o padrão (ou ele começa com <code>^</code>)</td></tr>
+<tr><td>Itens com espaço no começo</td><td>Use <code>"%s*([^,]+)"</code></td></tr>
+<tr><td>Palavras com acento partidas</td><td><code>%a</code> não conhece acentos: <code>[%a\128-\255]+</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. Complete o laço</h3>
+<p>Complete para mostrar cada número de <code>s</code>:</p>
+<div class="ex-code"><input data-answer="for" aria-label="palavra-chave"> n <input data-answer="in" aria-label="palavra-chave"> s:<input data-answer="gmatch" aria-label="função">("%d+") <input data-answer="do" aria-label="palavra-chave"><br>&nbsp;&nbsp;print(n)<br>end</div>
+</div>
+
+<div class="exercise">
+<h3>2. Quantas voltas?</h3>
+<p>Quantas voltas dá <code>for x in ("a1b22c333"):gmatch("%d+") do … end</code>?</p>
+<div class="ex-code">Dá <input data-answer="3" aria-label="número"> voltas.</div>
+</div>
+
+<div class="exercise">
+<h3>3. Qual é a soma?</h3>
+<p>Quanto vale <code>total</code> depois do laço?</p>
+<pre class="file" data-file="ex3.lua">local total = 0
+for n in ("2 mais 3 mais 10"):gmatch("%d+") do
+  total = total + tonumber(n)
+end
+</pre>
+<div class="ex-code">Vale <input data-answer="15" aria-label="número"></div>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">4. O que o <code>gmatch</code> devolve?</p>
+<label><input type="radio" name="q4"> Uma tabela com todos os achados</label>
+<label><input type="radio" name="q4"> Uma função (iterador) que entrega um achado por vez</label>
+<label><input type="radio" name="q4"> O primeiro achado</label>
+<label><input type="radio" name="q4"> O número de achados</label>
+</div>
+
+<div class="mc" data-answer="4">
+<p class="mc-q">5. Em <code>"pão;;café"</code>, qual padrão de <code>gmatch</code> entrega <strong>3</strong> campos (com o vazio)?</p>
+<label><input type="radio" name="q5"> <code>"[^;]+"</code></label>
+<label><input type="radio" name="q5"> <code>"%a+"</code></label>
+<label><input type="radio" name="q5"> <code>"^[^;]*"</code></label>
+<label><input type="radio" name="q5"> <code>"([^;]*)"</code></label>
+</div>
+
+<div class="mc" data-answer="1">
+<p class="mc-q">6. <code>for w in ("um dois"):gmatch("^%a+") do print(w) end</code> mostra:</p>
+<label><input type="radio" name="q6"> Nada: no <code>gmatch</code>, o <code>^</code> não é âncora, e o padrão não acha nada</label>
+<label><input type="radio" name="q6"> <code>um</code></label>
+<label><input type="radio" name="q6"> <code>um</code> e <code>dois</code></label>
+<label><input type="radio" name="q6"> Um erro de padrão</label>
+</div>
+
+<h3>Missão final: o contador de palavras</h3>
+
+<div class="trylua" data-goal="out:7 palavras;;src:gmatch">
+<p class="try-task"><strong>Missão:</strong> o programa conta as palavras da frase, mas diz <code>9 palavras</code>: o <code>%a+</code> partiu "pão" e "açúcar" nos acentos (e ainda cortou o "café"). Troque o padrão por um que mantenha as palavras com acento inteiras, para mostrar <code>7 palavras</code>. Dica: <code>"[%a\128-\255]+"</code>, ou <code>"%S+"</code>.</p>
+<pre class="script" data-file="main.lua">local frase = "pão de queijo e café com açúcar"
+local quantas = 0
+for palavra in frase:gmatch("%a+") do
+  quantas = quantas + 1
+  io.write(palavra, "|")
+end
+print()
+print(quantas .. " palavras")
+</pre>
+<pre class="solucao" data-file="main.lua">local frase = "pão de queijo e café com açúcar"
+local quantas = 0
+for palavra in frase:gmatch("[%a\128-\255]+") do
+  quantas = quantas + 1
+  io.write(palavra, "|")
+end
+print()
+print(quantas .. " palavras")
+</pre>
+</div>
+
+<p>O <code>io.write(palavra, "|")</code> mostra o que cada volta pegou, separado por <code>|</code>: assim você vê exatamente onde o padrão partiu as palavras. É um bom hábito para conferir qualquer <code>gmatch</code>.</p>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li><code>for x in s:gmatch(p) do … end</code> passa por <strong>todos</strong> os achados de <code>p</code>, um por volta; se não houver nenhum, o laço não roda.</li>
+  <li>Com capturas, cada volta entrega uma variável por captura: <code>for chave, valor in s:gmatch("(%w+)=(%w+)") do</code>.</li>
+  <li>Os achados são sempre texto: <code>tonumber</code> para somar. Para contar, um contador; para guardar, <code>lista[#lista + 1] = x</code>.</li>
+  <li><code>[^,]+</code> separa por vírgulas (pulando vazios); <code>([^;]*)</code> mantém os campos vazios; <code>()</code> dá a posição.</li>
+  <li>O terceiro argumento diz onde começar (5.4+; ignorado no 5.1/LuaJIT). O <code>^</code> não é âncora no <code>gmatch</code>.</li>
+  <li>O <code>gmatch</code> devolve um <strong>iterador</strong>: uma função que dá o próximo achado a cada chamada, e nada (<code>nil</code>) no fim.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
