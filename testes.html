@@ -1,0 +1,656 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua Testes — assert, uma mini função de teste e o busted | Guia Lua</title>
+<meta name="description" content="Testes automáticos no Lua 5.5 para quem nunca programou: testar um módulo com assert, escrever uma mini função de teste com pcall que continua depois de uma falha, testar erros e floats, o código de saída para avisar que algo falhou, e o busted (describe, it, assert.are.equal) instalado com o LuaRocks 3.13 para o 5.5, com as saídas reais de sucesso e de falha.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">Testes</span></h1>
+
+<p class="intro">Toda vez que a Ana muda uma função do módulo de contas, ela roda o programa e confere os números "no olho". Funciona com três contas; com trinta, ela vai esquecer alguma. Um <strong>teste automático</strong> é um pequeno programa que faz essa conferência por você: chama a função, compara com o resultado certo e avisa se algo mudou. Escreva uma vez, rode sempre que quiser, em um segundo.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O que é um teste e por que ele vale o trabalho.</li>
+  <li>Testar um módulo só com <code>assert</code>, e ler a mensagem quando um teste falha.</li>
+  <li>Escrever uma <strong>mini função de teste</strong>, com <code>pcall</code>, que continua depois de uma falha e conta quantos passaram (roda no editor do guia).</li>
+  <li>Testar que uma função <strong>dá erro</strong> quando deve, e comparar floats.</li>
+  <li>O <strong>código de saída</strong>: o jeito de um teste avisar "falhei" para outros programas.</li>
+  <li>O <strong>busted</strong>, a ferramenta de testes mais usada no Lua: como instalar para o 5.5, <code>describe</code>, <code>it</code>, <code>assert.are.equal</code>, e as saídas de sucesso e de falha.</li>
+</ul>
+</div>
+
+<p>Tudo rodou no <strong>Lua 5.5</strong> da máquina da Ana, numa pasta <code>testes</code>. A parte do <code>busted</code> precisa do LuaRocks (aula <a href="luarocks.html">LuaRocks</a>) e roda só no terminal; o resto roda também no editor do guia.</p>
+
+<hr>
+
+<h2>A ideia: a prova da receita</h2>
+<p>A padaria tem uma receita de pão de queijo. Toda vez que alguém muda a receita (troca a marca do polvilho, muda o forno), a dona faz uma <strong>fornada de prova</strong> e confere uma lista: "cresceu? está dourado? o miolo está macio? tem 20 unidades?". Se um item falhar, ela sabe <strong>na hora</strong> que a mudança estragou alguma coisa, antes de vender para o cliente.</p>
+<p>Um teste é essa lista de conferência, escrita em Lua:</p>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Na padaria</th><th>No código</th></tr>
+<tr><td>A receita</td><td>A função ou o módulo (<code>contas.lua</code>)</td></tr>
+<tr><td>"Tem 20 unidades?"</td><td>Uma <strong>verificação</strong>: <code>contas.desconto(80, 10) == 72</code></td></tr>
+<tr><td>A fornada de prova</td><td>Rodar o arquivo de testes</td></tr>
+<tr><td>"Tudo certo, pode vender"</td><td><code>todos os testes passaram</code></td></tr>
+</table>
+</div>
+<p>O segredo é que você escreve os testes <strong>com calma</strong>, quando sabe exatamente o resultado certo, e depois eles trabalham sozinhos, toda vez que você mexer no código.</p>
+
+<hr>
+
+<h2>1. O teste mais simples: <code>assert</code></h2>
+<p>O módulo das contas da Ana (veja <a href="modulos-proprios.html">Criando seu Módulo</a>), agora com um cuidado a mais: o desconto recusa porcentagens impossíveis, com <a href="error.html">error</a>:</p>
+
+<pre class="file" data-file="contas.lua">local M = {}
+
+function M.somar(a, b)
+  return a + b
+end
+
+function M.desconto(preco, porcento)
+  if porcento &lt; 0 or porcento &gt; 100 then
+    error("porcentagem inválida: " .. porcento, 2)
+  end
+  return preco - preco * porcento / 100
+end
+
+return M
+</pre>
+
+<p>O arquivo de teste carrega o módulo e confere os resultados com <a href="assert.html">assert</a> ("afirmar"): <code>assert(condição)</code> não faz nada se a condição for verdadeira, e para o programa com um erro se for falsa.</p>
+
+<pre class="file" data-file="teste1.lua">local contas = require("contas")
+
+assert(contas.somar(2, 3) == 5)
+assert(contas.desconto(80, 10) == 72)
+assert(contas.desconto(50, 0) == 50)
+print("todos os testes passaram")
+</pre>
+
+<pre class="term" data-cwd="~/testes">$ lua teste1.lua
+todos os testes passaram</pre>
+
+<p>Se a última linha apareceu, é porque nenhum <code>assert</code> parou o programa. (Repare que <code>72.0 == 72</code> é verdadeiro no Lua: o desconto devolve o float <code>72.0</code> e a comparação com o inteiro <code>72</code> passa. Veja <a href="numeros.html">Números</a>.)</p>
+
+<h3>Quando um teste falha</h3>
+<p>Para ver uma falha, a Ana escreveu de propósito um resultado errado (6 em vez de 5):</p>
+
+<pre class="file" data-file="teste3.lua">local contas = require("contas")
+
+assert(contas.somar(2, 3) == 6)
+</pre>
+
+<pre class="term" data-cwd="~/testes">$ lua teste3.lua
+lua: teste3.lua:3: assertion failed!
+stack traceback:
+	[C]: in global 'assert'
+	teste3.lua:3: in main chunk
+	[C]: in ?</pre>
+
+<p>"Afirmação falhou!", na linha 3. Funciona, mas não conta <strong>o quê</strong> falhou. Por isso o <code>assert</code> aceita um segundo argumento, a mensagem:</p>
+
+<pre class="file" data-file="teste2.lua">local contas = require("contas")
+
+assert(contas.somar(2, 3) == 5)
+assert(contas.desconto(80, 10) == 70, "desconto de 10% sobre 80 deveria dar 70")
+print("todos os testes passaram")
+</pre>
+
+<pre class="term" data-cwd="~/testes">$ lua teste2.lua
+lua: teste2.lua:4: desconto de 10% sobre 80 deveria dar 70
+stack traceback:
+	[C]: in global 'assert'
+	teste2.lua:4: in main chunk
+	[C]: in ?
+$ echo $?
+1</pre>
+
+<dl class="anatomy">
+  <dt>teste2.lua:4:</dt><dd>A linha do teste que falhou.</dd>
+  <dt>desconto de 10% sobre 80 deveria dar 70</dt><dd>A sua mensagem. Escreva o que <strong>deveria</strong> acontecer: quem ler (você, daqui a um mês) entende na hora.</dd>
+  <dt>[C]: in global 'assert'</dt><dd>Quem parou o programa foi o <code>assert</code>.</dd>
+  <dt>echo $? → 1</dt><dd>O <strong>código de saída</strong> do programa foi 1, "deu errado" (0 é "deu certo"). Isso vai ser útil na seção 4.</dd>
+</dl>
+
+<p>Aqui o <strong>teste</strong> é que estava errado (10% de 80 é 8, e 80 − 8 = 72). Isso acontece de verdade: quando um teste falha, confira as duas coisas, o código e o próprio teste.</p>
+
+<div class="trylua" data-goal="out:todos os testes passaram;;semerro">
+<p class="try-task"><strong>Missão:</strong> alguém mexeu no módulo e os testes do <code>main.lua</code> pegaram o problema. Rode, leia qual <code>assert</code> falhou e conserte a função na aba <code>contas.lua</code> (os testes estão certos).</p>
+<pre class="script" data-file="main.lua">local contas = require("contas")
+
+assert(contas.somar(2, 3) == 5, "2 + 3 deveria dar 5")
+assert(contas.somar(-1, 1) == 0, "-1 + 1 deveria dar 0")
+assert(contas.desconto(80, 10) == 72, "10% de desconto sobre 80 deveria dar 72")
+print("todos os testes passaram")
+</pre>
+<pre class="script" data-file="contas.lua">local M = {}
+
+function M.somar(a, b)
+  return a + b
+end
+
+function M.desconto(preco, porcento)
+  return preco - preco * porcento / 10
+end
+
+return M
+</pre>
+<pre class="solucao" data-file="contas.lua">local M = {}
+
+function M.somar(a, b)
+  return a + b
+end
+
+function M.desconto(preco, porcento)
+  return preco - preco * porcento / 100
+end
+
+return M
+</pre>
+</div>
+
+<hr>
+
+<h2>2. Uma mini função de teste</h2>
+<p>O <code>assert</code> tem um problema: na <strong>primeira</strong> falha, o programa para, e você não fica sabendo se os testes de baixo passariam. Com o <a href="pcall.html">pcall</a>, dá para rodar cada teste "protegido": se ele falhar, anotamos e seguimos para o próximo. São poucas linhas:</p>
+
+<pre class="file" data-file="teste_contas.lua">local contas = require("contas")
+
+local passou, falhou = 0, 0
+
+local function teste(nome, funcao)
+  local ok, erro = pcall(funcao)
+  if ok then
+    passou = passou + 1
+    print("ok      " .. nome)
+  else
+    falhou = falhou + 1
+    print("FALHOU  " .. nome .. ": " .. tostring(erro))
+  end
+end
+
+local function igual(obtido, esperado)
+  if obtido ~= esperado then
+    error("esperava " .. tostring(esperado) .. ", veio " .. tostring(obtido), 2)
+  end
+end
+
+teste("somar dois números", function ()
+  igual(contas.somar(2, 3), 5)
+end)
+
+teste("desconto de 10%", function ()
+  igual(contas.desconto(80, 10), 72)
+end)
+
+teste("desconto zero não muda o preço", function ()
+  igual(contas.desconto(50, 0), 50)
+end)
+
+teste("desconto de 25%", function ()
+  igual(contas.desconto(20, 25), 16)
+end)
+
+teste("porcentagem acima de 100 dá erro", function ()
+  local ok = pcall(contas.desconto, 50, 150)
+  igual(ok, false)
+end)
+
+teste("um teste errado de propósito", function ()
+  igual(contas.somar(0.1, 0.2), 0.3)
+end)
+
+print(string.format("%d ok, %d falharam", passou, falhou))
+os.exit(falhou == 0 and 0 or 1)
+</pre>
+
+<dl class="anatomy">
+  <dt>local function teste(nome, funcao)</dt><dd>Recebe um nome (para mostrar) e uma função com as verificações. Cada teste é uma <a href="funcoes-valores.html">função anônima</a>, <code>function () … end</code>, passada como argumento.</dd>
+  <dt>pcall(funcao)</dt><dd>Roda a função "protegida": se der erro lá dentro, o programa não para; o <code>pcall</code> devolve <code>false</code> e a mensagem.</dd>
+  <dt>passou, falhou</dt><dd>Dois contadores, para o resumo do final.</dd>
+  <dt>local function igual(obtido, esperado)</dt><dd>Uma verificação com mensagem pronta: "esperava X, veio Y". O <code>2</code> do <code>error</code> faz a mensagem apontar a linha do <strong>teste</strong> que chamou o <code>igual</code>, e não a linha do próprio <code>igual</code> (veja <a href="error.html">error</a>).</dd>
+  <dt>local ok = pcall(contas.desconto, 50, 150)</dt><dd>Para testar que algo <strong>dá erro</strong>: chame com <code>pcall</code> e confira que o primeiro resultado é <code>false</code>.</dd>
+  <dt>os.exit(falhou == 0 and 0 or 1)</dt><dd>Termina com código 0 se tudo passou, 1 se algo falhou (veja <a href="os-funcoes.html">os.exit</a> e o <a href="and-or-ternario.html">truque do and/or</a>).</dd>
+</dl>
+
+<pre class="term" data-cwd="~/testes">$ lua teste_contas.lua
+ok      somar dois números
+ok      desconto de 10%
+ok      desconto zero não muda o preço
+FALHOU  desconto de 25%: teste_contas.lua:35: esperava 16, veio 15.0
+ok      porcentagem acima de 100 dá erro
+FALHOU  um teste errado de propósito: teste_contas.lua:44: esperava 0.3, veio 0.30000000000000004
+4 ok, 2 falharam
+$ echo $?
+1</pre>
+
+<p>Todos os seis testes rodaram, mesmo com duas falhas no meio. Olhe as duas:</p>
+<ul>
+  <li><strong>desconto de 25%</strong>: "esperava 16, veio 15.0". Quem errou foi o teste: 25% de 20 é 5, e 20 − 5 = <strong>15</strong>. A função está certa. (Foi um erro de conta real, de quem escreveu esta aula, e o teste o pegou. É assim mesmo.)</li>
+  <li><strong>um teste errado de propósito</strong>: "esperava 0.3, veio 0.30000000000000004". É o errinho dos floats da aula <a href="math.html">math</a>: <code>0.1 + 0.2</code> não é exatamente <code>0.3</code>. Floats se comparam com uma tolerância (seção 3).</li>
+</ul>
+
+<div class="trylua" data-goal="out:3 ok, 0 falharam;;semerro">
+<p class="try-task"><strong>Missão:</strong> um dos três testes falha. Rode e leia a mensagem. Desta vez o módulo está certo e o <strong>teste</strong> está errado: faça a conta de cabeça (25% de 20) e conserte o valor esperado.</p>
+<pre class="script" data-file="main.lua">local contas = require("contas")
+local passou, falhou = 0, 0
+
+local function teste(nome, funcao)
+  local ok, erro = pcall(funcao)
+  if ok then
+    passou = passou + 1
+    print("ok      " .. nome)
+  else
+    falhou = falhou + 1
+    print("FALHOU  " .. nome .. ": " .. tostring(erro))
+  end
+end
+
+local function igual(obtido, esperado)
+  if obtido ~= esperado then
+    error("esperava " .. tostring(esperado) .. ", veio " .. tostring(obtido), 2)
+  end
+end
+
+teste("somar", function () igual(contas.somar(2, 3), 5) end)
+teste("desconto de 10%", function () igual(contas.desconto(80, 10), 72) end)
+teste("desconto de 25%", function () igual(contas.desconto(20, 25), 16) end)
+
+print(string.format("%d ok, %d falharam", passou, falhou))
+</pre>
+<pre class="script" data-file="contas.lua">local M = {}
+
+function M.somar(a, b)
+  return a + b
+end
+
+function M.desconto(preco, porcento)
+  return preco - preco * porcento / 100
+end
+
+return M
+</pre>
+<pre class="solucao" data-file="main.lua">local contas = require("contas")
+local passou, falhou = 0, 0
+
+local function teste(nome, funcao)
+  local ok, erro = pcall(funcao)
+  if ok then
+    passou = passou + 1
+    print("ok      " .. nome)
+  else
+    falhou = falhou + 1
+    print("FALHOU  " .. nome .. ": " .. tostring(erro))
+  end
+end
+
+local function igual(obtido, esperado)
+  if obtido ~= esperado then
+    error("esperava " .. tostring(esperado) .. ", veio " .. tostring(obtido), 2)
+  end
+end
+
+teste("somar", function () igual(contas.somar(2, 3), 5) end)
+teste("desconto de 10%", function () igual(contas.desconto(80, 10), 72) end)
+teste("desconto de 25%", function () igual(contas.desconto(20, 25), 15) end)
+
+print(string.format("%d ok, %d falharam", passou, falhou))
+</pre>
+</div>
+
+<hr>
+
+<h2>3. Floats: compare com tolerância</h2>
+<pre class="file" data-file="perto.lua">local function perto(a, b)
+  return math.abs(a - b) &lt; 1e-9
+end
+print(0.1 + 0.2 == 0.3, perto(0.1 + 0.2, 0.3))
+</pre>
+<pre class="term" data-cwd="~/testes">$ lua perto.lua
+false	true</pre>
+<p>Em vez de "é igual?", pergunte "a diferença é menor que um número minúsculo?" (<code>1e-9</code> = 0,000000001). Na mini função de teste, isso vira uma verificação a mais, por exemplo <code>local function quase_igual(obtido, esperado)</code>, que usa <code>perto</code> no lugar do <code>~=</code>. Para dinheiro, outra saída é testar o texto já formatado: <code>igual(string.format("%.2f", total), "30.00")</code>.</p>
+
+<hr>
+
+<h2>4. O código de saída: "falhei" para quem chamou</h2>
+<p>O <code>os.exit(falhou == 0 and 0 or 1)</code> do fim parece um detalhe, mas é o que permite automatizar. Outros programas não leem o seu "4 ok, 2 falharam"; eles olham o <strong>código de saída</strong>, o <code>$?</code> do terminal. Por exemplo, no bash, <code>&amp;&amp;</code> só roda o segundo comando se o primeiro terminou com 0:</p>
+<pre class="term" data-cwd="~/testes">$ lua teste1.lua &amp;&amp; echo "pode publicar"
+todos os testes passaram
+pode publicar</pre>
+<p>Com o <code>teste_contas.lua</code>, que termina com código 1, o <code>pode publicar</code> não aparece: <code>lua teste_contas.lua &amp;&amp; echo "pode publicar"</code> mostra as seis linhas dos testes e o <code>4 ok, 2 falharam</code>, e para aí. Ferramentas que rodam os testes sozinhas a cada mudança no código (o que os programadores chamam de <em>integração contínua</em>) funcionam exatamente assim.</p>
+
+<hr>
+
+<h2>5. O <code>busted</code>: a ferramenta de testes do Lua</h2>
+<p>A mini função da seção 2 é ótima para aprender e para programas pequenos. Projetos maiores usam o <strong>busted</strong>, uma rock que já traz tudo pronto: organiza os testes em grupos, tem dezenas de verificações e mostra um relatório. Ele não roda no editor do guia; é para o terminal.</p>
+
+<h3>Instalando para o Lua 5.5</h3>
+<p>No Ubuntu 26.04 existe o pacote <code>lua-busted</code> do <code>apt</code>, mas, como todas as bibliotecas Lua do Ubuntu, ele não é para o 5.5 (o que acontece com ele está em <a href="#errado">Quando dá errado</a>). O caminho é o LuaRocks oficial da aula <a href="luarocks.html">LuaRocks</a>, com o terminal já ajustado pelo <code>eval "$(~/.local/bin/luarocks path)"</code> no <code>~/.bashrc</code>:</p>
+
+<pre class="term">$ luarocks --local install busted
+Installing https://luarocks.org/busted-2.3.0-1.src.rock
+
+Missing dependencies for busted 2.3.0-1:
+   lua_cliargs &gt;= 3.0 (not installed)
+   luasystem &gt;= 0.2.0 (not installed)
+   dkjson &gt;= 2.1.0 (not installed)
+   say &gt;= 1.4-1 (not installed)
+   luassert &gt;= 1.9.0-1 (not installed)
+   lua-term &gt;= 0.1 (not installed)
+   penlight &gt;= 1.15.0 (not installed)
+   mediator_lua &gt;= 1.1.1 (not installed)
+
+busted 2.3.0-1 depends on lua &gt;= 5.1 (5.5-1 provided by VM: success)
+busted 2.3.0-1 depends on lua_cliargs &gt;= 3.0 (not installed)
+Installing https://luarocks.org/lua_cliargs-3.0.2-1.src.rock
+…                                        « instala cada dependência; algumas são compiladas com o gcc
+busted 2.3.0-1 is now installed in /home/ana/.luarocks (license: MIT &lt;http://opensource.org/licenses/MIT&gt;)
+
+$ which busted
+/home/ana/.luarocks/bin/busted</pre>
+
+<p>O busted precisa de oito outras rocks (as dependências), e o LuaRocks instala todas sozinho; duas delas (<code>luasystem</code> e <code>lua-term</code>) são em C e passam pelo <code>gcc</code> (no meio sai até um <code>warning</code>, um aviso do compilador, que pode ser ignorado). O comando <code>busted</code> foi para <code>~/.luarocks/bin</code>, que o <code>luarocks path</code> pôs no <code>PATH</code>; e ele roda com o <code>/usr/bin/lua5.5</code>.</p>
+
+<h3>Um arquivo de testes do busted</h3>
+<p>Por costume, os testes do busted ficam numa pasta <code>spec</code> (de "especificação"), em arquivos terminados em <code>_spec.lua</code>. O busted acha e roda todos sozinho:</p>
+
+<pre class="file" data-file="spec/contas_spec.lua">local contas = require("contas")
+
+describe("contas", function ()
+  it("soma dois números", function ()
+    assert.are.equal(5, contas.somar(2, 3))
+  end)
+
+  it("dá 10% de desconto", function ()
+    assert.are.equal(72, contas.desconto(80, 10))
+  end)
+
+  it("recusa porcentagem acima de 100", function ()
+    assert.has_error(function () contas.desconto(50, 150) end)
+  end)
+end)
+</pre>
+
+<dl class="anatomy">
+  <dt>describe("contas", function () … end)</dt><dd>"Descrever": um <strong>grupo</strong> de testes, com um nome. Pode ter grupos dentro de grupos.</dd>
+  <dt>it("soma dois números", function () … end)</dt><dd>"Isto…": <strong>um teste</strong>. Lido junto com o grupo, vira uma frase: "contas soma dois números". É o <code>teste(nome, função)</code> da seção 2, pronto.</dd>
+  <dt>assert.are.equal(esperado, obtido)</dt><dd>"São iguais": o <strong>esperado vem primeiro</strong> (ao contrário do nosso <code>igual</code>). Este <code>assert</code> é uma tabela cheia de verificações que o busted cria; não é o <code>assert</code> comum do Lua.</dd>
+  <dt>assert.has_error(função)</dt><dd>"Tem erro": passa se a função <strong>der erro</strong>. Substitui o nosso truque com <code>pcall</code>.</dd>
+</dl>
+
+<pre class="term" data-cwd="~/testes">$ busted
++++
+3 successes / 0 failures / 0 errors / 0 pending : 0.000905 seconds
+$ echo $?
+0</pre>
+
+<p>Cada <code>+</code> é um teste que passou. Depois, o placar: 3 sucessos, 0 falhas, 0 erros, 0 pendentes, e quanto tempo levou (esse número muda a cada vez). O código de saída é 0. Uma <strong>falha</strong> é uma verificação que não bateu; um <strong>erro</strong> é o teste quebrar no meio (um <code>nil</code> onde não devia, por exemplo).</p>
+
+<h3>Quando um teste do busted falha</h3>
+<p>Um arquivo com um teste errado de propósito (esperando 6 de <code>2 + 3</code>), passado direto ao busted:</p>
+<pre class="file" data-file="spec_errado.lua">local contas = require("contas")
+
+describe("contas", function ()
+  it("soma dois números", function ()
+    assert.are.equal(6, contas.somar(2, 3))
+  end)
+
+  it("dá 10% de desconto", function ()
+    assert.are.equal(72, contas.desconto(80, 10))
+  end)
+end)
+</pre>
+<pre class="term" data-cwd="~/testes">$ busted spec_errado.lua
+-+
+1 success / 1 failure / 0 errors / 0 pending : 0.001752 seconds
+
+Failure -&gt; spec_errado.lua @ 4
+contas soma dois números
+spec_errado.lua:5: Expected objects to be equal.
+Passed in:
+(number) 5
+Expected:
+(number) 6
+$ echo $?
+1</pre>
+
+<dl class="anatomy">
+  <dt>-+</dt><dd>Um <code>-</code> para o teste que falhou, um <code>+</code> para o que passou.</dd>
+  <dt>Failure -&gt; spec_errado.lua @ 4</dt><dd>"Falha", no teste que começa na linha 4.</dd>
+  <dt>contas soma dois números</dt><dd>O nome completo: grupo + teste.</dd>
+  <dt>Expected objects to be equal.</dt><dd>"Era esperado que os objetos fossem iguais", na linha 5.</dd>
+  <dt>Passed in: (number) 5 / Expected: (number) 6</dt><dd>"Recebido: 5. Esperado: 6." Com o tipo de cada um entre parênteses, o que ajuda quando um é <code>"5"</code> (texto) e o outro é <code>5</code>.</dd>
+</dl>
+
+<p>O busted tem outros formatos de relatório. O <code>-o TAP</code>, por exemplo, escreve uma linha por teste, com o nome, num formato que outras ferramentas entendem:</p>
+<pre class="term" data-cwd="~/testes">$ busted -o TAP
+ok 1 - contas soma dois números
+ok 2 - contas dá 10% de desconto
+ok 3 - contas recusa porcentagem acima de 100
+1..3</pre>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Forma</th><th>Quando usar</th></tr>
+<tr><td><code>assert(condição, "mensagem")</code> num arquivo</td><td>Conferências rápidas; para no primeiro erro. Roda em qualquer lugar, até no editor.</td></tr>
+<tr><td>Mini função <code>teste</code> com <code>pcall</code></td><td>Projetos pequenos, sem instalar nada; mostra todas as falhas de uma vez. Roda no editor.</td></tr>
+<tr><td><code>busted</code></td><td>Projetos de verdade: grupos, dezenas de verificações, relatórios. Precisa do LuaRocks; só no terminal.</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+
+<div class="cenario">
+<strong>O <code>busted</code> do <code>apt</code> com o Lua 5.5</strong>
+<p>Num terminal sem o <code>luarocks path</code>, com o pacote <code>lua-busted</code> do Ubuntu instalado, o comando <code>busted</code> é o do <code>apt</code>:</p>
+<pre class="term" data-cwd="~/testes">$ busted
+lua: /usr/bin/busted:3: module 'busted.runner' not found:
+	no field package.preload['busted.runner']
+	no file '/usr/local/share/lua/5.5/busted/runner.lua'
+	no file '/usr/local/share/lua/5.5/busted/runner/init.lua'
+	no file '/usr/local/lib/lua/5.5/busted/runner.lua'
+	no file '/usr/local/lib/lua/5.5/busted/runner/init.lua'
+	no file '/usr/share/lua/5.5/busted/runner.lua'
+	no file '/usr/share/lua/5.5/busted/runner/init.lua'
+	no file './busted/runner.lua'
+	no file './busted/runner/init.lua'
+	no file '/usr/local/lib/lua/5.5/busted/runner.so'
+	no file '/usr/lib/x86_64-linux-gnu/lua/5.5/busted/runner.so'
+	no file '/usr/lib/lua/5.5/busted/runner.so'
+	no file '/usr/local/lib/lua/5.5/loadall.so'
+	no file './busted/runner.so'
+	no file '/usr/local/lib/lua/5.5/busted.so'
+	no file '/usr/lib/x86_64-linux-gnu/lua/5.5/busted.so'
+	no file '/usr/lib/lua/5.5/busted.so'
+	no file '/usr/local/lib/lua/5.5/loadall.so'
+	no file './busted.so'
+stack traceback:
+	[C]: in global 'require'
+	/usr/bin/busted:3: in main chunk
+	[C]: in ?</pre>
+<p>O <code>/usr/bin/busted</code> é um programa Lua que começa com <code>require("busted.runner")</code> e roda com o comando <code>lua</code>, que é o 5.5. Só que o Ubuntu instalou os módulos do busted nas pastas do <strong>5.4</strong> (e do 5.1 e 5.3); na lista, só aparecem pastas <code>5.5</code>. É a mesma história das outras bibliotecas do <code>apt</code> (aula <a href="luarocks.html">LuaRocks</a>).</p>
+<p><strong>Um jeito de contornar:</strong> rodar o busted do <code>apt</code> com o <code>lua5.4</code>:</p>
+<pre class="term" data-cwd="~/testes">$ lua5.4 /usr/bin/busted
++++
+3 successes / 0 failures / 0 errors / 0 pending : 0.002515 seconds</pre>
+<p>Funciona, mas atenção: aí os seus testes rodam no <strong>Lua 5.4</strong>, não no 5.5. Se o seu código usa algo novo do 5.5 (a declaração <code>global</code>, por exemplo; veja <a href="novidades.html">Novidades do Lua 5.5</a>), o teste quebra lá sem o código estar errado. Prefira o busted do LuaRocks, que roda no 5.5.</p>
+</div>
+
+<div class="cenario">
+<strong>Misturou as duas coisas</strong>
+<p>Num terminal <strong>com</strong> o <code>luarocks path</code> do 5.5 ajustado, o <code>lua5.4 /usr/bin/busted</code> quebra de outro jeito:</p>
+<pre class="term" data-cwd="~/testes">$ lua5.4 /usr/bin/busted
+lua5.4: /home/ana/.luarocks/share/lua/5.5/pl/path.lua:26: pl.path requires LuaFileSystem
+stack traceback:
+	[C]: in function 'error'
+	/home/ana/.luarocks/share/lua/5.5/pl/path.lua:26: in main chunk
+	[C]: in function 'require'
+	/home/ana/.luarocks/share/lua/5.5/busted/runner.lua:11: in function 'busted.runner'
+	/usr/bin/busted:3: in main chunk
+	[C]: in ?</pre>
+<p>Repare nos caminhos: o <code>lua5.4</code> foi buscar os módulos em <code>…/share/lua/5.5/</code>, porque a <code>LUA_PATH</code> do <code>luarocks path</code> vale para <strong>qualquer</strong> Lua que você rodar naquele terminal. Ele achou o busted do 5.5, que pediu o <code>lfs</code> compilado para o 5.5, que o 5.4 não consegue usar. <strong>Moral:</strong> escolha um caminho só. Com o LuaRocks para o 5.5 instalado, use só <code>busted</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>O teste passa, mas devia falhar</strong>
+<p>Um teste que nunca falha não protege nada. Um erro comum é esquecer de <strong>comparar</strong>: <code>assert(contas.somar(2, 3))</code> só confere que o resultado não é <code>nil</code> nem <code>false</code>; qualquer número passa. Escreva sempre o resultado esperado: <code>assert(contas.somar(2, 3) == 5)</code>. Uma boa prática: quando escrever um teste novo, faça-o falhar uma vez de propósito (troque o 5 por 6) para ver que ele realmente confere alguma coisa.</p>
+</div>
+
+<hr>
+
+<h2>Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>O que faz</th></tr>
+<tr><td><code>assert(cond)</code></td><td>Para com <code>assertion failed!</code> se <code>cond</code> for <code>false</code> ou <code>nil</code></td></tr>
+<tr><td><code>assert(cond, "mensagem")</code></td><td>O mesmo, com a sua mensagem</td></tr>
+<tr><td><code>pcall(f)</code></td><td>Roda <code>f</code> sem deixar o erro parar o programa: <code>true</code> ou <code>false, mensagem</code></td></tr>
+<tr><td><code>pcall(f, a, b) == false</code></td><td>Testa que <code>f(a, b)</code> dá erro</td></tr>
+<tr><td><code>math.abs(a - b) &lt; 1e-9</code></td><td>Compara floats com tolerância</td></tr>
+<tr><td><code>os.exit(falhou == 0 and 0 or 1)</code></td><td>Código de saída 0 (tudo certo) ou 1 (falhou)</td></tr>
+<tr><td><code>luarocks --local install busted</code></td><td>Instala o busted para o 5.5 (com o LuaRocks 3.13)</td></tr>
+<tr><td><code>describe("grupo", function () … end)</code></td><td>busted: um grupo de testes</td></tr>
+<tr><td><code>it("faz tal coisa", function () … end)</code></td><td>busted: um teste</td></tr>
+<tr><td><code>assert.are.equal(esperado, obtido)</code></td><td>busted: confere a igualdade</td></tr>
+<tr><td><code>assert.are.same(t1, t2)</code></td><td>busted: confere que duas tabelas têm o mesmo conteúdo</td></tr>
+<tr><td><code>assert.is_true(x)</code>, <code>assert.is_nil(x)</code></td><td>busted: confere que é <code>true</code> / <code>nil</code></td></tr>
+<tr><td><code>assert.has_error(f)</code></td><td>busted: confere que <code>f</code> dá erro</td></tr>
+<tr><td><code>busted</code>, <code>busted arquivo.lua</code>, <code>busted -o TAP</code></td><td>Roda a pasta <code>spec</code>, um arquivo, ou com outro relatório</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. Complete o teste</h3>
+<p>Complete para o teste conferir que <code>dobro(4)</code> dá 8, com uma mensagem:</p>
+<div class="ex-code"><input data-answer="assert" aria-label="função">(dobro(4) <input data-answer="==" aria-label="operador"> 8, "dobro de 4 deveria dar 8")</div>
+</div>
+
+<div class="exercise">
+<h3>2. O código de saída</h3>
+<p>Um arquivo de testes termina com <code>os.exit(falhou == 0 and 0 or 1)</code> e duas verificações falharam. Qual é o <code>$?</code>?</p>
+<div class="ex-code"><input data-answer="1" aria-label="código de saída"></div>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">3. Por que a mini função de teste usa <code>pcall</code>?</p>
+<label><input type="radio" name="q3"> Para o teste rodar mais rápido</label>
+<label><input type="radio" name="q3"> Para uma falha não parar o programa, e os testes seguintes rodarem também</label>
+<label><input type="radio" name="q3"> Porque o <code>assert</code> não existe dentro de funções</label>
+<label><input type="radio" name="q3"> Para esconder os erros</label>
+</div>
+
+<div class="mc" data-answer="4">
+<p class="mc-q">4. No busted, <code>assert.are.equal(6, contas.somar(2, 3))</code> mostrou <code>Passed in: (number) 5</code> e <code>Expected: (number) 6</code>. O que isso quer dizer?</p>
+<label><input type="radio" name="q4"> O busted está quebrado</label>
+<label><input type="radio" name="q4"> A função devolveu um texto</label>
+<label><input type="radio" name="q4"> Faltou o <code>describe</code></label>
+<label><input type="radio" name="q4"> A função devolveu 5 e o teste esperava 6: ou o teste ou a função está errado</label>
+</div>
+
+<div class="mc" data-answer="1">
+<p class="mc-q">5. No Ubuntu 26.04, qual é o jeito de ter o busted rodando com o Lua 5.5?</p>
+<label><input type="radio" name="q5"> <code>luarocks --local install busted</code> com o LuaRocks 3.13 oficial</label>
+<label><input type="radio" name="q5"> <code>sudo apt install lua-busted</code> e rodar <code>busted</code></label>
+<label><input type="radio" name="q5"> <code>lua5.4 /usr/bin/busted</code></label>
+<label><input type="radio" name="q5"> O busted não existe para o Lua</label>
+</div>
+
+<h3>Missão final: passe em todos os testes</h3>
+
+<div class="trylua" data-goal="out:5 ok, 0 falharam;;semerro">
+<p class="try-task"><strong>Missão:</strong> os testes estão prontos; falta a função. Escreva <code>classificar(nota)</code> para devolver <code>"aprovada"</code> se a nota for 7 ou mais, <code>"recuperação"</code> se for 5 ou mais (e menor que 7), e <code>"reprovada"</code> se for menor que 5. Rode a cada mudança e veja os testes passarem um por um.</p>
+<pre class="script" data-file="main.lua">local function classificar(nota)
+  return "aprovada"
+end
+
+local passou, falhou = 0, 0
+local function teste(nota, esperado)
+  local obtido = classificar(nota)
+  if obtido == esperado then
+    passou = passou + 1
+    print("ok      " .. nota .. " -&gt; " .. esperado)
+  else
+    falhou = falhou + 1
+    print("FALHOU  " .. nota .. ": esperava " .. esperado .. ", veio " .. tostring(obtido))
+  end
+end
+
+teste(10, "aprovada")
+teste(7, "aprovada")
+teste(6.9, "recuperação")
+teste(5, "recuperação")
+teste(4.9, "reprovada")
+print(string.format("%d ok, %d falharam", passou, falhou))
+</pre>
+<pre class="solucao" data-file="main.lua">local function classificar(nota)
+  if nota &gt;= 7 then
+    return "aprovada"
+  elseif nota &gt;= 5 then
+    return "recuperação"
+  end
+  return "reprovada"
+end
+
+local passou, falhou = 0, 0
+local function teste(nota, esperado)
+  local obtido = classificar(nota)
+  if obtido == esperado then
+    passou = passou + 1
+    print("ok      " .. nota .. " -&gt; " .. esperado)
+  else
+    falhou = falhou + 1
+    print("FALHOU  " .. nota .. ": esperava " .. esperado .. ", veio " .. tostring(obtido))
+  end
+end
+
+teste(10, "aprovada")
+teste(7, "aprovada")
+teste(6.9, "recuperação")
+teste(5, "recuperação")
+teste(4.9, "reprovada")
+print(string.format("%d ok, %d falharam", passou, falhou))
+</pre>
+</div>
+
+<p>Repare nos testes escolhidos: além de um caso "do meio" para cada resposta, há os <strong>limites</strong> (7 e 6,9; 5 e 4,9). É na fronteira que os erros mais aparecem (um <code>&gt;</code> no lugar de <code>&gt;=</code>, por exemplo).</p>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li>Um teste chama o seu código e compara com o resultado certo, automaticamente. Escreva uma vez, rode a cada mudança.</li>
+  <li><code>assert(cond, "mensagem")</code> é o teste mais simples: para no primeiro erro, com a linha e a mensagem.</li>
+  <li>Uma mini função de teste com <code>pcall</code> roda todos os testes, mostra cada falha ("esperava X, veio Y") e conta o placar. Funciona no editor do guia.</li>
+  <li>Teste também os erros (<code>pcall(f, …) == false</code>), compare floats com tolerância e termine com <code>os.exit(0 ou 1)</code>.</li>
+  <li>Quando um teste falha, o erro pode estar no código <strong>ou no teste</strong>.</li>
+  <li>O <strong>busted</strong> (<code>describe</code>, <code>it</code>, <code>assert.are.equal</code>) é a ferramenta de testes do Lua. Para o 5.5, instale com o LuaRocks oficial: <code>luarocks --local install busted</code>. O do <code>apt</code> só roda com o 5.4.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
