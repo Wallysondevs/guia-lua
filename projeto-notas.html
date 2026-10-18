@@ -1,0 +1,1304 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua Projeto Notas da Turma (CSV) — io.lines, gmatch, médias, table.sort e relatório passo a passo | Guia Lua</title>
+<meta name="description" content="Projeto passo a passo: as notas de uma turma num arquivo CSV, lidas em Lua 5.5 com io.lines e separadas com gmatch; médias e situação de cada aluno, um relatório em colunas ordenado com table.sort e uma função de comparação, e um CSV novo gravado com os resultados. No fim, o que dá errado num CSV de verdade (campo vazio, texto no lugar de nota, linha em branco) e como o padrão ([^,]*), resolve. Quatro versões com saídas reais e missões no editor.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Projeto <span class="hl">Notas da Turma (CSV)</span></h1>
+
+<p class="intro">A Ana é professora e guarda as notas da turma numa planilha. A planilha sabe exportar um arquivo <strong>CSV</strong>, e é esse arquivo que o programa vai ler: calcular a média de cada aluno, dizer quem passou, mostrar um relatório em ordem e gravar um CSV novo com os resultados, que a planilha abre de volta. Este projeto não conversa com o teclado: ele lê um arquivo e escreve outro.</p>
+
+<div class="note">
+<strong>Você vai praticar</strong>
+<ul>
+  <li>Ler um arquivo linha por linha com <a href="io-lines.html">io.lines</a>.</li>
+  <li>Separar cada linha nas vírgulas com <a href="gmatch.html">gmatch</a> e um <a href="padroes.html">padrão</a>.</li>
+  <li>Guardar cada aluno como uma <a href="tabelas-aninhadas.html">tabela com campos</a> numa lista.</li>
+  <li>Calcular médias com uma <a href="funcoes.html">função</a> e escolher a situação com <a href="elseif.html">elseif</a>.</li>
+  <li>Ordenar com <a href="table-sort.html">table.sort</a> e uma função de comparação, e alinhar colunas com <a href="string-format.html">string.format</a>.</li>
+  <li>Gravar um arquivo novo com <a href="arquivos-escrever.html">write</a>.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>O que vamos construir</h2>
+<p>O arquivo que a planilha exportou, <code>notas.csv</code>:</p>
+
+<pre class="file" data-file="notas.csv">nome,prova1,prova2,prova3
+Ana Clara,8.5,7.0,9.0
+Bruno,5.0,6.5,4.0
+Carla,7.0,7.0,7.5
+Diego,3.5,5.0,6.0
+Elisa,10,9.5,9.0
+</pre>
+
+<p><strong>CSV</strong> quer dizer <em>comma-separated values</em>, "valores separados por vírgula": cada linha é uma linha da planilha, e as vírgulas separam as colunas. A primeira linha é o <strong>cabeçalho</strong>, com os nomes das colunas. (Repare que as notas usam <strong>ponto</strong> como separador decimal: <code>8.5</code>. A vírgula já está ocupada separando as colunas.) O programa pronto, no terminal da Ana:</p>
+
+<pre class="term" data-cwd="~/projetos/notas">$ lua notas.lua
+Aluno        P1    P2    P3   Média  Situação
+------------------------------------------------
+Elisa       10.0   9.5   9.0    9.50  aprovado(a)
+Ana Clara    8.5   7.0   9.0    8.17  aprovado(a)
+Carla        7.0   7.0   7.5    7.17  aprovado(a)
+Bruno        5.0   6.5   4.0    5.17  recuperação
+Diego        3.5   5.0   6.0    4.83  reprovado(a)
+------------------------------------------------
+Média da turma: 6.97
+Aprovados: 3 de 5
+Relatório gravado em relatorio.csv.
+$ cat relatorio.csv
+nome,media,situacao
+Elisa,9.50,aprovado(a)
+Ana Clara,8.17,aprovado(a)
+Carla,7.17,aprovado(a)
+Bruno,5.17,recuperação
+Diego,4.83,reprovado(a)</pre>
+
+<ol class="passo">
+  <li><a href="#versao1">Ler o CSV</a> (<code>io.lines</code>, <code>gmatch</code>).</li>
+  <li><a href="#versao2">Média e situação</a> (funções, <code>elseif</code>).</li>
+  <li><a href="#versao3">O relatório</a> (<code>table.sort</code> com função, colunas com <code>%5.1f</code>).</li>
+  <li><a href="#versao4">Gravar o relatorio.csv</a> (<code>io.open</code> com <code>"w"</code>).</li>
+</ol>
+<p>E, depois delas, <a href="#errado">o que dá errado num CSV de verdade</a>.</p>
+
+<h3>Antes de começar</h3>
+<p>Crie a pasta do projeto e, dentro dela, o <code>notas.csv</code> (copie o conteúdo acima num editor de texto; ou exporte da sua planilha como CSV, com ponto nos decimais). O programa vai se chamar <code>notas.lua</code> e fica na mesma pasta:</p>
+
+<pre class="term">$ mkdir -p projetos/notas
+$ cd projetos/notas</pre>
+
+<hr>
+
+<h2 id="versao1">Versão 1 · Ler o CSV</h2>
+<p>O primeiro passo é transformar o texto do arquivo em dados que o programa entende: uma lista de alunos, cada um com nome e notas. O <code>io.lines</code> entrega o arquivo uma linha por vez; o <code>gmatch</code> quebra cada linha nas vírgulas.</p>
+
+<pre class="file" data-file="notas.lua">local alunos = {}
+local cabecalho = true
+
+for linha in io.lines("notas.csv") do
+  if cabecalho then
+    cabecalho = false             -- a 1ª linha só tem os nomes das colunas
+  else
+    -- separa a linha nas vírgulas
+    local campos = {}
+    for campo in linha:gmatch("[^,]+") do
+      campos[#campos + 1] = campo
+    end
+
+    local aluno = { nome = campos[1], notas = {} }
+    for i = 2, #campos do
+      aluno.notas[#aluno.notas + 1] = tonumber(campos[i])
+    end
+    alunos[#alunos + 1] = aluno
+  end
+end
+
+print(#alunos .. " alunos lidos.")
+for _, aluno in ipairs(alunos) do
+  print(aluno.nome .. ": " .. table.concat(aluno.notas, " "))
+end
+</pre>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Peça</th><th>O que faz</th></tr>
+<tr><td><code>for linha in io.lines("notas.csv") do</code></td><td>Abre o arquivo, dá uma volta por linha (sem o <kbd>Enter</kbd> do fim) e fecha o arquivo sozinho quando ele acaba (veja <a href="io-lines.html">io.lines</a>).</td></tr>
+<tr><td><code>local cabecalho = true</code> … <code>cabecalho = false</code></td><td>Uma bandeira para pular a primeira linha: na primeira volta ela está levantada, o programa a abaixa e não faz mais nada com aquela linha.</td></tr>
+<tr><td><code>linha:gmatch("[^,]+")</code></td><td>Percorre todos os pedaços da linha que casam com o padrão <code>[^,]+</code>: "um ou mais caracteres que <strong>não</strong> são vírgula". Em <code>"Bruno,5.0,6.5,4.0"</code>, os pedaços são <code>Bruno</code>, <code>5.0</code>, <code>6.5</code> e <code>4.0</code> (veja <a href="gmatch.html">gmatch</a>). O <code>[^…]</code> é um "conjunto ao contrário".</td></tr>
+<tr><td><code>{ nome = campos[1], notas = {} }</code></td><td>O aluno: o primeiro campo é o nome, e as notas vão para uma lista própria.</td></tr>
+<tr><td><code>tonumber(campos[i])</code></td><td>Os campos são textos; as notas precisam virar números para as contas da versão 2.</td></tr>
+<tr><td><code>table.concat(aluno.notas, " ")</code></td><td>Mostra as notas separadas por espaço. O <code>table.concat</code> aceita números e os transforma em texto.</td></tr>
+</table>
+</div>
+
+<pre class="term" data-cwd="~/projetos/notas">$ lua notas.lua
+5 alunos lidos.
+Ana Clara: 8.5 7.0 9.0
+Bruno: 5.0 6.5 4.0
+Carla: 7.0 7.0 7.5
+Diego: 3.5 5.0 6.0
+Elisa: 10 9.5 9.0</pre>
+
+<p>Repare na Elisa: <code>10</code>, e não <code>10.0</code>. No arquivo está escrito <code>10</code>, sem ponto, e o <code>tonumber("10")</code> dá o <strong>inteiro</strong> 10 (veja <a href="numeros.html">Números</a>). Para as contas, não faz diferença; na hora de mostrar, a versão 3 vai formatar todas as notas iguais.</p>
+
+<div class="cenario">
+<strong>O arquivo não está na pasta</strong>
+<pre class="term" data-cwd="~/projetos/notas">$ lua notas.lua
+lua: notas.lua:47: cannot open file 'notas.csv' (No such file or directory)
+stack traceback:
+        [C]: in field 'lines'
+        notas.lua:47: in main chunk
+        [C]: in ?</pre>
+<p>"Não consigo abrir o arquivo <code>notas.csv</code> (nenhum arquivo ou diretório com esse nome)". (Esta saída é da versão final, por isso a linha 47.) O <code>io.lines("notas.csv")</code> procura o arquivo na pasta <strong>de onde você rodou</strong> o <code>lua</code>, e não na pasta do programa. Se a Ana rodasse <code>lua projetos/notas/notas.lua</code> da pasta pessoal, daria este erro mesmo com o arquivo no lugar. Rode de dentro da pasta (<code>cd projetos/notas</code>). Para tratar a falta do arquivo com uma mensagem própria, use <code>io.open</code>, como na <a href="projeto-forca.html">Forca</a>.</p>
+</div>
+
+<div class="trylua" data-goal="out:Ana Clara: 8.5 7.0 9.0;;out:5 alunos lidos.">
+<p class="try-task"><strong>Missão (versão 1):</strong> a caixa tem duas abas: o programa e o <code>notas.csv</code>. Falta separar a linha nas vírgulas. No lugar do comentário, escreva o laço <code>for campo in linha:gmatch("[^,]+") do</code> que guarda cada pedaço no fim de <code>campos</code>.</p>
+<pre class="script" data-file="notas.lua">local alunos = {}
+local cabecalho = true
+
+for linha in io.lines("notas.csv") do
+  if cabecalho then
+    cabecalho = false             -- a 1ª linha só tem os nomes das colunas
+  else
+    -- separa a linha nas vírgulas
+    local campos = {}
+    -- percorra a linha com gmatch e guarde cada campo em campos
+
+    local aluno = { nome = campos[1], notas = {} }
+    for i = 2, #campos do
+      aluno.notas[#aluno.notas + 1] = tonumber(campos[i])
+    end
+    alunos[#alunos + 1] = aluno
+  end
+end
+
+print(#alunos .. " alunos lidos.")
+for _, aluno in ipairs(alunos) do
+  print(aluno.nome .. ": " .. table.concat(aluno.notas, " "))
+end
+</pre>
+<pre class="script" data-file="notas.csv">nome,prova1,prova2,prova3
+Ana Clara,8.5,7.0,9.0
+Bruno,5.0,6.5,4.0
+Carla,7.0,7.0,7.5
+Diego,3.5,5.0,6.0
+Elisa,10,9.5,9.0
+</pre>
+<pre class="solucao" data-file="notas.lua">local alunos = {}
+local cabecalho = true
+
+for linha in io.lines("notas.csv") do
+  if cabecalho then
+    cabecalho = false             -- a 1ª linha só tem os nomes das colunas
+  else
+    -- separa a linha nas vírgulas
+    local campos = {}
+    for campo in linha:gmatch("[^,]+") do
+      campos[#campos + 1] = campo
+    end
+
+    local aluno = { nome = campos[1], notas = {} }
+    for i = 2, #campos do
+      aluno.notas[#aluno.notas + 1] = tonumber(campos[i])
+    end
+    alunos[#alunos + 1] = aluno
+  end
+end
+
+print(#alunos .. " alunos lidos.")
+for _, aluno in ipairs(alunos) do
+  print(aluno.nome .. ": " .. table.concat(aluno.notas, " "))
+end
+</pre>
+</div>
+
+<hr>
+
+<h2 id="versao2">Versão 2 · Média e situação</h2>
+<p>Com os dados em tabelas, as contas ficam fáceis. Três funções: <code>separar</code> (o laço do <code>gmatch</code>, agora com nome), <code>media</code> e <code>situacao</code>. A regra da escola da Ana: média 7 ou mais, aprovado; de 5 a 7, recuperação; abaixo de 5, reprovado.</p>
+
+<pre class="file" data-file="notas.lua">-- Separa uma linha do CSV nas vírgulas.
+local function separar(linha)
+  local campos = {}
+  for campo in linha:gmatch("[^,]+") do
+    campos[#campos + 1] = campo
+  end
+  return campos
+end
+
+local function media(notas)
+  local soma = 0
+  for _, nota in ipairs(notas) do
+    soma = soma + nota
+  end
+  return soma / #notas
+end
+
+local function situacao(m)
+  if m &gt;= 7 then
+    return "aprovado(a)"
+  elseif m &gt;= 5 then
+    return "recuperação"
+  else
+    return "reprovado(a)"
+  end
+end
+
+local alunos = {}
+local cabecalho = true
+for linha in io.lines("notas.csv") do
+  if cabecalho then
+    cabecalho = false
+  else
+    local campos = separar(linha)
+    local aluno = { nome = campos[1], notas = {} }
+    for i = 2, #campos do
+      aluno.notas[#aluno.notas + 1] = tonumber(campos[i])
+    end
+    aluno.media = media(aluno.notas)
+    alunos[#alunos + 1] = aluno
+  end
+end
+
+for _, aluno in ipairs(alunos) do
+  print(string.format("%s: média %.2f, %s", aluno.nome, aluno.media, situacao(aluno.media)))
+end
+</pre>
+
+<dl class="anatomy">
+  <dt>local soma = 0 … soma = soma + nota</dt><dd>O acumulador clássico: começa em zero e cada nota é somada. No fim, <code>soma / #notas</code> é a média (a barra sempre dá float, veja <a href="divisao.html">Divisão</a>).</dd>
+  <dt>if m &gt;= 7 … elseif m &gt;= 5 … else</dt><dd>A ordem importa: quem tem 8 também tem "5 ou mais", mas o <code>elseif</code> só é testado se o <code>if</code> de cima falhou (veja <a href="elseif.html">elseif</a>).</dd>
+  <dt>aluno.media = media(aluno.notas)</dt><dd>Guarda a média <strong>dentro</strong> do aluno, num campo novo. Calcula uma vez e usa quantas vezes precisar (a versão 3 usa para ordenar).</dd>
+  <dt>string.format("%s: média %.2f, %s", …)</dt><dd><code>%.2f</code> = um número com 2 casas decimais: <code>8.1666…</code> vira <code>8.17</code> (arredondado).</dd>
+</dl>
+
+<pre class="term" data-cwd="~/projetos/notas">$ lua notas.lua
+Ana Clara: média 8.17, aprovado(a)
+Bruno: média 5.17, recuperação
+Carla: média 7.17, aprovado(a)
+Diego: média 4.83, reprovado(a)
+Elisa: média 9.50, aprovado(a)</pre>
+
+<div class="tip">
+<strong>Uma função, um nome: <code>media</code> e <code>aluno.media</code></strong>
+<p>A função se chama <code>media</code> e o campo também. Não há confusão para o Lua: <code>media</code> sozinho é a variável local que guarda a função, e <code>aluno.media</code> é o campo <code>"media"</code> dentro da tabela <code>aluno</code>. São lugares diferentes. Só não crie uma <strong>variável</strong> local chamada <code>media</code> depois da função: ela esconderia a função (veja <a href="escopo.html">Escopo e Blocos</a>).</p>
+</div>
+
+<div class="trylua" data-goal="out:Ana Clara: média 8.17, aprovado(a);;out:Diego: média 4.83, reprovado(a)">
+<p class="try-task"><strong>Missão (versão 2):</strong> a função <code>media</code> devolve sempre 0, e todo mundo sai reprovado. Complete: some as notas com um <code>for _, nota in ipairs(notas) do</code> e devolva a soma dividida por <code>#notas</code>.</p>
+<pre class="script" data-file="notas.lua">-- Separa uma linha do CSV nas vírgulas.
+local function separar(linha)
+  local campos = {}
+  for campo in linha:gmatch("[^,]+") do
+    campos[#campos + 1] = campo
+  end
+  return campos
+end
+
+local function media(notas)
+  -- some as notas e divida pela quantidade
+  return 0
+end
+
+local function situacao(m)
+  if m &gt;= 7 then
+    return "aprovado(a)"
+  elseif m &gt;= 5 then
+    return "recuperação"
+  else
+    return "reprovado(a)"
+  end
+end
+
+local alunos = {}
+local cabecalho = true
+for linha in io.lines("notas.csv") do
+  if cabecalho then
+    cabecalho = false
+  else
+    local campos = separar(linha)
+    local aluno = { nome = campos[1], notas = {} }
+    for i = 2, #campos do
+      aluno.notas[#aluno.notas + 1] = tonumber(campos[i])
+    end
+    aluno.media = media(aluno.notas)
+    alunos[#alunos + 1] = aluno
+  end
+end
+
+for _, aluno in ipairs(alunos) do
+  print(string.format("%s: média %.2f, %s", aluno.nome, aluno.media, situacao(aluno.media)))
+end
+</pre>
+<pre class="script" data-file="notas.csv">nome,prova1,prova2,prova3
+Ana Clara,8.5,7.0,9.0
+Bruno,5.0,6.5,4.0
+Carla,7.0,7.0,7.5
+Diego,3.5,5.0,6.0
+Elisa,10,9.5,9.0
+</pre>
+<pre class="solucao" data-file="notas.lua">-- Separa uma linha do CSV nas vírgulas.
+local function separar(linha)
+  local campos = {}
+  for campo in linha:gmatch("[^,]+") do
+    campos[#campos + 1] = campo
+  end
+  return campos
+end
+
+local function media(notas)
+  local soma = 0
+  for _, nota in ipairs(notas) do
+    soma = soma + nota
+  end
+  return soma / #notas
+end
+
+local function situacao(m)
+  if m &gt;= 7 then
+    return "aprovado(a)"
+  elseif m &gt;= 5 then
+    return "recuperação"
+  else
+    return "reprovado(a)"
+  end
+end
+
+local alunos = {}
+local cabecalho = true
+for linha in io.lines("notas.csv") do
+  if cabecalho then
+    cabecalho = false
+  else
+    local campos = separar(linha)
+    local aluno = { nome = campos[1], notas = {} }
+    for i = 2, #campos do
+      aluno.notas[#aluno.notas + 1] = tonumber(campos[i])
+    end
+    aluno.media = media(aluno.notas)
+    alunos[#alunos + 1] = aluno
+  end
+end
+
+for _, aluno in ipairs(alunos) do
+  print(string.format("%s: média %.2f, %s", aluno.nome, aluno.media, situacao(aluno.media)))
+end
+</pre>
+</div>
+
+<hr>
+
+<h2 id="versao3">Versão 3 · O relatório</h2>
+<p>A Ana quer uma tabela bonita, com os alunos da maior para a menor média, a média da turma e quantos passaram. Duas novidades: ordenar por um <strong>campo</strong> (o <code>table.sort</code> sozinho não sabe comparar duas tabelas) e alinhar colunas de números. O programa é a versão 2 com o final trocado:</p>
+
+<pre class="file" data-file="notas.lua">-- Separa uma linha do CSV nas vírgulas.
+local function separar(linha)
+  local campos = {}
+  for campo in linha:gmatch("[^,]+") do
+    campos[#campos + 1] = campo
+  end
+  return campos
+end
+
+local function media(notas)
+  local soma = 0
+  for _, nota in ipairs(notas) do
+    soma = soma + nota
+  end
+  return soma / #notas
+end
+
+local function situacao(m)
+  if m &gt;= 7 then
+    return "aprovado(a)"
+  elseif m &gt;= 5 then
+    return "recuperação"
+  else
+    return "reprovado(a)"
+  end
+end
+
+local alunos = {}
+local cabecalho = true
+for linha in io.lines("notas.csv") do
+  if cabecalho then
+    cabecalho = false
+  else
+    local campos = separar(linha)
+    local aluno = { nome = campos[1], notas = {} }
+    for i = 2, #campos do
+      aluno.notas[#aluno.notas + 1] = tonumber(campos[i])
+    end
+    aluno.media = media(aluno.notas)
+    alunos[#alunos + 1] = aluno
+  end
+end
+
+-- Do maior para o menor: a função diz se a deve vir antes de b.
+table.sort(alunos, function (a, b)
+  return a.media &gt; b.media
+end)
+
+print("Aluno        P1    P2    P3   Média  Situação")
+print(string.rep("-", 48))
+local soma, aprovados = 0, 0
+for _, aluno in ipairs(alunos) do
+  local n = aluno.notas
+  print(string.format("%-10s %5.1f %5.1f %5.1f  %6.2f  %s",
+    aluno.nome, n[1], n[2], n[3], aluno.media, situacao(aluno.media)))
+  soma = soma + aluno.media
+  if aluno.media &gt;= 7 then
+    aprovados = aprovados + 1
+  end
+end
+print(string.rep("-", 48))
+print(string.format("Média da turma: %.2f", soma / #alunos))
+print(string.format("Aprovados: %d de %d", aprovados, #alunos))
+</pre>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Peça</th><th>O que faz</th></tr>
+<tr><td><code>table.sort(alunos, function (a, b) … end)</code></td><td>O segundo argumento é uma <strong>função de comparação</strong>: o <code>table.sort</code> a chama com dois alunos, <code>a</code> e <code>b</code>, e ela responde <code>true</code> se <code>a</code> deve vir <strong>antes</strong> de <code>b</code> (veja <a href="table-sort.html">table.sort</a>).</td></tr>
+<tr><td><code>return a.media &gt; b.media</code></td><td>"<code>a</code> vem antes se a média dele for maior": ordem decrescente. Com <code>&lt;</code>, seria da menor para a maior.</td></tr>
+<tr><td><code>string.rep("-", 48)</code></td><td>Repete o <code>-</code> 48 vezes: a linha que separa o cabeçalho (veja <a href="string-metodos.html">Funções de Texto</a>).</td></tr>
+<tr><td><code>%-10s</code></td><td>O nome em 10 posições, alinhado à esquerda.</td></tr>
+<tr><td><code>%5.1f</code></td><td>Um número em 5 posições, com 1 casa decimal, alinhado à <strong>direita</strong>: <code>" 10.0"</code>, <code>"  8.5"</code>. Com todos do mesmo tamanho, as vírgulas decimais ficam umas embaixo das outras. E o inteiro <code>10</code> da Elisa sai como <code>10.0</code>.</td></tr>
+<tr><td><code>local soma, aprovados = 0, 0</code></td><td>Dois acumuladores de uma vez: a soma das médias (para a média da turma) e o número de aprovados.</td></tr>
+<tr><td><code>print(string.format(…,</code> (linha quebrada)</td><td>Uma chamada comprida pode continuar na linha de baixo: para o Lua, a quebra de linha é só espaço.</td></tr>
+</table>
+</div>
+
+<pre class="term" data-cwd="~/projetos/notas">$ lua notas.lua
+Aluno        P1    P2    P3   Média  Situação
+------------------------------------------------
+Elisa       10.0   9.5   9.0    9.50  aprovado(a)
+Ana Clara    8.5   7.0   9.0    8.17  aprovado(a)
+Carla        7.0   7.0   7.5    7.17  aprovado(a)
+Bruno        5.0   6.5   4.0    5.17  recuperação
+Diego        3.5   5.0   6.0    4.83  reprovado(a)
+------------------------------------------------
+Média da turma: 6.97
+Aprovados: 3 de 5</pre>
+
+<div class="warning">
+<strong>Médias iguais: o <code>table.sort</code> não garante a ordem do empate</strong>
+<p>Se dois alunos tiverem exatamente a mesma média, o <code>table.sort</code> pode colocá-los em qualquer ordem entre si (ele não é "estável"). Para um relatório que precisa sair sempre igual, desempate na função: <code>if a.media ~= b.media then return a.media &gt; b.media end return a.nome &lt; b.nome</code> (empate: ordem alfabética). E a função de comparação precisa ser coerente: nunca use <code>&gt;=</code>, que diz que <code>a</code> vem antes de <code>b</code> e <code>b</code> antes de <code>a</code> ao mesmo tempo, e pode até dar erro. Com 100 notas iguais:</p>
+<pre class="term">$ lua -e 'local t = {} for i = 1, 100 do t[i] = 5 end table.sort(t, function (a, b) return a &gt;= b end) print("ok")'
+lua: (command line):1: invalid order function for sorting
+stack traceback:
+	[C]: in field 'sort'
+	(command line):1: in main chunk
+	[C]: in ?</pre>
+<p>"Função de ordem inválida para ordenar": o <code>table.sort</code> percebeu que as respostas da função se contradizem.</p>
+</div>
+
+<div class="trylua" data-goal="outre:Elisa[^\n]*\nAna Clara[^\n]*\nCarla[^\n]*\nBruno[^\n]*\nDiego;;src:table\.sort">
+<p class="try-task"><strong>Missão (versão 3):</strong> o relatório sai na ordem do arquivo. No lugar do comentário, ordene <code>alunos</code> com <code>table.sort</code> e uma função de comparação que ponha a maior média primeiro.</p>
+<pre class="script" data-file="notas.lua">-- Separa uma linha do CSV nas vírgulas.
+local function separar(linha)
+  local campos = {}
+  for campo in linha:gmatch("[^,]+") do
+    campos[#campos + 1] = campo
+  end
+  return campos
+end
+
+local function media(notas)
+  local soma = 0
+  for _, nota in ipairs(notas) do
+    soma = soma + nota
+  end
+  return soma / #notas
+end
+
+local function situacao(m)
+  if m &gt;= 7 then
+    return "aprovado(a)"
+  elseif m &gt;= 5 then
+    return "recuperação"
+  else
+    return "reprovado(a)"
+  end
+end
+
+local alunos = {}
+local cabecalho = true
+for linha in io.lines("notas.csv") do
+  if cabecalho then
+    cabecalho = false
+  else
+    local campos = separar(linha)
+    local aluno = { nome = campos[1], notas = {} }
+    for i = 2, #campos do
+      aluno.notas[#aluno.notas + 1] = tonumber(campos[i])
+    end
+    aluno.media = media(aluno.notas)
+    alunos[#alunos + 1] = aluno
+  end
+end
+
+-- ordene aqui os alunos pela média, da maior para a menor
+
+print("Aluno        P1    P2    P3   Média  Situação")
+print(string.rep("-", 48))
+local soma, aprovados = 0, 0
+for _, aluno in ipairs(alunos) do
+  local n = aluno.notas
+  print(string.format("%-10s %5.1f %5.1f %5.1f  %6.2f  %s",
+    aluno.nome, n[1], n[2], n[3], aluno.media, situacao(aluno.media)))
+  soma = soma + aluno.media
+  if aluno.media &gt;= 7 then
+    aprovados = aprovados + 1
+  end
+end
+print(string.rep("-", 48))
+print(string.format("Média da turma: %.2f", soma / #alunos))
+print(string.format("Aprovados: %d de %d", aprovados, #alunos))
+</pre>
+<pre class="script" data-file="notas.csv">nome,prova1,prova2,prova3
+Ana Clara,8.5,7.0,9.0
+Bruno,5.0,6.5,4.0
+Carla,7.0,7.0,7.5
+Diego,3.5,5.0,6.0
+Elisa,10,9.5,9.0
+</pre>
+<pre class="solucao" data-file="notas.lua">-- Separa uma linha do CSV nas vírgulas.
+local function separar(linha)
+  local campos = {}
+  for campo in linha:gmatch("[^,]+") do
+    campos[#campos + 1] = campo
+  end
+  return campos
+end
+
+local function media(notas)
+  local soma = 0
+  for _, nota in ipairs(notas) do
+    soma = soma + nota
+  end
+  return soma / #notas
+end
+
+local function situacao(m)
+  if m &gt;= 7 then
+    return "aprovado(a)"
+  elseif m &gt;= 5 then
+    return "recuperação"
+  else
+    return "reprovado(a)"
+  end
+end
+
+local alunos = {}
+local cabecalho = true
+for linha in io.lines("notas.csv") do
+  if cabecalho then
+    cabecalho = false
+  else
+    local campos = separar(linha)
+    local aluno = { nome = campos[1], notas = {} }
+    for i = 2, #campos do
+      aluno.notas[#aluno.notas + 1] = tonumber(campos[i])
+    end
+    aluno.media = media(aluno.notas)
+    alunos[#alunos + 1] = aluno
+  end
+end
+
+-- Do maior para o menor: a função diz se a deve vir antes de b.
+table.sort(alunos, function (a, b)
+  return a.media &gt; b.media
+end)
+
+print("Aluno        P1    P2    P3   Média  Situação")
+print(string.rep("-", 48))
+local soma, aprovados = 0, 0
+for _, aluno in ipairs(alunos) do
+  local n = aluno.notas
+  print(string.format("%-10s %5.1f %5.1f %5.1f  %6.2f  %s",
+    aluno.nome, n[1], n[2], n[3], aluno.media, situacao(aluno.media)))
+  soma = soma + aluno.media
+  if aluno.media &gt;= 7 then
+    aprovados = aprovados + 1
+  end
+end
+print(string.rep("-", 48))
+print(string.format("Média da turma: %.2f", soma / #alunos))
+print(string.format("Aprovados: %d de %d", aprovados, #alunos))
+</pre>
+</div>
+
+<hr>
+
+<h2 id="versao4">Versão 4 · Gravar o relatorio.csv</h2>
+<p>O relatório na tela é bom para olhar; para mandar para a coordenação, a Ana quer um CSV que a planilha abra. São sete linhas no fim do programa:</p>
+
+<pre class="file" data-file="notas.lua">-- (tudo da versão 3, e no fim:)
+
+-- Grava o resultado num CSV novo, para abrir na planilha.
+local saida = assert(io.open("relatorio.csv", "w"))
+saida:write("nome,media,situacao\n")
+for _, aluno in ipairs(alunos) do
+  saida:write(string.format("%s,%.2f,%s\n", aluno.nome, aluno.media, situacao(aluno.media)))
+end
+saida:close()
+print("Relatório gravado em relatorio.csv.")
+</pre>
+
+<dl class="anatomy">
+  <dt>assert(io.open("relatorio.csv", "w"))</dt><dd>Abre (ou cria) o arquivo para escrita, apagando o conteúdo antigo. O <code>assert</code> para o programa com a mensagem do <code>io.open</code> se não der para abrir (veja <a href="assert.html">assert</a>).</dd>
+  <dt>saida:write("nome,media,situacao\n")</dt><dd>O cabeçalho do CSV novo. Sem acento no "situacao": cabeçalhos simples evitam problemas em outros programas.</dd>
+  <dt>string.format("%s,%.2f,%s\n", …)</dt><dd>Uma linha por aluno, com as vírgulas entre os campos e o <code>\n</code> no fim. O <code>%.2f</code> escreve a média com <strong>ponto</strong> (<code>9.50</code>), o mesmo formato do arquivo de entrada.</dd>
+  <dt>saida:close()</dt><dd>Fecha o arquivo: garante que tudo foi mesmo escrito no disco.</dd>
+</dl>
+
+<p>A saída completa está no começo da página. Como o laço percorre <code>alunos</code> depois do <code>table.sort</code>, o CSV também sai em ordem de média.</p>
+
+<div class="note">
+<strong>A planilha em português e o ponto decimal</strong>
+<p>Uma planilha configurada em português costuma esperar <strong>vírgula</strong> nos decimais e <strong>ponto e vírgula</strong> entre as colunas (<code>Elisa;9,50;aprovado(a)</code>). Se o <code>relatorio.csv</code> abrir com tudo numa coluna só, use a opção de importação da planilha e escolha "vírgula" como separador. Ou gere o formato brasileiro: <code>string.format("%s;%s;%s\n", aluno.nome, (string.format("%.2f", aluno.media):gsub("%.", ",")), …)</code> (os parênteses em volta do <code>gsub</code> guardam só o texto; veja a <a href="projeto-calculadora.html">Calculadora</a>).</p>
+</div>
+
+<div class="trylua" data-goal="arquivo:relatorio.csv~nome,media,situacao;;arquivo:relatorio.csv~Elisa,9.50,aprovado(a)">
+<p class="try-task"><strong>Missão (versão 4):</strong> o relatório já sai na tela, mas o arquivo não é gravado. No lugar do comentário do fim, abra <code>relatorio.csv</code> com <code>"w"</code>, escreva o cabeçalho <code>nome,media,situacao</code> e uma linha por aluno (nome, média com <code>%.2f</code> e situação, separados por vírgula) e feche o arquivo.</p>
+<pre class="script" data-file="notas.lua">-- Separa uma linha do CSV nas vírgulas.
+local function separar(linha)
+  local campos = {}
+  for campo in linha:gmatch("[^,]+") do
+    campos[#campos + 1] = campo
+  end
+  return campos
+end
+
+local function media(notas)
+  local soma = 0
+  for _, nota in ipairs(notas) do
+    soma = soma + nota
+  end
+  return soma / #notas
+end
+
+local function situacao(m)
+  if m &gt;= 7 then
+    return "aprovado(a)"
+  elseif m &gt;= 5 then
+    return "recuperação"
+  else
+    return "reprovado(a)"
+  end
+end
+
+local alunos = {}
+local cabecalho = true
+for linha in io.lines("notas.csv") do
+  if cabecalho then
+    cabecalho = false
+  else
+    local campos = separar(linha)
+    local aluno = { nome = campos[1], notas = {} }
+    for i = 2, #campos do
+      aluno.notas[#aluno.notas + 1] = tonumber(campos[i])
+    end
+    aluno.media = media(aluno.notas)
+    alunos[#alunos + 1] = aluno
+  end
+end
+
+-- Do maior para o menor: a função diz se a deve vir antes de b.
+table.sort(alunos, function (a, b)
+  return a.media &gt; b.media
+end)
+
+print("Aluno        P1    P2    P3   Média  Situação")
+print(string.rep("-", 48))
+local soma, aprovados = 0, 0
+for _, aluno in ipairs(alunos) do
+  local n = aluno.notas
+  print(string.format("%-10s %5.1f %5.1f %5.1f  %6.2f  %s",
+    aluno.nome, n[1], n[2], n[3], aluno.media, situacao(aluno.media)))
+  soma = soma + aluno.media
+  if aluno.media &gt;= 7 then
+    aprovados = aprovados + 1
+  end
+end
+print(string.rep("-", 48))
+print(string.format("Média da turma: %.2f", soma / #alunos))
+print(string.format("Aprovados: %d de %d", aprovados, #alunos))
+
+-- grave aqui o relatorio.csv: o cabeçalho e uma linha por aluno
+</pre>
+<pre class="script" data-file="notas.csv">nome,prova1,prova2,prova3
+Ana Clara,8.5,7.0,9.0
+Bruno,5.0,6.5,4.0
+Carla,7.0,7.0,7.5
+Diego,3.5,5.0,6.0
+Elisa,10,9.5,9.0
+</pre>
+<pre class="solucao" data-file="notas.lua">-- Separa uma linha do CSV nas vírgulas.
+local function separar(linha)
+  local campos = {}
+  for campo in linha:gmatch("[^,]+") do
+    campos[#campos + 1] = campo
+  end
+  return campos
+end
+
+local function media(notas)
+  local soma = 0
+  for _, nota in ipairs(notas) do
+    soma = soma + nota
+  end
+  return soma / #notas
+end
+
+local function situacao(m)
+  if m &gt;= 7 then
+    return "aprovado(a)"
+  elseif m &gt;= 5 then
+    return "recuperação"
+  else
+    return "reprovado(a)"
+  end
+end
+
+local alunos = {}
+local cabecalho = true
+for linha in io.lines("notas.csv") do
+  if cabecalho then
+    cabecalho = false
+  else
+    local campos = separar(linha)
+    local aluno = { nome = campos[1], notas = {} }
+    for i = 2, #campos do
+      aluno.notas[#aluno.notas + 1] = tonumber(campos[i])
+    end
+    aluno.media = media(aluno.notas)
+    alunos[#alunos + 1] = aluno
+  end
+end
+
+-- Do maior para o menor: a função diz se a deve vir antes de b.
+table.sort(alunos, function (a, b)
+  return a.media &gt; b.media
+end)
+
+print("Aluno        P1    P2    P3   Média  Situação")
+print(string.rep("-", 48))
+local soma, aprovados = 0, 0
+for _, aluno in ipairs(alunos) do
+  local n = aluno.notas
+  print(string.format("%-10s %5.1f %5.1f %5.1f  %6.2f  %s",
+    aluno.nome, n[1], n[2], n[3], aluno.media, situacao(aluno.media)))
+  soma = soma + aluno.media
+  if aluno.media &gt;= 7 then
+    aprovados = aprovados + 1
+  end
+end
+print(string.rep("-", 48))
+print(string.format("Média da turma: %.2f", soma / #alunos))
+print(string.format("Aprovados: %d de %d", aprovados, #alunos))
+
+-- Grava o resultado num CSV novo, para abrir na planilha.
+local saida = assert(io.open("relatorio.csv", "w"))
+saida:write("nome,media,situacao\n")
+for _, aluno in ipairs(alunos) do
+  saida:write(string.format("%s,%.2f,%s\n", aluno.nome, aluno.media, situacao(aluno.media)))
+end
+saida:close()
+print("Relatório gravado em relatorio.csv.")
+</pre>
+</div>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+<p>O <code>notas.csv</code> da página é perfeito. O de verdade, preenchido por gente, não é: uma nota que faltou, um "sete" por extenso, uma linha em branco no fim. Três problemas reais, testados com a versão 2 (que é mais curta).</p>
+
+<div class="cenario">
+<strong>Um campo vazio: a média errada, sem aviso</strong>
+<p>O Bruno faltou à prova 2, e a célula ficou vazia:</p>
+<pre class="term" data-cwd="~/projetos/notas">$ cat notas.csv
+nome,prova1,prova2,prova3
+Ana Clara,8.5,7.0,9.0
+Bruno,5.0,,4.0
+$ lua notas.lua
+Ana Clara: média 8.17, aprovado(a)
+Bruno: média 4.50, reprovado(a)</pre>
+<p>Média 4.50 é <code>(5.0 + 4.0) / 2</code>: o programa dividiu por <strong>2</strong>, como se o Bruno tivesse feito só duas provas. O culpado é o padrão <code>[^,]+</code>, "um <strong>ou mais</strong> caracteres que não são vírgula": entre as duas vírgulas seguidas não há nenhum caractere, então ali não há pedaço nenhum. No modo interativo:</p>
+<pre class="term">$ lua
+Lua 5.5.0  Copyright (C) 1994-2025 Lua.org, PUC-Rio
+&gt; for campo in ("Bruno,5.0,,4.0"):gmatch("[^,]+") do io.write("[", campo, "] ") end print()
+[Bruno] [5.0] [4.0]
+&gt; for campo in ("Bruno,5.0,,4.0" .. ","):gmatch("([^,]*),") do io.write("[", campo, "] ") end print()
+[Bruno] [5.0] [] [4.0]
+&gt; os.exit()</pre>
+<p>O segundo padrão, <code>([^,]*),</code>, quer dizer "<strong>zero</strong> ou mais caracteres que não são vírgula, seguidos de uma vírgula", e guarda (os parênteses) só a parte de antes da vírgula. Com o <code>*</code>, o campo vazio também conta: aparece como <code>[]</code>. A vírgula acrescentada no fim da linha (<code>linha .. ","</code>) é para o último campo também terminar em vírgula. Com o relatório da versão 3, o mesmo arquivo não dá média errada: dá erro, porque falta a terceira nota para o <code>%5.1f</code>:</p>
+<pre class="term" data-cwd="~/projetos/notas">$ lua notas.lua
+Aluno        P1    P2    P3   Média  Situação
+------------------------------------------------
+Ana Clara    8.5   7.0   9.0    8.17  aprovado(a)
+lua: notas.lua:54: bad argument #5 to 'format' (number expected, got nil)
+stack traceback:
+	[C]: in field 'format'
+	notas.lua:54: in main chunk
+	[C]: in ?</pre>
+<p>"Argumento nº 5 ruim para o <code>format</code> (esperava número, veio nil)": o 1º argumento é o texto do formato, o 2º o nome, e o 5º é <code>n[3]</code>, que não existe.</p>
+</div>
+
+<div class="cenario">
+<strong>Texto no lugar de nota: a nota some</strong>
+<pre class="term" data-cwd="~/projetos/notas">$ cat notas.csv
+nome,prova1,prova2,prova3
+Ana Clara,8.5,7.0,9.0
+Diego,3.5,sete,6.0
+$ lua notas.lua
+Ana Clara: média 8.17, aprovado(a)
+Diego: média 4.75, reprovado(a)</pre>
+<p>De novo uma média de duas notas (<code>(3.5 + 6.0) / 2</code>), mas por outro motivo. O <code>tonumber("sete")</code> deu <code>nil</code>, e <code>aluno.notas[#aluno.notas + 1] = nil</code> <strong>não acrescenta nada</strong>: guardar <code>nil</code> numa posição é o mesmo que deixá-la vazia, e o <code>#</code> continua igual (veja <a href="sequencias.html">Sequências e Buracos</a>). O programa não reclamou de nada.</p>
+</div>
+
+<div class="cenario">
+<strong>Uma linha em branco no fim: um aluno <code>nil</code></strong>
+<p>Muitos editores (e planilhas) deixam uma linha vazia no fim do arquivo:</p>
+<pre class="term" data-cwd="~/projetos/notas">$ lua notas.lua
+Ana Clara: média 8.17, aprovado(a)
+nil: média -nan, reprovado(a)</pre>
+<p>A linha vazia não tem campo nenhum: o nome ficou <code>nil</code>, a lista de notas ficou vazia, e a média virou <code>0 / 0</code>, que dá <code>-nan</code> ("não é um número"). O <code>%s</code> do <code>string.format</code> escreveu o <code>nil</code> como texto.</p>
+</div>
+
+<p>Os três problemas têm a mesma lição: <strong>um programa que lê um arquivo feito por pessoas precisa conferir cada linha</strong>. A versão final troca o padrão do <code>separar</code>, pula as linhas em branco e confere cada aluno numa função <code>ler_aluno</code>, que devolve o aluno ou <code>nil</code> e o motivo (o mesmo costume do <code>io.open</code>):</p>
+
+<pre class="file" data-file="notas.lua">-- Separa uma linha do CSV nas vírgulas, sem perder os campos vazios.
+local function separar(linha)
+  local campos = {}
+  for campo in (linha .. ","):gmatch("([^,]*),") do
+    campos[#campos + 1] = campo
+  end
+  return campos
+end
+
+local function media(notas)
+  local soma = 0
+  for _, nota in ipairs(notas) do
+    soma = soma + nota
+  end
+  return soma / #notas
+end
+
+local function situacao(m)
+  if m &gt;= 7 then
+    return "aprovado(a)"
+  elseif m &gt;= 5 then
+    return "recuperação"
+  else
+    return "reprovado(a)"
+  end
+end
+
+-- Monta um aluno a partir dos campos. Devolve o aluno, ou nil e o motivo.
+local function ler_aluno(campos)
+  if #campos ~= 4 then
+    return nil, string.format("esperava 4 campos, achei %d", #campos)
+  end
+  local aluno = { nome = campos[1], notas = {} }
+  for i = 2, 4 do
+    local nota = tonumber(campos[i])
+    if nota == nil then
+      return nil, string.format("a nota %d (%q) não é um número", i - 1, campos[i])
+    end
+    aluno.notas[i - 1] = nota
+  end
+  aluno.media = media(aluno.notas)
+  return aluno
+end
+
+local alunos = {}
+local numero = 0
+for linha in io.lines("notas.csv") do
+  numero = numero + 1
+  if numero &gt; 1 and linha:match("%S") then   -- pula o cabeçalho e as linhas em branco
+    local aluno, motivo = ler_aluno(separar(linha))
+    if aluno then
+      alunos[#alunos + 1] = aluno
+    else
+      print(string.format("Linha %d ignorada (%s): %s", numero, motivo, linha))
+    end
+  end
+end
+
+-- Do maior para o menor: a função diz se a deve vir antes de b.
+table.sort(alunos, function (a, b)
+  return a.media &gt; b.media
+end)
+
+print("Aluno        P1    P2    P3   Média  Situação")
+print(string.rep("-", 48))
+local soma, aprovados = 0, 0
+for _, aluno in ipairs(alunos) do
+  local n = aluno.notas
+  print(string.format("%-10s %5.1f %5.1f %5.1f  %6.2f  %s",
+    aluno.nome, n[1], n[2], n[3], aluno.media, situacao(aluno.media)))
+  soma = soma + aluno.media
+  if aluno.media &gt;= 7 then
+    aprovados = aprovados + 1
+  end
+end
+print(string.rep("-", 48))
+print(string.format("Média da turma: %.2f", soma / #alunos))
+print(string.format("Aprovados: %d de %d", aprovados, #alunos))
+
+-- Grava o resultado num CSV novo, para abrir na planilha.
+local saida = assert(io.open("relatorio.csv", "w"))
+saida:write("nome,media,situacao\n")
+for _, aluno in ipairs(alunos) do
+  saida:write(string.format("%s,%.2f,%s\n", aluno.nome, aluno.media, situacao(aluno.media)))
+end
+saida:close()
+print("Relatório gravado em relatorio.csv.")
+</pre>
+
+<dl class="anatomy">
+  <dt>(linha .. ","):gmatch("([^,]*),")</dt><dd>O padrão que mantém os campos vazios (veja o primeiro cenário).</dd>
+  <dt>numero &gt; 1 and linha:match("%S")</dt><dd>Pula a linha 1 (o cabeçalho, agora contado com <code>numero</code> em vez da bandeira) e as linhas em que não há nenhum caractere que não seja espaço (<code>%S</code>, com S maiúsculo, é "qualquer coisa que <strong>não</strong> é espaço").</dd>
+  <dt>if #campos ~= 4 then return nil, …</dt><dd>Uma linha com campos a mais ou a menos é recusada, com o motivo.</dd>
+  <dt>string.format("… (%q) …", campos[i])</dt><dd>O <code>%q</code> mostra o texto entre aspas: um campo vazio aparece como <code>""</code>, e dá para ver que estava vazio.</dd>
+  <dt>print("Linha %d ignorada (%s): %s")</dt><dd>Avisa qual linha, por quê, e mostra a linha inteira, para a Ana achar e consertar na planilha.</dd>
+</dl>
+
+<pre class="term" data-cwd="~/projetos/notas">$ cat notas.csv
+nome,prova1,prova2,prova3
+Ana Clara,8.5,7.0,9.0
+Bruno,5.0,,4.0
+Carla,7.0,7.0,7.5
+Diego,3.5,sete,6.0
+Elisa,10,9.5,9.0
+
+$ lua notas.lua
+Linha 3 ignorada (a nota 2 ("") não é um número): Bruno,5.0,,4.0
+Linha 5 ignorada (a nota 2 ("sete") não é um número): Diego,3.5,sete,6.0
+Aluno        P1    P2    P3   Média  Situação
+------------------------------------------------
+Elisa       10.0   9.5   9.0    9.50  aprovado(a)
+Ana Clara    8.5   7.0   9.0    8.17  aprovado(a)
+Carla        7.0   7.0   7.5    7.17  aprovado(a)
+------------------------------------------------
+Média da turma: 8.28
+Aprovados: 3 de 3
+Relatório gravado em relatorio.csv.</pre>
+
+<p>As duas linhas com problema foram recusadas com o motivo, a linha em branco do fim foi pulada em silêncio, e o relatório saiu só com os dados confiáveis. (Ignorar a linha é uma escolha: outra seria parar o programa com <code>os.exit(1)</code>, para ninguém usar um relatório incompleto. Depende do uso.)</p>
+
+<div class="trylua" data-goal="out:a nota 2 (&quot;&quot;) não é um número;;out:Linha 5 ignorada">
+<p class="try-task"><strong>Missão (CSV com problemas):</strong> esta é a versão final, mas com o padrão antigo no <code>separar</code>. Com o <code>notas.csv</code> da segunda aba, o Bruno (campo vazio) é recusado com o motivo errado: "esperava 4 campos, achei 3". Troque o laço do <code>separar</code> pelo padrão que mantém os campos vazios, <code>(linha .. ","):gmatch("([^,]*),")</code>, para o aviso dizer que <code>a nota 2 ("") não é um número</code>.</p>
+<pre class="script" data-file="notas.lua">-- Separa uma linha do CSV nas vírgulas, sem perder os campos vazios.
+local function separar(linha)
+  local campos = {}
+  for campo in linha:gmatch("[^,]+") do
+    campos[#campos + 1] = campo
+  end
+  return campos
+end
+
+local function media(notas)
+  local soma = 0
+  for _, nota in ipairs(notas) do
+    soma = soma + nota
+  end
+  return soma / #notas
+end
+
+local function situacao(m)
+  if m &gt;= 7 then
+    return "aprovado(a)"
+  elseif m &gt;= 5 then
+    return "recuperação"
+  else
+    return "reprovado(a)"
+  end
+end
+
+-- Monta um aluno a partir dos campos. Devolve o aluno, ou nil e o motivo.
+local function ler_aluno(campos)
+  if #campos ~= 4 then
+    return nil, string.format("esperava 4 campos, achei %d", #campos)
+  end
+  local aluno = { nome = campos[1], notas = {} }
+  for i = 2, 4 do
+    local nota = tonumber(campos[i])
+    if nota == nil then
+      return nil, string.format("a nota %d (%q) não é um número", i - 1, campos[i])
+    end
+    aluno.notas[i - 1] = nota
+  end
+  aluno.media = media(aluno.notas)
+  return aluno
+end
+
+local alunos = {}
+local numero = 0
+for linha in io.lines("notas.csv") do
+  numero = numero + 1
+  if numero &gt; 1 and linha:match("%S") then   -- pula o cabeçalho e as linhas em branco
+    local aluno, motivo = ler_aluno(separar(linha))
+    if aluno then
+      alunos[#alunos + 1] = aluno
+    else
+      print(string.format("Linha %d ignorada (%s): %s", numero, motivo, linha))
+    end
+  end
+end
+
+-- Do maior para o menor: a função diz se a deve vir antes de b.
+table.sort(alunos, function (a, b)
+  return a.media &gt; b.media
+end)
+
+print("Aluno        P1    P2    P3   Média  Situação")
+print(string.rep("-", 48))
+local soma, aprovados = 0, 0
+for _, aluno in ipairs(alunos) do
+  local n = aluno.notas
+  print(string.format("%-10s %5.1f %5.1f %5.1f  %6.2f  %s",
+    aluno.nome, n[1], n[2], n[3], aluno.media, situacao(aluno.media)))
+  soma = soma + aluno.media
+  if aluno.media &gt;= 7 then
+    aprovados = aprovados + 1
+  end
+end
+print(string.rep("-", 48))
+print(string.format("Média da turma: %.2f", soma / #alunos))
+print(string.format("Aprovados: %d de %d", aprovados, #alunos))
+
+-- Grava o resultado num CSV novo, para abrir na planilha.
+local saida = assert(io.open("relatorio.csv", "w"))
+saida:write("nome,media,situacao\n")
+for _, aluno in ipairs(alunos) do
+  saida:write(string.format("%s,%.2f,%s\n", aluno.nome, aluno.media, situacao(aluno.media)))
+end
+saida:close()
+print("Relatório gravado em relatorio.csv.")
+</pre>
+<pre class="script" data-file="notas.csv">nome,prova1,prova2,prova3
+Ana Clara,8.5,7.0,9.0
+Bruno,5.0,,4.0
+Carla,7.0,7.0,7.5
+Diego,3.5,sete,6.0
+Elisa,10,9.5,9.0
+
+</pre>
+<pre class="solucao" data-file="notas.lua">-- Separa uma linha do CSV nas vírgulas, sem perder os campos vazios.
+local function separar(linha)
+  local campos = {}
+  for campo in (linha .. ","):gmatch("([^,]*),") do
+    campos[#campos + 1] = campo
+  end
+  return campos
+end
+
+local function media(notas)
+  local soma = 0
+  for _, nota in ipairs(notas) do
+    soma = soma + nota
+  end
+  return soma / #notas
+end
+
+local function situacao(m)
+  if m &gt;= 7 then
+    return "aprovado(a)"
+  elseif m &gt;= 5 then
+    return "recuperação"
+  else
+    return "reprovado(a)"
+  end
+end
+
+-- Monta um aluno a partir dos campos. Devolve o aluno, ou nil e o motivo.
+local function ler_aluno(campos)
+  if #campos ~= 4 then
+    return nil, string.format("esperava 4 campos, achei %d", #campos)
+  end
+  local aluno = { nome = campos[1], notas = {} }
+  for i = 2, 4 do
+    local nota = tonumber(campos[i])
+    if nota == nil then
+      return nil, string.format("a nota %d (%q) não é um número", i - 1, campos[i])
+    end
+    aluno.notas[i - 1] = nota
+  end
+  aluno.media = media(aluno.notas)
+  return aluno
+end
+
+local alunos = {}
+local numero = 0
+for linha in io.lines("notas.csv") do
+  numero = numero + 1
+  if numero &gt; 1 and linha:match("%S") then   -- pula o cabeçalho e as linhas em branco
+    local aluno, motivo = ler_aluno(separar(linha))
+    if aluno then
+      alunos[#alunos + 1] = aluno
+    else
+      print(string.format("Linha %d ignorada (%s): %s", numero, motivo, linha))
+    end
+  end
+end
+
+-- Do maior para o menor: a função diz se a deve vir antes de b.
+table.sort(alunos, function (a, b)
+  return a.media &gt; b.media
+end)
+
+print("Aluno        P1    P2    P3   Média  Situação")
+print(string.rep("-", 48))
+local soma, aprovados = 0, 0
+for _, aluno in ipairs(alunos) do
+  local n = aluno.notas
+  print(string.format("%-10s %5.1f %5.1f %5.1f  %6.2f  %s",
+    aluno.nome, n[1], n[2], n[3], aluno.media, situacao(aluno.media)))
+  soma = soma + aluno.media
+  if aluno.media &gt;= 7 then
+    aprovados = aprovados + 1
+  end
+end
+print(string.rep("-", 48))
+print(string.format("Média da turma: %.2f", soma / #alunos))
+print(string.format("Aprovados: %d de %d", aprovados, #alunos))
+
+-- Grava o resultado num CSV novo, para abrir na planilha.
+local saida = assert(io.open("relatorio.csv", "w"))
+saida:write("nome,media,situacao\n")
+for _, aluno in ipairs(alunos) do
+  saida:write(string.format("%s,%.2f,%s\n", aluno.nome, aluno.media, situacao(aluno.media)))
+end
+saida:close()
+print("Relatório gravado em relatorio.csv.")
+</pre>
+</div>
+
+<hr>
+
+<h2>Formas diferentes de guardar cada aluno</h2>
+<p>Este projeto guardou cada aluno como <code>{ nome = "Bruno", notas = { 5.0, 6.5, 4.0 }, media = 5.17 }</code>, numa lista. Outras escolhas possíveis:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Forma</th><th>Exemplo</th><th>Quando usar</th></tr>
+<tr><td>Lista de tabelas com campos (este projeto)</td><td><code>alunos[2].notas[1]</code></td><td>Quando a ordem importa (ordenar, mostrar) e cada aluno tem várias informações.</td></tr>
+<tr><td>Dicionário pelo nome</td><td><code>alunos["Bruno"].media</code></td><td>Quando o programa procura alunos pelo nome (como a <a href="projeto-agenda.html">Agenda</a>). Para ordenar, é preciso copiar os nomes para uma lista.</td></tr>
+<tr><td>Campos com o nome das colunas do cabeçalho</td><td><code>{ nome = "Bruno", prova1 = 5.0, prova2 = 6.5 }</code></td><td>Quando o CSV tem colunas de tipos diferentes: o programa lê o cabeçalho e usa cada nome de coluna como chave. Funciona para qualquer CSV, mas a conta da média fica menos direta.</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Para separar a linha</th><th>Campo vazio</th><th>Quando usar</th></tr>
+<tr><td><code>linha:gmatch("[^,]+")</code></td><td>Some</td><td>Quando nenhum campo pode estar vazio. Curto e comum em exemplos.</td></tr>
+<tr><td><code>(linha .. ","):gmatch("([^,]*),")</code></td><td>Vira <code>""</code></td><td>Com dados reais: mantém a posição de cada coluna.</td></tr>
+<tr><td>Uma biblioteca de CSV (pelo <a href="luarocks.html">LuaRocks</a>)</td><td>Vira <code>""</code></td><td>Quando os campos podem ter vírgula dentro, entre aspas (<code>"Souza, Bia",8.5</code>): nenhum dos dois padrões acima trata isso.</td></tr>
+</table>
+</div>
+
+<h2>Desafios extras</h2>
+<ul>
+  <li>Mostrar a maior e a menor nota da turma em cada prova (<code>math.max</code> e <code>math.min</code>; veja <a href="math.html">A Biblioteca math</a>).</li>
+  <li>Aceitar notas com vírgula decimal num CSV com ponto e vírgula entre as colunas (<code>Bruno;5,0;6,5;4,0</code>): troque o separador do padrão e passe cada nota por <code>gsub(",", ".")</code> antes do <code>tonumber</code>.</li>
+  <li>Ler o nome do arquivo da linha de comando (<code>lua notas.lua turma-b.csv</code>), com <a href="arg.html">arg[1]</a>.</li>
+</ul>
+
+<hr>
+
+<h2>Referência rápida do projeto</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>Para que serviu</th></tr>
+<tr><td><code>for linha in io.lines("notas.csv") do</code></td><td>Ler o arquivo linha por linha</td></tr>
+<tr><td><code>linha:gmatch("[^,]+")</code></td><td>Os pedaços entre vírgulas (sem os vazios)</td></tr>
+<tr><td><code>(linha .. ","):gmatch("([^,]*),")</code></td><td>Os pedaços entre vírgulas, com os vazios</td></tr>
+<tr><td><code>linha:match("%S")</code></td><td>A linha tem alguma coisa além de espaços?</td></tr>
+<tr><td><code>table.sort(lista, function (a, b) return a.media &gt; b.media end)</code></td><td>Ordenar por um campo, do maior para o menor</td></tr>
+<tr><td><code>"%-10s"</code>, <code>"%5.1f"</code>, <code>"%.2f"</code></td><td>Texto em 10 posições à esquerda; número em 5 posições com 1 casa; 2 casas</td></tr>
+<tr><td><code>string.rep("-", 48)</code></td><td>Uma linha de tracinhos</td></tr>
+<tr><td><code>assert(io.open(nome, "w"))</code> + <code>write</code> + <code>close</code></td><td>Gravar o CSV novo</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Sintoma</th><th>Causa provável</th></tr>
+<tr><td><code>cannot open file 'notas.csv' (No such file or directory)</code></td><td>O arquivo não está na pasta de onde o <code>lua</code> foi rodado</td></tr>
+<tr><td>Média calculada com notas a menos, sem aviso</td><td>Campo vazio com <code>[^,]+</code>, ou <code>tonumber</code> que deu <code>nil</code> (o <code>nil</code> não entra na lista)</td></tr>
+<tr><td><code>bad argument #5 to 'format' (number expected, got nil)</code></td><td>Falta uma nota para um <code>%f</code></td></tr>
+<tr><td><code>nil: média -nan</code></td><td>Linha em branco tratada como aluno</td></tr>
+<tr><td>Empates trocando de lugar</td><td><code>table.sort</code> não é estável: desempate na função</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. Linha por linha</h3>
+<p>Complete para percorrer o arquivo:</p>
+<div class="ex-code">for linha in io.<input data-answer="lines" aria-label="função">("notas.csv") do</div>
+</div>
+
+<div class="exercise">
+<h3>2. Os pedaços</h3>
+<p>Complete a função que percorre todos os pedaços que casam com o padrão:</p>
+<div class="ex-code">for campo in linha:<input data-answer="gmatch" aria-label="função">("[^,]+") do</div>
+</div>
+
+<div class="exercise">
+<h3>3. Da maior para a menor</h3>
+<p>Complete o sinal da comparação:</p>
+<div class="ex-code">table.sort(alunos, function (a, b) return a.media <input data-answer="&gt;" aria-label="operador"> b.media end)</div>
+</div>
+
+<div class="exercise">
+<h3>4. Duas casas</h3>
+<p>Complete o formato que mostra <code>8.1666…</code> como <code>8.17</code>:</p>
+<div class="ex-code">string.format("<input data-answer="%.2f" aria-label="formato">", 8.1666)</div>
+</div>
+
+<div class="mc" data-answer="3">
+<p class="mc-q">5. Com a linha <code>"Bruno,5.0,,4.0"</code>, quantos campos o <code>gmatch("[^,]+")</code> encontra?</p>
+<label><input type="radio" name="q5"> 4</label>
+<label><input type="radio" name="q5"> 5</label>
+<label><input type="radio" name="q5"> 3: o campo vazio entre as duas vírgulas some</label>
+<label><input type="radio" name="q5"> Nenhum: dá erro</label>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">6. O que faz <code>notas[#notas + 1] = nil</code>?</p>
+<label><input type="radio" name="q6"> Acrescenta um <code>nil</code> no fim, e <code>#notas</code> aumenta 1</label>
+<label><input type="radio" name="q6"> Nada: guardar <code>nil</code> é deixar a posição vazia, e <code>#notas</code> continua igual</label>
+<label><input type="radio" name="q6"> Apaga a última nota</label>
+<label><input type="radio" name="q6"> Dá erro</label>
+</div>
+
+<div class="mc" data-answer="1">
+<p class="mc-q">7. Na função de comparação do <code>table.sort</code>, o que significa <code>return true</code>?</p>
+<label><input type="radio" name="q7"> Que o primeiro argumento (<code>a</code>) deve vir antes do segundo (<code>b</code>)</label>
+<label><input type="radio" name="q7"> Que os dois são iguais</label>
+<label><input type="radio" name="q7"> Que a ordenação terminou</label>
+<label><input type="radio" name="q7"> Que <code>b</code> deve vir antes de <code>a</code></label>
+</div>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li>Um CSV é texto: uma linha por registro, vírgulas entre os campos, e a primeira linha com os nomes das colunas.</li>
+  <li><code>io.lines</code> entrega as linhas; <code>gmatch</code> com um padrão separa os campos. <code>[^,]+</code> perde os campos vazios; <code>(linha .. ","):gmatch("([^,]*),")</code> os mantém.</li>
+  <li>Cada aluno vira uma tabela com campos, numa lista; a média é calculada uma vez e guardada no próprio aluno.</li>
+  <li><code>table.sort</code> com uma função de comparação ordena por qualquer campo; <code>%-10s</code> e <code>%5.1f</code> alinham as colunas.</li>
+  <li>Gravar um CSV é <code>io.open(…, "w")</code>, uma linha por registro com <code>string.format</code>, e <code>close</code>.</li>
+  <li>Arquivo feito por pessoas tem defeitos: confira cada linha, diga qual linha e por quê, e nunca deixe um <code>nil</code> virar uma média errada em silêncio.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
