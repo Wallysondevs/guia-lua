@@ -1,0 +1,559 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua Privacidade com Closures — dados que ninguém de fora mexe | Guia Lua</title>
+<meta name="description" content="Encapsulamento no Lua para quem nunca programou: o saldo da conta que qualquer um muda, a convenção do sublinhado, a conta com closures (o saldo vira uma variável local que só as funções da conta enxergam), o estoque com a lista privada, closures × metatabelas, travar a tabela com __newindex, e os erros reais do Lua 5.5.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">Privacidade com Closures</span></h1>
+
+<p class="intro">Nas classes da aula <a href="classes.html">Classes com Metatabelas</a>, o saldo da conta é um campo comum: qualquer linha do programa pode escrever <code>conta_ana.saldo = -500</code>, e o método <code>depositar</code>, com todas as suas regras, nem fica sabendo. Proteger os dados de um objeto para que só os métodos dele mexam neles se chama <strong>encapsulamento</strong> (de "cápsula"). O Lua não tem uma palavra <code>private</code>, mas tem uma ferramenta que faz isso muito bem: as <a href="closures.html">closures</a>.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>Por que um campo aberto (<code>conta.saldo</code>) é perigoso, com os erros reais que aparecem longe da causa.</li>
+  <li>A convenção do sublinhado (<code>_saldo</code>) e o que ela <strong>não</strong> protege.</li>
+  <li>A conta com closures: o saldo vira uma variável <code>local</code> que só as funções da conta enxergam.</li>
+  <li>Por que esses objetos usam <strong>ponto</strong> (<code>ana.depositar(50)</code>), e não dois-pontos.</li>
+  <li>O estoque com a lista de produtos privada, e como entregar uma cópia.</li>
+  <li>Closures × metatabelas: quando usar cada uma.</li>
+  <li>Os erros reais: o dois-pontos, a função sobrescrita, e como travar a tabela com <code>__newindex</code>.</li>
+</ul>
+</div>
+
+<p>Todos os programas rodaram no <strong>Lua 5.5</strong> da máquina da Ana (usuária <code>ana</code>, computador <code>notebook</code>) com <code>lua arquivo.lua</code>. Revise antes <a href="closures.html">Closures</a> (é a base desta aula), <a href="escopo.html">Escopo e Blocos</a> e <a href="classes.html">Classes</a>.</p>
+
+<hr>
+
+<h2>A ideia: o caixa eletrônico</h2>
+<p>No caixa eletrônico, a Ana não abre o cofre do banco para pôr o dinheiro lá dentro. Ela usa os <strong>botões</strong>: "depositar", "sacar", "ver saldo". O cofre fica atrás da parede, e só as máquinas do banco chegam nele. Por isso o banco consegue garantir as regras: não dá para depositar um valor negativo, nem sacar mais do que tem.</p>
+<ul>
+  <li>O cofre é o <strong>dado privado</strong> (o saldo).</li>
+  <li>Os botões são as <strong>funções públicas</strong> (<code>depositar</code>, <code>sacar</code>, <code>saldo</code>), as únicas que chegam no cofre.</li>
+  <li>A parede é o <strong>escopo</strong>: uma variável <code>local</code> criada dentro de uma função não pode ser vista de fora dela. Mas as funções criadas ali dentro continuam enxergando a variável, mesmo depois: essas funções são as <strong>closures</strong>.</li>
+</ul>
+
+<hr>
+
+<h2>1. O problema: o saldo aberto</h2>
+
+<pre class="file" data-file="aberta.lua">local Conta = {}
+Conta.__index = Conta
+
+function Conta.new(titular, saldo)
+  return setmetatable({ titular = titular, saldo = saldo or 0 }, Conta)
+end
+
+function Conta:depositar(valor)
+  if valor &lt;= 0 then error("depósito precisa ser positivo", 2) end
+  self.saldo = self.saldo + valor
+end
+
+local conta_ana = Conta.new("Ana", 100)
+conta_ana.saldo = -500
+print(conta_ana.saldo)
+conta_ana.saldo = "mil"
+conta_ana:depositar(50)
+</pre>
+
+<pre class="term">$ lua aberta.lua
+-500
+lua: aberta.lua:10: attempt to add a 'string' with a 'number'
+stack traceback:
+	[C]: in metamethod 'add'
+	aberta.lua:10: in method 'depositar'
+	aberta.lua:17: in main chunk
+	[C]: in ?</pre>
+
+<dl class="anatomy">
+  <dt>conta_ana.saldo = -500 → -500</dt><dd>O <code>depositar</code> recusa valores negativos, mas ninguém precisa passar por ele: basta escrever no campo. O Lua aceitou um saldo de −500 sem reclamar.</dd>
+  <dt>conta_ana.saldo = "mil"</dt><dd>Pior: um texto no lugar do número. Também aceito, sem erro nessa linha.</dd>
+  <dt>attempt to add a 'string' with a 'number'</dt><dd>"Tentativa de somar uma string com um número". O erro só apareceu <strong>depois</strong>, dentro do <code>depositar</code> (linha 10), quando ele tentou fazer <code>"mil" + 50</code>. O <code>[C]: in metamethod 'add'</code> é o Lua tentando, sem sucesso, transformar o texto em número (veja <a href="conversao.html">Conversão</a>).</dd>
+</dl>
+
+<p>O engano foi na linha 16, mas o erro apareceu na 10, dentro de um método que estava certo. Num programa grande, achar quem estragou o saldo pode levar horas. Encapsular é fazer com que <strong>só</strong> os métodos possam mexer no saldo, e então qualquer saldo errado só pode ter vindo deles.</p>
+
+<h3>A convenção do sublinhado</h3>
+<p>Muita gente escreve os campos "internos" com um sublinhado na frente: <code>self._saldo</code>. É um <strong>aviso para pessoas</strong>: "não mexa nisto de fora". O Lua não dá a mínima para o sublinhado: <code>conta_ana._saldo = -500</code> funciona do mesmo jeito. Num time que respeita a convenção, isso basta muitas vezes. Quando você quer uma proteção de verdade, entram as closures.</p>
+
+<hr>
+
+<h2>2. A conta com closures</h2>
+<p>Em vez de uma classe com metatabela, uma função "fábrica" cria cada conta. O saldo é uma variável <code>local</code> da fábrica, e as funções da conta são criadas lá dentro:</p>
+
+<pre class="file" data-file="closure.lua">local function nova_conta(titular, saldo_inicial)
+  local saldo = saldo_inicial or 0
+
+  local conta = {}
+
+  function conta.depositar(valor)
+    if valor &lt;= 0 then
+      error("depósito precisa ser positivo", 2)
+    end
+    saldo = saldo + valor
+  end
+
+  function conta.saldo()
+    return saldo
+  end
+
+  function conta.titular()
+    return titular
+  end
+
+  return conta
+end
+
+local ana = nova_conta("Ana", 100)
+local bia = nova_conta("Bia")
+ana.depositar(50)
+bia.depositar(30)
+print(ana.titular(), ana.saldo())
+print(bia.titular(), bia.saldo())
+print(ana.saldo_inicial, ana.saldo == bia.saldo)
+ana.depositar(-10)
+</pre>
+
+<pre class="term">$ lua closure.lua
+Ana	150
+Bia	30
+nil	false
+lua: closure.lua:31: depósito precisa ser positivo
+stack traceback:
+	[C]: in global 'error'
+	closure.lua:8: in field 'depositar'
+	closure.lua:31: in main chunk
+	[C]: in ?</pre>
+
+<dl class="anatomy">
+  <dt>local saldo = saldo_inicial or 0</dt><dd>O "cofre". É uma variável local da função <code>nova_conta</code>: fora dela, ninguém consegue escrever o nome <code>saldo</code> e chegar nela.</dd>
+  <dt>local conta = {}</dt><dd>A tabela que vai ser devolvida, com os "botões". Ela <strong>não</strong> tem o saldo dentro: só funções.</dd>
+  <dt>function conta.depositar(valor)</dt><dd>Uma closure: foi criada dentro da <code>nova_conta</code> e por isso enxerga o <code>saldo</code> e o <code>titular</code> de lá. Repare no <strong>ponto</strong> (e não dois-pontos): ela não precisa de <code>self</code>, porque já sabe qual é o seu saldo.</dd>
+  <dt>function conta.saldo()</dt><dd>O botão "ver saldo": devolve o valor, mas não deixa mudar. Também o <code>titular</code> virou só leitura.</dd>
+  <dt>nova_conta("Ana", 100) e nova_conta("Bia")</dt><dd>Cada chamada da fábrica cria um <code>saldo</code> <strong>novo</strong> e funções novas presas a ele. A Ana e a Bia têm cofres separados (150 e 30).</dd>
+  <dt>ana.saldo_inicial → nil</dt><dd>O parâmetro também ficou lá dentro: de fora, não existe.</dd>
+  <dt>ana.saldo == bia.saldo → false</dt><dd>As funções das duas contas são <strong>diferentes</strong> (cada uma presa ao seu cofre). Numa classe com metatabela, todos os objetos dividem a mesma função.</dd>
+  <dt>ana.depositar(-10) → erro</dt><dd>Agora a regra vale de verdade: o único caminho para o saldo passa por ela. O nível <code>2</code> do <code>error</code> faz a mensagem apontar para a linha 31, a do pedido errado.</dd>
+</dl>
+
+<h3>Dá para chegar no saldo de fora?</h3>
+<p>Vamos tentar. Uma variável <code>saldo</code> do lado de fora é <strong>outra</strong> variável, que não tem nada a ver com a de dentro, e a tabela da conta só tem as funções:</p>
+
+<pre class="file" data-file="tentar.lua">local function nova_conta(saldo_inicial)
+  local saldo = saldo_inicial
+  local conta = {}
+  function conta.depositar(valor) saldo = saldo + valor end
+  function conta.saldo() return saldo end
+  return conta
+end
+
+local ana = nova_conta(100)
+local saldo = 1000000
+ana.depositar(50)
+print(ana.saldo(), saldo)
+
+local campos = {}
+for nome in pairs(ana) do campos[#campos + 1] = nome end
+table.sort(campos)
+print(table.concat(campos, ", "))
+</pre>
+
+<pre class="term">$ lua tentar.lua
+150	1000000
+depositar, saldo</pre>
+
+<p>O milhão ficou na variável de fora; a conta continuou com 150. E percorrer a tabela com <code>pairs</code> mostra só os dois "botões" (<code>depositar</code> e <code>saldo</code>, ordenados com <code>table.sort</code>): o número do saldo não está em lugar nenhum que se possa alcançar.</p>
+
+<div class="trylua" data-goal="out:Saldo: 70;;out:Saldo insuficiente;;semerro">
+<p class="try-task"><strong>Missão:</strong> acrescente à fábrica um botão <code>function conta.sacar(valor)</code>: se <code>valor</code> for maior que <code>saldo</code>, ele mostra <code>"Saldo insuficiente"</code>; senão, tira o valor do <code>saldo</code>. Repare que lá dentro você usa <code>saldo</code> direto, sem <code>self</code>.</p>
+<pre class="script" data-file="main.lua">local function nova_conta(saldo_inicial)
+  local saldo = saldo_inicial or 0
+  local conta = {}
+
+  function conta.depositar(valor)
+    saldo = saldo + valor
+  end
+
+  function conta.saldo()
+    return saldo
+  end
+
+  -- escreva aqui o conta.sacar(valor)
+
+  return conta
+end
+
+local ana = nova_conta(100)
+ana.sacar(30)
+ana.sacar(500)
+print("Saldo: " .. ana.saldo())
+</pre>
+<pre class="solucao" data-file="main.lua">local function nova_conta(saldo_inicial)
+  local saldo = saldo_inicial or 0
+  local conta = {}
+
+  function conta.depositar(valor)
+    saldo = saldo + valor
+  end
+
+  function conta.saldo()
+    return saldo
+  end
+
+  function conta.sacar(valor)
+    if valor &gt; saldo then
+      print("Saldo insuficiente")
+    else
+      saldo = saldo - valor
+    end
+  end
+
+  return conta
+end
+
+local ana = nova_conta(100)
+ana.sacar(30)
+ana.sacar(500)
+print("Saldo: " .. ana.saldo())
+</pre>
+</div>
+
+<hr>
+
+<h2>3. O estoque com a lista privada</h2>
+<p>O dado privado não precisa ser um número. No estoque da padaria, a tabela de produtos inteira fica escondida, e o resto do programa só consegue mexer nela pelas funções de entrada e saída:</p>
+
+<pre class="file" data-file="estoque.lua">local function novo_estoque()
+  local produtos = {}
+  local estoque = {}
+
+  function estoque.entrada(nome, quantidade)
+    produtos[nome] = (produtos[nome] or 0) + quantidade
+  end
+
+  function estoque.saida(nome, quantidade)
+    local tem = produtos[nome] or 0
+    if quantidade &gt; tem then
+      return false, "só temos " .. tem .. " de " .. nome
+    end
+    produtos[nome] = tem - quantidade
+    return true
+  end
+
+  function estoque.quantidade(nome)
+    return produtos[nome] or 0
+  end
+
+  function estoque.lista()
+    local copia = {}
+    for nome, qtd in pairs(produtos) do copia[nome] = qtd end
+    return copia
+  end
+
+  return estoque
+end
+
+local loja = novo_estoque()
+loja.entrada("pao", 40)
+loja.entrada("leite", 12)
+print(loja.saida("pao", 15))
+print(loja.saida("leite", 50))
+local copia = loja.lista()
+copia.pao = 9999
+print(loja.quantidade("pao"), copia.pao)
+print(loja.produtos)
+</pre>
+
+<pre class="term">$ lua estoque.lua
+true
+false	só temos 12 de leite
+25	9999
+nil</pre>
+
+<dl class="anatomy">
+  <dt>local produtos = {}</dt><dd>A tabela privada. Ninguém de fora tem uma variável que aponte para ela.</dd>
+  <dt>function estoque.lista()</dt><dd>Quem precisa ver todos os produtos recebe uma <strong>cópia</strong>. Se a função devolvesse a própria <code>produtos</code>, quem recebesse poderia mudá-la à vontade (tabelas são <a href="tabelas-referencia.html">referências</a>), e a privacidade acabaria.</dd>
+  <dt>copia.pao = 9999 → 25 9999</dt><dd>Mudar a cópia não muda o estoque: ele continua com 25 pães (40 − 15).</dd>
+  <dt>loja.produtos → nil</dt><dd>A tabela de produtos não é um campo da <code>loja</code>.</dd>
+</dl>
+
+<hr>
+
+<h2 id="formas">Formas diferentes de fazer a mesma coisa</h2>
+<p>Agora você conhece duas formas de fazer objetos no Lua. Elas não brigam: cada uma é melhor numa situação.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th></th><th>Classe com metatabela (<code>Conta.new</code>)</th><th>Closures (<code>nova_conta</code>)</th></tr>
+<tr><td>Onde ficam os dados</td><td>Em campos do objeto (<code>self.saldo</code>)</td><td>Em variáveis locais da fábrica</td></tr>
+<tr><td>Privacidade</td><td>Nenhuma (só a convenção do <code>_</code>)</td><td>De verdade: de fora, não se alcança</td></tr>
+<tr><td>Chamada</td><td><code>conta:depositar(50)</code>, com dois-pontos</td><td><code>conta.depositar(50)</code>, com ponto</td></tr>
+<tr><td>Funções</td><td>Uma só para todos os objetos (na classe)</td><td>Funções novas para cada objeto (gasta mais memória com milhares de objetos)</td></tr>
+<tr><td>Herança e metamétodos</td><td>Naturais (<a href="heranca.html">Herança</a>, <code>__tostring</code>…)</td><td>Possíveis, mas dão mais trabalho</td></tr>
+<tr><td>Método novo depois de criar os objetos</td><td>Vale para todos (está na classe)</td><td>Só para os objetos criados depois</td></tr>
+</table>
+</div>
+
+<p>Sobre as funções: no lab, duas contas da classe tinham <strong>a mesma</strong> função <code>depositar</code> (<code>a.depositar == b.depositar</code> deu <code>true</code>), e duas contas de closures tinham funções diferentes (<code>false</code>).</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Situação</th><th>Qual usar</th></tr>
+<tr><td>Muitos objetos (milhares de inimigos num jogo, linhas de uma planilha)</td><td>Classe com metatabela</td></tr>
+<tr><td>Família de tipos (Conta → Poupança)</td><td>Classe com metatabela</td></tr>
+<tr><td>Poucos objetos, com regras que não podem ser furadas (saldo, senha, contador)</td><td>Closures</td></tr>
+<tr><td>Time pequeno que confia uns nos outros</td><td>Classe com <code>_campo</code> por convenção</td></tr>
+</table>
+</div>
+
+<div class="note">
+<strong>Privacidade não é segurança</strong>
+<p>A biblioteca <a href="debug.html">debug</a> consegue espiar e até trocar as variáveis de uma closure: no lab, <code>debug.getupvalue(ana.saldo, 1)</code> devolveu <code>saldo 100</code>, e um <code>debug.setupvalue</code> trocou o saldo para 999. O encapsulamento protege contra <strong>enganos</strong> do seu próprio programa, não contra alguém que queira burlar de propósito. Senhas e dados sensíveis pedem outros cuidados.</p>
+</div>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+
+<div class="cenario">
+<strong>Chamou a função de closure com dois-pontos</strong>
+<pre class="file" data-file="dois_pontos.lua">local function nova_conta(saldo_inicial)
+  local saldo = saldo_inicial
+  local conta = {}
+  function conta.depositar(valor)
+    saldo = saldo + valor
+  end
+  return conta
+end
+
+local ana = nova_conta(100)
+ana:depositar(50)
+</pre>
+<pre class="term">$ lua dois_pontos.lua
+lua: dois_pontos.lua:5: attempt to perform arithmetic on a table value (local 'valor')
+stack traceback:
+	dois_pontos.lua:5: in method 'depositar'
+	dois_pontos.lua:11: in main chunk
+	[C]: in ?</pre>
+<p>O costume das classes traiu a Ana: <code>ana:depositar(50)</code> passou a tabela <code>ana</code> como primeiro argumento, que caiu em <code>valor</code> (a função não tem <code>self</code>). A soma virou "número + tabela". É o mesmo erro da aula <a href="metodos.html">Métodos</a>. <strong>Como consertar:</strong> <code>ana.depositar(50)</code>. Objetos de closures se usam com ponto.</p>
+</div>
+
+<div class="cenario">
+<strong>Escreveu por cima de um "botão"</strong>
+<pre class="file" data-file="sobrescreveu.lua">local function nova_conta(saldo_inicial)
+  local saldo = saldo_inicial
+  local conta = {}
+  function conta.saldo() return saldo end
+  return conta
+end
+
+local ana = nova_conta(100)
+ana.saldo = 0
+print(ana.saldo())
+</pre>
+<pre class="term">$ lua sobrescreveu.lua
+lua: sobrescreveu.lua:10: attempt to call a number value (field 'saldo')
+stack traceback:
+	sobrescreveu.lua:10: in main chunk
+	[C]: in ?</pre>
+<p>O cofre continua intacto (o saldo de dentro ainda é 100), mas a tabela dos botões é uma tabela comum, e a linha 9 trocou o botão <code>saldo</code> pelo número 0. Na linha 10, <code>ana.saldo()</code> tentou chamar um número: "tentativa de chamar um valor número (o campo <code>saldo</code>)". <strong>Como consertar:</strong> não escreva nos campos de um objeto de closures. Se quiser impedir de vez, trave a tabela, como abaixo.</p>
+</div>
+
+<div class="cenario">
+<strong>Travando a tabela dos botões com <code>__newindex</code></strong>
+<p>Juntando a closure com a tabela só de leitura da aula <a href="index-newindex.html">__index e __newindex</a>: os botões ficam numa tabela escondida (<code>metodos</code>), e a conta devolvida é uma tabela vazia que lê dela e recusa qualquer gravação.</p>
+<pre class="file" data-file="travada.lua">local function nova_conta(saldo_inicial)
+  local saldo = saldo_inicial
+  local metodos = {}
+  function metodos.depositar(valor) saldo = saldo + valor end
+  function metodos.saldo() return saldo end
+  return setmetatable({}, {
+    __index = metodos,
+    __newindex = function (t, chave)
+      error("a conta não aceita o campo '" .. tostring(chave) .. "'", 2)
+    end,
+  })
+end
+
+local ana = nova_conta(100)
+ana.depositar(50)
+print(ana.saldo())
+ana.saldo = 0
+</pre>
+<pre class="term">$ lua travada.lua
+150
+lua: travada.lua:17: a conta não aceita o campo 'saldo'
+stack traceback:
+	[C]: in global 'error'
+	travada.lua:9: in metamethod 'newindex'
+	travada.lua:17: in main chunk
+	[C]: in ?</pre>
+<p>Agora o <code>ana.saldo = 0</code> para o programa na hora, na linha certa, em vez de quebrar mais tarde. (O <a href="rawget-rawset.html">rawset</a> ainda passaria por cima, mas isso já é burlar de propósito.)</p>
+</div>
+
+<hr>
+
+<h2>Referência rápida: o molde de um objeto com closures</h2>
+
+<pre class="file" data-file="molde_closure.lua">local function novo_objeto(valor_inicial)
+  local dado = valor_inicial        -- privado: só as funções abaixo enxergam
+  local obj = {}
+
+  function obj.mudar(novo)          -- regras ficam aqui dentro
+    if novo &lt; 0 then error("valor inválido", 2) end
+    dado = novo
+  end
+
+  function obj.ler()                -- "getter": devolve, não deixa mudar
+    return dado
+  end
+
+  return obj                        -- só os botões saem da fábrica
+end
+
+local o = novo_objeto(10)
+o.mudar(20)                         -- com ponto, sem self
+print(o.ler())
+</pre>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Mensagem ou sintoma</th><th>Causa provável</th></tr>
+<tr><td>Erro dentro de um método certo, por causa de um campo com valor estranho</td><td>Alguém mudou o campo de fora: encapsule</td></tr>
+<tr><td><code>attempt to perform arithmetic on a table value (local 'valor')</code></td><td>Chamou com <code>:</code> uma função de closure (use <code>.</code>)</td></tr>
+<tr><td><code>attempt to call a number value (field '…')</code></td><td>Um "botão" foi sobrescrito por um valor</td></tr>
+<tr><td><code>nil</code> ao ler <code>obj.dado</code></td><td>Não é erro: o dado é privado; use a função de leitura</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. Ponto ou dois-pontos?</h3>
+<p>Num objeto criado com closures (<code>local ana = nova_conta(100)</code>), complete a chamada:</p>
+<div class="ex-code">ana<input data-answer="." aria-label="pontuação">depositar(50)</div>
+</div>
+
+<div class="exercise">
+<h3>2. O que aparece?</h3>
+<pre class="file" data-file="ex2.lua">local function nova_conta(s)
+  local saldo = s
+  return { ver = function () return saldo end }
+end
+local c = nova_conta(42)
+print(c.saldo)
+print(c.ver())
+</pre>
+<div class="ex-code">1º print: <input data-answer="nil" aria-label="primeiro print"><br>2º print: <input data-answer="42" aria-label="segundo print"></div>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">3. O que o sublinhado em <code>self._saldo</code> faz?</p>
+<label><input type="radio" name="q3"> Impede o Lua de deixar mudar o campo</label>
+<label><input type="radio" name="q3"> Nada para o Lua: é um aviso para as pessoas</label>
+<label><input type="radio" name="q3"> Torna o campo uma variável local</label>
+<label><input type="radio" name="q3"> Dá erro de sintaxe</label>
+</div>
+
+<div class="mc" data-answer="3">
+<p class="mc-q">4. Por que a função <code>estoque.lista()</code> devolve uma cópia da tabela de produtos?</p>
+<label><input type="radio" name="q4"> Porque o Lua não deixa devolver tabelas</label>
+<label><input type="radio" name="q4"> Para ficar mais rápido</label>
+<label><input type="radio" name="q4"> Porque, devolvendo a própria tabela, quem recebesse poderia mudar o estoque</label>
+<label><input type="radio" name="q4"> Para o <code>pairs</code> funcionar</label>
+</div>
+
+<div class="mc" data-answer="1">
+<p class="mc-q">5. Você vai criar 50 mil inimigos num jogo, todos com os mesmos métodos. Qual forma gasta menos memória?</p>
+<label><input type="radio" name="q5"> Classe com metatabela: os métodos ficam uma vez só, na classe</label>
+<label><input type="radio" name="q5"> Closures: cada inimigo com as suas funções</label>
+<label><input type="radio" name="q5"> As duas gastam igual</label>
+<label><input type="radio" name="q5"> Variáveis globais</label>
+</div>
+
+<h3>Missão final: o contador que ninguém fura</h3>
+
+<div class="trylua" data-goal="out:Visitas: 3;;src:local\s+total;;semerro">
+<p class="try-task"><strong>Missão:</strong> o contador de visitas do site da padaria guarda o total num campo da tabela, e uma linha "espertinha" (<code>visitas.total = 1000</code>) inflou o número. Reescreva o <code>novo_contador</code> com closure: troque o campo por uma variável <code>local total = 0</code> dentro da fábrica e faça as duas funções usarem essa variável. Sem mexer nas linhas de baixo, o resultado deve ser <code>Visitas: 3</code>.</p>
+<pre class="script" data-file="main.lua">local function novo_contador()
+  local contador = { total = 0 }
+
+  function contador.mais_um()
+    contador.total = contador.total + 1
+  end
+
+  function contador.valor()
+    return contador.total
+  end
+
+  return contador
+end
+
+local visitas = novo_contador()
+visitas.mais_um()
+visitas.mais_um()
+visitas.mais_um()
+visitas.total = 1000
+print("Visitas: " .. visitas.valor())
+</pre>
+<pre class="solucao" data-file="main.lua">local function novo_contador()
+  local total = 0
+  local contador = {}
+
+  function contador.mais_um()
+    total = total + 1
+  end
+
+  function contador.valor()
+    return total
+  end
+
+  return contador
+end
+
+local visitas = novo_contador()
+visitas.mais_um()
+visitas.mais_um()
+visitas.mais_um()
+visitas.total = 1000
+print("Visitas: " .. visitas.valor())
+</pre>
+</div>
+
+<p>No lab, a versão com closure mostrou <code>Visitas: 3</code>: o <code>visitas.total = 1000</code> só criou um campo novo e inútil na tabela, longe do <code>total</code> de verdade.</p>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li><strong>Encapsular</strong> é deixar os dados de um objeto acessíveis só pelas funções dele. Campos abertos (<code>conta.saldo</code>) aceitam qualquer valor, e o erro aparece longe da causa.</li>
+  <li>O sublinhado (<code>_saldo</code>) é só uma convenção: o Lua não protege nada.</li>
+  <li>Com <strong>closures</strong>, o dado vira uma variável <code>local</code> da função fábrica; as funções criadas lá dentro são as únicas que o enxergam. De fora, ele não existe.</li>
+  <li>Objetos de closures se usam com <strong>ponto</strong> (<code>ana.depositar(50)</code>): as funções não precisam de <code>self</code>.</li>
+  <li>Entregue <strong>cópias</strong> de tabelas privadas, nunca a própria tabela.</li>
+  <li>Classes com metatabela: muitos objetos, herança, metamétodos. Closures: poucos objetos com regras que não podem ser furadas. As duas formas podem se juntar (closure + <code>__newindex</code> para travar).</li>
+  <li>Para colocar tudo em prática, veja o <a href="projeto-banco.html">Projeto: Conta Bancária</a>. E a próxima aula, <a href="tabelas-fracas.html">Tabelas Fracas</a>, mostra outra técnica de metatabela.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
