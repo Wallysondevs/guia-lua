@@ -1,0 +1,628 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua io.open — abrindo arquivos para ler e escrever | Guia Lua</title>
+<meta name="description" content="io.open do Lua 5.5 para quem nunca programou: abrir um arquivo, o que a função devolve (o arquivo ou nil, a mensagem e o código do erro), arquivo inexistente, sem permissão e pasta errada, os modos r, w, a, r+ e b, por que fechar com f:close(), e os erros reais do Lua.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">io.open</span></h1>
+
+<p class="intro">Tudo o que um programa guarda em variáveis some quando ele termina. A lista de compras que a Ana digitou, as notas da turma, o estoque da lojinha: fechou o programa, acabou. Para os dados <strong>sobreviverem</strong>, eles vão para um <strong>arquivo</strong> no disco, como o <code>compras.txt</code> que você abre no editor de texto. No Lua, todo trabalho com arquivo começa pela mesma função: <code>io.open</code> (de <em>input/output</em>, "entrada/saída", e <em>open</em>, "abrir").</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>A ideia de abrir, usar e fechar um arquivo, e o primeiro programa que lê um arquivo inteiro.</li>
+  <li>O que o <code>io.open</code> devolve quando dá certo (um arquivo aberto) e quando dá errado (<code>nil</code>, a mensagem e um código).</li>
+  <li>As mensagens reais de arquivo que não existe, de arquivo sem permissão e de pasta errada.</li>
+  <li>Duas formas de tratar o erro: com <code>if not f then</code> e com <code>assert</code>.</li>
+  <li>Os <strong>modos</strong>: <code>"r"</code> (ler), <code>"w"</code> (escrever do zero), <code>"a"</code> (acrescentar), o <code>+</code> e o <code>b</code>.</li>
+  <li>Por que fechar com <code>f:close()</code>, e o que acontece quando você usa um arquivo já fechado.</li>
+</ul>
+</div>
+
+<p>Todos os programas desta aula rodaram no <strong>Lua 5.5</strong> da máquina da Ana (usuária <code>ana</code>, computador <code>notebook</code>), salvos na pasta pessoal dela (<code>/home/ana</code>) e executados com <code>lua arquivo.lua</code> (veja <a href="executar.html">Rodando um Programa</a>). O arquivo que eles abrem, <code>compras.txt</code>, fica na mesma pasta.</p>
+
+<hr>
+
+<h2>A ideia: o caderno na gaveta</h2>
+<p>A Ana guarda a lista de compras num caderno, dentro de uma gaveta. Para usar o caderno ela sempre faz a mesma coisa:</p>
+<ol class="passo">
+  <li><strong>Abre</strong> a gaveta e pega o caderno, já decidindo para quê: para <strong>ler</strong> a lista, para <strong>começar uma lista nova</strong> numa folha em branco, ou para <strong>acrescentar</strong> um item no fim.</li>
+  <li><strong>Usa</strong> o caderno: lê ou escreve.</li>
+  <li><strong>Fecha</strong> o caderno e devolve à gaveta, para ninguém tropeçar nele nem borrar a tinta.</li>
+</ol>
+<p>Às vezes o primeiro passo falha: o caderno não está na gaveta, ou a gaveta está trancada. Uma pessoa sensata percebe isso e não tenta ler um caderno que não está na mão dela.</p>
+<p>Um programa faz exatamente isso com um arquivo:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>No caderno</th><th>No Lua</th></tr>
+<tr><td>Abrir a gaveta e pegar o caderno, dizendo para quê</td><td><code>local f = io.open("compras.txt", "r")</code></td></tr>
+<tr><td>Ler ou escrever</td><td><code>f:read(…)</code> e <code>f:write(…)</code> (aulas <a href="arquivos-ler.html">Lendo Arquivos</a> e <a href="arquivos-escrever.html">Escrevendo Arquivos</a>)</td></tr>
+<tr><td>Fechar o caderno</td><td><code>f:close()</code></td></tr>
+<tr><td>O caderno não estava lá</td><td>o <code>io.open</code> devolve <code>nil</code> e uma mensagem explicando</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>1. O primeiro programa: ler um arquivo inteiro</h2>
+<p>Primeiro, a Ana criou o arquivo de texto <code>compras.txt</code> na pasta dela, com três linhas (pode ser no editor de texto; aqui foi pelo terminal):</p>
+
+<pre class="term">$ printf 'pão\nleite\ncafé\n' &gt; compras.txt
+$ cat compras.txt
+pão
+leite
+café</pre>
+
+<p>Agora o programa que abre esse arquivo, lê tudo o que tem dentro e mostra na tela:</p>
+
+<pre class="file" data-file="ler_compras.lua">local f = io.open("compras.txt", "r")
+local conteudo = f:read("a")
+f:close()
+print("O que está no arquivo:")
+io.write(conteudo)
+</pre>
+
+<dl class="anatomy">
+  <dt>io.open</dt><dd>A função que abre arquivos. Ela mora na biblioteca <code>io</code> (a de entrada e saída, a mesma do <a href="io-write.html">io.write</a> e do <a href="io-read.html">io.read</a>).</dd>
+  <dt>"compras.txt"</dt><dd>O <strong>nome do arquivo</strong>, entre aspas, porque é um texto. Sem pasta na frente, o Lua procura na pasta em que você está no terminal (aqui, <code>/home/ana</code>).</dd>
+  <dt>"r"</dt><dd>O <strong>modo</strong>: para que você quer o arquivo. <code>"r"</code> vem de <em>read</em>, "ler". A seção 5 mostra os outros modos.</dd>
+  <dt>local f = …</dt><dd>O que o <code>io.open</code> devolve é o <strong>arquivo aberto</strong>, guardado numa variável. O nome <code>f</code> (de <em>file</em>, "arquivo") é o mais comum; <code>arquivo</code> também serve.</dd>
+  <dt>f:read("a")</dt><dd>Lê o arquivo. O <code>"a"</code> (de <em>all</em>, "tudo") pede o conteúdo inteiro, de uma vez, num texto só. Os outros jeitos de ler estão na aula <a href="arquivos-ler.html">Lendo Arquivos</a>.</dd>
+  <dt>f:close()</dt><dd><strong>Fecha</strong> o arquivo. Depois desta linha, o <code>f</code> não serve mais para ler; o conteúdo já está guardado em <code>conteudo</code>.</dd>
+  <dt>io.write(conteudo)</dt><dd>Mostra o texto. Foi <code>io.write</code>, e não <code>print</code>, porque o arquivo já termina com uma quebra de linha; o <code>print</code> poria mais uma e sobraria uma linha em branco no fim.</dd>
+</dl>
+
+<pre class="term">$ lua ler_compras.lua
+O que está no arquivo:
+pão
+leite
+café</pre>
+
+<div class="tip">
+<strong>Os dois-pontos: <code>f:read</code></strong>
+<p>Repare que é <code>f:read(…)</code> e <code>f:close()</code>, com <strong>dois-pontos</strong>, e não com ponto. A leitura é "do arquivo <code>f</code>": o dois-pontos entrega o próprio <code>f</code> para a função. Por enquanto, guarde a regra: <strong>função do arquivo aberto usa <code>:</code></strong>. O porquê fica para a aula <a href="metodos.html">Métodos e o Dois-Pontos</a>. Já o <code>io.open</code> é com ponto, porque ele é da biblioteca <code>io</code>, não de um arquivo.</p>
+</div>
+
+<hr>
+
+<h2>2. O que o <code>io.open</code> devolve quando dá certo</h2>
+<p>Vale a pena olhar o que fica dentro do <code>f</code>. Este programa abre o arquivo, mostra o <code>f</code> com <code>print</code> e usa o <code>io.type</code>, que diz se um valor é um arquivo:</p>
+
+<pre class="file" data-file="o_que_volta.lua">local f = io.open("compras.txt", "r")
+print(f)
+print(io.type(f))
+print(f:close())
+print(io.type(f))
+print(io.type("compras.txt"))
+</pre>
+
+<pre class="term">$ lua o_que_volta.lua
+file (0x55f01caeb340)
+file
+true
+closed file
+nil
+$ lua o_que_volta.lua
+file (0x55f1073f6340)
+file
+true
+closed file
+nil</pre>
+
+<dl class="anatomy">
+  <dt>file (0x55f01caeb340)</dt><dd>O <code>print</code> de um arquivo aberto mostra <code>file</code> ("arquivo") e um <strong>endereço de memória</strong>, o lugar onde o Lua guardou as informações do arquivo. Rodando de novo, o número mudou (<code>0x55f1073f6340</code>): ele é diferente a cada execução e não quer dizer nada para você.</dd>
+  <dt>io.type(f) → file</dt><dd>"É um arquivo aberto."</dd>
+  <dt>f:close() → true</dt><dd>O <code>close</code> devolve <code>true</code> quando fechou direitinho.</dd>
+  <dt>io.type(f) → closed file</dt><dd>Depois do <code>close</code>: "é um arquivo, mas fechado".</dd>
+  <dt>io.type("compras.txt") → nil</dt><dd>Um texto com o nome do arquivo <strong>não é</strong> o arquivo. Só o que o <code>io.open</code> devolve é.</dd>
+</dl>
+
+<hr>
+
+<h2>3. Quando o arquivo não existe: <code>nil</code>, mensagem e código</h2>
+<p>A Ana digitou o nome errado: <code>compra.txt</code>, sem o "s". Esse arquivo não existe. O <code>io.open</code> <strong>não</strong> para o programa com um erro; ele devolve <strong>três valores</strong> que explicam o que houve:</p>
+
+<pre class="file" data-file="nao_existe.lua">print(io.open("compra.txt", "r"))
+</pre>
+
+<pre class="term">$ lua nao_existe.lua
+nil	compra.txt: No such file or directory	2</pre>
+
+<p>Para ver cada um com calma, guarde os três em variáveis (é uma <a href="atribuicao-multipla.html">atribuição múltipla</a>; veja também <a href="retornos-multiplos.html">Vários Retornos</a>):</p>
+
+<pre class="file" data-file="tres_valores.lua">local f, mensagem, codigo = io.open("compra.txt", "r")
+print("f:", f)
+print("mensagem:", mensagem)
+print("codigo:", codigo)
+</pre>
+
+<pre class="term">$ lua tres_valores.lua
+f:	nil
+mensagem:	compra.txt: No such file or directory
+codigo:	2</pre>
+
+<dl class="anatomy">
+  <dt>f → nil</dt><dd>No lugar do arquivo veio <code>nil</code>, o "nada" do Lua (veja <a href="nil.html">O Valor nil</a>). É o aviso de que <strong>não abriu</strong>.</dd>
+  <dt>mensagem → compra.txt: No such file or directory</dt><dd>O nome que você pediu e o motivo, em inglês: "não existe tal arquivo ou pasta". Essa frase vem do próprio sistema operacional (o Linux), por isso é igual em qualquer programa que tente abrir um arquivo que não existe.</dd>
+  <dt>codigo → 2</dt><dd>O mesmo motivo, em forma de número. Cada problema tem o seu (o 2 é "não existe"). Quase sempre a mensagem basta; o número serve para um programa decidir o que fazer conforme o tipo de problema.</dd>
+</dl>
+
+<h3>Se você ignorar o <code>nil</code></h3>
+<p>Muita gente escreve o programa da seção 1 sem pensar que o arquivo pode faltar. Com o nome errado:</p>
+
+<pre class="file" data-file="ignorou.lua">local f = io.open("compra.txt", "r")
+local conteudo = f:read("a")
+print(conteudo)
+</pre>
+
+<pre class="term">$ lua ignorou.lua
+lua: ignorou.lua:2: attempt to index a nil value (local 'f')
+stack traceback:
+	ignorou.lua:2: in main chunk
+	[C]: in ?
+$ echo $?
+1</pre>
+
+<p>Linha por linha:</p>
+<dl class="anatomy">
+  <dt>lua: ignorou.lua:2:</dt><dd>O erro aconteceu no arquivo <code>ignorou.lua</code>, na <strong>linha 2</strong>. Não na linha 1! O <code>io.open</code> da linha 1 funcionou do jeito dele: devolveu <code>nil</code>, sem reclamar.</dd>
+  <dt>attempt to index a nil value (local 'f')</dt><dd>"Tentativa de indexar um valor nil (a variável local <code>f</code>)". <em>Indexar</em> é pegar alguma coisa de dentro de um valor; o <code>f:read</code> tenta pegar o <code>read</code> de dentro do <code>f</code>. Mas o <code>f</code> é <code>nil</code>, e de dentro do nada não se tira nada.</dd>
+  <dt>stack traceback:</dt><dd>"Rastro da pilha": o caminho que o programa fez até o erro. Aqui é curto: <code>ignorou.lua:2: in main chunk</code> (na linha 2 do programa principal) e <code>[C]: in ?</code> (o próprio <code>lua</code>, que começou tudo). Detalhes em <a href="erros.html">Lendo uma Mensagem de Erro</a>.</dd>
+  <dt>echo $? → 1</dt><dd>O programa terminou com código de saída 1, o código de "deu erro".</dd>
+</dl>
+<p>A mensagem fala de <code>nil</code> e não de arquivo, o que confunde. Guarde a pista: <strong><code>attempt to index a nil value (local 'f')</code> logo depois de um <code>io.open</code> quase sempre quer dizer "o arquivo não abriu"</strong>. A seção 4 mostra como o programa pode avisar isso direito.</p>
+
+<div class="trylua" data-goal="out:café;;semerro">
+<p class="try-task"><strong>Missão:</strong> esta caixa tem duas abas: o programa (<code>main.lua</code>) e o arquivo <code>compras.txt</code>, que fica na mesma pasta. Rode e veja o erro. Depois, conserte o nome do arquivo no <code>io.open</code> para o programa mostrar a lista.</p>
+<pre class="script" data-file="main.lua">local f = io.open("compra.txt", "r")
+local conteudo = f:read("a")
+f:close()
+io.write(conteudo)
+</pre>
+<pre class="script" data-file="compras.txt">pão
+leite
+café
+</pre>
+<pre class="solucao" data-file="main.lua">local f = io.open("compras.txt", "r")
+local conteudo = f:read("a")
+f:close()
+io.write(conteudo)
+</pre>
+</div>
+
+<h3>Outros motivos: sem permissão e pasta errada</h3>
+<p>Não é só "não existe". A Ana tem um <code>diario.txt</code> e tirou dele todas as permissões com o comando <code>chmod 000</code> (os <code>----------</code> do <code>ls -l</code> querem dizer "ninguém lê, ninguém escreve"). O programa tenta três coisas que dão errado:</p>
+
+<pre class="term">$ chmod 000 diario.txt
+$ ls -l diario.txt
+---------- 1 ana ana 11 Oct 18 16:35 diario.txt</pre>
+
+<pre class="file" data-file="permissao.lua">print(io.open("diario.txt", "r"))
+print(io.open("Documentos", "w"))
+print(io.open("Documentoss/lista.txt", "w"))
+</pre>
+
+<pre class="term">$ lua permissao.lua
+nil	diario.txt: Permission denied	13
+nil	Documentos: Is a directory	21
+nil	Documentoss/lista.txt: No such file or directory	2</pre>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Mensagem</th><th>Código</th><th>Em português</th><th>O que aconteceu</th></tr>
+<tr><td><code>No such file or directory</code></td><td>2</td><td>Não existe tal arquivo ou pasta</td><td>Nome errado, pasta errada, ou o arquivo ainda não foi criado. No último exemplo, o arquivo nem chegou a ser procurado: a <strong>pasta</strong> <code>Documentoss</code> (com dois "s") é que não existe. O <code>io.open</code> cria arquivos, mas <strong>não cria pastas</strong>.</td></tr>
+<tr><td><code>Permission denied</code></td><td>13</td><td>Permissão negada</td><td>O arquivo existe, mas o seu usuário não pode ler (ou escrever) nele. Acontece com arquivos do sistema e com arquivos de outro usuário.</td></tr>
+<tr><td><code>Is a directory</code></td><td>21</td><td>É uma pasta</td><td>O nome é de uma pasta, não de um arquivo. <code>Documentos</code> é uma pasta da Ana; dá para criar arquivos <strong>dentro</strong> dela (<code>"Documentos/lista.txt"</code>), não escrever nela como se fosse um arquivo.</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>4. Tratando o erro: o programa avisa e continua</h2>
+<p>O jeito mais claro é testar o <code>f</code> logo depois do <code>io.open</code>. Se ele for <code>nil</code>, o programa mostra a mensagem e não tenta ler:</p>
+
+<pre class="file" data-file="tratando.lua">local nome = "compra.txt"
+local f, mensagem = io.open(nome, "r")
+if not f then
+  print("Não consegui abrir o arquivo.")
+  print("Motivo: " .. mensagem)
+else
+  io.write(f:read("a"))
+  f:close()
+end
+print("O programa continua.")
+</pre>
+
+<dl class="anatomy">
+  <dt>local f, mensagem = io.open(…)</dt><dd>Guarda os dois primeiros valores que o <code>io.open</code> devolve. O terceiro (o código) foi descartado: quando há mais valores do que variáveis, os que sobram são jogados fora.</dd>
+  <dt>if not f then</dt><dd>"Se não houver <code>f</code>". O <code>not nil</code> dá <code>true</code>, então o bloco roda justamente quando o arquivo não abriu (veja <a href="operadores-logicos.html">and, or e not</a>).</dd>
+  <dt>"Motivo: " .. mensagem</dt><dd>Junta o texto com a mensagem que o <code>io.open</code> deu. Mostrar o motivo de verdade ajuda muito quem usa o programa: "não existe" e "sem permissão" se consertam de jeitos diferentes.</dd>
+  <dt>else … f:close()</dt><dd>Só lê e fecha quando abriu. Dentro do <code>else</code>, o <code>f</code> com certeza é um arquivo.</dd>
+</dl>
+
+<pre class="term">$ lua tratando.lua
+Não consegui abrir o arquivo.
+Motivo: compra.txt: No such file or directory
+O programa continua.</pre>
+
+<p>Nada de <code>stack traceback</code>: o programa percebeu o problema, explicou e seguiu até o fim. Com o nome certo (<code>compras.txt</code>), o mesmo programa mostra a lista:</p>
+
+<pre class="term">$ sed -i 's/compra.txt/compras.txt/' tratando.lua
+$ lua tratando.lua
+pão
+leite
+café
+O programa continua.</pre>
+
+<div class="trylua" data-goal="out:Motivo: agenda.txt: No such file or directory;;semerro;;src:\bif\b">
+<p class="try-task"><strong>Missão:</strong> a Ana ainda não criou a <code>agenda.txt</code>, e o programa para com <code>attempt to index a nil value</code>. Guarde também a <code>mensagem</code> do <code>io.open</code> e escreva um <code>if not f then</code> que mostre <code>Motivo: </code> seguido da mensagem; o <code>f:read</code> e o <code>f:close</code> vão para o <code>else</code>.</p>
+<pre class="script" data-file="main.lua">local f = io.open("agenda.txt", "r")
+io.write(f:read("a"))
+f:close()
+print("Fim.")
+</pre>
+<pre class="solucao" data-file="main.lua">local f, mensagem = io.open("agenda.txt", "r")
+if not f then
+  print("Motivo: " .. mensagem)
+else
+  io.write(f:read("a"))
+  f:close()
+end
+print("Fim.")
+</pre>
+</div>
+
+<hr>
+
+<h2>5. Os modos: ler, escrever do zero, acrescentar</h2>
+<p>O segundo argumento do <code>io.open</code> diz <strong>para que</strong> você quer o arquivo. São poucas letras, e cada uma muda muito o que acontece:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Modo</th><th>Vem de</th><th>Para quê</th><th>Se o arquivo não existe</th><th>Se o arquivo já existe</th></tr>
+<tr><td><code>"r"</code></td><td><em>read</em>, ler</td><td>Só ler</td><td>Falha: <code>nil</code> e <code>No such file or directory</code></td><td>Lê desde o começo; nada muda no arquivo</td></tr>
+<tr><td><code>"w"</code></td><td><em>write</em>, escrever</td><td>Escrever do zero</td><td>Cria o arquivo vazio</td><td><strong>Apaga tudo</strong> o que havia e começa vazio</td></tr>
+<tr><td><code>"a"</code></td><td><em>append</em>, acrescentar</td><td>Escrever no fim</td><td>Cria o arquivo vazio</td><td>Mantém o conteúdo; o que você escrever vai para o <strong>fim</strong></td></tr>
+<tr><td><code>"r+"</code></td><td>ler + escrever</td><td>Ler e alterar</td><td>Falha, como o <code>"r"</code></td><td>Mantém o conteúdo; lê e escreve a partir do começo</td></tr>
+<tr><td><code>"w+"</code></td><td>escrever + ler</td><td>Escrever do zero e reler</td><td>Cria</td><td><strong>Apaga tudo</strong>, como o <code>"w"</code></td></tr>
+<tr><td><code>"a+"</code></td><td>acrescentar + ler</td><td>Ler e acrescentar</td><td>Cria</td><td>Lê de qualquer lugar; escreve sempre no fim</td></tr>
+</table>
+</div>
+
+<p>Sem o segundo argumento, o modo é <code>"r"</code>: <code>io.open("compras.txt")</code> é o mesmo que <code>io.open("compras.txt", "r")</code>.</p>
+
+<h3>O <code>"w"</code> e o <code>"a"</code> lado a lado</h3>
+<p>Este programa cria um recado com <code>"w"</code>, depois acrescenta uma linha com <code>"a"</code> e, por fim, abre com <code>"r"</code> para mostrar o resultado. As linhas em branco no meio só separam as três partes:</p>
+
+<pre class="file" data-file="modos.lua">local f = io.open("recado.txt", "w")
+f:write("Comprar pão\n")
+f:close()
+
+f = io.open("recado.txt", "a")
+f:write("Pagar a luz\n")
+f:close()
+
+f = io.open("recado.txt", "r")
+io.write(f:read("a"))
+f:close()
+</pre>
+
+<pre class="term">$ lua modos.lua
+Comprar pão
+Pagar a luz
+$ cat recado.txt
+Comprar pão
+Pagar a luz</pre>
+
+<p>O <code>f:write</code> escreve no arquivo (os detalhes estão em <a href="arquivos-escrever.html">Escrevendo Arquivos</a>); o <code>\n</code> é a quebra de linha (veja <a href="strings-escape.html">Caracteres de Escape</a>). Repare que a mesma variável <code>f</code> foi reaproveitada, sem <code>local</code> nas vezes seguintes: cada <code>io.open</code> põe nela um arquivo aberto novo.</p>
+
+<div class="warning">
+<strong>O <code>"w"</code> apaga sem perguntar</strong>
+<p>Abrir com <code>"w"</code> um arquivo que já existe <strong>zera</strong> o arquivo na hora, antes mesmo de você escrever qualquer coisa. Este programa só abre e fecha:</p>
+<pre class="file" data-file="apaga.lua">local f = io.open("recado.txt", "w")
+f:close()
+</pre>
+<pre class="term">$ lua apaga.lua
+$ ls -l recado.txt
+-rw-rw-r-- 1 ana ana 0 Oct 18 16:35 recado.txt</pre>
+<p>O <code>0</code> antes da data é o tamanho: <strong>0 bytes</strong>. O recado sumiu. Não existe lixeira nem "desfazer". Quando a ideia é juntar mais coisas num arquivo que já tem dados (um diário, um registro de vendas), o modo certo é o <code>"a"</code>.</p>
+</div>
+
+<h3>O <code>b</code>: modo binário</h3>
+<p>Qualquer modo pode terminar com <code>b</code> (de <em>binary</em>, "binário"): <code>"rb"</code>, <code>"wb"</code>, <code>"ab"</code>, <code>"r+b"</code>. Ele diz "trate o arquivo como bytes puros, sem mexer nas quebras de linha". Serve para imagens, músicas, arquivos compactados.</p>
+<ul>
+  <li>No <strong>Linux</strong> e no macOS, <code>"r"</code> e <code>"rb"</code> fazem exatamente a mesma coisa: lá, ninguém mexe nas quebras de linha.</li>
+  <li>No <strong>Windows</strong>, o modo texto troca as quebras de linha do Windows (<code>\r\n</code>) por <code>\n</code> na leitura, e o contrário na escrita. Numa imagem, isso estragaria os bytes. Por isso, para arquivos que não são texto, use sempre <code>"rb"</code> e <code>"wb"</code>: o programa funciona igual nos dois sistemas.</li>
+</ul>
+<p>(O comportamento do Windows vem da biblioteca de C que o Lua usa por baixo; não foi rodado aqui, a máquina da Ana é Linux.)</p>
+
+<div class="cenario">
+<strong>Modo que não existe: <code>"rw"</code></strong>
+<p>"Quero ler <strong>e</strong> escrever, então <code>"rw"</code>." Parece lógico, mas não é um modo válido:</p>
+<pre class="file" data-file="modo_rw.lua">local f = io.open("compras.txt", "rw")
+</pre>
+<pre class="term">$ lua modo_rw.lua
+lua: modo_rw.lua:1: bad argument #2 to 'open' (invalid mode)
+stack traceback:
+	[C]: in field 'open'
+	modo_rw.lua:1: in main chunk
+	[C]: in ?</pre>
+<p>"Argumento ruim nº 2 para o <code>open</code> (modo inválido)". O argumento nº 2 é o modo. Desta vez o programa <strong>para</strong> (não é um <code>nil</code> educado), porque o erro é de quem escreveu o programa, não do arquivo. A linha <code>[C]: in field 'open'</code> mostra que o erro foi detectado dentro do <code>io.open</code>, que é escrito na linguagem C. <strong>Como consertar:</strong> para ler e escrever, <code>"r+"</code>. O modo é sempre uma das letras <code>r</code>, <code>w</code>, <code>a</code>, talvez um <code>+</code> e talvez um <code>b</code>, nessa ordem.</p>
+</div>
+
+<hr>
+
+<h2>6. Fechar o arquivo: <code>f:close()</code></h2>
+<p>Quando o programa termina, o Lua fecha os arquivos que ficaram abertos. Então por que se preocupar? Porque, enquanto o programa roda, um arquivo aberto ainda está "na mão" dele:</p>
+<ul>
+  <li><strong>O que você escreveu pode ainda não estar no disco.</strong> Para ser rápido, o Lua junta o que você manda escrever num pedaço da memória e só leva para o disco de vez em quando. O <code>close</code> garante que tudo chegou. Se o programa travar ou for interrompido antes, o fim do texto pode se perder.</li>
+  <li><strong>Existe um limite</strong> de arquivos abertos ao mesmo tempo. Um programa que abre um arquivo por item numa lista grande, sem fechar, acaba esbarrando nele.</li>
+  <li><strong>É um hábito de quem escreve programa direito:</strong> abriu, usou, fechou. Quem lê o seu código vê onde o arquivo começa e termina de ser usado.</li>
+</ul>
+
+<p>Há duas escritas para fechar, que fazem a mesma coisa: <code>f:close()</code> (a mais comum) e <code>io.close(f)</code>. As duas devolvem <code>true</code> quando fecham bem.</p>
+
+<div class="cenario">
+<strong>Usou o arquivo depois de fechar</strong>
+<pre class="file" data-file="fechado.lua">local f = io.open("compras.txt", "r")
+f:close()
+local conteudo = f:read("a")
+</pre>
+<pre class="term">$ lua fechado.lua
+lua: fechado.lua:3: attempt to use a closed file
+stack traceback:
+	[C]: in method 'read'
+	fechado.lua:3: in main chunk
+	[C]: in ?</pre>
+<p>"Tentativa de usar um arquivo fechado", na linha 3. A linha <code>[C]: in method 'read'</code> diz que quem reclamou foi o <code>read</code>. Fechar <strong>duas vezes</strong> dá o mesmo erro, agora no <code>close</code>:</p>
+<pre class="file" data-file="fecha_duas.lua">local f = io.open("compras.txt", "r")
+print(io.close(f))
+f:close()
+</pre>
+<pre class="term">$ lua fecha_duas.lua
+true
+lua: fecha_duas.lua:3: attempt to use a closed file
+stack traceback:
+	[C]: in method 'close'
+	fecha_duas.lua:3: in main chunk
+	[C]: in ?</pre>
+<p><strong>Como consertar:</strong> leia tudo o que precisa <strong>antes</strong> do <code>close</code> (guardando numa variável, como o <code>conteudo</code> da seção 1), e feche uma vez só, no fim.</p>
+</div>
+
+<div class="note">
+<strong>Fechamento automático: <code>&lt;close&gt;</code></strong>
+<p>O Lua 5.4 e o 5.5 têm um jeito de o arquivo se fechar <strong>sozinho</strong> quando a variável deixa de existir: <code>local f &lt;close&gt; = assert(io.open("compras.txt"))</code>. Ele é útil quando o programa pode sair por vários caminhos (um <code>return</code> no meio, um erro) e é fácil esquecer o <code>close</code> em algum deles. Isso tem aula própria: <a href="close.html">Fechamento Automático (&lt;close&gt;)</a>. Até lá, feche com <code>f:close()</code>.</p>
+</div>
+
+<hr>
+
+<h2>7. Caminhos: onde o Lua procura o arquivo</h2>
+<p>O nome que você passa para o <code>io.open</code> pode ter pastas:</p>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Nome</th><th>Tipo</th><th>Onde fica</th></tr>
+<tr><td><code>"compras.txt"</code></td><td>relativo</td><td>Na <strong>pasta atual</strong>, aquela em que você estava no terminal ao rodar <code>lua</code> (não a pasta onde está o <code>.lua</code>!)</td></tr>
+<tr><td><code>"Documentos/lista.txt"</code></td><td>relativo</td><td>Dentro da pasta <code>Documentos</code> da pasta atual. No Linux, as pastas se separam com <code>/</code></td></tr>
+<tr><td><code>"/home/ana/compras.txt"</code></td><td>absoluto</td><td>Começa com <code>/</code>: o caminho completo, a partir da raiz do disco. Vale de qualquer pasta</td></tr>
+</table>
+</div>
+
+<pre class="file" data-file="caminho.lua">local f = assert(io.open("/home/ana/compras.txt", "r"))
+print(f:read("l"))
+f:close()
+local g = assert(io.open("Documentos/lista.txt", "w"))
+g:write("teste\n")
+g:close()
+print(io.open("Documentos/lista.txt"))
+</pre>
+
+<pre class="term">$ lua caminho.lua
+pão
+file (0x55db9e6c3300)
+$ ls Documentos
+lista.txt</pre>
+
+<p>O <code>f:read("l")</code> lê só a primeira linha (<code>pão</code>). O <code>"w"</code> criou a <code>lista.txt</code> dentro de <code>Documentos</code>, porque a pasta já existia; e o último <code>io.open</code> conseguiu abri-la (devolveu um <code>file (…)</code>, com outro endereço). Esse programa usou o <code>assert</code>, que é o assunto da próxima seção.</p>
+
+<div class="note">
+<strong>E no Windows?</strong>
+<p>No Windows, os caminhos usam <code>\</code>, que dentro de uma string do Lua precisa ser dobrada: <code>"C:\\Users\\Ana\\compras.txt"</code>. A barra normal também costuma funcionar lá: <code>"C:/Users/Ana/compras.txt"</code>. (Ilustrativo: não foi rodado num Windows.)</p>
+</div>
+
+<hr>
+
+<h2 id="formas">Formas diferentes de tratar o arquivo que não abriu</h2>
+<p>Você já viu o <code>if not f then</code>. A outra forma, muito usada, é embrulhar o <code>io.open</code> num <code>assert</code> ("garantir"):</p>
+
+<pre class="file" data-file="com_assert.lua">local f = assert(io.open("compra.txt", "r"))
+io.write(f:read("a"))
+f:close()
+</pre>
+
+<pre class="term">$ lua com_assert.lua
+lua: com_assert.lua:1: compra.txt: No such file or directory
+stack traceback:
+	[C]: in global 'assert'
+	com_assert.lua:1: in main chunk
+	[C]: in ?</pre>
+
+<p>O <code>assert</code> recebe os três valores do <code>io.open</code>. Se o primeiro for um arquivo, ele o devolve e tudo segue normal. Se for <code>nil</code>, ele <strong>para o programa</strong> usando o segundo valor (a mensagem) como mensagem de erro. Compare com o <code>ignorou.lua</code>: em vez do confuso <code>attempt to index a nil value</code>, a mensagem agora diz o problema de verdade, <code>compra.txt: No such file or directory</code>, e aponta a linha certa (a 1, a do <code>io.open</code>). O <code>[C]: in global 'assert'</code> mostra quem parou o programa. O <code>assert</code> tem aula própria: <a href="assert.html">assert</a>.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Forma</th><th>Quando o arquivo não abre</th><th>Quando usar</th></tr>
+<tr><td><code>local f, msg = io.open(…)</code> + <code>if not f then … end</code></td><td>O programa avisa do jeito que você quiser e <strong>continua</strong></td><td>Quando dá para seguir sem o arquivo: usar um valor padrão, pedir outro nome, criar o arquivo</td></tr>
+<tr><td><code>local f = assert(io.open(…))</code></td><td>O programa <strong>para</strong>, com a mensagem certa</td><td>Quando sem o arquivo não há o que fazer (um programa que só existe para ler aquele arquivo). É curto e a mensagem é boa</td></tr>
+<tr><td><code>local f = io.open(…)</code> e usar direto</td><td>Para com <code>attempt to index a nil value</code>, uma mensagem que esconde o motivo</td><td>Nunca. É o erro mais comum com arquivos</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+
+<div class="cenario">
+<strong>Abriu para ler e tentou escrever</strong>
+<pre class="file" data-file="modo_errado.lua">local f = io.open("compras.txt")
+print(f:write("ovos\n"))
+f:close()
+</pre>
+<pre class="term">$ lua modo_errado.lua
+nil	Bad file descriptor	9	0
+$ cat compras.txt
+pão
+leite
+café</pre>
+<p>Sem modo, o <code>io.open</code> abriu para <strong>ler</strong> (<code>"r"</code>). O <code>write</code> não parou o programa: ele devolveu <code>nil</code>, a mensagem <code>Bad file descriptor</code> ("descritor de arquivo ruim", o jeito do Linux de dizer "este arquivo não foi aberto para isso"), o código 9 e, no Lua 5.5, um quarto valor: quantos bytes chegaram a ser escritos (0). Os <code>ovos</code> não entraram na lista. Como o <code>write</code> não para o programa, esse erro passa despercebido se você não olhar o que ele devolve. <strong>Como consertar:</strong> abra com o modo de escrita que você quer: <code>"a"</code> para acrescentar no fim, <code>"w"</code> para recomeçar o arquivo.</p>
+</div>
+
+<div class="cenario">
+<strong>O arquivo existe, mas o Lua diz que não</strong>
+<p>Você confere com o <code>ls</code>, o arquivo está lá, e mesmo assim sai <code>No such file or directory</code>. As causas mais comuns:</p>
+<ul>
+  <li>Você rodou o <code>lua</code> de <strong>outra pasta</strong>. O nome relativo é procurado na pasta atual do terminal, não na pasta do programa. Teste com o caminho completo (<code>"/home/ana/compras.txt"</code>) ou entre na pasta com <code>cd</code> antes.</li>
+  <li>Maiúscula e minúscula: no Linux, <code>Compras.txt</code> e <code>compras.txt</code> são arquivos <strong>diferentes</strong>.</li>
+  <li>A extensão escondida: o arquivo se chama <code>compras.txt.txt</code>, ou só <code>compras</code>. O <code>ls</code> mostra o nome verdadeiro.</li>
+</ul>
+</div>
+
+<div class="cenario">
+<strong>Esqueceu as aspas no nome</strong>
+<pre class="file" data-file="sem_aspas.lua">local f = io.open(compras.txt, "r")
+</pre>
+<pre class="term">$ lua sem_aspas.lua
+lua: sem_aspas.lua:1: attempt to index a nil value (global 'compras')
+stack traceback:
+	sem_aspas.lua:1: in main chunk
+	[C]: in ?</pre>
+<p>Sem aspas, <code>compras.txt</code> não é um texto: o Lua lê como "o campo <code>txt</code> da variável <code>compras</code>". Não existe variável <code>compras</code> (ela vale <code>nil</code>), e de dentro do <code>nil</code> não se tira o <code>txt</code>. <strong>Como consertar:</strong> o nome do arquivo é sempre um texto: <code>io.open("compras.txt", "r")</code>, ou uma variável que guarda o texto (<code>local nome = "compras.txt"</code>).</p>
+</div>
+
+<hr>
+
+<h2>Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>O que faz</th></tr>
+<tr><td><code>io.open(nome)</code></td><td>Abre para ler (o mesmo que <code>"r"</code>)</td></tr>
+<tr><td><code>io.open(nome, modo)</code></td><td>Abre no modo pedido. Dá certo: devolve o arquivo. Dá errado: devolve <code>nil</code>, a mensagem e o código</td></tr>
+<tr><td><code>"r"</code> / <code>"w"</code> / <code>"a"</code></td><td>Ler / escrever do zero (apaga o que havia) / acrescentar no fim</td></tr>
+<tr><td><code>"r+"</code> / <code>"w+"</code> / <code>"a+"</code></td><td>Os mesmos, podendo ler e escrever</td></tr>
+<tr><td><code>"rb"</code>, <code>"wb"</code>…</td><td>Modo binário (imagens, arquivos que não são texto)</td></tr>
+<tr><td><code>f:close()</code> ou <code>io.close(f)</code></td><td>Fecha o arquivo; devolve <code>true</code></td></tr>
+<tr><td><code>io.type(x)</code></td><td><code>"file"</code> (aberto), <code>"closed file"</code> (fechado) ou <code>nil</code> (não é arquivo)</td></tr>
+<tr><td><code>assert(io.open(…))</code></td><td>Abre ou para o programa com a mensagem do motivo</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Sintoma</th><th>Causa provável</th></tr>
+<tr><td><code>nil	…: No such file or directory	2</code></td><td>Nome ou pasta errados, ou o arquivo ainda não existe (com <code>"r"</code>)</td></tr>
+<tr><td><code>nil	…: Permission denied	13</code></td><td>O seu usuário não pode ler/escrever esse arquivo</td></tr>
+<tr><td><code>nil	…: Is a directory	21</code></td><td>O nome é de uma pasta</td></tr>
+<tr><td><code>attempt to index a nil value (local 'f')</code></td><td>O <code>io.open</code> falhou (devolveu <code>nil</code>) e o programa usou o <code>f</code> mesmo assim</td></tr>
+<tr><td><code>bad argument #2 to 'open' (invalid mode)</code></td><td>Modo que não existe, como <code>"rw"</code> ou <code>"x"</code></td></tr>
+<tr><td><code>attempt to use a closed file</code></td><td>Usou (ou fechou de novo) um arquivo depois do <code>close</code></td></tr>
+<tr><td><code>nil	Bad file descriptor	9</code> no <code>write</code></td><td>O arquivo foi aberto só para ler</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. Complete o programa</h3>
+<p>Complete para abrir <code>notas.txt</code> para <strong>leitura</strong>, ler tudo e fechar:</p>
+<div class="ex-code">local f = io.<input data-answer="open" aria-label="função">("notas.txt", "<input data-answer="r" aria-label="modo">")<br>local texto = f:read("a")<br>f:<input data-answer="close" aria-label="método">()</div>
+</div>
+
+<div class="exercise">
+<h3>2. O que o <code>print</code> mostra?</h3>
+<p>O arquivo <code>xyz.txt</code> não existe. Qual é o <strong>primeiro</strong> valor que <code>print(io.open("xyz.txt"))</code> mostra?</p>
+<div class="ex-code">O primeiro valor é <input data-answer="nil" aria-label="primeiro valor">.</div>
+</div>
+
+<div class="mc" data-answer="3">
+<p class="mc-q">3. A Ana quer juntar uma venda nova no fim do arquivo <code>vendas.txt</code>, sem perder as vendas que já estão lá. Qual modo?</p>
+<label><input type="radio" name="q3"> <code>"r"</code></label>
+<label><input type="radio" name="q3"> <code>"w"</code></label>
+<label><input type="radio" name="q3"> <code>"a"</code></label>
+<label><input type="radio" name="q3"> <code>"rw"</code></label>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">4. O programa parou com <code>attempt to index a nil value (local 'f')</code> na linha logo depois do <code>io.open</code>. O que é mais provável?</p>
+<label><input type="radio" name="q4"> O arquivo está vazio</label>
+<label><input type="radio" name="q4"> O arquivo não abriu (nome errado, não existe, sem permissão) e o <code>io.open</code> devolveu <code>nil</code></label>
+<label><input type="radio" name="q4"> Faltou o <code>f:close()</code></label>
+<label><input type="radio" name="q4"> O modo <code>"r"</code> não existe</label>
+</div>
+
+<div class="mc" data-answer="1">
+<p class="mc-q">5. O que acontece com um arquivo de 2 páginas quando o programa faz <code>io.open("relatorio.txt", "w")</code> e logo depois <code>f:close()</code>, sem escrever nada?</p>
+<label><input type="radio" name="q5"> Ele fica vazio (0 bytes)</label>
+<label><input type="radio" name="q5"> Nada: como nada foi escrito, ele continua igual</label>
+<label><input type="radio" name="q5"> O Lua pergunta se pode apagar</label>
+<label><input type="radio" name="q5"> Dá erro, porque o arquivo já existe</label>
+</div>
+
+<h3>Missão final: o primeiro arquivo da Ana</h3>
+
+<div class="trylua" data-goal="arquivo:recado.txt~Ligar para a Bia;;semerro">
+<p class="try-task"><strong>Missão:</strong> o programa quer <strong>criar</strong> o arquivo <code>recado.txt</code> com um recado, mas abre no modo de leitura, e o arquivo ainda não existe. Rode e leia o erro. Depois troque o modo para o que cria o arquivo e escreve do zero. (Ao terminar, o programa mostra o que ficou gravado.)</p>
+<pre class="script" data-file="main.lua">local f = assert(io.open("recado.txt", "r"))
+f:write("Ligar para a Bia\n")
+f:close()
+
+local g = assert(io.open("recado.txt", "r"))
+io.write("Gravado: ", g:read("a"))
+g:close()
+</pre>
+<pre class="solucao" data-file="main.lua">local f = assert(io.open("recado.txt", "w"))
+f:write("Ligar para a Bia\n")
+f:close()
+
+local g = assert(io.open("recado.txt", "r"))
+io.write("Gravado: ", g:read("a"))
+g:close()
+</pre>
+</div>
+
+<p>Com o modo <code>"w"</code>, o programa mostra <code>Gravado: Ligar para a Bia</code>. Rode de novo: o recado continua um só, porque o <code>"w"</code> recomeça o arquivo a cada vez. Troque para <code>"a"</code> e rode algumas vezes para ver a diferença. (No editor, cada Rodar começa com a pasta vazia; para ver o <code>"a"</code> acumulando, abra o arquivo duas vezes no mesmo programa, como no <code>modos.lua</code> da seção 5.)</p>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li>Arquivo é como um caderno: <strong>abrir</strong> (<code>io.open</code>), <strong>usar</strong> (<code>f:read</code>, <code>f:write</code>), <strong>fechar</strong> (<code>f:close()</code>).</li>
+  <li><code>io.open(nome, modo)</code> devolve o arquivo aberto, ou <strong><code>nil</code>, a mensagem e o código</strong> quando não consegue: <code>No such file or directory</code> (2), <code>Permission denied</code> (13), <code>Is a directory</code> (21).</li>
+  <li>Sempre trate o <code>nil</code>: com <code>if not f then</code> (avisa e continua) ou com <code>assert(io.open(…))</code> (para com a mensagem certa). Ignorar dá <code>attempt to index a nil value (local 'f')</code>.</li>
+  <li>Modos: <code>"r"</code> lê (é o padrão), <code>"w"</code> <strong>apaga e escreve do zero</strong>, <code>"a"</code> acrescenta no fim; <code>+</code> permite ler e escrever; <code>b</code> é para arquivos que não são texto. <code>"rw"</code> não existe.</li>
+  <li>Feche todo arquivo que abrir, uma vez só, e não use o arquivo depois do <code>close</code> (<code>attempt to use a closed file</code>). O <code>&lt;close&gt;</code> fecha sozinho: aula <a href="close.html">Fechamento Automático</a>.</li>
+  <li>Nome sem pasta = pasta atual do terminal. O <code>io.open</code> cria arquivos, mas não cria pastas.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
