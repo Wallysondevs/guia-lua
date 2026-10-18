@@ -1,0 +1,537 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua LuaRocks — instalando bibliotecas de outras pessoas | Guia Lua</title>
+<meta name="description" content="LuaRocks com o Lua 5.5 no Ubuntu 26.04, com saídas reais: por que o luarocks do apt não serve para o 5.5 (e troca o comando lua para o 5.1), como instalar o LuaRocks 3.13 oficial na sua pasta pessoal, luarocks install inspect com --local, list, show, remove e search, um rock em C (luafilesystem), e como o require acha os rocks (luarocks path, LUA_PATH e o ~/.bashrc).">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">LuaRocks</span></h1>
+
+<p class="intro">O Lua vem com poucas bibliotecas: <code>string</code>, <code>math</code>, <code>table</code>, <code>io</code>, <code>os</code> e mais algumas. Para mostrar tabelas bonitas, ler JSON, mexer em pastas ou falar com a internet, outras pessoas já escreveram módulos prontos, e eles moram num site chamado <a href="https://luarocks.org">luarocks.org</a>. O programa que baixa e instala esses módulos se chama <strong>LuaRocks</strong>. Cada pacote de lá é uma <strong>rock</strong> ("pedra", em inglês: um trocadilho com "Lua", que é a lua do céu).</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O que é o LuaRocks e o que é uma <em>rock</em>.</li>
+  <li><strong>A realidade do Ubuntu 26.04:</strong> por que o <code>luarocks</code> do <code>apt</code> não serve para o Lua 5.5, e o efeito colateral dele (o comando <code>lua</code> vira o 5.1).</li>
+  <li>Como instalar o <strong>LuaRocks oficial</strong> (3.13) na sua pasta pessoal, passo a passo, com as saídas reais.</li>
+  <li><code>luarocks --local install inspect</code>, e os comandos <code>list</code>, <code>show</code>, <code>remove</code> e <code>search</code>.</li>
+  <li>Uma rock escrita em C (<code>luafilesystem</code>), que é compilada na hora.</li>
+  <li>Como o <code>require</code> acha o que o LuaRocks instalou: <code>luarocks path</code> e o <code>~/.bashrc</code>.</li>
+</ul>
+</div>
+
+<p>Tudo nesta aula rodou no terminal da máquina da Ana, um <strong>Ubuntu 26.04</strong> com o Lua 5.5, em 18/10/2026, com internet. As versões das rocks podem ter mudado desde então. <strong>O editor do guia não instala rocks</strong>: ele roda só o Lua e os arquivos das abas (seção 7).</p>
+
+<hr>
+
+<h2>A ideia: a loja de aplicativos do Lua</h2>
+<p>No celular, a Ana não escreve um aplicativo de mapas: ela abre a loja, procura "mapas", toca em "instalar", e pronto. O LuaRocks é a loja de aplicativos do Lua, só que para <strong>módulos</strong>:</p>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>No celular</th><th>No Lua</th></tr>
+<tr><td>A loja (Play Store)</td><td>O site <a href="https://luarocks.org">luarocks.org</a></td></tr>
+<tr><td>O aplicativo da loja, que baixa e instala</td><td>O comando <code>luarocks</code></td></tr>
+<tr><td>Um aplicativo</td><td>Uma <strong>rock</strong>: um ou mais módulos (veja <a href="modulos.html">Módulos e require</a>)</td></tr>
+<tr><td>"Este app precisa do Android 12"</td><td>"Esta rock precisa do Lua &gt;= 5.1"</td></tr>
+<tr><td>Abrir o app</td><td><code>local inspect = require("inspect")</code></td></tr>
+</table>
+</div>
+<p>Depois de instalada, uma rock é só um módulo numa pasta. O trabalho do LuaRocks é baixar, às vezes compilar, e guardar os arquivos numa pasta onde o <code>require</code> consiga achar (lembra do <a href="package-path.html">package.path</a>?).</p>
+
+<hr>
+
+<h2>1. A pegadinha do Ubuntu 26.04: o <code>luarocks</code> do <code>apt</code></h2>
+<p>O caminho óbvio seria <code>sudo apt install luarocks</code>. No Ubuntu 26.04, <strong>não faça isso</strong> se você quer usar o Lua 5.5. O pacote do Ubuntu é o LuaRocks <strong>3.8.0</strong>, mais antigo que o Lua 5.5, e ele não sabe trabalhar com o 5.5. O lab tem esse pacote instalado; veja o que acontece:</p>
+
+<pre class="term">$ luarocks --version
+/usr/bin/luarocks 3.8.0
+LuaRocks main command-line interface
+
+$ luarocks config lua_version
+5.1
+$ luarocks install inspect
+
+Error: /usr/local/lib/luarocks/rocks-5.1 does not exist and your user does not have write permissions in /usr/local/lib
+-- you may want to run as a privileged user or use your local tree with --local.
+$ luarocks --lua-version 5.5 --local install inspect
+Installing https://luarocks.org/inspect-3.1.3-0.rockspec
+
+Error: Failed finding Lua header files. You may need to install them or configure LUA_INCDIR.</pre>
+
+<dl class="anatomy">
+  <dt>luarocks config lua_version → 5.1</dt><dd>Por padrão, ele trabalha para o <strong>Lua 5.1</strong>, não para o 5.5. Tudo o que instalar vai para as pastas do 5.1, que o <code>require</code> do 5.5 nunca olha.</dd>
+  <dt>Error: /usr/local/lib/luarocks/rocks-5.1 does not exist…</dt><dd>"A pasta não existe e o seu usuário não tem permissão de escrita em <code>/usr/local/lib</code>. Você pode rodar como usuário privilegiado ou usar a sua árvore local com <code>--local</code>." Além de ser para o 5.1, ele quer instalar numa pasta do sistema.</dd>
+  <dt>--lua-version 5.5 … Failed finding Lua header files</dt><dd>Pedindo o 5.5 explicitamente, ele "não acha os arquivos de cabeçalho do Lua". Mesmo apontando o caminho certo deles, o 3.8 continua falhando, porque o jeito de o Lua 5.5 escrever o número da versão nesses arquivos é novo e ele não entende. Não há saída com esta versão.</dd>
+</dl>
+
+<div class="warning">
+<strong>O efeito colateral: o comando <code>lua</code> vira o 5.1</strong>
+<p>O pacote <code>luarocks</code> do Ubuntu traz junto o <code>lua5.1</code>. E o Ubuntu escolhe qual programa responde pelo comando <code>lua</code> por <strong>prioridade</strong>, com o sistema <code>update-alternatives</code>: o 5.1 tem prioridade 110, o 5.5 tem 20. Num Ubuntu 26.04 que só tinha o <code>lua5.5</code>, o <code>sudo apt install luarocks</code> escreveu, no meio das mensagens:</p>
+<pre class="term">update-alternatives: usando /usr/bin/lua5.1 para fornecer /usr/bin/lua (lua-interpreter) no modo automático</pre>
+<p>e, depois disso, <code>lua -v</code> respondeu <code>Lua 5.1.5  Copyright (C) 1994-2012 Lua.org, PUC-Rio</code>. Os seus programas passam a rodar no 5.1 sem você perceber (e o <code>//</code>, o <code>math.type</code>, o <code>&lt;const&gt;</code> deixam de funcionar). No lab dá para ver a briga das prioridades:</p>
+<pre class="term">$ update-alternatives --display lua-interpreter
+lua-interpreter - modo manual
+  a melhor versão de link é /usr/bin/lua5.1
+  o link atualmente aponta para /usr/bin/lua5.5
+  link lua-interpreter é /usr/bin/lua
+  secundário lua-manual é /usr/share/man/man1/lua.1.gz
+/usr/bin/lua5.1 - prioridade 110
+  secundário lua-manual: /usr/share/man/man1/lua5.1.1.gz
+/usr/bin/lua5.4 - prioridade 20
+  secundário lua-manual: /usr/share/man/man1/lua5.4.1.gz
+/usr/bin/lua5.5 - prioridade 20
+  secundário lua-manual: /usr/share/man/man1/lua5.5.1.gz
+$ lua -v
+Lua 5.5.0  Copyright (C) 1994-2025 Lua.org, PUC-Rio</pre>
+<p>"A melhor versão é o 5.1" (pela prioridade), mas o link aponta para o 5.5, porque no lab ele foi fixado à mão ("modo manual"). <strong>Se isso aconteceu com você</strong>, o conserto é fixar o 5.5 de volta (o mesmo para o <code>luac</code>):</p>
+<pre class="term">$ sudo update-alternatives --set lua-interpreter /usr/bin/lua5.5
+$ sudo update-alternatives --set lua-compiler /usr/bin/luac5.5</pre>
+<p>(Esses dois comandos não rodaram no lab, que não tem <code>sudo</code>; confira depois com <code>lua -v</code>.) Ou desinstale o pacote: <code>sudo apt remove luarocks</code>.</p>
+</div>
+
+<p>E as bibliotecas que o Ubuntu oferece pelo <code>apt</code> (<code>lua-inspect</code>, <code>lua-dkjson</code>, <code>lua-filesystem</code>…)? Também não servem: no Ubuntu 26.04 elas são empacotadas só para o 5.1, o 5.3 e o 5.4, e vão para pastas como <code>/usr/share/lua/5.4</code>. Nenhuma vai para <code>/usr/share/lua/5.5</code>. Para o 5.5, o caminho é o LuaRocks oficial.</p>
+
+<hr>
+
+<h2>2. Instalando o LuaRocks oficial na sua pasta</h2>
+<p>O site do LuaRocks distribui o código-fonte da versão mais nova (a 3.13.0, em outubro de 2026). Você vai baixar, configurar para o Lua 5.5 e instalar <strong>dentro da sua pasta pessoal</strong>, em <code>~/.local</code>. Assim não precisa de <code>sudo</code> e não mexe em nada do sistema.</p>
+
+<h3>O que precisa estar instalado antes</h3>
+<p>Para compilar, o LuaRocks precisa dos cabeçalhos do Lua 5.5 (o pacote <code>liblua5.5-dev</code>, que você talvez já tenha instalado na aula <a href="instalar.html">Instalar o Lua</a>), do compilador de C (<code>gcc</code>), do <code>make</code>, do <code>unzip</code> e do <code>wget</code>. São os que o lab tem:</p>
+<pre class="term">$ sudo apt install liblua5.5-dev gcc make unzip wget</pre>
+<p>(Esta linha não rodou no lab, que não tem <code>sudo</code>; os pacotes já estavam lá.) O <code>make</code> e o <code>gcc</code> também servem para as rocks escritas em C, como a da seção 4.</p>
+
+<h3>Passo a passo</h3>
+<ol class="passo">
+  <li>Baixe o pacote do site (o <code>-q</code> deixa o <code>wget</code> quieto) e confira que ele chegou:
+<pre class="term">$ wget -q https://luarocks.org/releases/luarocks-3.13.0.tar.gz
+$ ls
+Documentos
+Downloads
+Imagens
+Modelos
+Música
+Público
+Vídeos
+luarocks-3.13.0.tar.gz
+Área de trabalho</pre></li>
+  <li>Desempacote e entre na pasta:
+<pre class="term">$ tar xzf luarocks-3.13.0.tar.gz
+$ cd luarocks-3.13.0</pre></li>
+  <li>Configure: diga onde instalar (<code>--prefix</code>) e para qual Lua (<code>--lua-version</code>). O <code>$HOME</code> é a sua pasta pessoal:
+<pre class="term" data-cwd="~/luarocks-3.13.0">$ ./configure --prefix=$HOME/.local --lua-version=5.5
+
+Configuring LuaRocks version 3.13.0...
+
+Lua interpreter found: /usr/bin/lua5.5
+Checking if /usr/bin/lua5.5 is Lua version 5.5... yes
+lua.h found: /usr/include/lua5.5/lua.h
+unzip found in PATH: /usr/bin
+
+Done configuring.
+
+LuaRocks will be installed at......: /home/ana/.local
+LuaRocks will install rocks at.....: /home/ana/.local
+LuaRocks configuration directory...: /home/ana/.local/etc/luarocks
+Using Lua from.....................: /usr
+
+* Type make and make install:
+  to install to /home/ana/.local as usual.
+* Type make bootstrap:
+  to install LuaRocks into /home/ana/.local as a rock.
+</pre>
+  As linhas que importam: ele achou o <code>lua5.5</code>, confirmou que é o 5.5 (<code>yes</code>), e achou o <code>lua.h</code> (o cabeçalho que faltava ao LuaRocks do <code>apt</code>). No terminal, algumas linhas saem coloridas. Se aparecer um erro dizendo que não achou o <code>lua.h</code>, falta o <code>liblua5.5-dev</code>.</li>
+  <li>Compile e instale (no fim, os comandos que o <code>make</code> mostra são muitos; só a última parte está aqui):
+<pre class="term" data-cwd="~/luarocks-3.13.0">$ make
+mkdir -p "build"
+…                                        « várias linhas montando o build/luarocks
+$ make install
+mkdir -p '/home/ana/.local/etc/luarocks/'
+install -m 644  './build/config-5.5.lua' '/home/ana/.local/etc/luarocks/config-5.5.lua'
+mkdir -p '/home/ana/.local/bin/'
+install './build/luarocks' '/home/ana/.local/bin/luarocks'
+install './build/luarocks-admin' '/home/ana/.local/bin/luarocks-admin'
+…                                        « e copia os módulos do próprio LuaRocks
+$ cd</pre></li>
+  <li>Confira a versão, usando o caminho completo do programa novo:
+<pre class="term">$ ~/.local/bin/luarocks --version
+/home/ana/.local/bin/luarocks 3.13.0
+LuaRocks main command-line interface
+
+$ ~/.local/bin/luarocks config lua_version
+5.5</pre>
+  Agora sim: 3.13.0, trabalhando para o 5.5. Depois de instalado, a pasta <code>luarocks-3.13.0</code> e o arquivo <code>.tar.gz</code> podem ser apagados.</li>
+</ol>
+
+<div class="tip">
+<strong>Por que <code>~/.local/bin/luarocks</code> e não só <code>luarocks</code>?</strong>
+<p>Até você configurar o terminal (seção 5), o comando <code>luarocks</code> sozinho ainda pode ser o antigo, do <code>apt</code> (se ele estiver instalado), ou nem existir. O caminho completo garante que é o novo. Num Ubuntu, a pasta <code>~/.local/bin</code> entra no <code>PATH</code> sozinha a partir do <strong>próximo login</strong>, se ela existir; até lá, use o caminho completo.</p>
+</div>
+
+<hr>
+
+<h2>3. Instalando a primeira rock: <code>inspect</code></h2>
+<p>A rock <code>inspect</code> mostra o conteúdo de uma tabela de um jeito legível, coisa que o <code>print</code> não faz (ele só mostra <code>table: 0x…</code>; veja <a href="tabelas.html">Tabelas</a>). É ótima para descobrir o que tem dentro de uma tabela enquanto você conserta um programa.</p>
+
+<pre class="term">$ ~/.local/bin/luarocks --local install inspect
+Installing https://luarocks.org/inspect-3.1.3-0.rockspec
+
+
+inspect 3.1.3-0 depends on lua &gt;= 5.1 (5.5-1 provided by VM: success)
+No existing manifest. Attempting to rebuild...
+inspect 3.1.3-0 is now installed in /home/ana/.luarocks (license: MIT &lt;http://opensource.org/licenses/MIT&gt;)
+</pre>
+
+<dl class="anatomy">
+  <dt>--local</dt><dd>"Instale na minha <strong>árvore local</strong>": a pasta <code>~/.luarocks</code>, só sua. Sem <code>sudo</code>, sem mexer no sistema, e cada usuário do computador tem a sua.</dd>
+  <dt>Installing https://luarocks.org/inspect-3.1.3-0.rockspec</dt><dd>Ele achou a versão mais nova (3.1.3) e baixou a "receita" da rock (o <em>rockspec</em>).</dd>
+  <dt>depends on lua &gt;= 5.1 (5.5-1 provided by VM: success)</dt><dd>A rock pede o Lua 5.1 ou mais novo; o "VM" (o Lua que vai rodar) é o 5.5: <code>success</code>, tudo certo.</dd>
+  <dt>No existing manifest. Attempting to rebuild...</dt><dd>Na primeira instalação ele cria o índice das rocks instaladas. Só aparece uma vez.</dd>
+  <dt>is now installed in /home/ana/.luarocks</dt><dd>Instalada, com a licença dela (MIT: pode usar à vontade).</dd>
+</dl>
+
+<h3>O que foi instalado, e onde</h3>
+<pre class="term">$ ~/.local/bin/luarocks --local list
+
+Rocks installed for Lua 5.5 in /home/ana/.luarocks
+--------------------------------------------------
+
+inspect
+   3.1.3-0 (installed) - /home/ana/.luarocks/lib/luarocks/rocks-5.5
+
+$ ls ~/.luarocks
+lib
+share
+$ ls ~/.luarocks/share/lua/5.5
+inspect.lua</pre>
+
+<p>A rock é só um arquivo, <code>inspect.lua</code>, guardado em <code>~/.luarocks/share/lua/5.5</code>. Um módulo como os que você escreveu em <a href="modulos-proprios.html">Criando seu Módulo</a>.</p>
+
+<h3>Mas o <code>require</code> ainda não acha</h3>
+<pre class="term">$ lua -e 'local inspect = require("inspect")'
+lua: (command line):1: module 'inspect' not found:
+	no field package.preload['inspect']
+	no file '/usr/local/share/lua/5.5/inspect.lua'
+	no file '/usr/local/share/lua/5.5/inspect/init.lua'
+	no file '/usr/local/lib/lua/5.5/inspect.lua'
+	no file '/usr/local/lib/lua/5.5/inspect/init.lua'
+	no file '/usr/share/lua/5.5/inspect.lua'
+	no file '/usr/share/lua/5.5/inspect/init.lua'
+	no file './inspect.lua'
+	no file './inspect/init.lua'
+	no file '/usr/local/lib/lua/5.5/inspect.so'
+	no file '/usr/lib/x86_64-linux-gnu/lua/5.5/inspect.so'
+	no file '/usr/lib/lua/5.5/inspect.so'
+	no file '/usr/local/lib/lua/5.5/loadall.so'
+	no file './inspect.so'
+stack traceback:
+	[C]: in global 'require'
+	(command line):1: in main chunk
+	[C]: in ?</pre>
+
+<p>Leia a lista: nenhuma linha fala de <code>~/.luarocks</code>. O arquivo está lá, mas a pasta não está no <code>package.path</code>. Este é o tropeço número 1 de quem começa com o LuaRocks, e o conserto é a próxima seção.</p>
+
+<hr>
+
+<h2>4. Como o <code>require</code> acha as rocks: <code>luarocks path</code></h2>
+<p>O próprio LuaRocks sabe quais pastas precisam entrar na lista. O comando <code>luarocks path</code> <strong>escreve</strong> os comandos que ajustam o terminal:</p>
+
+<pre class="term">$ ~/.local/bin/luarocks path
+export LUA_PATH='/home/ana/.local/share/lua/5.5/?.lua;/usr/local/share/lua/5.5/?.lua;/usr/local/share/lua/5.5/?/init.lua;/usr/local/lib/lua/5.5/?.lua;/usr/local/lib/lua/5.5/?/init.lua;/usr/share/lua/5.5/?.lua;/usr/share/lua/5.5/?/init.lua;./?.lua;./?/init.lua;/home/ana/.luarocks/share/lua/5.5/?.lua;/home/ana/.luarocks/share/lua/5.5/?/init.lua;/home/ana/.local/share/lua/5.5/?/init.lua'
+export LUA_CPATH='/usr/local/lib/lua/5.5/?.so;/usr/lib/x86_64-linux-gnu/lua/5.5/?.so;/usr/lib/lua/5.5/?.so;/usr/local/lib/lua/5.5/loadall.so;./?.so;/home/ana/.luarocks/lib/lua/5.5/?.so;/home/ana/.local/lib/lua/5.5/?.so'
+export PATH='/home/ana/.luarocks/bin:/home/ana/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'</pre>
+
+<p>São três <code>export</code> (veja a seção 3 de <a href="package-path.html">package.path</a>): a <code>LUA_PATH</code> é a lista padrão <strong>mais</strong> as pastas <code>~/.luarocks/share/lua/5.5</code> (e as do <code>~/.local</code>); a <code>LUA_CPATH</code> faz o mesmo para as rocks em C; o <code>PATH</code> põe <code>~/.local/bin</code> (onde está o <code>luarocks</code> novo) e <code>~/.luarocks/bin</code> (onde as rocks põem os seus comandos) na frente. Ele só <strong>mostrou</strong> os comandos. Para <strong>rodá-los</strong> no terminal atual, use <code>eval</code> ("avaliar"):</p>
+
+<pre class="term">$ eval "$(~/.local/bin/luarocks path)"</pre>
+
+<p>Não aparece nada, mas agora o terminal está ajustado. Teste com um programa:</p>
+
+<pre class="file" data-file="ver.lua">local inspect = require("inspect")
+local cesta = {"pão", "leite", precos = {pao = 0.75, leite = 5.49}}
+print(inspect(cesta))
+print(package.searchpath("inspect", package.path))
+</pre>
+
+<pre class="term">$ lua ver.lua
+{ "pão", "leite",
+  precos = {
+    leite = 5.49,
+    pao = 0.75
+  }
+}
+/home/ana/.luarocks/share/lua/5.5/inspect.lua</pre>
+
+<p>O <code>inspect</code> mostrou a tabela inteira, até a tabela de dentro (e com as chaves em ordem alfabética, então a saída é sempre a mesma). E o <code>package.searchpath</code> confirma de onde o módulo veio: da árvore local do LuaRocks.</p>
+
+<h3>Para valer em todo terminal: o <code>~/.bashrc</code></h3>
+<p>O <code>eval</code> vale só para aquele terminal; fechou, perdeu. Para todo terminal novo já sair ajustado, ponha a mesma linha no fim do arquivo <code>~/.bashrc</code>, que o bash lê sempre que abre:</p>
+
+<pre class="term">$ echo 'eval "$(~/.local/bin/luarocks path)"' &gt;&gt; ~/.bashrc
+$ tail -1 ~/.bashrc
+eval "$(~/.local/bin/luarocks path)"</pre>
+
+<p>O <code>&gt;&gt;</code> acrescenta no fim do arquivo (um <code>&gt;</code> só apagaria o que já estava lá: cuidado!). Num terminal novo, o comando <code>luarocks</code> sozinho já é o 3.13 (porque o <code>~/.local/bin</code> entrou na frente do <code>/usr/bin</code> no <code>PATH</code>), e o <code>require</code> acha as rocks. No lab, abrindo um bash novo:</p>
+
+<pre class="term">$ bash -i -c 'luarocks --version | head -1; lua -e "print(require([[lfs]]).currentdir())"' 2&gt;/dev/null
+/home/ana/.local/bin/luarocks 3.13.0
+/home/ana</pre>
+
+<p>(O <code>lfs</code> é a rock da próxima seção.) Daqui em diante, esta aula escreve só <code>luarocks</code>, já que o terminal está ajustado.</p>
+
+<hr>
+
+<h2>5. Uma rock escrita em C: <code>luafilesystem</code></h2>
+<p>Algumas rocks não são arquivos <code>.lua</code>: são escritas em C, porque fazem coisas que o Lua puro não consegue (listar as pastas, por exemplo). O LuaRocks baixa o código e <strong>compila na hora</strong>, com o <code>gcc</code>. A <code>luafilesystem</code> (o módulo se chama <code>lfs</code>) é a mais usada para pastas e arquivos:</p>
+
+<pre class="term">$ luarocks --local install luafilesystem
+Installing https://luarocks.org/luafilesystem-1.9.0-1.src.rock
+
+
+luafilesystem 1.9.0-1 depends on lua &gt;= 5.1 (5.5-1 provided by VM: success)
+gcc -O2 -fPIC -I/usr/include/lua5.5 -c src/lfs.c -o src/lfs.o
+gcc  -shared -o /tmp/luarocks_build-luafilesystem-1.9.0-1-234566/lfs.so src/lfs.o
+luafilesystem 1.9.0-1 is now installed in /home/ana/.luarocks (license: MIT/X11)
+
+$ lua -e 'local lfs = require("lfs") print(lfs.currentdir()) print(package.searchpath("lfs", package.cpath))'
+/home/ana
+/home/ana/.luarocks/lib/lua/5.5/lfs.so</pre>
+
+<p>As duas linhas do <code>gcc</code> são a compilação: a primeira transforma o <code>lfs.c</code> em código de máquina usando os cabeçalhos do 5.5 (<code>-I/usr/include/lua5.5</code>), a segunda empacota tudo num <code>lfs.so</code>. O resultado foi para <code>~/.luarocks/lib/lua/5.5/lfs.so</code>, e é o <code>package.cpath</code> (a lista dos módulos em C) que o acha. O <code>lfs.currentdir()</code> mostrou a pasta atual. Se o <code>gcc</code> não estiver instalado, é nesta hora que a instalação falha.</p>
+
+<hr>
+
+<h2>6. Os outros comandos do dia a dia</h2>
+
+<h3><code>show</code>: o que é essa rock?</h3>
+<pre class="term">$ luarocks --local show inspect
+
+inspect 3.1.3-0 - Lua table visualizer, ideal for debugging
+
+inspect will print out your lua tables nicely so you can debug your programs
+quickly. It sorts keys by type and name and handles recursive tables properly.
+
+License:      	MIT &lt;http://opensource.org/licenses/MIT&gt;
+Homepage:     	https://github.com/kikito/inspect.lua
+Installed in: 	/home/ana/.luarocks
+
+Modules:
+	inspect (/home/ana/.luarocks/share/lua/5.5/inspect.lua)
+
+Depends on:
+	lua &gt;= 5.1 (using 5.5-1)
+</pre>
+<p>Descrição ("visualizador de tabelas, ideal para depurar"), licença, a página do projeto, os <strong>módulos</strong> que ela traz (o nome que vai no <code>require</code>) e as dependências.</p>
+
+<h3><code>search</code>: procurar na loja</h3>
+<pre class="term">$ luarocks search inspect
+
+inspect - Search results for Lua 5.5:
+=====================================
+
+
+Rockspecs and source rocks:
+---------------------------
+
+inspect
+   3.1.3-0 (rockspec) - https://luarocks.org
+   3.1.2-0 (rockspec) - https://luarocks.org
+   3.1.1-0 (rockspec) - https://luarocks.org
+…                                        « versões mais antigas
+inspect-tl-type
+   0.0.1-1 (rockspec) - https://luarocks.org
+…</pre>
+
+<h3><code>remove</code>: desinstalar</h3>
+<pre class="term">$ luarocks --local remove inspect
+Checking stability of dependencies in the absence of
+inspect 3.1.3-0...
+
+Removing inspect 3.1.3-0...
+Removal successful.
+$ lua ver.lua 2&gt;&amp;1 | head -3
+lua: ver.lua:1: module 'inspect' not found:
+	no field package.preload['inspect']
+	no file '/home/ana/.local/share/lua/5.5/inspect.lua'</pre>
+<p>Antes de remover, ele confere se outra rock precisava dela ("checando a estabilidade das dependências"). Depois, o <code>ver.lua</code> volta a dar <code>module 'inspect' not found</code>, e repare que agora a lista começa por <code>/home/ana/.local/…</code>: é o <code>LUA_PATH</code> do <code>luarocks path</code> em ação.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Comando</th><th>O que faz</th></tr>
+<tr><td><code>luarocks --local install NOME</code></td><td>Baixa e instala a rock (e as dependências) em <code>~/.luarocks</code></td></tr>
+<tr><td><code>luarocks --local install NOME VERSÃO</code></td><td>Uma versão específica (ex.: <code>inspect 3.1.2-0</code>)</td></tr>
+<tr><td><code>luarocks --local list</code></td><td>As rocks instaladas</td></tr>
+<tr><td><code>luarocks --local show NOME</code></td><td>Descrição, módulos, dependências e onde está</td></tr>
+<tr><td><code>luarocks --local remove NOME</code></td><td>Desinstala</td></tr>
+<tr><td><code>luarocks search TEXTO</code></td><td>Procura no luarocks.org</td></tr>
+<tr><td><code>luarocks path</code></td><td>Escreve os <code>export</code> de <code>LUA_PATH</code>, <code>LUA_CPATH</code> e <code>PATH</code> (use com <code>eval</code>)</td></tr>
+<tr><td><code>luarocks config lua_version</code></td><td>Para qual versão do Lua ele está trabalhando</td></tr>
+</table>
+</div>
+
+<div class="note">
+<strong>Sem o <code>--local</code></strong>
+<p>No LuaRocks oficial instalado com <code>--prefix=$HOME/.local</code>, a árvore "do sistema" dele também é uma pasta sua (<code>~/.local</code>: veja a linha <code>LuaRocks will install rocks at.....: /home/ana/.local</code> do <code>configure</code>), então instalar sem <code>--local</code> também funcionaria, sem <code>sudo</code>. Esta aula usa sempre <code>--local</code> para ficar igual ao que você vai ler na documentação e em outros tutoriais, e para as suas rocks ficarem todas num lugar só, <code>~/.luarocks</code>.</p>
+</div>
+
+<hr>
+
+<h2>7. No editor do guia</h2>
+<p>A caixa "Experimente" roda o Lua 5.5 no navegador, com os arquivos das abas, e mais nada: não há internet para o LuaRocks, não há <code>gcc</code>, e nenhuma rock vem instalada. Lá, <code>require("inspect")</code> dá <code>module 'inspect' not found</code>, com a mesma lista de pastas do terminal. Para usar uma rock, instale o Lua e o LuaRocks no seu computador (aula <a href="instalar.html">Instalar o Lua</a>).</p>
+<p>Uma coisa útil que dá para praticar no editor: fazer o programa <strong>continuar funcionando</strong> quando uma rock não está instalada, com o <a href="pcall.html">pcall</a>. O <code>pcall(require, "inspect")</code> tenta carregar e, em vez de parar o programa, devolve <code>false</code> e a mensagem de erro:</p>
+
+<div class="trylua" data-goal="out:inspect não está instalado;;semerro;;src:pcall">
+<p class="try-task"><strong>Missão:</strong> no editor, o <code>inspect</code> não existe e o programa para na linha 1. Use <code>local ok, inspect = pcall(require, "inspect")</code> e, se <code>ok</code> for falso, mostre <code>inspect não está instalado</code> e a lista com <code>table.concat</code>; se for verdadeiro, use o <code>inspect</code>.</p>
+<pre class="script" data-file="main.lua">local inspect = require("inspect")
+local compras = {"pão", "leite", "café"}
+print(inspect(compras))
+</pre>
+<pre class="solucao" data-file="main.lua">local ok, inspect = pcall(require, "inspect")
+local compras = {"pão", "leite", "café"}
+if ok then
+  print(inspect(compras))
+else
+  print("inspect não está instalado")
+  print(table.concat(compras, ", "))
+end
+</pre>
+</div>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+
+<div class="cenario">
+<strong>Instalou, mas o <code>require</code> não acha</strong>
+<p>É o caso da seção 3: a lista do <code>module 'inspect' not found</code> não tem nenhuma linha com <code>.luarocks</code>. Faltou o <code>eval "$(~/.local/bin/luarocks path)"</code> nesse terminal (ou no <code>~/.bashrc</code>). Confira também se você instalou com o LuaRocks do 5.5: <code>luarocks config lua_version</code> tem de dizer <code>5.5</code>; uma rock instalada para o 5.1 vai para <code>rocks-5.1</code> e o 5.5 nunca a vê.</p>
+</div>
+
+<div class="cenario">
+<strong>O nome da rock está errado</strong>
+<pre class="term">$ luarocks --local install inspekt
+
+Error: No results matching query were found for Lua 5.5.
+To check if it is available for other Lua versions, use --check-lua-versions.</pre>
+<p>"Nenhum resultado para a busca, para o Lua 5.5. Para ver se existe para outras versões, use <code>--check-lua-versions</code>." Ou o nome está errado (aqui, <code>inspekt</code>), ou a rock existe só para versões antigas do Lua. Use <code>luarocks search</code> para conferir o nome. Atenção: o nome da <strong>rock</strong> e o nome do <strong>módulo</strong> podem ser diferentes. Você instala <code>luafilesystem</code> e faz <code>require("lfs")</code>; o <code>luarocks show</code> mostra os módulos.</p>
+</div>
+
+<div class="cenario">
+<strong>Usou o <code>luarocks</code> do <code>apt</code> sem perceber</strong>
+<p>Se aparecer <code>Error: /usr/local/lib/luarocks/rocks-5.1 does not exist…</code> ou <code>Failed finding Lua header files</code>, o <code>luarocks</code> que respondeu é o 3.8 do Ubuntu (confira com <code>luarocks --version</code>: o caminho é <code>/usr/bin/luarocks</code>). Use <code>~/.local/bin/luarocks</code>, ou ajuste o terminal com o <code>eval</code> da seção 4.</p>
+</div>
+
+<div class="cenario">
+<strong>Uma rock em C sem o <code>gcc</code></strong>
+<p>Rocks como a <code>luafilesystem</code> precisam compilar. Sem o <code>gcc</code> (ou sem os cabeçalhos do <code>liblua5.5-dev</code>), a instalação para no meio, numa das linhas do <code>gcc</code>. Instale os pacotes da seção 2 e tente de novo. (Este caso não foi reproduzido no lab, que tem o <code>gcc</code>.)</p>
+</div>
+
+<hr>
+
+<h2>Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Situação</th><th>O que fazer</th></tr>
+<tr><td>Ubuntu 26.04 + Lua 5.5</td><td>Não use o <code>luarocks</code> do <code>apt</code> (3.8, trabalha para o 5.1). Instale o 3.13 oficial em <code>~/.local</code></td></tr>
+<tr><td>O <code>lua</code> virou 5.1</td><td><code>sudo update-alternatives --set lua-interpreter /usr/bin/lua5.5</code> (e <code>lua-compiler</code> com <code>/usr/bin/luac5.5</code>)</td></tr>
+<tr><td>Instalar o LuaRocks</td><td><code>wget</code> → <code>tar xzf</code> → <code>./configure --prefix=$HOME/.local --lua-version=5.5</code> → <code>make</code> → <code>make install</code></td></tr>
+<tr><td>Instalar uma rock</td><td><code>luarocks --local install NOME</code> (vai para <code>~/.luarocks</code>)</td></tr>
+<tr><td>Fazer o <code>require</code> achar</td><td><code>eval "$(~/.local/bin/luarocks path)"</code>, e a mesma linha no fim do <code>~/.bashrc</code></td></tr>
+<tr><td>Módulos <code>.lua</code> das rocks</td><td><code>~/.luarocks/share/lua/5.5/</code> (no <code>package.path</code>)</td></tr>
+<tr><td>Módulos em C das rocks</td><td><code>~/.luarocks/lib/lua/5.5/</code> (no <code>package.cpath</code>)</td></tr>
+<tr><td>No editor do guia</td><td>Não há rocks; use <code>pcall(require, "nome")</code> para o programa não quebrar</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. Complete o comando</h3>
+<p>Complete para instalar a rock <code>dkjson</code> (que lê e escreve JSON) na sua árvore local:</p>
+<div class="ex-code">luarocks <input data-answer="--local" aria-label="opção"> <input data-answer="install" aria-label="comando"> dkjson</div>
+</div>
+
+<div class="exercise">
+<h3>2. Onde ficou?</h3>
+<p>Com <code>--local</code> no Lua 5.5, em que pasta fica o arquivo <code>.lua</code> de uma rock? (comece com <code>~/</code>)</p>
+<div class="ex-code"><input data-answer="~/.luarocks/share/lua/5.5|~/.luarocks/share/lua/5.5/" aria-label="pasta"></div>
+</div>
+
+<div class="mc" data-answer="3">
+<p class="mc-q">3. No Ubuntu 26.04, por que o <code>sudo apt install luarocks</code> não serve para o Lua 5.5?</p>
+<label><input type="radio" name="q3"> Porque o LuaRocks não existe para Linux</label>
+<label><input type="radio" name="q3"> Porque ele precisa de internet</label>
+<label><input type="radio" name="q3"> Porque é a versão 3.8, que trabalha para o 5.1 e não consegue instalar para o 5.5 (e ainda troca o <code>lua</code> para o 5.1)</label>
+<label><input type="radio" name="q3"> Porque ele só instala rocks escritas em C</label>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">4. A rock foi instalada, mas <code>require("inspect")</code> dá <code>module 'inspect' not found</code> e a lista não tem <code>.luarocks</code>. O que falta?</p>
+<label><input type="radio" name="q4"> Reinstalar a rock com <code>sudo</code></label>
+<label><input type="radio" name="q4"> Rodar <code>eval "$(~/.local/bin/luarocks path)"</code> nesse terminal (ou pôr no <code>~/.bashrc</code>)</label>
+<label><input type="radio" name="q4"> Escrever <code>require("inspect.lua")</code></label>
+<label><input type="radio" name="q4"> Copiar o arquivo para <code>/usr/bin</code></label>
+</div>
+
+<div class="mc" data-answer="1">
+<p class="mc-q">5. Você instalou a rock <code>luafilesystem</code>. Qual é o <code>require</code>?</p>
+<label><input type="radio" name="q5"> <code>require("lfs")</code>: o nome do módulo está no <code>luarocks show</code></label>
+<label><input type="radio" name="q5"> <code>require("luafilesystem")</code>, sempre o nome da rock</label>
+<label><input type="radio" name="q5"> <code>require("luarocks.luafilesystem")</code></label>
+<label><input type="radio" name="q5"> Nenhum: rocks em C não usam <code>require</code></label>
+</div>
+
+<h3>Missão final: faça o que o <code>luarocks path</code> faz</h3>
+
+<div class="trylua" data-goal="out:Olá, Ana!;;semerro;;src:\.luarocks">
+<p class="try-task"><strong>Missão:</strong> imagine que o LuaRocks instalou uma rock com o módulo <code>saudacao</code> na árvore local (veja a aba: o arquivo está em <code>.luarocks/share/lua/5.5/</code>, dentro da pasta da Ana). O <code>require</code> não acha, porque essa pasta não está no <code>package.path</code>. No começo do <code>main.lua</code>, acrescente ao <code>package.path</code> o modelo <code>os.getenv("HOME") .. "/.luarocks/share/lua/5.5/?.lua"</code> (lembre do <code>;</code> que separa os modelos).</p>
+<pre class="script" data-file="main.lua">local saudacao = require("saudacao")
+print(saudacao.ola("Ana"))
+</pre>
+<pre class="script" data-file=".luarocks/share/lua/5.5/saudacao.lua">local M = {}
+function M.ola(nome)
+  return "Olá, " .. nome .. "!"
+end
+return M
+</pre>
+<pre class="solucao" data-file="main.lua">package.path = package.path .. ";" .. os.getenv("HOME") .. "/.luarocks/share/lua/5.5/?.lua"
+local saudacao = require("saudacao")
+print(saudacao.ola("Ana"))
+</pre>
+</div>
+
+<p>É exatamente o que a <code>LUA_PATH</code> do <code>luarocks path</code> faz: põe <code>/home/ana/.luarocks/share/lua/5.5/?.lua</code> na lista. No terminal, deixe o <code>eval</code> fazer isso por você em vez de mexer no <code>package.path</code> do programa.</p>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li>O LuaRocks instala <strong>rocks</strong> (módulos de outras pessoas) do site luarocks.org.</li>
+  <li>No Ubuntu 26.04, o <code>luarocks</code> do <code>apt</code> (3.8) trabalha para o Lua 5.1, não instala para o 5.5, e faz o comando <code>lua</code> virar o 5.1. As bibliotecas <code>lua-*</code> do <code>apt</code> também não são para o 5.5.</li>
+  <li>O LuaRocks oficial (3.13) instalado em <code>~/.local</code> funciona com o 5.5: <code>./configure --prefix=$HOME/.local --lua-version=5.5</code>, <code>make</code>, <code>make install</code>.</li>
+  <li><code>luarocks --local install NOME</code> instala em <code>~/.luarocks</code>; <code>list</code>, <code>show</code>, <code>remove</code> e <code>search</code> fazem o resto.</li>
+  <li>O <code>require</code> só acha as rocks depois do <code>eval "$(~/.local/bin/luarocks path)"</code>; ponha essa linha no <code>~/.bashrc</code>.</li>
+  <li>O editor do guia não instala rocks: lá, use <code>pcall(require, "nome")</code> para o programa sobreviver sem elas.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
