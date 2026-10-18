@@ -1,0 +1,524 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua utf8 — acentos, utf8.len, utf8.char e utf8.codes | Guia Lua</title>
+<meta name="description" content="Acentos no Lua para quem nunca programou: por que #&quot;ação&quot; dá 6, o que é UTF-8, utf8.len, utf8.char, utf8.codepoint, utf8.codes, utf8.charpattern e utf8.offset (que no Lua 5.5 devolve início e fim), recortar e inverter texto com acento, por que string.upper(&quot;ação&quot;) dá AçãO mesmo com os.setlocale, e os erros reais do Lua 5.5.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">utf8</span></h1>
+
+<p class="intro">Nas aulas anteriores, os acentos atrapalharam várias vezes: <code>#"ação"</code> deu 6, o <code>sub</code> cortou o "ç" ao meio, o <code>reverse</code> desmontou o "ã", o <code>upper</code> deixou <code>AçãO</code>, o <code>%a</code> partiu "pão" em dois. Todos esses problemas têm a mesma causa: o Lua trabalha com <strong>bytes</strong>, e uma letra com acento ocupa <strong>mais de um byte</strong>. Nesta aula você entende por quê, e conhece a biblioteca <code>utf8</code>, que vem com o Lua e sabe contar <strong>letras</strong> de verdade.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O que é o <strong>UTF-8</strong> e por que o "ç" ocupa 2 bytes, o "€" 3 e o "😀" 4.</li>
+  <li>Como contar letras com <code>utf8.len</code>.</li>
+  <li>O número de cada letra (o <strong>código</strong>): <code>utf8.codepoint</code>, <code>utf8.char</code> e o escape <code>"\u{E7}"</code>.</li>
+  <li>Como passar por cada letra com <code>utf8.codes</code> e com <code>gmatch(utf8.charpattern)</code>.</li>
+  <li>Como achar onde começa a enésima letra com <code>utf8.offset</code> (que no 5.5 devolve início <strong>e fim</strong>), e recortar sem cortar acentos.</li>
+  <li>Como inverter um texto com acentos sem estragá-lo.</li>
+  <li>Por que <code>string.upper("ação")</code> dá <code>AçãO</code>, com ou sem <code>os.setlocale</code>, e uma saída para isso.</li>
+  <li>O que acontece com texto que não é UTF-8 válido, e os erros reais.</li>
+</ul>
+</div>
+
+<p>Todos os programas desta aula rodaram no <strong>Lua 5.5</strong> da máquina da Ana (usuária <code>ana</code>, computador <code>notebook</code>), salvos na pasta pessoal dela e executados com <code>lua arquivo.lua</code>. Você pode rodar cada um no editor do guia.</p>
+
+<hr>
+
+<h2>A ideia: o estacionamento com vagas de moto e de caminhão</h2>
+<p>Imagine um estacionamento em que todas as vagas têm o mesmo tamanho. Um carro ocupa <strong>1</strong> vaga. Uma van ocupa <strong>2</strong>, um ônibus <strong>3</strong>, um caminhão <strong>4</strong>. Se o fiscal contar <strong>vagas ocupadas</strong>, ele não descobre quantos <strong>veículos</strong> há: 6 vagas podem ser 6 carros, ou 2 carros e 2 vans.</p>
+<p>Na memória do computador, as vagas são os <strong>bytes</strong>, e os veículos são as letras. O padrão que decide quantas vagas cada letra ocupa se chama <strong>UTF-8</strong>, e é o usado hoje em praticamente todo lugar (no terminal do Ubuntu, nas páginas da internet, nos arquivos <code>.lua</code> que você salva):</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Caractere</th><th>Bytes</th><th>Quem usa esse tamanho</th></tr>
+<tr><td><code>a</code> <code>Z</code> <code>7</code> <code>!</code> espaço</td><td>1</td><td>as letras sem acento, os algarismos e os sinais da tabela ASCII (veja <a href="string-sub.html">string.byte</a>)</td></tr>
+<tr><td><code>ç</code> <code>ã</code> <code>é</code> <code>ü</code> <code>ñ</code></td><td>2</td><td>as letras acentuadas do português e de outras línguas europeias</td></tr>
+<tr><td><code>€</code> <code>→</code> <code>日</code></td><td>3</td><td>símbolos, setas, japonês, chinês…</td></tr>
+<tr><td><code>😀</code> <code>🍕</code></td><td>4</td><td>os emojis</td></tr>
+</table>
+</div>
+
+<p>O <code>#</code>, o <code>sub</code>, o <code>byte</code>, o <code>upper</code> e os padrões são o fiscal que conta vagas: rápidos e simples, mas sem saber onde termina cada letra. A biblioteca <code>utf8</code> é o fiscal que conta veículos.</p>
+
+<hr>
+
+<h2>1. Contar letras: <code>utf8.len</code></h2>
+
+<pre class="file" data-file="contar.lua">local palavra = "ação"
+print(#palavra, utf8.len(palavra))
+print(#"Conceição", utf8.len("Conceição"))
+print(#"€", utf8.len("€"), #"😀", utf8.len("😀"))
+</pre>
+
+<pre class="term">$ lua contar.lua
+6	4
+11	9
+3	1	4	1</pre>
+
+<dl class="anatomy">
+  <dt>utf8</dt><dd>A biblioteca de UTF-8. Como a <code>string</code>, já vem carregada: não precisa de <code>require</code>.</dd>
+  <dt>utf8.len(palavra)</dt><dd><em>len</em> de <em>length</em>, "comprimento": quantos <strong>caracteres</strong> o texto tem. "ação" tem 4 letras em 6 bytes.</dd>
+  <dt>#"€" e #"😀"</dt><dd>O euro ocupa 3 bytes e o emoji, 4; para o <code>utf8.len</code>, cada um é 1 caractere.</dd>
+</dl>
+
+<p>Repare que <strong>não</strong> existe o atalho <code>palavra:len()</code> para isso: o dois-pontos chama as funções da biblioteca <code>string</code> (veja <a href="string-metodos.html">Funções de Texto</a>), e <code>palavra:len()</code> é o mesmo que <code>#palavra</code>. Para letras, é sempre <code>utf8.len(palavra)</code>.</p>
+
+<div class="trylua" data-goal="out:Conceição tem 9 letras;;src:utf8\.len">
+<p class="try-task"><strong>Missão:</strong> o crachá da Conceição precisa dizer quantas letras o nome tem, mas o programa diz 11. Troque o <code>#nome</code> por <code>utf8.len(nome)</code> para mostrar <code>Conceição tem 9 letras</code>.</p>
+<pre class="script" data-file="main.lua">local nome = "Conceição"
+print(nome .. " tem " .. #nome .. " letras")
+</pre>
+<pre class="solucao" data-file="main.lua">local nome = "Conceição"
+print(nome .. " tem " .. utf8.len(nome) .. " letras")
+</pre>
+</div>
+
+<hr>
+
+<h2>2. O número de cada caractere: <code>utf8.codepoint</code> e <code>utf8.char</code></h2>
+<p>Cada caractere do mundo tem um número fixo, o seu <strong>código</strong> (em inglês, <em>code point</em>), numa tabela gigante chamada <strong>Unicode</strong>. Os de 0 a 127 são os mesmos da tabela ASCII (<code>A</code> = 65); o <code>ç</code> é 231, o <code>€</code> é 8364. O UTF-8 é só o jeito de guardar esses números em bytes.</p>
+
+<pre class="file" data-file="codigos.lua">print(utf8.codepoint("ç"), ("ç"):byte(1, -1))
+print(utf8.codepoint("ação", 1, -1))
+print(utf8.char(97, 231, 227, 111), utf8.char(8364), utf8.char(128512))
+print("\u{E7}\u{E3}", "\u{20AC}", #"\u{E7}")
+</pre>
+
+<pre class="term">$ lua codigos.lua
+231	195	167
+97	231	227	111
+ação	€	😀
+çã	€	2</pre>
+
+<dl class="anatomy">
+  <dt>utf8.codepoint("ç")</dt><dd>O código Unicode do <code>ç</code>: 231. Compare com o <code>byte</code>, que mostra os <strong>2 bytes</strong> em que esse 231 foi guardado (195 e 167).</dd>
+  <dt>utf8.codepoint("ação", 1, -1)</dt><dd>Com início e fim (em bytes, como no <code>sub</code>), devolve o código de cada caractere: um número por letra, e não por byte.</dd>
+  <dt>utf8.char(…)</dt><dd>O caminho de volta: dos códigos para o texto. Diferente do <code>string.char</code> (só de 0 a 255, um byte cada), ele aceita qualquer código, e monta os bytes certos sozinho: 128512 é o 😀.</dd>
+  <dt>"\u{E7}"</dt><dd>Um escape dentro de texto: <code>\u{…}</code> com o código em <strong>hexadecimal</strong> (E7 = 231, 20AC = 8364). Serve para escrever um caractere que não está no seu teclado. O resultado é um texto normal, de 2 bytes no caso do <code>ç</code>. Os outros escapes estão em <a href="strings-escape.html">Caracteres de Escape</a>.</dd>
+</dl>
+
+<hr>
+
+<h2>3. Uma letra de cada vez: <code>utf8.codes</code> e <code>utf8.charpattern</code></h2>
+<p>Para passar por cada <strong>letra</strong> (e não por cada byte), há dois jeitos. O primeiro é o laço com <code>utf8.codes</code>, que entrega a posição (em bytes) e o código de cada caractere:</p>
+
+<pre class="file" data-file="codes.lua">for pos, codigo in utf8.codes("ação") do
+  print(pos, codigo, utf8.char(codigo))
+end
+</pre>
+
+<pre class="term">$ lua codes.lua
+1	97	a
+2	231	ç
+4	227	ã
+6	111	o</pre>
+
+<p>As posições pulam de 2 para 4 e de 4 para 6: é o espaço que o <code>ç</code> e o <code>ã</code> ocupam. O laço <code>for … in</code> é o mesmo da aula <a href="gmatch.html">gmatch</a>, agora com duas variáveis.</p>
+
+<p>O segundo jeito usa o <code>gmatch</code> com um padrão pronto, o <code>utf8.charpattern</code>: o padrão de "<strong>um</strong> caractere UTF-8 inteiro", com todos os seus bytes. Ele entrega as letras como texto:</p>
+
+<pre class="file" data-file="letras.lua">for letra in ("ação"):gmatch(utf8.charpattern) do
+  io.write("[", letra, "]")
+end
+print()
+</pre>
+
+<pre class="term">$ lua letras.lua
+[a][ç][ã][o]</pre>
+
+<p>O <code>utf8.charpattern</code> é um texto comum, o padrão <code>"[\0-\x7F\xC2-\xFD][\x80-\xBF]*"</code> (como diz o manual do Lua): "um byte de começo de caractere, seguido dos bytes de continuação". Não tente mostrá-lo com <code>print</code>: ele é feito de bytes soltos, e o terminal mostra uns <code>�</code>. Use-o direto no <code>gmatch</code>, no <code>gsub</code> ou no <code>match</code>.</p>
+
+<div class="trylua">
+<p class="try-task"><strong>Experimente:</strong> troque a palavra por um nome seu, com acentos, ou por um emoji (<code>"oi 😀"</code>), e compare as duas colunas: a posição em bytes e a letra.</p>
+<pre class="script" data-file="main.lua">local texto = "Lição de casa"
+for pos, codigo in utf8.codes(texto) do
+  print(pos, utf8.char(codigo))
+end
+print("bytes:", #texto, "letras:", utf8.len(texto))
+</pre>
+</div>
+
+<hr>
+
+<h2>4. Onde começa a enésima letra: <code>utf8.offset</code></h2>
+<p>Para recortar com o <code>sub</code> sem partir um acento, você precisa saber em que <strong>byte</strong> começa cada letra. É o que o <code>utf8.offset</code> responde (<em>offset</em> = "deslocamento"):</p>
+
+<pre class="file" data-file="offset.lua">local p = "ação"
+print(utf8.offset(p, 2))
+print(utf8.offset(p, 3))
+print(utf8.offset(p, -1))
+print(utf8.offset(p, 5))
+print(utf8.offset(p, 6))
+</pre>
+
+<pre class="term">$ lua offset.lua
+2	3
+4	5
+6	6
+7	7
+nil</pre>
+
+<dl class="anatomy">
+  <dt>utf8.offset(p, 2) → 2  3</dt><dd>A 2ª letra (o <code>ç</code>) começa no byte 2 e termina no byte 3. <span class="versao">5.5</span> No Lua 5.5 o <code>offset</code> devolve <strong>dois</strong> números, o início e o fim do caractere; no 5.4, só o início (no lab, <code>lua5.4</code> deu só <code>2</code>).</dd>
+  <dt>utf8.offset(p, 3) → 4  5</dt><dd>A 3ª letra (o <code>ã</code>) ocupa os bytes 4 e 5.</dd>
+  <dt>utf8.offset(p, -1) → 6  6</dt><dd>Negativo conta do fim: a última letra, o <code>o</code>, no byte 6.</dd>
+  <dt>utf8.offset(p, 5) → 7  7</dt><dd>A "5ª letra" de uma palavra de 4 letras é o lugar <strong>logo depois do fim</strong>: o byte 7. Parece estranho, mas é muito útil (logo abaixo).</dd>
+  <dt>utf8.offset(p, 6) → nil</dt><dd>Mais longe do que isso, não existe: <code>nil</code>.</dd>
+</dl>
+
+<h3>Recortar por letras</h3>
+<p>A receita: o pedaço da letra <code>i</code> até a letra <code>j</code> vai do <strong>início</strong> da letra <code>i</code> até um byte <strong>antes</strong> do início da letra <code>j + 1</code>:</p>
+
+<pre class="file" data-file="recortar.lua">local s = "pão de queijo"
+print(s:sub(1, 3))
+print(s:sub(utf8.offset(s, 1), utf8.offset(s, 4) - 1))
+
+local nome = "Conceição"
+print(nome:sub(utf8.offset(nome, 6)))
+print(nome:sub((utf8.offset(nome, 6))))
+
+local erica = "Érica"
+local fim = utf8.offset(erica, 2) - 1
+print(erica:sub(1, fim), erica:sub(fim + 1))
+</pre>
+
+<pre class="term">$ lua recortar.lua
+pã
+pão
+i
+ição
+É	rica</pre>
+
+<dl class="anatomy">
+  <dt>s:sub(1, 3)</dt><dd>Os 3 primeiros <strong>bytes</strong>: <code>p</code> e o <code>ã</code> (que ocupa 2). Faltou o <code>o</code>.</dd>
+  <dt>s:sub(utf8.offset(s, 1), utf8.offset(s, 4) - 1)</dt><dd>As 3 primeiras <strong>letras</strong>: do início da 1ª até antes do início da 4ª (o espaço, no byte 5). Quando há mais de um valor, o <code>sub</code> usa só o primeiro de cada <code>offset</code>, que é o início.</dd>
+  <dt>nome:sub(utf8.offset(nome, 6)) → i</dt><dd>A ideia era "da 6ª letra até o fim", mas saiu só o <code>i</code>! Aqui o <code>offset</code> é o <strong>último</strong> argumento do <code>sub</code>, e aí os seus <strong>dois</strong> valores entram: o <code>sub</code> recebeu <code>sub(6, 6)</code>, início e fim do <code>i</code>. <span class="versao">5.5</span> No Lua 5.4, com um valor só, essa mesma linha dava <code>ição</code> (conferido no lab com <code>lua5.4</code>).</dd>
+  <dt>nome:sub((utf8.offset(nome, 6))) → ição</dt><dd>Os <strong>parênteses extras</strong> em volta do <code>offset</code> cortam a resposta para um valor só, o início (o mesmo truque do <a href="gsub.html">gsub</a>). Agora sim: da 6ª letra até o fim.</dd>
+  <dt>erica:sub(1, fim)</dt><dd>A primeira letra inteira, o <code>É</code> (2 bytes), separada do resto. Lembra da missão de <a href="string-sub.html">sub, byte e char</a>, em que <code>sub(1, 1)</code> pegava meio <code>é</code>? É assim que se resolve.</dd>
+</dl>
+
+<hr>
+
+<h2>5. Inverter um texto com acentos</h2>
+<p>O <code>string.reverse</code> inverte os bytes, e com isso desmonta as letras de 2 bytes (veja <a href="string-metodos.html">Funções de Texto</a>). Para inverter <strong>letras</strong>, pegue uma por uma com o <code>utf8.charpattern</code> e vá pondo cada uma <strong>na frente</strong> das anteriores:</p>
+
+<pre class="file" data-file="inverter.lua">local p = "ação"
+print(p:reverse())
+local invertida = ""
+for letra in p:gmatch(utf8.charpattern) do
+  invertida = letra .. invertida
+end
+print(invertida)
+</pre>
+
+<pre class="term">$ lua inverter.lua
+o�ç�a
+oãça</pre>
+
+<p>A cada volta, a letra nova vai para o começo: <code>a</code>, depois <code>ça</code>, depois <code>ãça</code>, depois <code>oãça</code>. Você vai fazer isso na missão final.</p>
+
+<hr>
+
+<h2>6. Maiúsculas com acento: por que <code>upper</code> não funciona</h2>
+
+<pre class="file" data-file="maiusculas.lua">print(string.upper("ação"), ("ÁGUA"):lower())
+print(os.setlocale())
+print(os.setlocale(""))
+print(string.upper("ação"), ("ÁGUA"):lower())
+</pre>
+
+<pre class="term">$ lua maiusculas.lua
+AçãO	Água
+C
+pt_BR.UTF-8
+AçãO	Água</pre>
+
+<dl class="anatomy">
+  <dt>AçãO e Água</dt><dd>O <code>upper</code> e o <code>lower</code> só trocaram as letras sem acento.</dd>
+  <dt>os.setlocale() → C</dt><dd>O <strong>locale</strong> é a configuração de idioma e país que o programa usa (para datas, números, letras). Todo programa Lua começa no locale <code>C</code>, o "neutro", em inglês.</dd>
+  <dt>os.setlocale("") → pt_BR.UTF-8</dt><dd>Com o texto vazio, o Lua adota o locale do computador: aqui, português do Brasil em UTF-8. É isso que faz o <code>os.date</code> escrever "domingo" e "outubro" (aula <a href="os-date-time.html">Datas e Horas</a>).</dd>
+  <dt>AçãO de novo</dt><dd>Mesmo em português, nada mudou.</dd>
+</dl>
+
+<p>O motivo: o <code>upper</code> olha <strong>um byte de cada vez</strong> e pergunta ao sistema "este byte é uma letra minúscula?". No UTF-8, nenhum byte sozinho é uma letra acentuada: o <code>ç</code> são os bytes 195 e 167, e cada um, isolado, não é letra nenhuma. Então o <code>upper</code> os deixa como estão, com ou sem locale. (Em codificações antigas, de um byte por letra, como a Latin-1 dos anos 1990, o locale até resolvia; com o UTF-8, não.)</p>
+
+<h3>Uma saída: uma tabela de trocas</h3>
+<p>O Lua não traz uma tabela de maiúsculas para todas as letras do mundo (ela seria maior que o próprio Lua). Mas para o português bastam poucas letras, e o <a href="gsub.html">gsub</a> com uma tabela faz o resto:</p>
+
+<pre class="file" data-file="acentos.lua">local maiusculas = { ["á"] = "Á", ["ã"] = "Ã", ["ç"] = "Ç", ["é"] = "É" }
+local texto = "ação é água"
+print((texto:upper():gsub(utf8.charpattern, maiusculas)))
+</pre>
+
+<pre class="term">$ lua acentos.lua
+AÇÃO É ÁGUA</pre>
+
+<p>O <code>upper</code> cuida das letras sem acento; depois, o <code>gsub</code> passa por cada caractere (<code>utf8.charpattern</code>) e troca os que estão na tabela. Os que não estão ficam como estavam. Para um programa de verdade, complete a tabela com todas as letras acentuadas que você precisar (<code>à</code>, <code>â</code>, <code>ê</code>, <code>í</code>, <code>ó</code>, <code>ô</code>, <code>õ</code>, <code>ú</code>…).</p>
+
+<hr>
+
+<h2>7. Texto que não é UTF-8 válido</h2>
+<p>Nem todo texto é UTF-8 bem formado: um arquivo antigo, um <code>sub</code> que cortou uma letra ao meio, bytes escritos com <code>"\xff"</code>. O <code>utf8.len</code> avisa sem quebrar o programa:</p>
+
+<pre class="file" data-file="invalido.lua">print(utf8.len("ab\xffcd"))
+local metade = ("ação"):sub(1, 2)
+print(utf8.len(metade))
+print(utf8.len("ação"))
+</pre>
+
+<pre class="term">$ lua invalido.lua
+nil	3
+nil	2
+4</pre>
+
+<p>Com texto inválido, o <code>utf8.len</code> devolve <code>nil</code> e a <strong>posição do primeiro byte problemático</strong>: em <code>"ab\xffcd"</code>, o byte 255 (escrito <code>\xff</code>) na posição 3; no "meio ç" de <code>sub(1, 2)</code>, a posição 2. É um jeito de <strong>conferir</strong> se um texto é UTF-8 válido: <code>utf8.len(texto) ~= nil</code>. Já o <code>utf8.codepoint</code> e o <code>utf8.codes</code> não perdoam: dão erro (veja abaixo).</p>
+
+<hr>
+
+<h2 id="formas">Formas diferentes de fazer a mesma coisa</h2>
+<p>Passar por cada letra de "ação", de dois jeitos:</p>
+
+<pre class="file" data-file="duas.lua">for _, codigo in utf8.codes("ação") do io.write(utf8.char(codigo), " ") end
+print()
+for letra in ("ação"):gmatch(utf8.charpattern) do io.write(letra, " ") end
+print()
+</pre>
+
+<pre class="term">$ lua duas.lua
+a ç ã o
+a ç ã o </pre>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Você quer…</th><th>Use</th></tr>
+<tr><td>O tamanho em bytes (para arquivos, rede)</td><td><code>#s</code></td></tr>
+<tr><td>Quantas letras o texto tem</td><td><code>utf8.len(s)</code></td></tr>
+<tr><td>Passar por cada letra, como texto</td><td><code>for letra in s:gmatch(utf8.charpattern) do</code></td></tr>
+<tr><td>Passar por cada letra, com o código e a posição</td><td><code>for pos, codigo in utf8.codes(s) do</code></td></tr>
+<tr><td>Recortar da letra <code>i</code> até a <code>j</code></td><td><code>s:sub(utf8.offset(s, i), utf8.offset(s, j + 1) - 1)</code></td></tr>
+<tr><td>Montar um caractere a partir do código</td><td><code>utf8.char(231)</code>, ou <code>"\u{E7}"</code> no código</td></tr>
+<tr><td>Conferir se o texto é UTF-8 válido</td><td><code>utf8.len(s) ~= nil</code></td></tr>
+<tr><td>Maiúsculas com acento</td><td><code>s:upper()</code> + <code>gsub(utf8.charpattern, tabela)</code></td></tr>
+</table>
+</div>
+
+<div class="note">
+<strong>Em outras versões</strong>
+<p>A biblioteca <code>utf8</code> existe desde o Lua 5.3. No Lua 5.1 e no <strong>LuaJIT</strong> (Neovim, LÖVE) ela <strong>não existe</strong>: no lab, <code>luajit -e 'print(utf8.len("ação"))'</code> deu <code>attempt to index global 'utf8' (a nil value)</code>. O <code>utf8.offset</code> com dois resultados (início e fim) é novidade do <span class="versao">5.5</span>. Veja <a href="versoes.html">As Diferenças entre Versões</a> e <a href="novidades.html">Novidades do Lua 5.5</a>.</p>
+</div>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+
+<div class="cenario">
+<strong>Pediu o código de um texto que não é UTF-8</strong>
+<pre class="term">$ lua -e 'print(utf8.codepoint("\xff"))'
+lua: (command line):1: invalid UTF-8 code
+stack traceback:
+	[C]: in field 'codepoint'
+	(command line):1: in main chunk
+	[C]: in ?</pre>
+<p>Linha por linha:</p>
+<dl class="anatomy">
+  <dt>lua: (command line):1:</dt><dd>O <code>lua -e</code> roda o código direto do terminal: o lugar do erro é a "linha de comando", linha 1.</dd>
+  <dt>invalid UTF-8 code</dt><dd>"Código UTF-8 inválido": o byte 255 não começa nenhum caractere UTF-8.</dd>
+  <dt>[C]: in field 'codepoint'</dt><dd>Quem reclamou foi o <code>utf8.codepoint</code>, uma função escrita em C.</dd>
+  <dt>(command line):1: in main chunk / [C]: in ?</dt><dd>Chamado pelo programa principal, que o <code>lua</code> rodou.</dd>
+</dl>
+<p>A mesma mensagem aparece com <code>utf8.codepoint("ação", 3)</code>: o byte 3 é a <strong>segunda metade</strong> do <code>ç</code>, e não o começo de um caractere. <strong>Como consertar:</strong> confira antes com <code>utf8.len(texto)</code>, e use posições que venham do <code>utf8.offset</code> ou do <code>utf8.codes</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>O laço com <code>utf8.codes</code> parou no meio</strong>
+<pre class="term">$ lua -e 'for p, c in utf8.codes("a\xffb") do print(p, c) end'
+1	97
+lua: (command line):1: invalid UTF-8 code
+stack traceback:
+	[C]: in for iterator 'for iterator'
+	(command line):1: in main chunk
+	[C]: in ?</pre>
+<p>A primeira volta funcionou (o <code>a</code>, código 97); na segunda, o iterador achou o byte 255 e parou o programa (<code>[C]: in for iterator</code>). <strong>Como consertar:</strong> confira o texto antes do laço com <code>utf8.len</code>; se ele devolver <code>nil</code>, o texto tem um byte ruim na posição indicada.</p>
+</div>
+
+<div class="cenario">
+<strong>Começou o <code>offset</code> no meio de uma letra</strong>
+<pre class="term">$ lua -e 'print(utf8.offset("ação", 1, 3))'
+lua: (command line):1: initial position is a continuation byte
+stack traceback:
+	[C]: in field 'offset'
+	(command line):1: in main chunk
+	[C]: in ?</pre>
+<p>"A posição inicial é um byte de continuação". O terceiro argumento do <code>offset</code> diz de que byte começar a contar, e o byte 3 é a segunda metade do <code>ç</code>. <strong>Como consertar:</strong> comece num byte que seja início de letra (o 1, ou uma posição que o próprio <code>offset</code> devolveu). Com <code>utf8.len</code>, uma posição inicial além do texto dá outro erro: <code>utf8.len("ab", 5)</code> → <code>bad argument #2 to 'len' (initial position out of bounds)</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Código inválido no <code>utf8.char</code></strong>
+<pre class="term">$ lua -e 'print(utf8.char(-1))'
+lua: (command line):1: bad argument #1 to 'char' (value out of range)
+stack traceback:
+	[C]: in field 'char'
+	(command line):1: in main chunk
+	[C]: in ?
+$ lua -e 'print(utf8.char("a"))'
+lua: (command line):1: bad argument #1 to 'char' (number expected, got string)
+stack traceback:
+	[C]: in field 'char'
+	(command line):1: in main chunk
+	[C]: in ?</pre>
+<p>"Valor fora da faixa" para o número negativo; "esperava número, recebeu texto" para a letra. O <code>utf8.char</code> vai do <strong>código</strong> para o caractere; para o caminho contrário, use <code>utf8.codepoint("a")</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Usou a biblioteca no Lua errado</strong>
+<pre class="term">$ luajit -e 'print(utf8.len("ação"))'
+luajit: (command line):1: attempt to index global 'utf8' (a nil value)
+stack traceback:
+	(command line):1: in main chunk
+	[C]: at 0x56152eeca630</pre>
+<p>No LuaJIT (e no Lua 5.1), a variável <code>utf8</code> não existe: é <code>nil</code>, e não dá para procurar o <code>len</code> dentro do nada. (O número <code>0x…</code> no fim é um endereço de memória e muda a cada vez.) <strong>Como consertar:</strong> rode com o <code>lua</code> 5.3 ou mais novo, ou, se o programa precisa rodar no LuaJIT, conte as letras com um padrão escrito à mão: os bytes de 128 a 191 são sempre "continuação" de uma letra, então contar os <strong>outros</strong> bytes dá o número de letras. No lab, <code>luajit -e 'local _, n = ("ação"):gsub("[^\128-\191]", "") print(n)'</code> mostrou <code>4</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Erros que não dão mensagem</strong>
+<ul>
+  <li><strong><code>utf8.offset</code> no fim da lista de argumentos</strong>: <code>s:sub(utf8.offset(s, 6))</code> recorta <strong>uma</strong> letra só no Lua 5.5, porque os dois valores do <code>offset</code> (início e fim) viram os dois argumentos do <code>sub</code>. Escreva <code>s:sub((utf8.offset(s, 6)))</code> ou guarde antes: <code>local i = utf8.offset(s, 6)</code>.</li>
+  <li><strong><code>#</code> no lugar de <code>utf8.len</code></strong>: o número sai maior do que o de letras (<code>#"Conceição"</code> é 11).</li>
+  <li><strong><code>sub</code>, <code>reverse</code> ou <code>upper</code> em texto com acento</strong>: <code>�</code>, letras desmontadas ou acentos sem maiúscula.</li>
+  <li><strong>Alinhar colunas com acento</strong>: <code>string.format("%5s|", "ação")</code> dá <code>ação|</code> sem nenhum espaço, porque o <code>%5s</code> conta 6 bytes; <code>"acao"</code> sai como <code> acao|</code>. Para alinhar, calcule os espaços com <code>utf8.len</code> (<code>(" "):rep(5 - utf8.len(s)) .. s</code>).</li>
+  <li><strong>Imprimir o <code>utf8.charpattern</code></strong>: aparecem <code>�</code>. Ele é um padrão para usar, não para ler.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>O que faz</th><th>Exemplo → resultado</th></tr>
+<tr><td><code>utf8.len(s)</code></td><td>Quantos caracteres; texto inválido → <code>nil</code> e a posição do byte ruim</td><td><code>utf8.len("ação")</code> → <code>4</code></td></tr>
+<tr><td><code>utf8.len(s, i, j)</code></td><td>Caracteres que começam entre os bytes <code>i</code> e <code>j</code></td><td><code>utf8.len("ação", 4)</code> → <code>2</code></td></tr>
+<tr><td><code>utf8.char(n, …)</code></td><td>Texto a partir dos códigos Unicode</td><td><code>utf8.char(231, 8364)</code> → <code>ç€</code></td></tr>
+<tr><td><code>utf8.codepoint(s, i, j)</code></td><td>Os códigos dos caracteres entre os bytes <code>i</code> e <code>j</code> (padrão: só o <code>i</code>)</td><td><code>utf8.codepoint("€")</code> → <code>8364</code></td></tr>
+<tr><td><code>for pos, cod in utf8.codes(s) do</code></td><td>Cada caractere: posição em bytes e código</td><td>(seção 3)</td></tr>
+<tr><td><code>utf8.charpattern</code></td><td>Padrão de um caractere UTF-8 inteiro</td><td><code>s:gmatch(utf8.charpattern)</code></td></tr>
+<tr><td><code>utf8.offset(s, n)</code></td><td>Início e fim (5.5) em bytes do <code>n</code>-ésimo caractere; negativo conta do fim; <code>n</code> = total + 1 → logo depois do fim</td><td><code>utf8.offset("ação", 3)</code> → <code>4  5</code></td></tr>
+<tr><td><code>utf8.offset(s, 0, i)</code></td><td>Início e fim do caractere que contém o byte <code>i</code></td><td><code>utf8.offset("ação", 0, 3)</code> → <code>2  3</code></td></tr>
+<tr><td><code>"\u{E7}"</code></td><td>Escape de texto: o caractere de código hexadecimal E7</td><td><code>ç</code></td></tr>
+<tr><td><code>os.setlocale("")</code></td><td>Usa o idioma do computador (datas); <strong>não</strong> faz o <code>upper</code> entender acentos</td><td><code>pt_BR.UTF-8</code></td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Sintoma</th><th>Causa provável</th></tr>
+<tr><td><code>#s</code> maior que o número de letras</td><td><code>#</code> conta bytes: use <code>utf8.len</code></td></tr>
+<tr><td><code>�</code> depois de <code>sub</code> ou <code>reverse</code></td><td>Uma letra foi partida: recorte com <code>utf8.offset</code>, inverta com <code>utf8.charpattern</code></td></tr>
+<tr><td><code>AçãO</code></td><td><code>upper</code>/<code>lower</code> só trocam A–Z: use uma tabela com <code>gsub</code></td></tr>
+<tr><td><code>utf8.len</code> devolve <code>nil  3</code></td><td>Texto inválido: byte ruim na posição 3</td></tr>
+<tr><td><code>invalid UTF-8 code</code></td><td><code>codepoint</code>/<code>codes</code> num texto inválido ou no meio de uma letra</td></tr>
+<tr><td><code>initial position is a continuation byte</code></td><td>Posição inicial no meio de uma letra</td></tr>
+<tr><td><code>attempt to index global 'utf8' (a nil value)</code></td><td>Lua 5.1 ou LuaJIT: não têm a biblioteca</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. Bytes ou letras?</h3>
+<p>Quanto vale <code>#"pão"</code> e quanto vale <code>utf8.len("pão")</code>?</p>
+<div class="ex-code"><code>#"pão"</code> = <input data-answer="4" aria-label="bytes"> · <code>utf8.len("pão")</code> = <input data-answer="3" aria-label="letras"></div>
+</div>
+
+<div class="exercise">
+<h3>2. Do código para a letra</h3>
+<p>Complete para mostrar o <code>ç</code> (código 231):</p>
+<div class="ex-code">print(utf8.<input data-answer="char" aria-label="função">(231))</div>
+</div>
+
+<div class="exercise">
+<h3>3. Onde começa?</h3>
+<p>Qual é o <strong>primeiro</strong> número que <code>utf8.offset("ação", 4)</code> devolve (o byte onde começa o <code>o</code>)?</p>
+<div class="ex-code">É <input data-answer="6" aria-label="posição"></div>
+</div>
+
+<div class="mc" data-answer="3">
+<p class="mc-q">4. Por que <code>string.upper("ação")</code> dá <code>AçãO</code>?</p>
+<label><input type="radio" name="q4"> Porque faltou chamar <code>os.setlocale("")</code></label>
+<label><input type="radio" name="q4"> Porque o Lua não aceita acentos</label>
+<label><input type="radio" name="q4"> Porque o <code>upper</code> olha um byte de cada vez, e nenhum byte sozinho do UTF-8 é uma letra acentuada</label>
+<label><input type="radio" name="q4"> Porque <code>ç</code> e <code>ã</code> já são maiúsculas</label>
+</div>
+
+<div class="mc" data-answer="1">
+<p class="mc-q">5. Qual laço passa por cada <strong>letra</strong> de um texto com acentos?</p>
+<label><input type="radio" name="q5"> <code>for letra in s:gmatch(utf8.charpattern) do</code></label>
+<label><input type="radio" name="q5"> <code>for letra in s:gmatch(".") do</code></label>
+<label><input type="radio" name="q5"> <code>for letra in s:gmatch("%a") do</code></label>
+<label><input type="radio" name="q5"> <code>for letra in utf8.len(s) do</code></label>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">6. O que <code>utf8.len("ab\xffcd")</code> devolve?</p>
+<label><input type="radio" name="q6"> <code>5</code></label>
+<label><input type="radio" name="q6"> <code>nil</code> e <code>3</code>: o texto não é UTF-8 válido, e o problema está no byte 3</label>
+<label><input type="radio" name="q6"> <code>4</code></label>
+<label><input type="radio" name="q6"> Dá erro e para o programa</label>
+</div>
+
+<h3>Missão final: o espelho que respeita acentos</h3>
+
+<div class="trylua" data-goal="out:oãça;;src:utf8">
+<p class="try-task"><strong>Missão:</strong> o programa usa <code>reverse()</code> e estraga o "ç" e o "ã". Troque a linha 2 por um laço que passe por cada letra com <code>gmatch(utf8.charpattern)</code> e ponha cada letra <strong>na frente</strong> das anteriores (<code>invertida = letra .. invertida</code>), para mostrar <code>oãça</code>.</p>
+<pre class="script" data-file="main.lua">local palavra = "ação"
+local invertida = palavra:reverse()
+print(invertida)
+</pre>
+<pre class="solucao" data-file="main.lua">local palavra = "ação"
+local invertida = ""
+for letra in palavra:gmatch(utf8.charpattern) do
+  invertida = letra .. invertida
+end
+print(invertida)
+</pre>
+</div>
+
+<p>Depois de acertar, troque "ação" por "Conceição" ou por <code>"oi 😀"</code>: o laço não precisa mudar, porque o <code>utf8.charpattern</code> sabe onde termina cada caractere, de 1, 2, 3 ou 4 bytes.</p>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li>No UTF-8, uma letra ocupa de 1 a 4 bytes: <code>a</code> 1, <code>ç</code> 2, <code>€</code> 3, <code>😀</code> 4. O <code>#</code>, o <code>sub</code>, o <code>upper</code>, o <code>reverse</code> e os padrões trabalham com <strong>bytes</strong>.</li>
+  <li><code>utf8.len(s)</code> conta caracteres (texto inválido → <code>nil</code> e a posição do problema).</li>
+  <li><code>utf8.codepoint</code> dá o código Unicode de cada caractere; <code>utf8.char</code> e o escape <code>"\u{E7}"</code> fazem o caminho de volta.</li>
+  <li>Cada letra: <code>for pos, cod in utf8.codes(s)</code> ou <code>for letra in s:gmatch(utf8.charpattern)</code>.</li>
+  <li><code>utf8.offset(s, n)</code> dá onde começa (e, no 5.5, onde termina) a <code>n</code>-ésima letra: use-o para recortar com o <code>sub</code> sem partir acentos.</li>
+  <li><code>upper</code>/<code>lower</code> não mexem em letras acentuadas, nem com <code>os.setlocale("")</code>: use uma tabela de trocas com <code>gsub(utf8.charpattern, tabela)</code>.</li>
+  <li>A biblioteca <code>utf8</code> existe a partir do Lua 5.3; não existe no 5.1 nem no LuaJIT.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
