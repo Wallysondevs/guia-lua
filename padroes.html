@@ -1,0 +1,664 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua padrões (patterns) — %d, %a, [ ], *, +, - e capturas | Guia Lua</title>
+<meta name="description" content="Os padrões do Lua para quem nunca programou: o ponto, as classes %a %d %s %w %p %l %u, o escape com %, os conjuntos [ ], os quantificadores * + - ?, as âncoras ^ e $, as capturas, %b() e %f[%w], por que não são expressões regulares (sem | nem {n}), os acentos, e os erros reais do Lua 5.5.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">Padrões</span></h1>
+
+<p class="intro">Na aula <a href="string-find.html">find e match</a> você viu que o <code>%d+</code> acha "um número qualquer" e que o <code>.</code> acha "qualquer caractere". Esses sinais fazem parte dos <strong>padrões</strong> (em inglês, <em>patterns</em>): uma linguagem pequena, escrita dentro de um texto, para descrever <strong>o formato</strong> do que você procura. "Dois algarismos, dois-pontos, dois algarismos" é o formato de uma hora; "letras, um <code>@</code>, mais letras" é o de um e-mail. Os padrões funcionam em quatro funções: <code>find</code>, <code>match</code>, <a href="gmatch.html">gmatch</a> e <a href="gsub.html">gsub</a>.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O <code>.</code> e as <strong>classes</strong>: <code>%a</code> (letra), <code>%d</code> (algarismo), <code>%s</code> (espaço), <code>%w</code> (letra ou algarismo), <code>%p</code> (pontuação), <code>%l</code>, <code>%u</code> e as versões ao contrário (<code>%D</code>, <code>%S</code>…).</li>
+  <li>O <code>%</code> como sinal de <strong>escape</strong>: <code>%.</code>, <code>%-</code>, <code>%%</code>.</li>
+  <li>Os <strong>conjuntos</strong> <code>[abc]</code>, <code>[0-9]</code> e <code>[^…]</code>.</li>
+  <li>Os <strong>quantificadores</strong> <code>*</code>, <code>+</code>, <code>-</code> e <code>?</code>, e a diferença entre o "guloso" <code>.*</code> e o "preguiçoso" <code>.-</code>.</li>
+  <li>As <strong>âncoras</strong> <code>^</code> (começo) e <code>$</code> (fim), para validar um formato inteiro.</li>
+  <li>As <strong>capturas</strong> <code>( )</code>, a captura de posição <code>()</code> e o <code>%1</code>.</li>
+  <li>Dois recursos especiais: <code>%b()</code> (parênteses equilibrados) e <code>%f[%w]</code> (palavra inteira).</li>
+  <li>Por que os padrões do Lua <strong>não são expressões regulares</strong>: não existe <code>|</code>, nem <code>{3}</code>, nem <code>\d</code>.</li>
+  <li>Por que <code>%a</code> não acha o "ç", e os erros reais de padrão malformado.</li>
+</ul>
+</div>
+
+<p>Todos os programas desta aula rodaram no <strong>Lua 5.5</strong> da máquina da Ana (usuária <code>ana</code>, computador <code>notebook</code>), salvos na pasta pessoal dela e executados com <code>lua arquivo.lua</code>. Os exemplos usam o <code>match</code>, que devolve o texto achado (ou <code>nil</code>), porque ele mostra melhor o que o padrão pegou.</p>
+
+<hr>
+
+<h2>A ideia: o formulário com quadradinhos</h2>
+<p>Lembra daqueles formulários de papel com quadradinhos? No campo da data aparece <code>[_][_]/[_][_]/[_][_][_][_]</code>: dois algarismos, uma barra, dois algarismos, uma barra, quatro algarismos. Ninguém escreveu ali <strong>qual</strong> é a data; está escrito só o <strong>formato</strong>. Qualquer data que caiba nos quadradinhos serve.</p>
+<p>Um padrão é esse formulário escrito com sinais. O formulário da data, em padrão do Lua, fica <code>%d%d/%d%d/%d%d%d%d</code>: cada <code>%d</code> é um quadradinho "aqui vai um algarismo", e a barra é uma barra mesmo. Na hora de procurar, o Lua passa o formulário pelo texto, da esquerda para a direita, até achar um pedaço que encaixe.</p>
+
+<pre class="file" data-file="formulario.lua">local recado = "Pagar o aluguel até 05/11/2026, sem falta."
+print(recado:match("%d%d/%d%d/%d%d%d%d"))
+</pre>
+
+<pre class="term">$ lua formulario.lua
+05/11/2026</pre>
+
+<hr>
+
+<h2>1. Letras comuns e o ponto</h2>
+<p>Num padrão, a maioria dos caracteres vale por ele mesmo: <code>"pão"</code> acha <code>pão</code>, a barra acha a barra. As exceções são os 12 <strong>caracteres mágicos</strong>, que têm significado especial:</p>
+
+<p><code>^ $ ( ) % . [ ] * + - ?</code></p>
+
+<p>O mais simples deles é o <code>.</code> (ponto): ele vale por <strong>um caractere qualquer</strong>, seja letra, algarismo, espaço ou sinal.</p>
+
+<pre class="file" data-file="ponto.lua">print(("gato"):match("g.to"))
+print(("g7to"):match("g.to"))
+print(("gto"):match("g.to"))
+</pre>
+
+<pre class="term">$ lua ponto.lua
+gato
+g7to
+nil</pre>
+
+<p>O <code>g.to</code> exige <strong>exatamente um</strong> caractere entre o <code>g</code> e o <code>to</code>. No <code>"gto"</code> não tem nenhum, então não encaixa.</p>
+
+<hr>
+
+<h2>2. As classes: <code>%a</code>, <code>%d</code>, <code>%s</code>…</h2>
+<p>Às vezes "qualquer caractere" é demais: você quer "qualquer <strong>algarismo</strong>" ou "qualquer <strong>letra</strong>". Para isso existem as <strong>classes</strong>, escritas com um <code>%</code> e uma letra. Cada classe vale por <strong>um</strong> caractere daquele tipo:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Classe</th><th>Vale por um(a)…</th><th>De onde vem o nome</th><th>Exemplos que encaixam</th></tr>
+<tr><td><code>.</code></td><td>caractere qualquer</td><td></td><td><code>a</code> <code>7</code> <code>!</code> espaço</td></tr>
+<tr><td><code>%a</code></td><td>letra (só de A a Z, sem acento)</td><td><em>alphabetic</em></td><td><code>a</code> <code>Z</code></td></tr>
+<tr><td><code>%d</code></td><td>algarismo (0 a 9)</td><td><em>digit</em></td><td><code>0</code> <code>7</code></td></tr>
+<tr><td><code>%l</code></td><td>letra minúscula</td><td><em>lower</em></td><td><code>a</code> <code>z</code></td></tr>
+<tr><td><code>%u</code></td><td>letra maiúscula</td><td><em>upper</em></td><td><code>A</code> <code>Z</code></td></tr>
+<tr><td><code>%w</code></td><td>letra ou algarismo</td><td><em>word</em> ("palavra")</td><td><code>a</code> <code>Z</code> <code>7</code></td></tr>
+<tr><td><code>%s</code></td><td>espaço em branco (espaço, tabulação <code>\t</code>, quebra de linha <code>\n</code>)</td><td><em>space</em></td><td>espaço, <code>\t</code>, <code>\n</code></td></tr>
+<tr><td><code>%p</code></td><td>sinal de pontuação</td><td><em>punctuation</em></td><td><code>,</code> <code>.</code> <code>!</code> <code>(</code> <code>-</code> <code>@</code></td></tr>
+<tr><td><code>%x</code></td><td>algarismo hexadecimal (0–9, a–f, A–F)</td><td><em>hexadecimal</em></td><td><code>7</code> <code>f</code> <code>A</code></td></tr>
+<tr><td><code>%c</code></td><td>caractere de controle (invisível)</td><td><em>control</em></td><td><code>\n</code> <code>\t</code></td></tr>
+<tr><td><code>%g</code></td><td>caractere visível (tudo menos espaço e controle)</td><td><em>graphic</em></td><td><code>a</code> <code>7</code> <code>!</code></td></tr>
+</table>
+</div>
+
+<p>Junte uma classe com o <code>+</code> ("um ou mais", seção 5) e você pega palavras e números inteiros:</p>
+
+<pre class="file" data-file="classes.lua">local s = "Ana, 32 anos! Tel: (11) 9876-5432."
+print(s:match("%a+"))
+print(s:match("%d+"))
+print(s:match("%p"))
+print(s:match("%u"), s:match("%l+"))
+print(("Olá, Mundo"):match("%u%l+"))
+</pre>
+
+<pre class="term">$ lua classes.lua
+Ana
+32
+,
+A	na
+Ol</pre>
+
+<dl class="anatomy">
+  <dt>%a+</dt><dd>Uma ou mais letras seguidas: a primeira palavra, <code>Ana</code>. Parou na vírgula, que não é letra.</dd>
+  <dt>%d+</dt><dd>Um ou mais algarismos: o primeiro número da frase, <code>32</code>.</dd>
+  <dt>%p</dt><dd>O primeiro sinal de pontuação: a vírgula.</dd>
+  <dt>%u e %l+</dt><dd>A primeira maiúscula (<code>A</code>) e as primeiras minúsculas seguidas (<code>na</code>, de "Ana").</dd>
+  <dt>%u%l+ em "Olá, Mundo"</dt><dd>Uma maiúscula seguida de minúsculas: deu <code>Ol</code>, e não <code>Olá</code>. O <code>á</code> não é letra para o <code>%l</code>; a seção 11 explica.</dd>
+</dl>
+
+<h3>Maiúscula = o contrário</h3>
+<p>Cada classe tem uma versão com a letra em <strong>maiúscula</strong> que quer dizer "qualquer coisa <strong>menos</strong> isso": <code>%D</code> é "não algarismo", <code>%S</code> é "não espaço", <code>%A</code> é "não letra".</p>
+
+<pre class="file" data-file="contrario.lua">print(("abc 123"):match("%A+"))
+print(("   oi"):match("%S+"))
+print(("Ana, 32 anos"):match("%D+") .. "|")
+</pre>
+
+<pre class="term">$ lua contrario.lua
+ 123
+oi
+Ana, |</pre>
+
+<p>O <code>%A+</code> pegou o espaço e o <code>123</code> (nada disso é letra). O <code>%D+</code> pegou tudo até o primeiro algarismo, inclusive a vírgula e o espaço: a barra <code>|</code> no fim mostra onde o pedaço termina.</p>
+
+<hr>
+
+<h2>3. O <code>%</code>: tirando a mágica de um sinal</h2>
+<p>E para achar um ponto <strong>de verdade</strong>, ou um cifrão, ou um hífen? Ponha um <code>%</code> na frente do caractere mágico: <code>%.</code> é um ponto, <code>%-</code> é um hífen, <code>%$</code> é um cifrão, <code>%%</code> é o próprio sinal de porcentagem. Isso se chama <strong>escapar</strong> o caractere.</p>
+
+<pre class="file" data-file="escape.lua">print(("cpf 123.456.789-09"):match("%d%d%d%.%d%d%d%.%d%d%d%-%d%d"))
+print(("R$ 4,50"):match("R%$ (%d+,%d+)"))
+print(("desconto de 100%"):match("%d+%%"))
+</pre>
+
+<pre class="term">$ lua escape.lua
+123.456.789-09
+4,50
+100%</pre>
+
+<p>Na dúvida, escape: pôr <code>%</code> antes de qualquer sinal que não seja letra nem algarismo é sempre seguro (<code>%@</code>, <code>%/</code>, <code>%:</code> valem pelo próprio sinal). Atenção: no Lua o escape dos padrões é o <code>%</code>, e <strong>não</strong> a barra invertida <code>\</code> de outras linguagens; a barra é o escape dos <a href="strings-escape.html">textos</a> (<code>\n</code>, <code>\t</code>) e não serve aqui.</p>
+
+<hr>
+
+<h2>4. Conjuntos: <code>[ ]</code></h2>
+<p>Entre colchetes, você monta a sua própria classe: <code>[aeiou]</code> vale por <strong>uma</strong> vogal, qualquer uma delas. Dentro dos colchetes também dá para usar faixas com hífen (<code>[0-9]</code>, <code>[a-z]</code>), classes (<code>[%w_]</code>) e, com um <code>^</code> logo no começo, o contrário (<code>[^%d]</code>, "qualquer coisa menos algarismo").</p>
+
+<pre class="file" data-file="conjuntos.lua">print(("cor: vermelho"):match("[aeiou]+"))
+print(("Ano 2026"):match("[0-9]+"))
+print(("x7y"):match("[^%d]+"))
+print(("nome_completo1 = Ana"):match("[%w_]+"))
+print(("A-1 B-2"):match("[AB]%-%d"))
+print(("Bia Souza"):match("[^ ]+"))
+</pre>
+
+<pre class="term">$ lua conjuntos.lua
+o
+2026
+x
+nome_completo1
+A-1
+Bia</pre>
+
+<dl class="anatomy">
+  <dt>[aeiou]+</dt><dd>Uma ou mais vogais seguidas. A primeira vogal de <code>"cor: vermelho"</code> é o <code>o</code> de "cor", sozinho (depois vem o <code>r</code>).</dd>
+  <dt>[0-9]+</dt><dd>A faixa de 0 a 9: o mesmo que <code>%d+</code>.</dd>
+  <dt>[^%d]+</dt><dd>Com <code>^</code> logo depois do <code>[</code>: um ou mais caracteres que <strong>não</strong> são algarismos. Pegou o <code>x</code> e parou no <code>7</code>.</dd>
+  <dt>[%w_]+</dt><dd>Letras, algarismos ou sublinhado: o jeito de achar um nome de variável.</dd>
+  <dt>[AB]%-%d</dt><dd>Um <code>A</code> ou um <code>B</code>, um hífen (escapado) e um algarismo.</dd>
+  <dt>[^ ]+</dt><dd>Tudo que não é espaço: a primeira palavra.</dd>
+</dl>
+
+<div class="trylua">
+<p class="try-task"><strong>Experimente:</strong> troque o padrão da linha 2 e veja o que o <code>match</code> pega. Tente <code>"%u%l+"</code>, <code>"%d+"</code>, <code>"[aeiou]+"</code>, <code>"%p"</code>, <code>"%s%a+"</code> e <code>"[^,]+"</code>.</p>
+<pre class="script" data-file="main.lua">local s = "Pedido 42, Bia Souza, Rua das Flores 15"
+local padrao = "%a+"
+print(s:match(padrao))
+</pre>
+</div>
+
+<hr>
+
+<h2>5. Quantos? Os quantificadores <code>*</code>, <code>+</code>, <code>-</code> e <code>?</code></h2>
+<p>Uma classe vale por <strong>um</strong> caractere. Para dizer "vários", ponha um quantificador logo <strong>depois</strong> dela:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>Quer dizer</th><th>Exemplo</th></tr>
+<tr><td><code>x+</code></td><td><strong>um ou mais</strong> (pega o máximo que der)</td><td><code>("aaa"):match("a+")</code> → <code>aaa</code>; em <code>"bbb"</code> → <code>nil</code></td></tr>
+<tr><td><code>x*</code></td><td><strong>zero ou mais</strong> (pega o máximo que der)</td><td><code>("aaa"):match("a*")</code> → <code>aaa</code>; em <code>"bbb"</code> → <code>""</code> (zero <code>a</code> também serve)</td></tr>
+<tr><td><code>x-</code></td><td><strong>zero ou mais</strong>, mas pega o <strong>mínimo</strong> que der</td><td><code>("aaa"):match("a-")</code> → <code>""</code></td></tr>
+<tr><td><code>x?</code></td><td><strong>zero ou um</strong> (opcional)</td><td><code>"colou?r"</code> acha <code>color</code> e <code>colour</code></td></tr>
+</table>
+</div>
+
+<pre class="file" data-file="quantos.lua">print(("aaa"):match("a+"), ("bbb"):match("a+"))
+print(("aaa"):match("a*"), ("bbb"):match("a*") == "")
+print(("color"):match("colou?r"), ("colour"):match("colou?r"), ("cor"):match("colou?r"))
+</pre>
+
+<pre class="term">$ lua quantos.lua
+aaa	nil
+aaa	true
+color	colour	nil</pre>
+
+<h3>Guloso × preguiçoso: <code>.*</code> e <code>.-</code></h3>
+<p>O <code>*</code> e o <code>+</code> são <strong>gulosos</strong>: pegam o máximo que conseguirem. O <code>-</code> é <strong>preguiçoso</strong>: pega o mínimo. A diferença aparece quando o que você procura se repete:</p>
+
+<pre class="file" data-file="guloso.lua">local html = "&lt;b&gt;oi&lt;/b&gt; e &lt;b&gt;tchau&lt;/b&gt;"
+print(html:match("&lt;b&gt;(.*)&lt;/b&gt;"))
+print(html:match("&lt;b&gt;(.-)&lt;/b&gt;"))
+</pre>
+
+<pre class="term">$ lua guloso.lua
+oi&lt;/b&gt; e &lt;b&gt;tchau
+oi</pre>
+
+<p>Os dois começam no primeiro <code>&lt;b&gt;</code>. O guloso <code>.*</code> engole tudo até o <strong>último</strong> <code>&lt;/b&gt;</code> da linha; o preguiçoso <code>.-</code> para no <strong>primeiro</strong> <code>&lt;/b&gt;</code> que aparece. Quase sempre, entre duas marcas, é o <code>.-</code> que você quer. Outro exemplo, com nomes de arquivo:</p>
+
+<pre class="file" data-file="arquivo.lua">local nome = "arquivo.tar.gz"
+print(nome:match("^(.-)%."))
+print(nome:match("^(.*)%."))
+print(nome:match("%.(%w+)$"))
+</pre>
+
+<pre class="term">$ lua arquivo.lua
+arquivo
+arquivo.tar
+gz</pre>
+
+<div class="warning">
+<strong>O <code>-</code> é mágico</strong>
+<p>Por ser o quantificador preguiçoso, o hífen não vale por um hífen depois de uma classe: <code>"%d-%d"</code> quer dizer "algarismos, o mínimo possível, e um algarismo", e não "algarismo, hífen, algarismo". Para o hífen de verdade (CEP, telefone, data com traço), escreva sempre <code>%-</code>.</p>
+</div>
+
+<hr>
+
+<h2>6. Começo e fim: as âncoras <code>^</code> e <code>$</code></h2>
+<p>Sem âncora, o padrão encaixa em <strong>qualquer lugar</strong> do texto. Com <code>^</code> no começo do padrão, ele só encaixa no <strong>começo</strong> do texto; com <code>$</code> no fim, só no <strong>fim</strong>. Com os dois, o texto inteiro tem de seguir o formato, e é assim que se <strong>valida</strong> uma entrada:</p>
+
+<pre class="file" data-file="ancoras.lua">print(("123abc"):match("^%d+"), ("abc123"):match("^%d+"))
+print(("abc123"):match("%d+$"))
+print(("12:30"):match("^%d%d:%d%d$"))
+print(("12:30 da tarde"):match("^%d%d:%d%d$"))
+print(("x 01310-1000"):find("%d%d%d%d%d%-%d%d%d"))
+print(("x 01310-1000"):find("^%d%d%d%d%d%-%d%d%d$"))
+</pre>
+
+<pre class="term">$ lua ancoras.lua
+123	nil
+123
+12:30
+nil
+3	11
+nil</pre>
+
+<p>Sem as âncoras, o padrão do CEP "achou" um CEP dentro de <code>"x 01310-1000"</code>, que tem um <code>x</code> na frente e um algarismo a mais no fim. Com <code>^</code> e <code>$</code>, ele exige que o texto seja <strong>só</strong> o CEP, do começo ao fim. O <code>^</code> e o <code>$</code> só são âncoras nas pontas do padrão; no meio dele, valem pelo próprio sinal (e dentro de <code>[ ]</code>, o <code>^</code> logo no começo é o "contrário", como você viu).</p>
+
+<div class="trylua" data-goal="out:01310-100 válido? true;;out:1310-100 válido? false">
+<p class="try-task"><strong>Missão:</strong> o padrão da linha 1 aceita qualquer coisa com números e um hífen, até o CEP com um algarismo a menos. Reescreva-o para exigir o formato exato do CEP: do começo ao fim, 5 algarismos, um hífen e 3 algarismos. O primeiro deve dar <code>true</code> e o segundo <code>false</code>.</p>
+<pre class="script" data-file="main.lua">local padrao = "%d+%-%d+"
+local cep1 = "01310-100"
+local cep2 = "1310-100"
+print(cep1 .. " válido? " .. tostring(cep1:find(padrao) ~= nil))
+print(cep2 .. " válido? " .. tostring(cep2:find(padrao) ~= nil))
+</pre>
+<pre class="solucao" data-file="main.lua">local padrao = "^%d%d%d%d%d%-%d%d%d$"
+local cep1 = "01310-100"
+local cep2 = "1310-100"
+print(cep1 .. " válido? " .. tostring(cep1:find(padrao) ~= nil))
+print(cep2 .. " válido? " .. tostring(cep2:find(padrao) ~= nil))
+</pre>
+</div>
+
+<hr>
+
+<h2>7. Capturas: <code>( )</code></h2>
+<p>Você já viu na aula <a href="string-find.html">find e match</a>: os parênteses marcam o que deve voltar. O padrão inteiro precisa encaixar, mas o <code>match</code> devolve só as partes entre parênteses, uma resposta por par:</p>
+
+<pre class="file" data-file="capturas.lua">print(("2026-10-18"):match("(%d+)%-(%d+)%-(%d+)"))
+local dia, mes = ("data: 18/10"):match("(%d+)/(%d+)")
+print("dia " .. dia .. ", mês " .. mes)
+print(("x=10; y=20"):match("y=(%d+)"))
+print(("  meio  "):match("^%s*(.-)%s*$") .. "|")
+</pre>
+
+<pre class="term">$ lua capturas.lua
+2026	10	18
+dia 18, mês 10
+20
+meio|</pre>
+
+<dl class="anatomy">
+  <dt>(%d+)%-(%d+)%-(%d+)</dt><dd>Três capturas, três respostas: ano, mês e dia.</dd>
+  <dt>local dia, mes = …</dt><dd>As respostas vão para as variáveis na ordem (veja <a href="atribuicao-multipla.html">Atribuição Múltipla</a>).</dd>
+  <dt>y=(%d+)</dt><dd>O <code>y=</code> serve de "placa de rua": diz <strong>onde</strong> está o número que você quer, mas não volta junto.</dd>
+  <dt>^%s*(.-)%s*$</dt><dd>Um clássico: espaços no começo (<code>^%s*</code>), o miolo (<code>(.-)</code>), espaços no fim (<code>%s*$</code>). Volta só o miolo, sem os espaços das pontas. Como o <code>.-</code> é preguiçoso, os espaços do fim ficam para o <code>%s*</code>.</dd>
+</dl>
+
+<h3>A captura de posição <code>()</code></h3>
+<p>Um par de parênteses <strong>vazio</strong> não captura texto: captura a <strong>posição</strong> onde está, como um número.</p>
+
+<pre class="file" data-file="posicao.lua">print(("bolo"):match("()l()"))
+</pre>
+
+<pre class="term">$ lua posicao.lua
+3	4</pre>
+
+<p>O primeiro <code>()</code> marcou a posição antes do <code>l</code> (3) e o segundo, a posição logo depois (4).</p>
+
+<h3>Repetir o que foi capturado: <code>%1</code></h3>
+<p>Dentro do padrão, <code>%1</code> quer dizer "o mesmo texto que a captura 1 pegou" (<code>%2</code> é a segunda, até <code>%9</code>). Serve para achar letras dobradas, ou a mesma aspa abrindo e fechando:</p>
+
+<pre class="file" data-file="repete.lua">print(("aa bb cd"):match("(%a)%1"))
+print(("abc"):match("(%a)%1"))
+print(("ele disse 'oi' e saiu"):match("([\"'])(.-)%1"))
+</pre>
+
+<pre class="term">$ lua repete.lua
+a
+nil
+'	oi</pre>
+
+<p>Na última linha, <code>([\"'])</code> captura a aspa que abre (simples ou dupla; o <code>\"</code> é uma aspa dupla dentro do texto do padrão), <code>(.-)</code> captura o que vem dentro, e <code>%1</code> exige que feche com a <strong>mesma</strong> aspa.</p>
+
+<hr>
+
+<h2>8. Parênteses equilibrados: <code>%b()</code></h2>
+<p><code>%bxy</code> acha um pedaço que começa com <code>x</code>, termina com <code>y</code> e tem os <code>x</code> e <code>y</code> do meio <strong>equilibrados</strong> (cada um que abre, fecha). É o jeito de pegar uma expressão entre parênteses mesmo com parênteses dentro dela. Funciona com qualquer par: <code>%b[]</code>, <code>%b{}</code>, <code>%b&lt;&gt;</code>.</p>
+
+<pre class="file" data-file="equilibrado.lua">print(("f(a(b)c) x"):match("%b()"))
+print(("f(a(b)c) x"):match("%(.-%)"))
+</pre>
+
+<pre class="term">$ lua equilibrado.lua
+(a(b)c)
+(a(b)</pre>
+
+<p>O <code>%(.-%)</code> parou no primeiro <code>)</code> que viu e devolveu um pedaço desequilibrado. O <code>%b()</code> contou: abriu, abriu, fechou, fechou.</p>
+
+<hr>
+
+<h2>9. Palavra inteira: a fronteira <code>%f[%w]</code></h2>
+<p>Procurar <code>"gato"</code> também acha o "gato" de dentro de "gatinho". A <strong>fronteira</strong> <code>%f[conjunto]</code> não pega nenhum caractere: ela só encaixa no ponto em que o caractere de antes <strong>não</strong> é do conjunto e o de depois <strong>é</strong>. Com <code>%f[%a]</code> antes da palavra e <code>%f[%A]</code> depois, você exige a palavra inteira:</p>
+
+<pre class="file" data-file="fronteira.lua">local padrao = "%f[%a]gato%f[%A]"
+print(("o gato e o gatinho"):find(padrao))
+print(("o gatinho"):find(padrao))
+print(("o gatinho"):find("gato"), ("o gatinho"):find("gat"))
+</pre>
+
+<pre class="term">$ lua fronteira.lua
+3	6
+nil
+nil	3	5</pre>
+
+<dl class="anatomy">
+  <dt>%f[%a]</dt><dd>"Aqui começa uma letra": antes, um não-letra (ou o começo do texto); depois, uma letra.</dd>
+  <dt>gato</dt><dd>A palavra.</dd>
+  <dt>%f[%A]</dt><dd>"Aqui começa uma não-letra": depois do <code>o</code> tem de vir algo que não é letra (ou o fim do texto). No "gatinho", depois do <code>gat</code> vem o <code>i</code>, uma letra: não encaixa.</dd>
+</dl>
+
+<p>A última linha compara: sem fronteira, <code>"gato"</code> não está em "gatinho" (<code>nil</code>), mas <code>"gat"</code> está, nas posições 3 a 5. Com a fronteira no fim, nem um pedaço de palavra passa.</p>
+
+<hr>
+
+<h2>10. Padrões não são expressões regulares</h2>
+<p>Se você já viu <strong>expressões regulares</strong> (as <em>regex</em> de Python, JavaScript, do <code>grep</code>), cuidado: os padrões do Lua se parecem com elas, mas são bem menores (o código inteiro deles tem poucas centenas de linhas). Três coisas comuns na regex <strong>não existem</strong> no Lua, e o pior é que o Lua não reclama: o sinal só vale por ele mesmo.</p>
+
+<pre class="file" data-file="nao-regex.lua">print(("isso"):find("isso|aquilo"))
+print(("isso|aquilo"):find("isso|aquilo"))
+print(("aaa"):find("a{3}"))
+print(("a{3}"):find("a{3}"))
+print(("haha"):match("(ha)+"))
+</pre>
+
+<pre class="term">$ lua nao-regex.lua
+nil
+1	11
+nil
+1	4
+nil</pre>
+
+<p>O <code>"isso|aquilo"</code> só achou o texto que tem <strong>a barra de verdade</strong>; o <code>"a{3}"</code> só achou as chaves de verdade; e o <code>(ha)+</code> não repete o grupo: depois do <code>)</code>, o <code>+</code> não tem a quem se aplicar e vira um <code>+</code> comum. O padrão quer dizer "capture <code>ha</code>, seguido de um sinal de mais": no lab, <code>("ha+"):match("(ha)+")</code> deu <code>ha</code>.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Na regex</th><th>No padrão do Lua</th><th>O que fazer no Lua</th></tr>
+<tr><td><code>gato|cão</code> (um ou outro)</td><td>o <code>|</code> é uma barra comum</td><td>procure duas vezes: <code>s:find("gato") or s:find("cão")</code></td></tr>
+<tr><td><code>\d{3}</code> (exatamente 3)</td><td><code>{3}</code> são três caracteres comuns</td><td>repita a classe: <code>%d%d%d</code></td></tr>
+<tr><td><code>(ha)+</code> (repetir um grupo)</td><td>o quantificador só vale para <strong>um</strong> caractere ou classe</td><td>use <a href="gmatch.html">gmatch</a> ou um laço</td></tr>
+<tr><td><code>\d</code>, <code>\w</code>, <code>\s</code></td><td>a barra é escape de texto: <code>"\d"</code> é erro de sintaxe</td><td><code>%d</code>, <code>%w</code>, <code>%s</code></td></tr>
+<tr><td><code>\.</code></td><td>idem</td><td><code>%.</code></td></tr>
+<tr><td><code>.*?</code> (preguiçoso)</td><td><code>?</code> depois de <code>*</code> não tem esse sentido</td><td><code>.-</code></td></tr>
+<tr><td><code>\b</code> (fronteira de palavra)</td><td>não existe</td><td><code>%f[%w]</code> … <code>%f[%W]</code></td></tr>
+</table>
+</div>
+
+<p>Por que o Lua é assim? Para continuar <strong>pequeno</strong>: uma biblioteca de regex completa seria maior do que o Lua inteiro. Para casos muito complicados existe a biblioteca LPeg, do mesmo autor do Lua, instalada à parte (aula <a href="luarocks.html">LuaRocks</a>).</p>
+
+<hr>
+
+<h2>11. Acentos: <code>%a</code> não conhece o "ç"</h2>
+
+<pre class="file" data-file="acentos.lua">print(("cão"):match("%a+"))
+print(("ação"):match("%a+"))
+print(("ação"):match("[ç]"))
+os.setlocale("")
+print(("ação"):match("%a+"))
+print(("ação e pão"):match("[%a\128-\255]+"))
+</pre>
+
+<pre class="term">$ lua acentos.lua
+c
+a
+�                         « um byte solto: meio "ç"
+a
+ação</pre>
+
+<p>As classes trabalham <strong>byte a byte</strong>, e as letras com acento ocupam 2 bytes cada no UTF-8. Nenhum desses bytes é "letra" para o <code>%a</code>, então ele para antes do acento. Nem o <code>os.setlocale("")</code> (que põe o Lua no idioma do computador, aqui português) muda isso. E o <code>[ç]</code> não é "o ç": é um conjunto com os <strong>2 bytes</strong> do ç, e acha só um deles. Um truque que funciona para palavras em português: <code>[%a\128-\255]</code>, "letra ou qualquer byte de 128 a 255" (todos os bytes das letras com acento estão nessa faixa). A aula <a href="utf8.html">Acentos e a Biblioteca utf8</a> mostra o <code>utf8.charpattern</code>, o padrão de "um caractere UTF-8 inteiro".</p>
+
+<hr>
+
+<h2 id="formas">Formas diferentes de fazer a mesma coisa</h2>
+<p>Pegar o número de <code>"Mesa 12"</code>, de quatro jeitos:</p>
+
+<pre class="file" data-file="mesa.lua">local s = "Mesa 12"
+print(s:match("%d+"))         -- 1. classe
+print(s:match("[0-9]+"))      -- 2. conjunto com faixa
+print(s:match("Mesa (%d+)"))  -- 3. com "placa de rua" e captura
+print(s:match("%d+$"))        -- 4. no fim do texto
+</pre>
+
+<pre class="term">$ lua mesa.lua
+12
+12
+12
+12</pre>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Situação</th><th>Prefira</th></tr>
+<tr><td>Procurar um texto exato, sem formato</td><td>nada de padrão: <code>s:find(trecho, 1, true)</code></td></tr>
+<tr><td>"Um número", "uma palavra"</td><td>as classes: <code>%d+</code>, <code>%a+</code>, <code>%w+</code> (mais curtas e claras que <code>[0-9]+</code>)</td></tr>
+<tr><td>Um grupo de caracteres sem classe pronta</td><td>conjunto: <code>[%w_]</code>, <code>[aeiou]</code>, <code>[^,]</code></td></tr>
+<tr><td>Validar o formato do texto inteiro</td><td>âncoras: <code>^…$</code></td></tr>
+<tr><td>O que está entre duas marcas</td><td>preguiçoso com captura: <code>"&lt;b&gt;(.-)&lt;/b&gt;"</code></td></tr>
+<tr><td>Palavra inteira</td><td>fronteira: <code>%f[%a]gato%f[%A]</code></td></tr>
+<tr><td>Texto com acentos</td><td><code>[%a\128-\255]</code> ou a biblioteca <a href="utf8.html">utf8</a></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+
+<div class="cenario">
+<strong>Usou a barra invertida da regex</strong>
+<pre class="file" data-file="barra.lua">print(("tel 123"):match("\d+"))
+</pre>
+<pre class="term">$ lua barra.lua
+lua: barra.lua:1: invalid escape sequence near '"\d'</pre>
+<p>"Sequência de escape inválida perto de <code>"\d</code>". O erro não é do padrão: é do <strong>texto</strong>. Dentro de aspas, a barra invertida começa um escape (<code>\n</code>, <code>\t</code>, veja <a href="strings-escape.html">Caracteres de Escape</a>), e <code>\d</code> não existe. Como é erro de sintaxe, o programa nem começa (não há traceback). <strong>Como consertar:</strong> no Lua é <code>%d</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Abriu um colchete e não fechou</strong>
+<pre class="term">$ lua -e 'print(("a"):match("[a-"))'
+lua: (command line):1: malformed pattern (missing ']')
+stack traceback:
+	[C]: in method 'match'
+	(command line):1: in main chunk
+	[C]: in ?</pre>
+<p>"Padrão malformado (falta o <code>]</code>)". Todo <code>[</code> abre um conjunto que precisa de um <code>]</code>. (O <code>lua -e</code> roda o código direto do terminal; o lugar aparece como <code>(command line):1</code>. O <code>[C]: in method 'match'</code> diz que o erro foi descoberto dentro do <code>match</code>.) <strong>Como consertar:</strong> feche o conjunto, ou escape o colchete se você queria o caractere: <code>%[</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Parêntese sem par</strong>
+<pre class="term">$ lua -e 'print(("a"):match("(a"))'
+lua: (command line):1: unfinished capture
+stack traceback:
+	[C]: in method 'match'
+	(command line):1: in main chunk
+	[C]: in ?
+$ lua -e 'print(("a"):match("a)"))'
+lua: (command line):1: invalid pattern capture
+stack traceback:
+	[C]: in method 'match'
+	(command line):1: in main chunk
+	[C]: in ?</pre>
+<p>Com um <code>(</code> sobrando: "captura não terminada". Com um <code>)</code> sobrando: "captura inválida no padrão" (fechou algo que não abriu). <strong>Como consertar:</strong> confira os pares; para o parêntese como caractere, <code>%(</code> e <code>%)</code>.</p>
+</div>
+
+<div class="cenario">
+<strong><code>%1</code> sem captura</strong>
+<pre class="term">$ lua -e 'print(("a"):match("%1"))'
+lua: (command line):1: invalid capture index %1
+stack traceback:
+	[C]: in method 'match'
+	(command line):1: in main chunk
+	[C]: in ?</pre>
+<p>"Índice de captura inválido": o <code>%1</code> quer repetir a captura 1, e ainda não existe nenhuma. Também acontece com <code>%2</code> quando só há uma captura. <strong>Como consertar:</strong> o <code>%1</code> tem de vir <strong>depois</strong> de um par de parênteses: <code>"(%a)%1"</code>.</p>
+</div>
+
+<div class="cenario">
+<strong><code>%b</code> e <code>%f</code> incompletos</strong>
+<pre class="term">$ lua -e 'print(("ab"):match("%b("))'
+lua: (command line):1: malformed pattern (missing arguments to '%b')
+stack traceback:
+	[C]: in method 'match'
+	(command line):1: in main chunk
+	[C]: in ?
+$ lua -e 'print(("ab"):match("%f"))'
+lua: (command line):1: missing '[' after '%f' in pattern
+stack traceback:
+	[C]: in method 'match'
+	(command line):1: in main chunk
+	[C]: in ?</pre>
+<p>O <code>%b</code> precisa de <strong>dois</strong> caracteres (o que abre e o que fecha: <code>%b()</code>); o <code>%f</code> precisa de um conjunto entre colchetes (<code>%f[%w]</code>). <strong>Como consertar:</strong> complete o que falta.</p>
+</div>
+
+<div class="cenario">
+<strong>Erros que não dão mensagem</strong>
+<ul>
+  <li><strong><code>|</code>, <code>{3}</code>, <code>(ha)+</code></strong>: o padrão roda, só não faz o que você pensou (seção 10). O resultado é <code>nil</code> ou um achado estranho.</li>
+  <li><strong><code>.*</code> no lugar de <code>.-</code></strong>: pega demais, até a última marca da linha (seção 5).</li>
+  <li><strong>Esqueceu a âncora</strong>: <code>"%d%d%d%d%d%-%d%d%d"</code> "valida" <code>"x 01310-1000"</code> (seção 6).</li>
+  <li><strong><code>-</code> sem <code>%</code></strong>: <code>"%d-%d"</code> não procura um hífen (seção 5).</li>
+  <li><strong>Letra desconhecida depois do <code>%</code></strong>: <code>%y</code> não é classe nenhuma, e o Lua o trata como a letra <code>y</code>: <code>("a"):match("%y")</code> dá <code>nil</code>, sem aviso.</li>
+</ul>
+<p>Quando um padrão não funciona, teste-o sozinho, num texto curto, no <a href="repl.html">modo interativo</a> ou no editor desta página, e vá aumentando aos poucos.</p>
+</div>
+
+<hr>
+
+<h2>Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>Vale por</th></tr>
+<tr><td><code>x</code> (caractere comum)</td><td>ele mesmo</td></tr>
+<tr><td><code>.</code></td><td>um caractere qualquer</td></tr>
+<tr><td><code>%a %d %l %u %w %s %p %x %c %g</code></td><td>letra, algarismo, minúscula, maiúscula, letra ou algarismo, espaço, pontuação, hexadecimal, controle, visível</td></tr>
+<tr><td><code>%A %D %S %W …</code></td><td>o contrário da classe</td></tr>
+<tr><td><code>%.</code> <code>%%</code> <code>%-</code> <code>%(</code> …</td><td>o próprio sinal (escape)</td></tr>
+<tr><td><code>[abc]</code> <code>[0-9]</code> <code>[%w_]</code></td><td>um caractere do conjunto</td></tr>
+<tr><td><code>[^abc]</code></td><td>um caractere fora do conjunto</td></tr>
+<tr><td><code>x*</code> · <code>x+</code> · <code>x-</code> · <code>x?</code></td><td>0 ou mais (guloso) · 1 ou mais (guloso) · 0 ou mais (preguiçoso) · 0 ou 1</td></tr>
+<tr><td><code>^…</code> · <code>…$</code></td><td>começo · fim do texto (só nas pontas do padrão)</td></tr>
+<tr><td><code>( )</code></td><td>captura o texto</td></tr>
+<tr><td><code>()</code></td><td>captura a posição (um número)</td></tr>
+<tr><td><code>%1</code> … <code>%9</code></td><td>o mesmo texto da captura 1 … 9</td></tr>
+<tr><td><code>%bxy</code></td><td>pedaço de <code>x</code> até <code>y</code>, equilibrado: <code>%b()</code></td></tr>
+<tr><td><code>%f[conj]</code></td><td>fronteira: o de antes não é do conjunto, o de depois é</td></tr>
+</table>
+</div>
+<p>A tabela completa, para consulta, está em <a href="ref-padroes.html">Padrões (%d, %a, %s…)</a>.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Sintoma</th><th>Causa provável</th></tr>
+<tr><td><code>invalid escape sequence near '"\d'</code></td><td>Barra invertida da regex: use <code>%d</code></td></tr>
+<tr><td><code>malformed pattern (missing ']')</code></td><td><code>[</code> sem <code>]</code></td></tr>
+<tr><td><code>malformed pattern (ends with '%')</code></td><td><code>%</code> no fim do padrão: para o sinal, <code>%%</code></td></tr>
+<tr><td><code>unfinished capture</code> · <code>invalid pattern capture</code></td><td><code>(</code> sem <code>)</code> · <code>)</code> sem <code>(</code></td></tr>
+<tr><td><code>invalid capture index %1</code></td><td><code>%1</code> antes de qualquer captura</td></tr>
+<tr><td><code>missing arguments to '%b'</code> · <code>missing '[' after '%f'</code></td><td><code>%b</code> sem os dois caracteres · <code>%f</code> sem conjunto</td></tr>
+<tr><td>Pegou demais</td><td><code>.*</code> no lugar de <code>.-</code></td></tr>
+<tr><td>Parou antes do acento</td><td><code>%a</code> não conhece letras acentuadas: <code>[%a\128-\255]</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. A classe certa</h3>
+<p>Complete para pegar o número de <code>"Sala 204"</code>:</p>
+<div class="ex-code">print(("Sala 204"):match("<input data-answer="%d+|[0-9]+|%d%d%d" aria-label="padrão">"))</div>
+</div>
+
+<div class="exercise">
+<h3>2. Escape</h3>
+<p>Qual padrão acha um ponto de verdade? Escreva os dois caracteres.</p>
+<div class="ex-code">O padrão é <input data-answer="%." aria-label="padrão"></div>
+</div>
+
+<div class="exercise">
+<h3>3. O preguiçoso</h3>
+<p>O que <code>print(("[a] [b]"):match("%[(.-)%]"))</code> mostra?</p>
+<div class="ex-code">Mostra <input data-answer="a" aria-label="saída"></div>
+</div>
+
+<div class="mc" data-answer="3">
+<p class="mc-q">4. Qual padrão aceita <strong>só</strong> textos que são inteiramente algarismos, como <code>"2026"</code>?</p>
+<label><input type="radio" name="q4"> <code>"%d+"</code></label>
+<label><input type="radio" name="q4"> <code>"%d*"</code></label>
+<label><input type="radio" name="q4"> <code>"^%d+$"</code></label>
+<label><input type="radio" name="q4"> <code>"\d+"</code></label>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">5. O que <code>("gato"):find("gato|cão")</code> devolve?</p>
+<label><input type="radio" name="q5"> <code>1  4</code>, porque o <code>|</code> quer dizer "ou"</label>
+<label><input type="radio" name="q5"> <code>nil</code>: no Lua o <code>|</code> é uma barra comum, e não há barra em <code>"gato"</code></label>
+<label><input type="radio" name="q5"> Um erro de padrão malformado</label>
+<label><input type="radio" name="q5"> <code>1  8</code></label>
+</div>
+
+<div class="mc" data-answer="4">
+<p class="mc-q">6. Por que <code>("pão"):match("%a+")</code> devolve só <code>p</code>?</p>
+<label><input type="radio" name="q6"> Porque o <code>+</code> pega uma letra só</label>
+<label><input type="radio" name="q6"> Porque falta o <code>os.setlocale("")</code></label>
+<label><input type="radio" name="q6"> Porque o <code>%a</code> só acha a primeira letra</label>
+<label><input type="radio" name="q6"> Porque o <code>ã</code> ocupa 2 bytes, e nenhum deles é letra para o <code>%a</code></label>
+</div>
+
+<h3>Missão final: a hora da entrega</h3>
+
+<div class="trylua" data-goal="out:Hora: 14, minuto: 35;;semerro">
+<p class="try-task"><strong>Missão:</strong> o recado diz <code>"Entrega às 14:35, portão 2"</code>. O padrão da linha 2 está pegando só o primeiro número, e o minuto fica <code>nil</code>, o que quebra o programa. Escreva um padrão com <strong>duas capturas</strong> no formato de hora (dois algarismos, dois-pontos, dois algarismos) para mostrar <code>Hora: 14, minuto: 35</code>.</p>
+<pre class="script" data-file="main.lua">local recado = "Entrega às 14:35, portão 2"
+local hora, minuto = recado:match("(%d+)")
+print("Hora: " .. hora .. ", minuto: " .. minuto)
+</pre>
+<pre class="solucao" data-file="main.lua">local recado = "Entrega às 14:35, portão 2"
+local hora, minuto = recado:match("(%d%d):(%d%d)")
+print("Hora: " .. hora .. ", minuto: " .. minuto)
+</pre>
+</div>
+
+<p>Rodando o código inicial, o Lua reclama de <code>attempt to concatenate a nil value (local 'minuto')</code>: o <code>match</code> devolveu uma captura só, e o <code>minuto</code> ficou vazio. Com o padrão certo, o <code>2</code> do portão não atrapalha: ele não está no formato <code>%d%d:%d%d</code>.</p>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li>Um padrão descreve o <strong>formato</strong> do que você procura; vale em <code>find</code>, <code>match</code>, <code>gmatch</code> e <code>gsub</code>.</li>
+  <li><code>.</code> é qualquer caractere; <code>%a %d %s %w %p %l %u</code> são classes, e a maiúscula (<code>%D</code>, <code>%S</code>) é o contrário.</li>
+  <li>O escape é o <code>%</code> (<code>%.</code>, <code>%-</code>, <code>%%</code>), nunca a barra <code>\</code>. Os mágicos são <code>^ $ ( ) % . [ ] * + - ?</code>.</li>
+  <li><code>[ ]</code> monta um conjunto; <code>[^ ]</code>, o contrário. <code>*</code> e <code>+</code> são gulosos; <code>-</code> é preguiçoso; <code>?</code> é opcional. Eles valem só para o caractere ou classe logo antes.</li>
+  <li><code>^</code> e <code>$</code> prendem o padrão no começo e no fim: é assim que se valida.</li>
+  <li><code>( )</code> captura texto, <code>()</code> captura posição, <code>%1</code> repete uma captura; <code>%b()</code> acha parênteses equilibrados; <code>%f[%a]</code> marca o começo de uma palavra.</li>
+  <li>Não é regex: sem <code>|</code>, sem <code>{n}</code>, sem grupo repetido, sem <code>\d</code>. E <code>%a</code> não conhece acentos.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
