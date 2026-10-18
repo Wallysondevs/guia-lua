@@ -1,0 +1,1316 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua Projeto Calculadora — io.read, tonumber, if/elseif, while e funções passo a passo | Guia Lua</title>
+<meta name="description" content="Projeto passo a passo: uma calculadora de terminal em Lua 5.5 que lê dois números e uma operação com io.read() e tonumber(), escolhe a conta com if/elseif, recusa a divisão por zero (que no Lua dá inf, sem erro), repete até você sair e, na versão final, valida o que foi digitado com funções. Quatro versões com sessões reais e missões no editor.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Projeto <span class="hl">Calculadora</span></h1>
+
+<p class="intro">O primeiro projeto do guia: uma calculadora que roda no terminal. Ela pede um número, a operação e outro número, mostra o resultado e pergunta se você quer fazer outra conta. A conta em si é a parte fácil: o Lua já sabe somar. O desafio é fazer o programa <strong>não quebrar</strong> (nem responder bobagem) quando alguém divide por zero, escolhe uma operação que não existe ou digita "seis" no lugar de um número.</p>
+
+<div class="note">
+<strong>Você vai praticar</strong>
+<ul>
+  <li>Escrever a pergunta com <a href="io-write.html">io.write()</a> e ler a resposta com <a href="io-read.html">io.read()</a>.</li>
+  <li>Transformar o texto em número com <a href="conversao.html">tonumber()</a> (e descobrir o que ele faz com "seis").</li>
+  <li>Escolher a conta com <a href="elseif.html">if e elseif</a>.</li>
+  <li>Recusar a divisão por zero com <a href="if-else.html">if e else</a>.</li>
+  <li>Repetir tudo com <a href="while.html">while</a> e sair com <a href="break.html">break</a>.</li>
+  <li>Separar o programa em <a href="funcoes.html">funções</a> que devolvem valores com <a href="return.html">return</a> (às vezes <a href="retornos-multiplos.html">dois</a>).</li>
+  <li>Limpar e formatar o texto com <a href="gsub.html">gsub</a>, <a href="string-find.html">match</a> e <a href="string-format.html">string.format</a>.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>O que vamos construir</h2>
+<p>Esta é a calculadora pronta, rodando no computador da Ana. <strong>O que aparece depois dos dois-pontos de cada pergunta foi digitado por ela</strong> (o <code>10</code>, o <code>+</code>, o <code>s</code>…); o resto foi o programa que escreveu:</p>
+
+<pre class="term" data-cwd="~/projetos/calculadora">$ lua calculadora.lua
+=== Calculadora da Ana ===
+Primeiro número: 10
+Operação (+ - * /): +
+Segundo número: 5
+10 + 5 = 15
+Outra conta? (s/n): s
+Primeiro número: seis
+"seis" não é um número. Tente de novo.          « texto no lugar de número
+Primeiro número: 6
+Operação (+ - * /): %
+Operação desconhecida: %                        « operação que não existe
+Operação (+ - * /): *
+Segundo número: 1.5
+6 * 1.5 = 9
+Outra conta? (s/n): S                           « maiúsculo também vale
+Primeiro número: 2,5                            « com vírgula também vale
+Operação (+ - * /): /
+Segundo número: 0
+Não dá para dividir por zero.                   « divisão por zero
+Outra conta? (s/n): s
+Primeiro número: 0.1
+Operação (+ - * /): +
+Segundo número: 0.2
+0.1 + 0.2 = 0.3
+Outra conta? (s/n): s
+Primeiro número: 10
+Operação (+ - * /): /
+Segundo número: 3
+10 / 3 = 3.333333333
+Outra conta? (s/n):  n
+Até logo!</pre>
+
+<p>Vamos chegar lá em quatro versões. No fim de cada uma, o programa roda; cada versão acrescenta uma coisa só:</p>
+
+<ol class="passo">
+  <li><a href="#versao1">Dois números e um operador</a> (<code>io.read</code>, <code>tonumber</code>, <code>if</code>/<code>elseif</code>).</li>
+  <li><a href="#versao2">A divisão por zero</a> (que no Lua não dá erro: dá <code>inf</code>).</li>
+  <li><a href="#versao3">Repetir até a pessoa sair</a> (<code>while true</code> e <code>break</code>).</li>
+  <li><a href="#versao4">Funções e entrada validada</a> (<code>local function</code>, <code>return</code>, <code>nil</code> como "não deu").</li>
+</ol>
+
+<h3>Antes de começar</h3>
+<p>Você precisa saber criar e rodar um arquivo <code>.lua</code> (<a href="executar.html">Rodando um Programa</a>), usar <a href="variaveis.html">variáveis</a> com <a href="local.html">local</a> e juntar textos com <a href="concatenacao.html">..</a>. No seu computador, crie a pasta do projeto; o arquivo vai se chamar <code>calculadora.lua</code>:</p>
+
+<pre class="term">$ mkdir -p projetos/calculadora
+$ cd projetos/calculadora</pre>
+
+<p>Em cada versão há também uma caixa <strong>Experimente</strong>, que roda o Lua de verdade aqui na página. Nas missões deste projeto, a caixa tem um campo <strong>Entrada</strong>, já preenchido com as respostas que o programa vai receber, uma por linha, como se alguém as digitasse (a missão diz quais são). O editor mostra essas respostas depois de cada pergunta, como no terminal.</p>
+
+<hr>
+
+<h2>Antes da versão 1: o Lua converte sozinho… às vezes</h2>
+<p>O jeito mais curto de pedir dois números e somar seria este:</p>
+
+<pre class="file" data-file="calculadora.lua">print("=== Calculadora da Ana ===")
+io.write("Primeiro número: ")
+local a = io.read()
+io.write("Segundo número: ")
+local b = io.read()
+print(a .. " + " .. b .. " = " .. a + b)
+</pre>
+
+<pre class="term" data-cwd="~/projetos/calculadora">$ lua calculadora.lua
+=== Calculadora da Ana ===
+Primeiro número: 10
+Segundo número: 5
+10 + 5 = 15</pre>
+
+<p>Deu certo! Mas preste atenção: o <code>io.read()</code> sempre devolve um <strong>texto</strong> (uma string), mesmo que a pessoa tenha digitado só algarismos. Para o Lua, <code>a</code> vale <code>"10"</code> e <code>b</code> vale <code>"5"</code>. A conta funcionou porque o Lua tem uma ajuda automática: quando você usa <code>+</code> com dois textos que <strong>parecem</strong> números, ele os converte e faz a conta (é a <em>coerção</em>, veja <a href="conversao.html">Conversão</a>). Repare também no <code>.. a + b</code>: o <code>+</code> é feito antes do <code>..</code> (veja <a href="precedencia.html">Precedência</a>), então o texto recebe o resultado <code>15</code>, e não <code>"105"</code>.</p>
+
+<p>Agora, se a Ana digitar um texto que não parece número:</p>
+
+<pre class="term" data-cwd="~/projetos/calculadora">$ lua calculadora.lua
+=== Calculadora da Ana ===
+Primeiro número: seis
+Segundo número: 5
+lua: calculadora.lua:6: attempt to add a 'string' with a 'string'
+stack traceback:
+        [C]: in metamethod 'add'
+        calculadora.lua:6: in main chunk
+        [C]: in ?</pre>
+
+<p>"Tentativa de somar uma string com uma string": o Lua tentou converter <code>"seis"</code> e não conseguiu. A mensagem fala de textos, e não de números, o que confunde quem lê. E há um problema pior, que você vai ver na versão 2: um texto <code>"0"</code> <strong>não é igual</strong> ao número <code>0</code>. Por isso a calculadora converte o que foi digitado <strong>logo na entrada</strong>, com <code>tonumber()</code>, e passa a trabalhar só com números. É o primeiro passo da versão 1.</p>
+
+<hr>
+
+<h2 id="versao1">Versão 1 · Dois números e um operador</h2>
+<p>A calculadora pede o primeiro número, a operação e o segundo número. Os números passam pelo <code>tonumber()</code> ("para número"), que transforma o texto num número. A operação fica como texto mesmo: <code>"+"</code>, <code>"-"</code>, <code>"*"</code> ou <code>"/"</code>. Para escolher a conta, uma escada de <a href="elseif.html">if e elseif</a>.</p>
+
+<pre class="file" data-file="calculadora.lua">print("=== Calculadora da Ana ===")
+io.write("Primeiro número: ")
+local a = tonumber(io.read())
+io.write("Operação (+ - * /): ")
+local op = io.read()
+io.write("Segundo número: ")
+local b = tonumber(io.read())
+
+if op == "+" then
+  print(a .. " + " .. b .. " = " .. a + b)
+elseif op == "-" then
+  print(a .. " - " .. b .. " = " .. a - b)
+elseif op == "*" then
+  print(a .. " * " .. b .. " = " .. a * b)
+elseif op == "/" then
+  print(a .. " / " .. b .. " = " .. a / b)
+else
+  print("Operação desconhecida: " .. op)
+end
+</pre>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Linha</th><th>O que faz</th></tr>
+<tr><td><code>print("=== Calculadora da Ana ===")</code></td><td>O título, para a pessoa saber que programa está rodando.</td></tr>
+<tr><td><code>io.write("Primeiro número: ")</code></td><td>Mostra a pergunta <strong>sem pular linha</strong> (o <code>print</code> pularia), para o que for digitado aparecer logo depois dos dois-pontos. Veja <a href="io-write.html">io.write()</a>.</td></tr>
+<tr><td><code>io.read()</code></td><td>Espera a pessoa digitar e apertar <kbd>Enter</kbd>, e devolve a linha digitada, como texto (sem o Enter). Veja <a href="io-read.html">io.read()</a>.</td></tr>
+<tr><td><code>tonumber(…)</code></td><td>Converte o texto em número: <code>"10"</code> vira <code>10</code>, <code>"7.5"</code> vira <code>7.5</code>. Um <code>io.read()</code> dentro de um <code>tonumber()</code>: o Lua faz primeiro o de dentro (lê) e depois o de fora (converte). Se o texto não for um número, devolve <code>nil</code> ("nada").</td></tr>
+<tr><td><code>local op = io.read()</code></td><td>A operação, sem conversão: <code>"+"</code> é um texto e assim fica.</td></tr>
+<tr><td><code>if op == "+" then</code></td><td>"Se a operação for igual a <code>"+"</code>, então…". O <code>==</code> compara (um <code>=</code> só guarda valor numa variável; veja <a href="operadores-comparacao.html">Comparações</a>).</td></tr>
+<tr><td><code>elseif op == "-" then</code></td><td>"Senão, se…": só é testado quando o <code>if</code> de cima deu falso. O Lua testa de cima para baixo e faz <strong>só o primeiro</strong> que combinar.</td></tr>
+<tr><td><code>else</code></td><td>Pega tudo o que não combinou com nenhum dos de cima: <code>x</code>, <code>%</code>, uma palavra qualquer.</td></tr>
+<tr><td><code>end</code></td><td>Um <code>end</code> só fecha a escada inteira (o <code>if</code>, os <code>elseif</code> e o <code>else</code>).</td></tr>
+<tr><td><code>a .. " + " .. b .. " = " .. a + b</code></td><td>Monta a frase juntando pedaços com <code>..</code>. Os números viram texto sozinhos na hora de juntar.</td></tr>
+</table>
+</div>
+
+<p>Rodando no terminal da Ana, três vezes:</p>
+
+<pre class="term" data-cwd="~/projetos/calculadora">$ lua calculadora.lua
+=== Calculadora da Ana ===
+Primeiro número: 10
+Operação (+ - * /): +
+Segundo número: 5
+10 + 5 = 15
+$ lua calculadora.lua
+=== Calculadora da Ana ===
+Primeiro número: 7.5
+Operação (+ - * /): /
+Segundo número: 2
+7.5 / 2 = 3.75
+$ lua calculadora.lua
+=== Calculadora da Ana ===
+Primeiro número: 10
+Operação (+ - * /): /
+Segundo número: 5
+10 / 5 = 2.0</pre>
+
+<p>Repare no último: <code>10 / 5 = 2.0</code>, com <code>.0</code>. O Lua tem dois tipos de número (veja <a href="numeros.html">Números</a>): o <strong>inteiro</strong> (<code>10</code>, <code>5</code>) e o <strong>float</strong>, com casas decimais (<code>7.5</code>). O <code>tonumber("10")</code> dá um inteiro, por isso <code>10 + 5</code> mostra <code>15</code>. Mas a barra <code>/</code> <strong>sempre</strong> dá float, mesmo quando a divisão é exata (veja <a href="divisao.html">Divisão: /, // e %</a>). Está correto, só não é bonito; na versão 4 a calculadora vai mostrar <code>10 / 5 = 2</code>. E uma operação que não existe cai no <code>else</code>:</p>
+
+<pre class="term" data-cwd="~/projetos/calculadora">$ lua calculadora.lua
+=== Calculadora da Ana ===
+Primeiro número: 3
+Operação (+ - * /): x
+Segundo número: 4
+Operação desconhecida: x</pre>
+
+<p>Conferindo no modo interativo o que o <code>tonumber</code> faz com cada texto:</p>
+
+<pre class="term">$ lua
+Lua 5.5.0  Copyright (C) 1994-2025 Lua.org, PUC-Rio
+&gt; tonumber("10")
+10
+&gt; tonumber("7.5")
+7.5
+&gt; tonumber("2,5")
+nil
+&gt; tonumber("seis")
+nil
+&gt; tonumber("  8  ")
+8
+&gt; math.type(tonumber("10")), math.type(tonumber("7.5"))
+integer float
+&gt; os.exit()</pre>
+
+<p>Espaços nas pontas não atrapalham (<code>"  8  "</code> vira <code>8</code>). Mas <code>"2,5"</code>, com vírgula, dá <code>nil</code>: para o Lua, o decimal é com <strong>ponto</strong>. E <code>"seis"</code> também dá <code>nil</code>. O <code>tonumber</code> não para o programa: ele devolve <code>nil</code> e deixa você decidir o que fazer (veja <a href="nil.html">O Valor nil</a>). Só que a versão 1 ainda não decide nada.</p>
+
+<div class="warning">
+<strong>0.1 + 0.2 não dá exatamente 0.3</strong>
+<pre class="term" data-cwd="~/projetos/calculadora">$ lua calculadora.lua
+=== Calculadora da Ana ===
+Primeiro número: 0.1
+Operação (+ - * /): +
+Segundo número: 0.2
+0.1 + 0.2 = 0.30000000000000004</pre>
+<p>Não é defeito da calculadora nem do Lua: o computador guarda os números com casas decimais em binário, e alguns, como <code>0.1</code>, não têm representação exata (como 1/3 não tem em decimal: 0,3333…). Sobra um erro minúsculo na 17ª casa. Quase toda linguagem de programação dá o mesmo resultado. Na versão 4, a calculadora arredonda na hora de mostrar.</p>
+<p>Curiosidade: o Lua 5.4 mostrava <code>0.3</code> aqui, porque escondia as últimas casas ao transformar o número em texto. O 5.5 mostra o número inteiro, sem esconder. Conferido no computador da Ana:</p>
+<pre class="term">$ lua -e "print(0.1 + 0.2, 10 / 5, 7 // 2, 2^10)"
+0.30000000000000004     2.0     3       1024.0
+$ lua5.4 -e "print(0.1 + 0.2, 10 / 5, 7 // 2, 2^10)"
+0.3     2.0     3       1024.0</pre>
+<p>A conta é a mesma nas duas versões; só a forma de <strong>mostrar</strong> mudou. Mais em <a href="versoes.html">As Diferenças entre as Versões</a>.</p>
+</div>
+
+<h3>Quando dá errado na versão 1</h3>
+
+<div class="cenario">
+<strong>Texto no lugar de número: <code>attempt to perform arithmetic on a nil value</code></strong>
+<pre class="term" data-cwd="~/projetos/calculadora">$ lua calculadora.lua
+=== Calculadora da Ana ===
+Primeiro número: seis
+Operação (+ - * /): +
+Segundo número: 5
+lua: calculadora.lua:10: attempt to perform arithmetic on a nil value (local 'a')
+stack traceback:
+        calculadora.lua:10: in main chunk
+        [C]: in ?</pre>
+<p>Esta é a primeira mensagem de erro do projeto. Linha por linha:</p>
+<dl class="anatomy">
+  <dt>lua: calculadora.lua:10:</dt><dd>Quem reclamou (o <code>lua</code>), em que arquivo (<code>calculadora.lua</code>) e em que <strong>linha</strong> (a 10, a do <code>print</code> da soma).</dd>
+  <dt>attempt to perform arithmetic on a nil value</dt><dd>"Tentativa de fazer conta com um valor nil". O <code>tonumber("seis")</code> deu <code>nil</code>, e <code>nil + 5</code> não existe.</dd>
+  <dt>(local 'a')</dt><dd>O culpado: a variável local <code>a</code>. Ótima pista: o problema não está na linha 10, e sim onde <code>a</code> ganhou o valor (a linha 3).</dd>
+  <dt>stack traceback:</dt><dd>"Rastro da pilha": o caminho até o erro, do mais recente para o mais antigo.</dd>
+  <dt>calculadora.lua:10: in main chunk</dt><dd>Estava na linha 10, no "pedaço principal" do programa (fora de qualquer função).</dd>
+  <dt>[C]: in ?</dt><dd>Quem começou tudo: o próprio programa <code>lua</code>, escrito em C. Aparece no fim de todo traceback.</dd>
+</dl>
+<p>O programa <strong>parou</strong> ali. Com <code>2,5</code> acontece a mesma coisa (o <code>tonumber</code> não entende a vírgula). A versão 4 conserta isso: pergunta de novo enquanto não vier um número. A aula <a href="erros.html">Lendo uma Mensagem de Erro</a> mostra mais tracebacks.</p>
+<p>(No seu terminal a linha da mensagem pode aparecer quebrada em duas, com o <code>)</code> sozinho embaixo: é só o terminal sem espaço na largura. É uma linha só.)</p>
+</div>
+
+<div class="trylua" data-stdin="10\n-\n4" data-goal="out:10 - 4 = 6">
+<p class="try-task"><strong>Missão (versão 1):</strong> o programa ainda não pede o segundo número e não sabe subtrair. Onde está o comentário, peça e leia <code>b</code> (com <code>io.write</code> e <code>tonumber(io.read())</code>), e acrescente um <code>elseif</code> para a operação <code>"-"</code>. A entrada da missão é <code>10</code>, <code>-</code>, <code>4</code>: o resultado deve ser <code>10 - 4 = 6</code>.</p>
+<pre class="script" data-file="calculadora.lua">print("=== Calculadora da Ana ===")
+io.write("Primeiro número: ")
+local a = tonumber(io.read())
+io.write("Operação (+ - * /): ")
+local op = io.read()
+-- peça e leia o segundo número
+
+if op == "+" then
+  print(a .. " + " .. b .. " = " .. a + b)
+elseif op == "*" then
+  print(a .. " * " .. b .. " = " .. a * b)
+elseif op == "/" then
+  print(a .. " / " .. b .. " = " .. a / b)
+else
+  print("Operação desconhecida: " .. op)
+end
+</pre>
+<pre class="solucao" data-file="calculadora.lua">print("=== Calculadora da Ana ===")
+io.write("Primeiro número: ")
+local a = tonumber(io.read())
+io.write("Operação (+ - * /): ")
+local op = io.read()
+io.write("Segundo número: ")
+local b = tonumber(io.read())
+
+if op == "+" then
+  print(a .. " + " .. b .. " = " .. a + b)
+elseif op == "-" then
+  print(a .. " - " .. b .. " = " .. a - b)
+elseif op == "*" then
+  print(a .. " * " .. b .. " = " .. a * b)
+elseif op == "/" then
+  print(a .. " / " .. b .. " = " .. a / b)
+else
+  print("Operação desconhecida: " .. op)
+end
+</pre>
+</div>
+
+<hr>
+
+<h2 id="versao2">Versão 2 · A divisão por zero</h2>
+<p>Na maioria das linguagens, dividir por zero para o programa com um erro. No Lua, com a barra <code>/</code>, <strong>não</strong>: a conta é feita com floats, e o resultado é um valor especial. Veja a versão 1 recebendo um zero:</p>
+
+<pre class="term" data-cwd="~/projetos/calculadora">$ lua calculadora.lua
+=== Calculadora da Ana ===
+Primeiro número: 1
+Operação (+ - * /): /
+Segundo número: 0
+1 / 0 = inf
+$ lua calculadora.lua
+=== Calculadora da Ana ===
+Primeiro número: 0
+Operação (+ - * /): /
+Segundo número: 0
+0 / 0 = -nan</pre>
+
+<p><code>inf</code> é "infinito" (de <em>infinity</em>) e <code>nan</code> é "não é um número" (<em>not a number</em>; o sinal de menos na frente não quer dizer nada de útil). O programa não quebrou, mas a resposta não serve para a Ana. Na matemática, dividir por zero não tem resposta: a calculadora deve <strong>avisar</strong>. A mudança é um <code>if</code> dentro do caso da divisão:</p>
+
+<pre class="file" data-file="calculadora.lua">print("=== Calculadora da Ana ===")
+io.write("Primeiro número: ")
+local a = tonumber(io.read())
+io.write("Operação (+ - * /): ")
+local op = io.read()
+io.write("Segundo número: ")
+local b = tonumber(io.read())
+
+if op == "+" then
+  print(a .. " + " .. b .. " = " .. a + b)
+elseif op == "-" then
+  print(a .. " - " .. b .. " = " .. a - b)
+elseif op == "*" then
+  print(a .. " * " .. b .. " = " .. a * b)
+elseif op == "/" then
+  if b == 0 then
+    print("Não dá para dividir por zero.")
+  else
+    print(a .. " / " .. b .. " = " .. a / b)
+  end
+else
+  print("Operação desconhecida: " .. op)
+end
+</pre>
+
+<dl class="anatomy">
+  <dt>elseif op == "/" then</dt><dd>O caso da divisão continua o mesmo; o que mudou é o que está dentro dele.</dd>
+  <dt>if b == 0 then</dt><dd>Um <code>if</code> comum, dentro do caso: se o divisor for zero, avisa em vez de dividir. Um bloco pode ter qualquer coisa dentro, inclusive outro <code>if</code> (veja <a href="condicoes-aninhadas.html">Condições Aninhadas</a>).</dd>
+  <dt>else … end</dt><dd>Senão, faz a conta como antes. Esse <code>end</code> fecha o <code>if b == 0</code>; o <code>end</code> da última linha continua fechando a escada de fora. Indentar com 2 espaços ajuda a ver qual <code>end</code> fecha o quê.</dd>
+</dl>
+
+<pre class="term" data-cwd="~/projetos/calculadora">$ lua calculadora.lua
+=== Calculadora da Ana ===
+Primeiro número: 1
+Operação (+ - * /): /
+Segundo número: 0
+Não dá para dividir por zero.
+$ lua calculadora.lua
+=== Calculadora da Ana ===
+Primeiro número: 9
+Operação (+ - * /): -
+Segundo número: 12
+9 - 12 = -3</pre>
+
+<p>Em vez de <code>inf</code>, uma frase que a Ana entende. Isso é <strong>prevenir</strong>: o programa confere antes de fazer a conta perigosa.</p>
+
+<div class="tip">
+<strong>Por que o <code>tonumber</code> é importante aqui</strong>
+<p>Sem o <code>tonumber</code>, o <code>b</code> seria o texto <code>"0"</code>, e <code>"0" == 0</code> dá <code>false</code> no Lua: o <code>==</code> nunca converte, um texto nunca é igual a um número. O <code>if</code> não pegaria o zero e a calculadora mostraria <code>1 / 0 = inf</code> do mesmo jeito. A coerção automática que você viu antes do <code>+</code> só vale para contas, nunca para comparações. Por isso: converta na entrada.</p>
+</div>
+
+<div class="cenario">
+<strong>Nem toda divisão por zero dá <code>inf</code></strong>
+<p>Com a barra <code>/</code>, o Lua faz a conta com floats e o zero vira <code>inf</code>. Mas a <strong>divisão inteira</strong> <code>//</code> e o <strong>resto</strong> <code>%</code> entre dois inteiros param o programa com um erro de verdade:</p>
+<pre class="term">$ lua -e "print(7 // 0)"
+lua: (command line):1: attempt to divide by zero
+stack traceback:
+        (command line):1: in main chunk
+        [C]: in ?
+$ lua -e "print(7 % 0)"
+lua: (command line):1: attempt to perform 'n%0'
+stack traceback:
+        (command line):1: in main chunk
+        [C]: in ?
+$ lua -e "print(7.0 % 0, 7 / 0, 7 // 0.0)"
+-nan    inf     inf</pre>
+<p>"Tentativa de dividir por zero" e "tentativa de fazer <code>n%0</code>" (resto de um número por zero). O <code>(command line):1</code> quer dizer "na linha 1 do código que veio na linha de comando" (o <code>-e</code>). Com um float no meio (<code>7.0</code>, <code>0.0</code>), volta o <code>inf</code>/<code>nan</code>. Conclusão: confira o zero <strong>antes</strong> de qualquer divisão. O desafio do fim da página usa o <code>%</code>, e lá esse cuidado vai fazer falta.</p>
+</div>
+
+<div class="trylua" data-stdin="1\n/\n0" data-goal="out:Não dá para dividir por zero.;;semerro">
+<p class="try-task"><strong>Missão (versão 2):</strong> o caso da divisão ainda divide sem olhar, e a entrada da missão (<code>1</code>, <code>/</code>, <code>0</code>) mostra <code>1 / 0 = inf</code>. Dentro do caso <code>"/"</code>, confira se <code>b == 0</code>: se for, mostre <code>Não dá para dividir por zero.</code>; senão, faça a conta.</p>
+<pre class="script" data-file="calculadora.lua">print("=== Calculadora da Ana ===")
+io.write("Primeiro número: ")
+local a = tonumber(io.read())
+io.write("Operação (+ - * /): ")
+local op = io.read()
+io.write("Segundo número: ")
+local b = tonumber(io.read())
+
+if op == "+" then
+  print(a .. " + " .. b .. " = " .. a + b)
+elseif op == "-" then
+  print(a .. " - " .. b .. " = " .. a - b)
+elseif op == "*" then
+  print(a .. " * " .. b .. " = " .. a * b)
+elseif op == "/" then
+  print(a .. " / " .. b .. " = " .. a / b)
+else
+  print("Operação desconhecida: " .. op)
+end
+</pre>
+<pre class="solucao" data-file="calculadora.lua">print("=== Calculadora da Ana ===")
+io.write("Primeiro número: ")
+local a = tonumber(io.read())
+io.write("Operação (+ - * /): ")
+local op = io.read()
+io.write("Segundo número: ")
+local b = tonumber(io.read())
+
+if op == "+" then
+  print(a .. " + " .. b .. " = " .. a + b)
+elseif op == "-" then
+  print(a .. " - " .. b .. " = " .. a - b)
+elseif op == "*" then
+  print(a .. " * " .. b .. " = " .. a * b)
+elseif op == "/" then
+  if b == 0 then
+    print("Não dá para dividir por zero.")
+  else
+    print(a .. " / " .. b .. " = " .. a / b)
+  end
+else
+  print("Operação desconhecida: " .. op)
+end
+</pre>
+</div>
+
+<hr>
+
+<h2 id="versao3">Versão 3 · Repetir até a pessoa sair</h2>
+<p>Até agora, cada conta exige rodar o programa de novo. A Ana quer fazer várias contas seguidas. A solução é colocar tudo dentro de um laço <a href="while.html">while</a> ("enquanto") e, no fim de cada volta, perguntar se ela quer continuar.</p>
+
+<pre class="file" data-file="calculadora.lua">print("=== Calculadora da Ana ===")
+
+while true do
+  io.write("Primeiro número: ")
+  local a = tonumber(io.read())
+  io.write("Operação (+ - * /): ")
+  local op = io.read()
+  io.write("Segundo número: ")
+  local b = tonumber(io.read())
+
+  if op == "+" then
+    print(a .. " + " .. b .. " = " .. a + b)
+  elseif op == "-" then
+    print(a .. " - " .. b .. " = " .. a - b)
+  elseif op == "*" then
+    print(a .. " * " .. b .. " = " .. a * b)
+  elseif op == "/" then
+    if b == 0 then
+      print("Não dá para dividir por zero.")
+    else
+      print(a .. " / " .. b .. " = " .. a / b)
+    end
+  else
+    print("Operação desconhecida: " .. op)
+  end
+
+  io.write("Outra conta? (s/n): ")
+  local continuar = io.read()
+  if continuar ~= "s" then
+    break
+  end
+end
+
+print("Até logo!")
+</pre>
+
+<dl class="anatomy">
+  <dt>while true do</dt><dd>"Enquanto verdadeiro, faça": um laço que, sozinho, nunca termina. Tudo o que está entre o <code>do</code> e o <code>end</code> dele se repete. Quem decide a hora de parar é o <code>break</code> lá dentro.</dd>
+  <dt>(o bloco inteiro andou 2 espaços)</dt><dd>As perguntas e o <code>if</code> agora estão <strong>dentro</strong> do <code>while</code>. Para o Lua, quem marca o que é do laço é o <code>do … end</code>, e não a indentação; mas indentar deixa isso visível para você (veja <a href="sintaxe.html">Sintaxe e Blocos</a>).</dd>
+  <dt>local continuar = io.read()</dt><dd>Lê a resposta. Como está dentro do laço, é uma variável nova a cada volta.</dd>
+  <dt>if continuar ~= "s" then</dt><dd>"Se a resposta for diferente de <code>s</code>". No Lua, "diferente" se escreve <code>~=</code> (não <code>!=</code>). Qualquer outra coisa (<code>n</code>, <code>não</code>, só <kbd>Enter</kbd>) encerra.</dd>
+  <dt>break</dt><dd>"Quebrar": sai do laço na hora. O programa continua na primeira linha <strong>depois</strong> do <code>end</code> do <code>while</code> (veja <a href="break.html">break</a>).</dd>
+  <dt>print("Até logo!")</dt><dd>Fora do laço: roda uma vez só, quando o <code>break</code> acontece.</dd>
+</dl>
+
+<pre class="term" data-cwd="~/projetos/calculadora">$ lua calculadora.lua
+=== Calculadora da Ana ===
+Primeiro número: 10
+Operação (+ - * /): +
+Segundo número: 5
+10 + 5 = 15
+Outra conta? (s/n): s
+Primeiro número: 100
+Operação (+ - * /): /
+Segundo número: 8
+100 / 8 = 12.5
+Outra conta? (s/n): n
+Até logo!</pre>
+
+<p>E um tropeço que a Ana encontrou logo no segundo uso:</p>
+
+<pre class="term" data-cwd="~/projetos/calculadora">$ lua calculadora.lua
+=== Calculadora da Ana ===
+Primeiro número: 10
+Operação (+ - * /): +
+Segundo número: 5
+10 + 5 = 15
+Outra conta? (s/n): s
+Primeiro número: 3
+Operação (+ - * /): *
+Segundo número: 4
+3 * 4 = 12
+Outra conta? (s/n): S                « maiúsculo: o programa terminou!
+Até logo!</pre>
+
+<p>Ela queria continuar, mas digitou <code>S</code> maiúsculo, e <code>"S" ~= "s"</code> é verdadeiro: para o Lua, maiúscula e minúscula são letras diferentes. Na versão 4, a resposta passa por <code>lower()</code> ("mais baixo", minúsculas) antes de comparar.</p>
+
+<div class="note">
+<strong>Por que <code>while true</code> com <code>break</code>?</strong>
+<p>Dava para usar o <a href="repeat.html">repeat … until</a> ("repita … até que"), que testa a condição no fim de cada volta: <code>repeat … until continuar ~= "s"</code>. O problema é que <code>continuar</code> precisa ser lido antes do <code>until</code>. O <code>while true</code> com <code>break</code> deixa a ordem natural, faz a conta e depois pergunta, e funciona igual em qualquer versão do Lua. É um padrão muito comum em programas que conversam com a pessoa.</p>
+</div>
+
+<div class="cenario">
+<strong>Sair no meio com <kbd>Ctrl</kbd>+<kbd>C</kbd> ou <kbd>Ctrl</kbd>+<kbd>D</kbd></strong>
+<p>Se a Ana desistir no meio de uma conta e apertar <kbd>Ctrl</kbd>+<kbd>C</kbd>, que interrompe qualquer programa no terminal:</p>
+<pre class="term" data-cwd="~/projetos/calculadora">$ lua calculadora.lua
+=== Calculadora da Ana ===
+Primeiro número: 10
+Operação (+ - * /): ^C
+lua: calculadora.lua:7: interrupted!
+stack traceback:
+        [C]: in field 'read'
+        calculadora.lua:7: in main chunk
+        [C]: in ?
+$ echo $?
+1</pre>
+<p>O <code>^C</code> é o terminal mostrando a tecla. O Lua responde com <code>interrupted!</code> ("interrompido!") e o traceback mostra onde o programa estava: na linha 7, dentro da função <code>read</code> (o <code>[C]: in field 'read'</code>), esperando a operação. O código de saída 1 (o <code>echo $?</code>) diz "terminou com erro". Não é defeito: é o jeito normal de interromper.</p>
+<p>Já o <kbd>Ctrl</kbd>+<kbd>D</kbd> quer dizer "acabou a entrada". Aí o <code>io.read()</code> não tem linha nenhuma para devolver e devolve <code>nil</code>:</p>
+<pre class="term" data-cwd="~/projetos/calculadora">$ lua calculadora.lua
+=== Calculadora da Ana ===
+Primeiro número: 10
+Operação (+ - * /): +
+Segundo número:
+lua: calculadora.lua:12: attempt to perform arithmetic on a nil value (local 'b')
+stack traceback:
+        calculadora.lua:12: in main chunk
+        [C]: in ?</pre>
+<p>A Ana apertou <kbd>Ctrl</kbd>+<kbd>D</kbd> no segundo número: <code>tonumber(nil)</code> dá <code>nil</code> e a conta da linha 12 quebra. A versão 4 trata esse caso e se despede direitinho. (Nas caixas "Experimente", quando as linhas da <strong>Entrada</strong> acabam, acontece o mesmo: o <code>io.read()</code> devolve <code>nil</code>.)</p>
+</div>
+
+<div class="trylua" data-stdin="10\n+\n5\ns\n3\n*\n4\nn" data-goal="out:3 * 4 = 12;;out:Até logo!;;src:\bwhile\b">
+<p class="try-task"><strong>Missão (versão 3):</strong> o programa faz uma conta, pergunta "Outra conta?", mas não repete. Coloque as perguntas, o <code>if</code> e a pergunta "Outra conta?" dentro de um <code>while true do … end</code> e saia com <code>break</code> quando a resposta não for <code>s</code>. A entrada da missão faz <code>10 + 5</code>, responde <code>s</code>, faz <code>3 * 4</code> e responde <code>n</code>.</p>
+<pre class="script" data-file="calculadora.lua">print("=== Calculadora da Ana ===")
+
+io.write("Primeiro número: ")
+local a = tonumber(io.read())
+io.write("Operação (+ - * /): ")
+local op = io.read()
+io.write("Segundo número: ")
+local b = tonumber(io.read())
+
+if op == "+" then
+  print(a .. " + " .. b .. " = " .. a + b)
+elseif op == "-" then
+  print(a .. " - " .. b .. " = " .. a - b)
+elseif op == "*" then
+  print(a .. " * " .. b .. " = " .. a * b)
+elseif op == "/" then
+  if b == 0 then
+    print("Não dá para dividir por zero.")
+  else
+    print(a .. " / " .. b .. " = " .. a / b)
+  end
+else
+  print("Operação desconhecida: " .. op)
+end
+
+io.write("Outra conta? (s/n): ")
+local continuar = io.read()
+
+print("Até logo!")
+</pre>
+<pre class="solucao" data-file="calculadora.lua">print("=== Calculadora da Ana ===")
+
+while true do
+  io.write("Primeiro número: ")
+  local a = tonumber(io.read())
+  io.write("Operação (+ - * /): ")
+  local op = io.read()
+  io.write("Segundo número: ")
+  local b = tonumber(io.read())
+
+  if op == "+" then
+    print(a .. " + " .. b .. " = " .. a + b)
+  elseif op == "-" then
+    print(a .. " - " .. b .. " = " .. a - b)
+  elseif op == "*" then
+    print(a .. " * " .. b .. " = " .. a * b)
+  elseif op == "/" then
+    if b == 0 then
+      print("Não dá para dividir por zero.")
+    else
+      print(a .. " / " .. b .. " = " .. a / b)
+    end
+  else
+    print("Operação desconhecida: " .. op)
+  end
+
+  io.write("Outra conta? (s/n): ")
+  local continuar = io.read()
+  if continuar ~= "s" then
+    break
+  end
+end
+
+print("Até logo!")
+</pre>
+</div>
+
+<hr>
+
+<h2 id="versao4">Versão 4 · Funções e entrada validada</h2>
+<p>A versão 3 já faz várias contas, mas ainda quebra com <code>seis</code>, com <code>2,5</code> e com o <kbd>Ctrl</kbd>+<kbd>D</kbd>, e não aceita o <code>S</code> maiúsculo. E o programa ficou comprido: está tudo misturado num bloco só. A versão 4 resolve as duas coisas de uma vez: cada tarefa vira uma <a href="funcoes.html">função</a> com nome, e a função que lê números <strong>insiste</strong> até receber um número de verdade.</p>
+
+<pre class="file" data-file="calculadora.lua">-- Calculadora da Ana, versão 4: funções e entrada validada
+
+-- Pergunta e devolve o que a pessoa digitou, sem espaços nas pontas.
+local function ler(pergunta)
+  io.write(pergunta)
+  local texto = io.read()
+  if texto == nil then        -- a entrada acabou (Ctrl+D)
+    print()
+    print("Até logo!")
+    os.exit(0)
+  end
+  return texto:match("^%s*(.-)%s*$")
+end
+
+-- Pergunta até a pessoa digitar um número; aceita vírgula ou ponto.
+local function ler_numero(pergunta)
+  while true do
+    local texto = ler(pergunta)
+    local numero = tonumber((texto:gsub(",", ".")))
+    if numero then
+      return numero
+    end
+    print('"' .. texto .. '" não é um número. Tente de novo.')
+  end
+end
+
+-- Pergunta até a pessoa digitar uma das quatro operações.
+local function ler_operacao()
+  while true do
+    local op = ler("Operação (+ - * /): ")
+    if op == "+" or op == "-" or op == "*" or op == "/" then
+      return op
+    end
+    print("Operação desconhecida: " .. op)
+  end
+end
+
+-- Mostra 15 em vez de 15.0 e 0.3 em vez de 0.30000000000000004.
+local function formatar(numero)
+  return string.format("%.10g", numero)
+end
+
+-- Faz a conta. Devolve o resultado, ou nil e o motivo.
+local function calcular(a, op, b)
+  if op == "+" then
+    return a + b
+  elseif op == "-" then
+    return a - b
+  elseif op == "*" then
+    return a * b
+  elseif op == "/" then
+    if b == 0 then
+      return nil, "Não dá para dividir por zero."
+    end
+    return a / b
+  end
+end
+
+print("=== Calculadora da Ana ===")
+
+while true do
+  local a = ler_numero("Primeiro número: ")
+  local op = ler_operacao()
+  local b = ler_numero("Segundo número: ")
+
+  local resultado, erro = calcular(a, op, b)
+  if resultado then
+    print(formatar(a) .. " " .. op .. " " .. formatar(b) .. " = " .. formatar(resultado))
+  else
+    print(erro)
+  end
+
+  local continuar = ler("Outra conta? (s/n): "):lower()
+  if continuar ~= "s" then
+    break
+  end
+end
+
+print("Até logo!")
+</pre>
+
+<p>Parece muito código novo, mas o "programa principal" (do <code>print</code> do título até o fim) ficou <strong>mais curto</strong> e mais fácil de ler do que na versão 3: ele só chama funções com nomes que dizem o que fazem. Vamos às peças.</p>
+
+<h3>As funções, uma por uma</h3>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Peça</th><th>O que faz</th></tr>
+<tr><td><code>local function ler(pergunta)</code></td><td>Cria a função <code>ler</code>, que recebe o texto da pergunta. Todas as perguntas do programa passam por ela. O <code>local</code> faz a função existir só neste arquivo (veja <a href="local.html">local × Global</a>).</td></tr>
+<tr><td><code>if texto == nil then</code> … <code>os.exit(0)</code></td><td>Se a entrada acabou (<kbd>Ctrl</kbd>+<kbd>D</kbd>), pula uma linha, despede-se e encerra o programa com o código 0, "tudo certo" (veja <a href="os-funcoes.html">os.exit</a>).</td></tr>
+<tr><td><code>texto:match("^%s*(.-)%s*$")</code></td><td>Devolve o texto sem os espaços das pontas: <code>"  s  "</code> vira <code>"s"</code>. É um <a href="padroes.html">padrão</a>: <code>^</code> começo, <code>%s*</code> espaços, <code>(.-)</code> o miolo (que é devolvido), <code>%s*$</code> espaços até o fim. O Lua não tem um <code>trim</code> pronto; esta linha é o jeito costumeiro.</td></tr>
+<tr><td><code>texto:gsub(",", ".")</code></td><td>Troca a vírgula pelo ponto: <code>"2,5"</code> vira <code>"2.5"</code>, que o <code>tonumber</code> entende (veja <a href="gsub.html">gsub</a>).</td></tr>
+<tr><td><code>tonumber((texto:gsub(…)))</code></td><td>Por que os parênteses dobrados? O <code>gsub</code> devolve <strong>dois</strong> valores: o texto novo e quantas trocas fez (<code>"2.5"</code> e <code>1</code>). O <code>tonumber</code> aceita um segundo argumento (a base: 2, 16…) e entenderia aquele <code>1</code> como base. Os parênteses extras cortam a lista para um valor só.</td></tr>
+<tr><td><code>if numero then return numero end</code></td><td>Se a conversão deu certo, devolve o número e <strong>sai da função</strong> (e, com ela, do <code>while</code>). Se deu <code>nil</code>, mostra o aviso e o <code>while true</code> pergunta de novo.</td></tr>
+<tr><td><code>op == "+" or op == "-" or …</code></td><td>A operação tem de ser uma das quatro. Com <code>or</code> ("ou"), basta uma comparação dar verdadeiro (veja <a href="operadores-logicos.html">and, or e not</a>).</td></tr>
+<tr><td><code>string.format("%.10g", numero)</code></td><td>Transforma o número em texto com no máximo 10 algarismos significativos e <strong>sem zeros sobrando</strong>: <code>15.0</code> vira <code>"15"</code>, <code>0.30000000000000004</code> vira <code>"0.3"</code>. O <code>g</code> é de "geral" (veja <a href="string-format.html">string.format</a>).</td></tr>
+<tr><td><code>return nil, "Não dá…"</code></td><td>O costume do Lua para "não deu": devolver <code>nil</code> e, em segundo lugar, o motivo (veja <a href="retornos-multiplos.html">Vários Retornos</a>). Muitas funções prontas fazem assim, como o <code>io.open</code>.</td></tr>
+<tr><td><code>local resultado, erro = calcular(a, op, b)</code></td><td>Recebe os dois valores. Se deu certo, <code>resultado</code> tem o número e <code>erro</code> fica <code>nil</code>; se não deu, o contrário.</td></tr>
+<tr><td><code>ler("Outra conta? (s/n): "):lower()</code></td><td>Lê, apara os espaços e passa para minúsculas: <code>S</code>, <code>s</code> e <code>" s "</code> viram todos <code>"s"</code> (veja <a href="string-metodos.html">Funções de Texto</a>).</td></tr>
+</table>
+</div>
+
+<p>Conferindo no modo interativo as peças novas, uma de cada vez:</p>
+
+<pre class="term">$ lua
+Lua 5.5.0  Copyright (C) 1994-2025 Lua.org, PUC-Rio
+&gt; ("2,5"):gsub(",", ".")
+2.5     1
+&gt; ("  s  "):match("^%s*(.-)%s*$")
+s
+&gt; string.format("%.10g", 0.1 + 0.2)
+0.3
+&gt; string.format("%.10g", 10 / 5)
+2
+&gt; string.format("%.10g", 10 / 3)
+3.333333333
+&gt; os.exit()</pre>
+
+<p>O primeiro mostra os dois valores do <code>gsub</code>: o texto <code>2.5</code> e o <code>1</code> (uma troca). (Um texto entre aspas precisa de parênteses em volta para receber o <code>:gsub</code> direto; numa variável, <code>texto:gsub(…)</code> basta.)</p>
+
+<div class="cenario">
+<strong>Esquecer os parênteses extras: <code>base out of range</code></strong>
+<pre class="term">$ lua
+Lua 5.5.0  Copyright (C) 1994-2025 Lua.org, PUC-Rio
+&gt; tonumber(("2,5"):gsub(",", "."))
+stdin:1: bad argument #2 to 'tonumber' (base out of range)
+stack traceback:
+        [C]: in global 'tonumber'
+        stdin:1: in main chunk
+        [C]: in ?
+&gt; tonumber((("2,5"):gsub(",", ".")))
+2.5
+&gt; os.exit()</pre>
+<p>"Argumento nº 2 ruim para o <code>tonumber</code> (base fora do intervalo)". Sem os parênteses extras, os <strong>dois</strong> valores do <code>gsub</code> entram no <code>tonumber</code>: <code>tonumber("2.5", 1)</code>, e base 1 não existe (vai de 2 a 36). O <code>[C]: in global 'tonumber'</code> mostra que o erro saiu de dentro da função pronta, e o <code>stdin:1</code> é a linha digitada no modo interativo. Com os parênteses, sai o <code>2.5</code> esperado.</p>
+</div>
+
+<p>Agora a sessão completa:</p>
+
+<pre class="term" data-cwd="~/projetos/calculadora">$ lua calculadora.lua
+=== Calculadora da Ana ===
+Primeiro número: 10
+Operação (+ - * /): +
+Segundo número: 5
+10 + 5 = 15
+Outra conta? (s/n): s
+Primeiro número: seis
+"seis" não é um número. Tente de novo.
+Primeiro número: 6
+Operação (+ - * /): %
+Operação desconhecida: %
+Operação (+ - * /): *
+Segundo número: 1.5
+6 * 1.5 = 9
+Outra conta? (s/n): S
+Primeiro número: 2,5
+Operação (+ - * /): /
+Segundo número: 0
+Não dá para dividir por zero.
+Outra conta? (s/n): s
+Primeiro número: 0.1
+Operação (+ - * /): +
+Segundo número: 0.2
+0.1 + 0.2 = 0.3
+Outra conta? (s/n): s
+Primeiro número: 10
+Operação (+ - * /): /
+Segundo número: 3
+10 / 3 = 3.333333333
+Outra conta? (s/n):  n
+Até logo!</pre>
+
+<p>É a sessão do começo da página. Tudo o que derrubava a versão 1 agora tem resposta. E o <kbd>Ctrl</kbd>+<kbd>D</kbd> no meio de uma pergunta:</p>
+
+<pre class="term" data-cwd="~/projetos/calculadora">$ lua calculadora.lua
+=== Calculadora da Ana ===
+Primeiro número: 10
+Operação (+ - * /):
+
+Até logo!</pre>
+
+<div class="cenario">
+<strong>Usar a função antes de criá-la: <code>attempt to call a nil value</code></strong>
+<p>Se o programa principal ficar <strong>em cima</strong> das funções (as chamadas primeiro, os <code>local function</code> depois), acontece isto (programa encurtado para caber):</p>
+<pre class="file" data-file="nome.lua">print("=== Calculadora da Ana ===")
+local a = ler_numero("Primeiro número: ")
+
+local function ler_numero(pergunta)
+  io.write(pergunta)
+  return tonumber(io.read())
+end
+</pre>
+<pre class="term" data-cwd="~/projetos/calculadora">$ lua nome.lua
+=== Calculadora da Ana ===
+lua: nome.lua:2: attempt to call a nil value (global 'ler_numero')
+stack traceback:
+        nome.lua:2: in main chunk
+        [C]: in ?</pre>
+<p>"Tentativa de chamar um valor nil (a global <code>ler_numero</code>)". O Lua lê e executa o arquivo <strong>de cima para baixo</strong>. A criação da função é uma instrução como outra qualquer: só depois que ela roda a função passa a existir. Quando a linha 2 chamou <code>ler_numero</code>, a <code>local function</code> ainda estava lá embaixo; o Lua procurou uma variável <strong>global</strong> com esse nome, não achou nada (<code>nil</code>) e não dá para chamar <code>nil</code>. <strong>Como consertar:</strong> as funções primeiro, o programa principal no fim, como na versão 4. Uma função também só pode usar as funções locais criadas <strong>acima</strong> dela: por isso <code>ler</code> vem antes de <code>ler_numero</code>.</p>
+</div>
+
+<div class="trylua" data-stdin="abc\n10\n+\n5\nn" data-goal="out:&quot;abc&quot; não é um número. Tente de novo.;;out:10 + 5 = 15;;semerro">
+<p class="try-task"><strong>Missão (versão 4):</strong> a função <code>ler_numero</code> ainda não insiste: com a entrada da missão (<code>abc</code>, <code>10</code>, <code>+</code>, <code>5</code>, <code>n</code>), o <code>abc</code> vira <code>nil</code> e a conta quebra. Ponha a leitura dentro de um <code>while true do … end</code>: se o <code>tonumber</code> der um número, devolva com <code>return</code>; senão, mostre <code>"abc" não é um número. Tente de novo.</code> (com o texto que a pessoa digitou) e deixe o laço perguntar de novo.</p>
+<pre class="script" data-file="calculadora.lua">local function ler(pergunta)
+  io.write(pergunta)
+  local texto = io.read()
+  if texto == nil then
+    print()
+    print("Até logo!")
+    os.exit(0)
+  end
+  return texto:match("^%s*(.-)%s*$")
+end
+
+local function ler_numero(pergunta)
+  local texto = ler(pergunta)
+  return tonumber((texto:gsub(",", ".")))
+end
+
+local function ler_operacao()
+  while true do
+    local op = ler("Operação (+ - * /): ")
+    if op == "+" or op == "-" or op == "*" or op == "/" then
+      return op
+    end
+    print("Operação desconhecida: " .. op)
+  end
+end
+
+local function formatar(numero)
+  return string.format("%.10g", numero)
+end
+
+local function calcular(a, op, b)
+  if op == "+" then
+    return a + b
+  elseif op == "-" then
+    return a - b
+  elseif op == "*" then
+    return a * b
+  elseif op == "/" then
+    if b == 0 then
+      return nil, "Não dá para dividir por zero."
+    end
+    return a / b
+  end
+end
+
+print("=== Calculadora da Ana ===")
+
+while true do
+  local a = ler_numero("Primeiro número: ")
+  local op = ler_operacao()
+  local b = ler_numero("Segundo número: ")
+
+  local resultado, erro = calcular(a, op, b)
+  if resultado then
+    print(formatar(a) .. " " .. op .. " " .. formatar(b) .. " = " .. formatar(resultado))
+  else
+    print(erro)
+  end
+
+  local continuar = ler("Outra conta? (s/n): "):lower()
+  if continuar ~= "s" then
+    break
+  end
+end
+
+print("Até logo!")
+</pre>
+<pre class="solucao" data-file="calculadora.lua">local function ler(pergunta)
+  io.write(pergunta)
+  local texto = io.read()
+  if texto == nil then
+    print()
+    print("Até logo!")
+    os.exit(0)
+  end
+  return texto:match("^%s*(.-)%s*$")
+end
+
+local function ler_numero(pergunta)
+  while true do
+    local texto = ler(pergunta)
+    local numero = tonumber((texto:gsub(",", ".")))
+    if numero then
+      return numero
+    end
+    print('"' .. texto .. '" não é um número. Tente de novo.')
+  end
+end
+
+local function ler_operacao()
+  while true do
+    local op = ler("Operação (+ - * /): ")
+    if op == "+" or op == "-" or op == "*" or op == "/" then
+      return op
+    end
+    print("Operação desconhecida: " .. op)
+  end
+end
+
+local function formatar(numero)
+  return string.format("%.10g", numero)
+end
+
+local function calcular(a, op, b)
+  if op == "+" then
+    return a + b
+  elseif op == "-" then
+    return a - b
+  elseif op == "*" then
+    return a * b
+  elseif op == "/" then
+    if b == 0 then
+      return nil, "Não dá para dividir por zero."
+    end
+    return a / b
+  end
+end
+
+print("=== Calculadora da Ana ===")
+
+while true do
+  local a = ler_numero("Primeiro número: ")
+  local op = ler_operacao()
+  local b = ler_numero("Segundo número: ")
+
+  local resultado, erro = calcular(a, op, b)
+  if resultado then
+    print(formatar(a) .. " " .. op .. " " .. formatar(b) .. " = " .. formatar(resultado))
+  else
+    print(erro)
+  end
+
+  local continuar = ler("Outra conta? (s/n): "):lower()
+  if continuar ~= "s" then
+    break
+  end
+end
+
+print("Até logo!")
+</pre>
+</div>
+
+<hr>
+
+<h2>Formas diferentes de escolher a conta</h2>
+<p>A calculadora usou uma escada de <code>if</code>/<code>elseif</code>. O Lua não tem um comando <code>switch</code> (ou <code>match</code>) como outras linguagens; o jeito "à moda do Lua" de escolher entre vários valores é uma <a href="dicionarios.html">tabela</a> que liga cada símbolo a uma função. Funciona porque, no Lua, <a href="funcoes-valores.html">funções são valores</a>: dá para guardá-las numa tabela como se fossem números.</p>
+
+<pre class="file" data-file="formas.lua">local a, op, b = 10, "*", 3
+
+-- Forma 1: if/elseif
+if op == "+" then
+  print("if/elseif:", a + b)
+elseif op == "*" then
+  print("if/elseif:", a * b)
+end
+
+-- Forma 2: uma tabela de funções
+local contas = {
+  ["+"] = function (x, y) return x + y end,
+  ["-"] = function (x, y) return x - y end,
+  ["*"] = function (x, y) return x * y end,
+  ["/"] = function (x, y) return x / y end,
+}
+print("tabela:", contas[op](a, b))
+print("existe '%'?", contas["%"])
+</pre>
+
+<pre class="term" data-cwd="~/projetos/calculadora">$ lua formas.lua
+if/elseif:	30
+tabela:	30
+existe '%'?	nil</pre>
+
+<p>Na forma 2, <code>contas[op]</code> busca na tabela a função guardada na chave <code>"*"</code>, e o <code>(a, b)</code> logo depois a chama com os dois números. Uma operação que não existe dá <code>nil</code>: <code>if not contas[op] then</code> faz o papel do <code>else</code>. (A chave precisa dos colchetes, <code>["+"]</code>, porque <code>+</code> não é um nome válido para escrever <code>contas.+</code>.)</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Forma</th><th>Quando usar</th></tr>
+<tr><td><code>if</code> / <code>elseif</code></td><td>Poucas opções, ou condições diferentes entre si (<code>op == "/" and b == 0</code>). É o mais fácil de ler no começo.</td></tr>
+<tr><td>Tabela de funções</td><td>Muitas opções que fazem coisas do mesmo formato. Acrescentar uma operação é acrescentar uma linha na tabela, e <code>contas[op]</code> já serve para validar a operação.</td></tr>
+</table>
+</div>
+
+<div class="warning">
+<strong>E o <code>load()</code>?</strong>
+<p>Na internet você vai achar calculadoras de uma linha só, com <a href="load.html">load</a>, que transforma um texto em código Lua e o executa:</p>
+<pre class="term">$ lua
+Lua 5.5.0  Copyright (C) 1994-2025 Lua.org, PUC-Rio
+&gt; load("return 10 + 5")()
+15
+&gt; load("return 2,5")()
+2       5
+&gt; os.exit()</pre>
+<p>Parece prático, mas repare no segundo: <code>2,5</code> não deu erro nem 2.5; virou <strong>dois</strong> valores, 2 e 5. E o pior: o <code>load</code> executa <strong>qualquer</strong> código que a pessoa digitar, inclusive um <code>os.remove("arquivo")</code> que apaga arquivos. Nunca rode com <code>load</code> um texto que veio do teclado, de um arquivo ou da internet. A calculadora da Ana é mais longa, mas ela sabe exatamente o que aceita.</p>
+</div>
+
+<hr>
+
+<h2>Desafio extra: resto e potência</h2>
+<p>A Ana quer mais duas operações: o resto da divisão (<code>%</code>) e a potência (<code>^</code>, "elevado a"), que você conhece da aula <a href="operadores-aritmeticos.html">Operadores Aritméticos</a>. Lembre do cenário da versão 2: <code>7 % 0</code> entre inteiros <strong>para o programa</strong> (<code>attempt to perform 'n%0'</code>), então o caso <code>"%"</code> precisa recusar o zero, como a divisão. Com as mudanças da missão abaixo, a Ana testou assim:</p>
+
+<pre class="term" data-cwd="~/projetos/calculadora">$ lua calculadora.lua
+=== Calculadora da Ana ===
+Primeiro número: 10
+Operação (+ - * / % ^): %
+Segundo número: 3
+10 % 3 = 1
+Outra conta? (s/n): s
+Primeiro número: 2
+Operação (+ - * / % ^): ^
+Segundo número: 10
+2 ^ 10 = 1024
+Outra conta? (s/n): s
+Primeiro número: 7
+Operação (+ - * / % ^): %
+Segundo número: 0
+Não dá para dividir por zero.
+Outra conta? (s/n): n
+Até logo!</pre>
+
+<p>O <code>2 ^ 10</code> dá <code>1024.0</code> (a potência sempre dá float, como a barra), mas o <code>formatar</code> mostra <code>1024</code>.</p>
+
+<div class="trylua" data-stdin="10\n%\n3\ns\n2\n^\n10\ns\n7\n%\n0\nn" data-goal="out:10 % 3 = 1;;out:2 ^ 10 = 1024;;out:Não dá para dividir por zero.;;semerro">
+<p class="try-task"><strong>Desafio no editor:</strong> acrescente <code>%</code> e <code>^</code> à calculadora. Mude dois lugares: em <code>ler_operacao</code>, aceite também <code>op == "%"</code> e <code>op == "^"</code> (e mude a pergunta para <code>"Operação (+ - * / % ^): "</code>); em <code>calcular</code>, acrescente um <code>elseif op == "%"</code> (recusando o zero, como a divisão) e um <code>elseif op == "^"</code>. Com a entrada da missão, deve aparecer <code>10 % 3 = 1</code>, <code>2 ^ 10 = 1024</code> e a recusa de <code>7 % 0</code>.</p>
+<pre class="script" data-file="calculadora.lua">local function ler(pergunta)
+  io.write(pergunta)
+  local texto = io.read()
+  if texto == nil then
+    print()
+    print("Até logo!")
+    os.exit(0)
+  end
+  return texto:match("^%s*(.-)%s*$")
+end
+
+local function ler_numero(pergunta)
+  while true do
+    local texto = ler(pergunta)
+    local numero = tonumber((texto:gsub(",", ".")))
+    if numero then
+      return numero
+    end
+    print('"' .. texto .. '" não é um número. Tente de novo.')
+  end
+end
+
+local function ler_operacao()
+  while true do
+    local op = ler("Operação (+ - * /): ")
+    if op == "+" or op == "-" or op == "*" or op == "/" then
+      return op
+    end
+    print("Operação desconhecida: " .. op)
+  end
+end
+
+local function formatar(numero)
+  return string.format("%.10g", numero)
+end
+
+local function calcular(a, op, b)
+  if op == "+" then
+    return a + b
+  elseif op == "-" then
+    return a - b
+  elseif op == "*" then
+    return a * b
+  elseif op == "/" then
+    if b == 0 then
+      return nil, "Não dá para dividir por zero."
+    end
+    return a / b
+  end
+end
+
+print("=== Calculadora da Ana ===")
+
+while true do
+  local a = ler_numero("Primeiro número: ")
+  local op = ler_operacao()
+  local b = ler_numero("Segundo número: ")
+
+  local resultado, erro = calcular(a, op, b)
+  if resultado then
+    print(formatar(a) .. " " .. op .. " " .. formatar(b) .. " = " .. formatar(resultado))
+  else
+    print(erro)
+  end
+
+  local continuar = ler("Outra conta? (s/n): "):lower()
+  if continuar ~= "s" then
+    break
+  end
+end
+
+print("Até logo!")
+</pre>
+<pre class="solucao" data-file="calculadora.lua">local function ler(pergunta)
+  io.write(pergunta)
+  local texto = io.read()
+  if texto == nil then
+    print()
+    print("Até logo!")
+    os.exit(0)
+  end
+  return texto:match("^%s*(.-)%s*$")
+end
+
+local function ler_numero(pergunta)
+  while true do
+    local texto = ler(pergunta)
+    local numero = tonumber((texto:gsub(",", ".")))
+    if numero then
+      return numero
+    end
+    print('"' .. texto .. '" não é um número. Tente de novo.')
+  end
+end
+
+local function ler_operacao()
+  while true do
+    local op = ler("Operação (+ - * / % ^): ")
+    if op == "+" or op == "-" or op == "*" or op == "/" or op == "%" or op == "^" then
+      return op
+    end
+    print("Operação desconhecida: " .. op)
+  end
+end
+
+local function formatar(numero)
+  return string.format("%.10g", numero)
+end
+
+local function calcular(a, op, b)
+  if op == "+" then
+    return a + b
+  elseif op == "-" then
+    return a - b
+  elseif op == "*" then
+    return a * b
+  elseif op == "/" then
+    if b == 0 then
+      return nil, "Não dá para dividir por zero."
+    end
+    return a / b
+  elseif op == "%" then
+    if b == 0 then
+      return nil, "Não dá para dividir por zero."
+    end
+    return a % b
+  elseif op == "^" then
+    return a ^ b
+  end
+end
+
+print("=== Calculadora da Ana ===")
+
+while true do
+  local a = ler_numero("Primeiro número: ")
+  local op = ler_operacao()
+  local b = ler_numero("Segundo número: ")
+
+  local resultado, erro = calcular(a, op, b)
+  if resultado then
+    print(formatar(a) .. " " .. op .. " " .. formatar(b) .. " = " .. formatar(resultado))
+  else
+    print(erro)
+  end
+
+  local continuar = ler("Outra conta? (s/n): "):lower()
+  if continuar ~= "s" then
+    break
+  end
+end
+
+print("Até logo!")
+</pre>
+</div>
+
+<p>Outras ideias para continuar sozinho: trocar a escada de <code>calcular</code> pela tabela de funções (e usar <code>contas[op]</code> para validar em <code>ler_operacao</code>); guardar cada conta numa lista e mostrar o histórico quando a Ana sair; aceitar a conta inteira numa linha só (<code>10 + 5</code>), separando as partes com <a href="string-find.html">match</a>.</p>
+
+<hr>
+
+<h2>Referência rápida do projeto</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>Para que serviu</th></tr>
+<tr><td><code>io.write("…")</code> + <code>io.read()</code></td><td>Perguntar sem pular linha e ler a resposta (sempre texto, ou <code>nil</code> no fim da entrada)</td></tr>
+<tr><td><code>tonumber(texto)</code></td><td>Converter o texto em número; dá <code>nil</code> se não for número</td></tr>
+<tr><td><code>if</code> / <code>elseif</code> / <code>else</code> / <code>end</code></td><td>Escolher a conta (versão 1)</td></tr>
+<tr><td><code>if b == 0 then</code></td><td>Prevenir a divisão por zero, que daria <code>inf</code> (versão 2)</td></tr>
+<tr><td><code>while true do</code> … <code>break</code> … <code>end</code></td><td>Repetir até a pessoa pedir para sair (versão 3)</td></tr>
+<tr><td><code>texto:match("^%s*(.-)%s*$")</code></td><td>Tirar os espaços das pontas</td></tr>
+<tr><td><code>texto:lower()</code></td><td>Aceitar <code>S</code> e <code>s</code> como a mesma resposta</td></tr>
+<tr><td><code>(texto:gsub(",", "."))</code></td><td>Aceitar o decimal com vírgula (os parênteses guardam só o texto)</td></tr>
+<tr><td><code>local function</code> / <code>return</code></td><td>Separar o programa em tarefas com nome (versão 4)</td></tr>
+<tr><td><code>return nil, "motivo"</code></td><td>Avisar que não deu, e por quê</td></tr>
+<tr><td><code>string.format("%.10g", x)</code></td><td>Mostrar <code>15</code> em vez de <code>15.0</code> e <code>0.3</code> em vez de <code>0.30000000000000004</code></td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Sintoma</th><th>Causa provável</th></tr>
+<tr><td><code>attempt to add a 'string' with a 'string'</code></td><td>Faltou o <code>tonumber</code>, e o texto digitado não parece número</td></tr>
+<tr><td><code>attempt to perform arithmetic on a nil value (local 'a')</code></td><td>O <code>tonumber</code> deu <code>nil</code> (texto, vírgula ou <kbd>Ctrl</kbd>+<kbd>D</kbd>) e o programa fez conta mesmo assim</td></tr>
+<tr><td><code>1 / 0 = inf</code> ou <code>-nan</code></td><td>Divisão por zero com <code>/</code>: confira o divisor antes</td></tr>
+<tr><td><code>attempt to perform 'n%0'</code> / <code>attempt to divide by zero</code></td><td>Resto (<code>%</code>) ou divisão inteira (<code>//</code>) de inteiros por zero</td></tr>
+<tr><td>O zero passa pelo <code>if b == 0</code></td><td><code>b</code> é o texto <code>"0"</code>: o <code>==</code> não converte. Use <code>tonumber</code></td></tr>
+<tr><td><code>interrupted!</code></td><td>A pessoa apertou <kbd>Ctrl</kbd>+<kbd>C</kbd></td></tr>
+<tr><td><code>attempt to call a nil value (global 'ler_numero')</code></td><td>A função foi chamada antes do <code>local function</code> (ou o nome está escrito diferente)</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. A conversão</h3>
+<p>Complete para que <code>a</code> guarde um número, e não um texto:</p>
+<div class="ex-code">local a = <input data-answer="tonumber" aria-label="função">(io.read())</div>
+</div>
+
+<div class="exercise">
+<h3>2. O próximo caso</h3>
+<p>Complete a palavra que testa mais um caso na escada, depois do <code>if</code>:</p>
+<div class="ex-code"><input data-answer="elseif" aria-label="palavra-chave"> op == "-" then</div>
+</div>
+
+<div class="exercise">
+<h3>3. Sair do laço</h3>
+<p>Complete a palavra que encerra o <code>while true</code>:</p>
+<div class="ex-code">if continuar ~= "s" then<br>&nbsp;&nbsp;<input data-answer="break" aria-label="palavra-chave"><br>end</div>
+</div>
+
+<div class="exercise">
+<h3>4. O resultado</h3>
+<p>Sem rodar: o que o Lua 5.5 mostra para <code>print(10 / 5)</code>?</p>
+<div class="ex-code"><input data-answer="2.0" aria-label="saída"></div>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">5. Sem <code>tonumber</code>, a Ana digitou <code>1</code>, <code>/</code> e <code>0</code>, e a versão 2 mostrou <code>1 / 0 = inf</code> em vez do aviso. Por quê?</p>
+<label><input type="radio" name="q5"> O <code>if b == 0</code> está no lugar errado</label>
+<label><input type="radio" name="q5"> <code>b</code> era o texto <code>"0"</code>, e <code>"0" == 0</code> dá <code>false</code>: o <code>==</code> não converte</label>
+<label><input type="radio" name="q5"> O Lua não sabe comparar com zero</label>
+<label><input type="radio" name="q5"> Faltou um <code>else</code></label>
+</div>
+
+<div class="mc" data-answer="3">
+<p class="mc-q">6. Na versão 4, o que acontece quando a Ana digita <code>seis</code> no primeiro número?</p>
+<label><input type="radio" name="q6"> O programa para com <code>attempt to perform arithmetic on a nil value</code></label>
+<label><input type="radio" name="q6"> O número vira 0 e a conta continua</label>
+<label><input type="radio" name="q6"> O <code>tonumber</code> dá <code>nil</code>, a função mostra o aviso e o <code>while true</code> pergunta de novo</label>
+<label><input type="radio" name="q6"> O programa pula para a pergunta da operação</label>
+</div>
+
+<div class="mc" data-answer="1">
+<p class="mc-q">7. Por que <code>tonumber((texto:gsub(",", ".")))</code> tem parênteses dobrados?</p>
+<label><input type="radio" name="q7"> O <code>gsub</code> devolve dois valores (o texto e o número de trocas), e os parênteses extras deixam só o texto</label>
+<label><input type="radio" name="q7"> Sem eles dá erro de sintaxe</label>
+<label><input type="radio" name="q7"> Para o programa ficar mais rápido</label>
+<label><input type="radio" name="q7"> Porque o <code>tonumber</code> só aceita textos entre parênteses</label>
+</div>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li>O <code>io.read()</code> sempre devolve <strong>texto</strong> (ou <code>nil</code> quando a entrada acaba). Converta na entrada com <code>tonumber()</code>: a coerção automática do Lua vale para contas, mas não para comparações (<code>"0" == 0</code> é <code>false</code>).</li>
+  <li><code>tonumber</code> devolve <code>nil</code> para o que não é número (<code>"seis"</code>, <code>"2,5"</code>): confira antes de fazer conta.</li>
+  <li><code>if</code>/<code>elseif</code>/<code>else</code> escolhem a conta; uma tabela de funções é a alternativa à moda do Lua.</li>
+  <li>Dividir por zero com <code>/</code> não dá erro no Lua: dá <code>inf</code> ou <code>nan</code>. Com <code>//</code> e <code>%</code> entre inteiros, dá erro. <strong>Previna</strong> com <code>if b == 0</code>.</li>
+  <li><code>while true do … end</code> com <code>break</code> repete até a pessoa pedir para sair; <code>match</code> e <code>lower</code> deixam a resposta tolerante.</li>
+  <li>Funções com nomes claros deixam o programa principal curto. Funções locais precisam ser criadas <strong>antes</strong> de serem chamadas.</li>
+  <li><code>return nil, "motivo"</code> é o jeito do Lua de dizer "não deu".</li>
+  <li>Nunca rode com <code>load</code> o que a pessoa digita.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
