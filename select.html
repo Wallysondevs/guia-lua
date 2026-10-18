@@ -1,0 +1,479 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua select — contando e escolhendo argumentos | Guia Lua</title>
+<meta name="description" content="A função select do Lua: select('#', ...) para contar os argumentos (inclusive os nil), select(n, ...) para pegar do n-ésimo em diante, índices negativos para contar do fim, os parênteses para ficar com um valor só, percorrer ... sem perder os nil, usar select com funções de vários retornos, comparação com table.pack e os erros reais: bad argument #1 to 'select' (index out of range).">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">select</span> e o Número de Argumentos</h1>
+
+<p class="intro">Na aula <a href="varargs.html">Funções Variádicas</a>, o <code>select("#", ...)</code> apareceu para contar argumentos. Mas o <code>select</code> ("selecionar", em inglês) faz mais: ele escolhe valores de uma lista pela <strong>posição</strong>, do começo ou do fim. Com ele, uma função variádica trabalha com o <code>...</code> direto, sem criar tabela, e sem perder nenhum <code>nil</code> pelo caminho. Ele também serve para pegar o segundo valor de funções como <code>string.find</code> e <code>string.gsub</code>.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>Os dois modos do <code>select</code>: <code>select("#", ...)</code> (contar) e <code>select(n, ...)</code> (pegar do n-ésimo em diante).</li>
+  <li>Por que <code>select(n, ...)</code> devolve <strong>vários</strong> valores, e como ficar com um só.</li>
+  <li>Os índices negativos: <code>select(-1, ...)</code> é o último.</li>
+  <li>A percorrer os argumentos com <code>for i = 1, select("#", ...)</code> sem perder os <code>nil</code>.</li>
+  <li>A usar o <code>select</code> com funções que devolvem vários valores.</li>
+  <li>Quando preferir <code>table.pack</code>.</li>
+  <li>Os erros reais: <code>bad argument #1 to 'select' (index out of range)</code> e companhia.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>A ideia: a fila do pão</h2>
+<p>Na fila da padaria, a Ana pode fazer duas perguntas: "<strong>quantas</strong> pessoas tem na fila?" e "<strong>da terceira pessoa em diante</strong>, quem está aí?". O <code>select</code> responde as duas, para qualquer lista de valores:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Pergunta</th><th>No Lua</th><th>Resposta</th></tr>
+<tr><td>Quantos são?</td><td><code>select("#", ...)</code></td><td>Um número</td></tr>
+<tr><td>Do n-ésimo em diante, quem são?</td><td><code>select(n, ...)</code></td><td>Os valores da posição <code>n</code> até o fim</td></tr>
+<tr><td>Quem são os últimos n?</td><td><code>select(-n, ...)</code></td><td>Os <code>n</code> últimos valores</td></tr>
+</table>
+</div>
+
+<p>O primeiro argumento do <code>select</code> é a pergunta; tudo o que vem depois é a fila.</p>
+
+<hr>
+
+<h2>1. Contando: <code>select("#", ...)</code></h2>
+
+<pre class="file" data-file="contar.lua">print(select("#"))
+print(select("#", "Ana"))
+print(select("#", "Ana", "Bia", "Carla"))
+print(select("#", nil))
+print(select("#", nil, nil, nil))
+</pre>
+
+<pre class="term">$ lua contar.lua
+0
+1
+3
+1
+3
+</pre>
+
+<dl class="anatomy">
+  <dt>"#"</dt><dd>O texto <code>"#"</code> (com aspas) é o pedido "conte". É o mesmo símbolo do operador de tamanho (aula <a href="operador-tamanho.html">O Operador de Tamanho</a>), mas aqui é um texto passado como argumento.</dd>
+  <dt>select("#")</dt><dd>Nada depois do <code>"#"</code>: zero valores.</dd>
+  <dt>select("#", nil, nil, nil)</dt><dd><strong>3</strong>. O <code>select</code> conta posições, não importa o que há nelas. É isso que o <code>#</code> de uma tabela não consegue fazer quando há <code>nil</code> (aula <a href="sequencias.html">Sequências e Buracos</a>).</dd>
+</dl>
+
+<hr>
+
+<h2>2. Escolhendo: <code>select(n, ...)</code></h2>
+<p>Com um número no primeiro argumento, o <code>select</code> devolve o valor dessa posição <strong>e todos os seguintes</strong>:</p>
+
+<pre class="file" data-file="a_partir.lua">print(select(1, "a", "b", "c", "d"))
+print(select(2, "a", "b", "c", "d"))
+print(select(3, "a", "b", "c", "d"))
+print(select(4, "a", "b", "c", "d"))
+print(select(5, "a", "b", "c", "d"))
+print("fim")
+</pre>
+
+<pre class="term">$ lua a_partir.lua
+a	b	c	d
+b	c	d
+c	d
+d
+                                                   « select(5, …): nada
+fim
+</pre>
+
+<p>Pedir uma posição depois do fim (a 5ª de quatro) não é erro: o <code>select</code> devolve <strong>zero valores</strong>, e o <code>print</code> mostra uma linha vazia.</p>
+
+<h3>Ficando com um valor só</h3>
+<p>Quase sempre você quer só <strong>o</strong> valor da posição, não "dali em diante". As regras de ajuste da aula <a href="retornos-multiplos.html">Vários Retornos</a> resolvem:</p>
+
+<pre class="file" data-file="so_um.lua">local terceiro = select(3, "a", "b", "c", "d")
+print(terceiro)
+print((select(3, "a", "b", "c", "d")))
+print(select(3, "a", "b", "c", "d"), "&lt;- só o c")
+</pre>
+
+<pre class="term">$ lua so_um.lua
+c
+c
+c	&lt;- só o c
+</pre>
+
+<dl class="anatomy">
+  <dt>local terceiro = select(3, …)</dt><dd>Uma variável só: ela fica com o primeiro valor devolvido (<code>"c"</code>), e o <code>"d"</code> é descartado.</dd>
+  <dt>(select(3, …))</dt><dd>Os parênteses em volta cortam para um valor.</dd>
+  <dt>select(3, …), "…"</dt><dd>Não é o último da lista de argumentos: entra só o primeiro valor.</dd>
+</dl>
+
+<hr>
+
+<h2>3. Contando do fim: índices negativos</h2>
+<p>Um número negativo conta a partir do fim: <code>-1</code> é o último, <code>-2</code> são os dois últimos, e assim por diante.</p>
+
+<pre class="file" data-file="negativo.lua">print(select(-1, "a", "b", "c", "d"))
+print(select(-2, "a", "b", "c", "d"))
+local ultimo = select(-1, "pão", "leite", "café")
+print("último item: " .. ultimo)
+</pre>
+
+<pre class="term">$ lua negativo.lua
+d
+c	d
+último item: café
+</pre>
+
+<p>O <code>select(-1, ...)</code> é o jeito curto de pegar o último argumento, sem precisar contar antes.</p>
+
+<hr>
+
+<h2>4. O <code>select</code> dentro de uma função variádica</h2>
+<p>É ali que ele mais aparece. Juntando tudo:</p>
+
+<pre class="file" data-file="dentro_funcao.lua">local function info(...)
+  local n = select("#", ...)
+  print("chegaram " .. n .. " argumentos")
+  if n &gt; 0 then
+    print("o primeiro é", (select(1, ...)))
+    print("o último é", (select(-1, ...)))
+    print("do segundo em diante:", select(2, ...))
+  end
+end
+
+info("Ana", "Bia", "Carla")
+info()
+</pre>
+
+<pre class="term">$ lua dentro_funcao.lua
+chegaram 3 argumentos
+o primeiro é	Ana
+o último é	Carla
+do segundo em diante:	Bia	Carla
+chegaram 0 argumentos
+</pre>
+
+<p>Repare no <code>if n &gt; 0</code>: sem argumentos, <code>select(-1, ...)</code> dá erro (veja em <a href="#errado">Quando dá errado</a>), então a função confere antes.</p>
+
+<div class="trylua" data-goal="src:select;;out:Último da fila: Carla;;semerro">
+<p class="try-task"><strong>Missão:</strong> a função <code>ultimo</code> deveria devolver o último nome da fila, mas devolve o primeiro. Use <code>select</code> com um índice negativo para ela devolver <code>Carla</code>.</p>
+<pre class="script" data-file="main.lua">local function ultimo(...)
+  return (...)
+end
+
+print("Último da fila: " .. ultimo("Ana", "Bia", "Carla"))
+</pre>
+<pre class="solucao" data-file="main.lua">local function ultimo(...)
+  return (select(-1, ...))
+end
+
+print("Último da fila: " .. ultimo("Ana", "Bia", "Carla"))
+</pre>
+</div>
+
+<hr>
+
+<h2>5. Percorrendo os argumentos sem perder os <code>nil</code></h2>
+<p>O <code>ipairs({...})</code> para no primeiro <code>nil</code>. Com o <code>select</code>, dá para visitar cada posição, de 1 até a contagem:</p>
+
+<pre class="file" data-file="laco.lua">local function mostrar(...)
+  for i = 1, select("#", ...) do
+    local valor = (select(i, ...))
+    print(i, valor)
+  end
+end
+
+mostrar("Ana", nil, 42, false)
+</pre>
+
+<pre class="term">$ lua laco.lua
+1	Ana
+2	nil
+3	42
+4	false
+</pre>
+
+<ol class="passo">
+  <li><code>select("#", ...)</code> dá 4, então o <code>for</code> vai de 1 a 4.</li>
+  <li>A cada volta, <code>(select(i, ...))</code> pega o valor da posição <code>i</code>, cortado para um só pelos parênteses.</li>
+  <li>O <code>nil</code> da posição 2 aparece, e o laço continua até o <code>false</code>.</li>
+</ol>
+
+<h3>Ou com <code>table.pack</code></h3>
+<p>O mesmo laço pode ser escrito com <code>table.pack(...)</code>, que guarda os argumentos numa tabela com o campo <code>n</code> (ou com o <code>...nome</code> do 5.5, aula <a href="varargs.html">Funções Variádicas</a>):</p>
+
+<pre class="file" data-file="laco_pack.lua">local function mostrar(...)
+  local args = table.pack(...)
+  for i = 1, args.n do
+    print(i, args[i])
+  end
+end
+
+mostrar("Ana", nil, 42, false)
+</pre>
+
+<pre class="term">$ lua laco_pack.lua
+1	Ana
+2	nil
+3	42
+4	false
+</pre>
+
+<p>A saída é a mesma. A diferença está no trabalho: cada <code>select(i, ...)</code> devolve <strong>todos</strong> os valores da posição <code>i</code> até o fim (e o Lua joga fora os que sobram), enquanto o <code>table.pack</code> monta a tabela uma vez. Com poucos argumentos não faz diferença. Com muitos, faz: num teste no lab, com 200 argumentos e 20 mil repetições, a versão com <code>select</code> levou cerca de 0,75 segundo e a com <code>table.pack</code>, cerca de 0,11 (os números mudam de computador para computador, mas a diferença fica).</p>
+
+<hr>
+
+<h2>6. <code>select</code> com funções de vários retornos</h2>
+<p>O <code>select</code> não serve só para o <code>...</code>: qualquer lista de valores entra. Por isso ele é útil para pegar o <strong>segundo</strong> valor de uma função que devolve vários:</p>
+
+<pre class="file" data-file="retornos.lua">local texto = "Padaria do bairro"
+print(string.find(texto, "do"))
+print(select(2, string.find(texto, "do")))
+print(select(2, string.gsub("banana", "a", "o")))
+print(select("#", string.find(texto, "xyz")))
+print(select("#", io.open("nao_existe.txt")))
+</pre>
+
+<pre class="term">$ lua retornos.lua
+9	10
+10
+3
+1
+3
+</pre>
+
+<dl class="anatomy">
+  <dt>select(2, string.find(…))</dt><dd>O <code>string.find</code> devolve onde o achado começa e termina (<code>9</code>, <code>10</code>); o <code>select(2, …)</code> fica com o fim.</dd>
+  <dt>select(2, string.gsub(…))</dt><dd>Só a quantidade de trocas (<code>3</code>), sem o texto novo. Um jeito de contar quantas vezes uma letra aparece.</dd>
+  <dt>select("#", string.find(texto, "xyz"))</dt><dd>Quando não acha, o <code>string.find</code> devolve um valor só, o <code>nil</code>: a contagem dá 1.</dd>
+  <dt>select("#", io.open(…))</dt><dd>Quando falha, o <code>io.open</code> devolve três valores (<code>nil</code>, a mensagem e o número do erro).</dd>
+</dl>
+
+<p>O <code>select("#", f())</code> é um bom jeito de descobrir quantos valores uma função devolve.</p>
+
+<div class="note">
+<strong>E nas outras versões?</strong>
+<p>O <code>select</code> é igual no Lua 5.1, no LuaJIT, no 5.4 e no 5.5, inclusive os índices negativos (o mesmo <code>negativo.lua</code> deu a mesma saída no <code>lua5.1</code>). Ele é o único jeito de contar argumentos que existe em <strong>todas</strong> as versões: o <code>table.pack</code> não existe no Lua 5.1, e o <code>...nome</code> só existe no 5.5.</p>
+</div>
+
+<hr>
+
+<h2>Formas diferentes de pegar um argumento</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Para</th><th>Com <code>select</code></th><th>Outra forma</th><th>Qual usar</th></tr>
+<tr><td>Contar</td><td><code>select("#", ...)</code></td><td><code>table.pack(...).n</code></td><td>Tanto faz; o <code>select</code> não cria tabela</td></tr>
+<tr><td>O primeiro</td><td><code>(select(1, ...))</code></td><td><code>(...)</code> ou <code>local a = ...</code></td><td>A outra forma, mais curta</td></tr>
+<tr><td>O último</td><td><code>(select(-1, ...))</code></td><td><code>local t = {...}; t[#t]</code></td><td><code>select</code>: não depende do <code>#</code></td></tr>
+<tr><td>Do 2º em diante, para repassar</td><td><code>g(select(2, ...))</code></td><td><code>g(table.unpack(t, 2, t.n))</code></td><td><code>select</code>, bem mais simples</td></tr>
+<tr><td>Percorrer todos</td><td><code>for i = 1, select("#", ...) do</code></td><td><code>table.pack</code> + <code>for i = 1, t.n</code></td><td><code>table.pack</code> (ou <code>...nome</code> no 5.5), principalmente com muitos argumentos</td></tr>
+<tr><td>O 2º valor de uma função</td><td><code>select(2, f())</code></td><td><code>local _, b = f()</code></td><td>Os dois servem; o <code>select</code> cabe numa expressão</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+
+<div class="cenario">
+<strong>Posição zero</strong>
+<pre class="file" data-file="erro_zero.lua">print(select(0, "a", "b"))
+</pre>
+<pre class="term">$ lua erro_zero.lua
+lua: erro_zero.lua:1: bad argument #1 to 'select' (index out of range)
+stack traceback:
+	[C]: in global 'select'
+	erro_zero.lua:1: in main chunk
+	[C]: in ?
+</pre>
+<p>Linha por linha:</p>
+<dl class="anatomy">
+  <dt>bad argument #1 to 'select'</dt><dd>"Argumento nº 1 do <code>select</code> inválido": o problema é o primeiro argumento, o <code>0</code>.</dd>
+  <dt>(index out of range)</dt><dd>"Posição fora do intervalo". No Lua as posições começam em 1, e não existe posição 0.</dd>
+  <dt>[C]: in global 'select'</dt><dd>O erro foi percebido dentro do <code>select</code>, que é escrito em C. O nosso código culpado vem na linha de baixo: <code>erro_zero.lua:1</code>.</dd>
+</dl>
+<p>O mesmo erro aparece com um negativo maior que a lista: <code>select(-5, "a", "b")</code> dá <code>bad argument #1 to 'select' (index out of range)</code>. E por isso <code>select(-1, ...)</code> sem nenhum argumento também falha. <strong>Como consertar:</strong> confira a contagem antes, <code>if select("#", ...) &gt; 0 then</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Esquecer o primeiro argumento, ou mandar um texto qualquer</strong>
+<pre class="file" data-file="erro_texto.lua">print(select("2", "a", "b"))
+print(select("dois", "a", "b"))
+</pre>
+<pre class="term">$ lua erro_texto.lua
+b
+lua: erro_texto.lua:2: bad argument #1 to 'select' (number expected, got string)
+stack traceback:
+	[C]: in global 'select'
+	erro_texto.lua:2: in main chunk
+	[C]: in ?
+</pre>
+<p>O <code>"2"</code> funcionou, porque o Lua converte um texto que parece número. Já <code>"dois"</code> não: <code>number expected, got string</code>, "esperava um número, veio um texto". Só o texto <code>"#"</code> tem significado especial. Sem argumento nenhum, <code>select()</code> dá <code>bad argument #1 to 'select' (number expected, got no value)</code> ("veio nada").</p>
+</div>
+
+<div class="cenario">
+<strong>Pedir uma posição que não veio</strong>
+<pre class="file" data-file="erro_nome.lua">local function primeiro_nome(...)
+  return "Olá, " .. select(1, ...)
+end
+print(primeiro_nome("Ana", "Bia"))
+print(primeiro_nome())
+</pre>
+<pre class="term">$ lua erro_nome.lua
+Olá, Ana
+lua: erro_nome.lua:2: attempt to concatenate a nil value
+stack traceback:
+	erro_nome.lua:2: in local 'primeiro_nome'
+	erro_nome.lua:5: in main chunk
+	[C]: in ?
+</pre>
+<p>Na segunda chamada não há argumentos. <code>select(1, ...)</code> não dá erro (posição depois do fim é permitida), mas devolve <strong>zero valores</strong>; no <code>..</code>, esse "nada" vira <code>nil</code>. Como o valor não estava numa variável, a mensagem não diz nome. <strong>Como consertar:</strong> confira <code>select("#", ...)</code> antes, ou dê um padrão: <code>local nome = (...) or "cliente"</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Esquecer os parênteses e mostrar valores demais</strong>
+<p>Sem erro: <code>print(i, select(i, ...))</code> mostra a posição <code>i</code> <strong>e todas as seguintes</strong>, porque o <code>select</code> é o último argumento do <code>print</code>. <strong>Como consertar:</strong> <code>print(i, (select(i, ...)))</code>, ou guarde antes numa variável, como em <code>laco.lua</code>. Numa conta, como <code>soma + select(i, ...)</code>, isso não acontece: lá só o primeiro valor entra.</p>
+</div>
+
+<hr>
+
+<h2>Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>Devolve</th></tr>
+<tr><td><code>select("#", ...)</code></td><td>Quantos valores vêm depois do <code>"#"</code>, contando os <code>nil</code></td></tr>
+<tr><td><code>select(n, ...)</code></td><td>Os valores da posição <code>n</code> até o fim</td></tr>
+<tr><td><code>(select(n, ...))</code></td><td>Só o valor da posição <code>n</code></td></tr>
+<tr><td><code>select(-n, ...)</code></td><td>Os <code>n</code> últimos valores; <code>select(-1, ...)</code> é o último</td></tr>
+<tr><td><code>select(n, ...)</code> com <code>n</code> maior que a contagem</td><td>Zero valores (não é erro)</td></tr>
+<tr><td><code>select(2, f())</code></td><td>O 2º valor de <code>f</code> (e os seguintes)</td></tr>
+<tr><td><code>select(0, ...)</code>, <code>select(-n, ...)</code> além do começo</td><td>Erro: <code>index out of range</code></td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Sintoma</th><th>Causa provável</th></tr>
+<tr><td><code>bad argument #1 to 'select' (index out of range)</code></td><td>Posição 0, ou negativa além do começo (por exemplo, <code>select(-1)</code> sem argumentos)</td></tr>
+<tr><td><code>bad argument #1 to 'select' (number expected, got string)</code></td><td>O primeiro argumento é um texto que não é <code>"#"</code> nem número</td></tr>
+<tr><td><code>bad argument #1 to 'select' (number expected, got no value)</code></td><td><code>select()</code> sem nada</td></tr>
+<tr><td><code>attempt to concatenate a nil value</code> (sem nome) com <code>select</code></td><td>A posição pedida não veio: zero valores</td></tr>
+<tr><td>Valores a mais na saída</td><td>Faltaram os parênteses em volta de <code>select(i, ...)</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. Contando</h3>
+<p>Complete para contar os argumentos:</p>
+<div class="ex-code">local n = <input data-answer="select" aria-label="função">("#", ...)</div>
+</div>
+
+<div class="exercise">
+<h3>2. O último</h3>
+<p>Complete o número que pega o <strong>último</strong> argumento:</p>
+<div class="ex-code">local ultimo = (select(<input data-answer="-1" aria-label="posição">, ...))</div>
+</div>
+
+<div class="mc" data-answer="3">
+<p class="mc-q">3. O que mostra <code>print(select(2, "a", "b", "c"))</code>?</p>
+<label><input type="radio" name="q3"> <code>b</code></label>
+<label><input type="radio" name="q3"> <code>2</code></label>
+<label><input type="radio" name="q3"> <code>b c</code></label>
+<label><input type="radio" name="q3"> <code>a b</code></label>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">4. Quanto dá <code>select("#", nil, nil)</code>?</p>
+<label><input type="radio" name="q4"> <code>0</code></label>
+<label><input type="radio" name="q4"> <code>2</code></label>
+<label><input type="radio" name="q4"> <code>nil</code></label>
+<label><input type="radio" name="q4"> Dá erro</label>
+</div>
+
+<div class="mc" data-answer="4">
+<p class="mc-q">5. O que acontece com <code>select(0, "a", "b")</code>?</p>
+<label><input type="radio" name="q5"> Devolve <code>"a", "b"</code></label>
+<label><input type="radio" name="q5"> Devolve zero valores</label>
+<label><input type="radio" name="q5"> Devolve <code>2</code></label>
+<label><input type="radio" name="q5"> Erro: <code>bad argument #1 to 'select' (index out of range)</code></label>
+</div>
+
+<div class="mc" data-answer="1">
+<p class="mc-q">6. E com <code>select(5, "a", "b")</code>?</p>
+<label><input type="radio" name="q6"> Devolve zero valores, sem erro</label>
+<label><input type="radio" name="q6"> Erro: <code>index out of range</code></label>
+<label><input type="radio" name="q6"> Devolve <code>"b"</code></label>
+<label><input type="radio" name="q6"> Devolve <code>nil, nil, nil</code></label>
+</div>
+
+<h3>Missão final: a chamada da turma</h3>
+
+<div class="trylua" data-goal="src:select;;out:Presentes: 3 de 5;;semerro">
+<p class="try-task"><strong>Missão:</strong> a professora passa os nomes de quem respondeu à chamada, com <code>nil</code> no lugar de quem faltou. A função deveria dizer <code>Presentes: 3 de 5</code>, mas o <code>ipairs</code> para no primeiro <code>nil</code>. Reescreva a contagem com <code>select</code>: o total é <code>select("#", ...)</code>, e os presentes são as posições cujo valor não é <code>nil</code>.</p>
+<pre class="script" data-file="main.lua">local function presenca(...)
+  local presentes = 0
+  for _, nome in ipairs({...}) do
+    presentes = presentes + 1
+  end
+  local total = 0
+  for _ in ipairs({...}) do
+    total = total + 1
+  end
+  print("Presentes: " .. presentes .. " de " .. total)
+end
+
+presenca("Ana", nil, "Bia", nil, "Carla")
+</pre>
+<pre class="solucao" data-file="main.lua">local function presenca(...)
+  local total = select("#", ...)
+  local presentes = 0
+  for i = 1, total do
+    if (select(i, ...)) ~= nil then
+      presentes = presentes + 1
+    end
+  end
+  print("Presentes: " .. presentes .. " de " .. total)
+end
+
+presenca("Ana", nil, "Bia", nil, "Carla")
+</pre>
+</div>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li><code>select("#", ...)</code> conta os valores, inclusive os <code>nil</code>.</li>
+  <li><code>select(n, ...)</code> devolve do n-ésimo valor <strong>até o fim</strong>; para ficar com um só, use parênteses ou uma variável.</li>
+  <li>Negativos contam do fim: <code>select(-1, ...)</code> é o último.</li>
+  <li>Posição depois do fim: zero valores. Posição 0, ou negativa além do começo: <code>index out of range</code>.</li>
+  <li><code>for i = 1, select("#", ...)</code> com <code>(select(i, ...))</code> percorre tudo sem perder <code>nil</code>; com muitos argumentos, <code>table.pack</code> faz o mesmo com menos trabalho.</li>
+  <li><code>select(2, f())</code> pega o segundo valor de uma função de vários retornos.</li>
+  <li>O <code>select</code> existe igual em todas as versões do Lua.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
