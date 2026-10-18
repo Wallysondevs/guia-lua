@@ -1,0 +1,455 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua and/or — o "if numa linha" e a sua armadilha | Guia Lua</title>
+<meta name="description" content="O truque cond and a or b do Lua para quem nunca programou: o que and e or devolvem de verdade, o valor padrão com or, o if/else numa linha, a armadilha quando o valor do meio é false ou nil, os parênteses com .. e o erro real do ? : que o Lua não tem.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">O Truque do and/or</span></h1>
+
+<p class="intro">Muitas vezes um <code>if/else</code> só serve para escolher <strong>um valor entre dois</strong>: "aprovada" ou "reprovada", "par" ou "ímpar", o apelido ou "visitante". Escrever cinco linhas para isso cansa. Várias linguagens têm um atalho, o operador <strong>ternário</strong> (<code>cond ? a : b</code>). <strong>O Lua não tem.</strong> No lugar dele, os programadores Lua usam um truque com <code>and</code> e <code>or</code>: <code>cond and a or b</code>. Ele é curto e muito comum, mas tem uma armadilha que você precisa conhecer.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O que <code>and</code> e <code>or</code> devolvem de verdade (não é só <code>true</code> ou <code>false</code>).</li>
+  <li>O <strong>valor padrão</strong> com <code>or</code>: <code>apelido or "visitante"</code>.</li>
+  <li>O "if numa linha": <code>nota &gt;= 6 and "aprovada" or "reprovada"</code>, passo a passo.</li>
+  <li>A <strong>armadilha</strong>: quando o valor do meio é <code>false</code> ou <code>nil</code>, o truque dá a resposta errada, sem erro nenhum.</li>
+  <li>Os parênteses que o <code>..</code> exige, e o erro real de quem tenta usar <code>? :</code> no Lua.</li>
+</ul>
+</div>
+
+<p>Todos os programas desta aula rodaram no <strong>Lua 5.5</strong> da máquina da Ana (usuária <code>ana</code>, computador <code>notebook</code>), com <code>lua arquivo.lua</code>. O truque (e a armadilha) funciona igual nas outras versões: a Ana rodou os exemplos também com <code>lua5.4</code>, <code>lua5.1</code> e <code>luajit</code>, e as saídas foram as mesmas.</p>
+
+<hr>
+
+<h2>A ideia: "o que tiver, senão o padrão"</h2>
+<p>Na padaria, a Ana anota o nome de quem encomenda um bolo. Se a pessoa diz o apelido, ela escreve o apelido; se não diz, escreve "cliente". Ela não pensa "se… então… senão…": ela pensa "<strong>o apelido, ou então</strong> cliente". O <code>or</code> do Lua faz exatamente isso, e é a primeira peça do truque.</p>
+
+<hr>
+
+<h2>1. O que <code>and</code> e <code>or</code> devolvem</h2>
+<p>Na aula <a href="operadores-logicos.html">and, or e not</a>, você viu <code>and</code> e <code>or</code> com <code>true</code> e <code>false</code>. Mas eles funcionam com <strong>qualquer valor</strong>, e não devolvem necessariamente <code>true</code> ou <code>false</code>: devolvem <strong>um dos dois lados</strong>. Lembre que, no Lua, só <code>false</code> e <code>nil</code> são falsos (veja <a href="if.html">if … then</a>).</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Expressão</th><th>Regra</th></tr>
+<tr><td><code>a or b</code></td><td>Se <code>a</code> for verdadeiro, devolve <code>a</code> (e nem olha o <code>b</code>). Senão, devolve <code>b</code>.</td></tr>
+<tr><td><code>a and b</code></td><td>Se <code>a</code> for falso, devolve <code>a</code> (e nem olha o <code>b</code>). Senão, devolve <code>b</code>.</td></tr>
+</table>
+</div>
+
+<pre class="file" data-file="valores.lua">print(nil or "padrão")
+print("Ana" or "visitante")
+print(false or nil)
+print(1 and 2)
+print(nil and 2)
+print(false and "nunca")
+print(0 and "zero é verdadeiro")
+</pre>
+
+<pre class="term">$ lua valores.lua
+padrão
+Ana
+nil
+2
+nil
+false
+zero é verdadeiro
+</pre>
+
+<dl class="anatomy">
+  <dt>nil or "padrão" → padrão</dt><dd>O lado esquerdo é falso, então o <code>or</code> devolve o direito.</dd>
+  <dt>"Ana" or "visitante" → Ana</dt><dd>O esquerdo é verdadeiro (um texto), então o <code>or</code> devolve ele mesmo, o texto <code>"Ana"</code>, e não <code>true</code>.</dd>
+  <dt>false or nil → nil</dt><dd>Os dois são falsos: o <code>or</code> devolve o direito, que é <code>nil</code>.</dd>
+  <dt>1 and 2 → 2</dt><dd>O esquerdo é verdadeiro, então o <code>and</code> devolve o direito.</dd>
+  <dt>nil and 2 → nil / false and "nunca" → false</dt><dd>O esquerdo é falso: o <code>and</code> devolve o próprio esquerdo, sem olhar o direito.</dd>
+  <dt>0 and "zero é verdadeiro"</dt><dd>O 0 é verdadeiro no Lua, então o <code>and</code> segue para o direito.</dd>
+</dl>
+
+<hr>
+
+<h2>2. O valor padrão com <code>or</code></h2>
+<p>A regra do <code>or</code> dá o uso mais comum de todos: "use este valor; se ele não existir (for <code>nil</code>), use aquele".</p>
+
+<pre class="file" data-file="padrao.lua">local apelido = nil
+local nome_mostrado = apelido or "visitante"
+print("Oi, " .. nome_mostrado .. "!")
+</pre>
+
+<pre class="term">$ lua padrao.lua
+Oi, visitante!
+</pre>
+
+<p>Com <code>local apelido = "Aninha"</code>, o <code>or</code> devolveria <code>"Aninha"</code> e o programa mostraria <code>Oi, Aninha!</code>. Você vai ver esse <code>x or valor_padrao</code> em todo programa Lua, principalmente em funções com parâmetros opcionais (aula <a href="parametros.html">Parâmetros e Argumentos</a>).</p>
+
+<h3>O <code>and</code> como guarda</h3>
+<p>O <code>and</code> tem um uso parecido: "só calcule isto se o valor existir". O <code>#</code> (tamanho) de um <code>nil</code> daria erro, mas o <code>and</code> nem chega a calcular:</p>
+
+<pre class="file" data-file="guarda.lua">local texto = nil
+local tamanho = texto and #texto
+print("tamanho:", tamanho)
+texto = "leite"
+tamanho = texto and #texto
+print("tamanho:", tamanho)
+</pre>
+
+<pre class="term">$ lua guarda.lua
+tamanho:	nil
+tamanho:	5
+</pre>
+
+<hr>
+
+<h2>3. O truque: <code>cond and a or b</code></h2>
+<p>Agora junte os dois: um <code>and</code> e depois um <code>or</code>. O resultado se comporta como um <code>if/else</code> que escolhe um valor:</p>
+
+<pre class="file" data-file="ternario.lua">local nota = 8
+local situacao = nota &gt;= 6 and "aprovada" or "reprovada"
+print("Situação: " .. situacao)
+</pre>
+
+<pre class="term">$ lua ternario.lua
+Situação: aprovada
+</pre>
+
+<p>Com <code>nota = 4</code>, saiu <code>Situação: reprovada</code>. É o mesmo que estas cinco linhas:</p>
+
+<pre class="file" data-file="ifelse.lua">local nota = 8
+local situacao
+if nota &gt;= 6 then
+  situacao = "aprovada"
+else
+  situacao = "reprovada"
+end
+print("Situação: " .. situacao)
+</pre>
+
+<h3>Passo a passo: por que funciona</h3>
+<p>O <code>and</code> é feito antes do <code>or</code> (ele tem precedência maior, como a multiplicação antes da soma; veja <a href="precedencia.html">Precedência</a>). Então o Lua lê <code>(nota &gt;= 6 and "aprovada") or "reprovada"</code>:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Passo</th><th>Com <code>nota = 8</code></th><th>Com <code>nota = 4</code></th></tr>
+<tr><td>1. <code>nota &gt;= 6</code></td><td><code>true</code></td><td><code>false</code></td></tr>
+<tr><td>2. <code>… and "aprovada"</code></td><td>o esquerdo é verdadeiro → <code>"aprovada"</code></td><td>o esquerdo é falso → <code>false</code></td></tr>
+<tr><td>3. <code>… or "reprovada"</code></td><td><code>"aprovada"</code> é verdadeiro → <code>"aprovada"</code></td><td><code>false</code> é falso → <code>"reprovada"</code></td></tr>
+</table>
+</div>
+
+<p>Repare no passo 3 da primeira coluna: o truque só deu certo porque <code>"aprovada"</code> é <strong>verdadeiro</strong> (todo texto é). Guarde isso: é a chave da armadilha da seção 4.</p>
+
+<p>O truque também cabe dentro de outras expressões, mas aí ponha <strong>parênteses</strong> em volta dele:</p>
+
+<pre class="term">$ lua -e 'local n = 7 print(n .. (n % 2 == 0 and " é par" or " é ímpar"))'
+7 é ímpar
+</pre>
+
+<div class="trylua" data-goal="out:Itens: 12, sacolas: 2;;src:\band\b[^\n]*\bor\b">
+<p class="try-task"><strong>Missão:</strong> até 10 itens vão numa sacola; mais que isso, duas. Troque o <code>if/else</code> por uma linha só com o truque: <code>local sacolas = itens &lt;= 10 and 1 or 2</code>.</p>
+<pre class="script" data-file="main.lua">local itens = 12
+local sacolas
+if itens &lt;= 10 then
+  sacolas = 1
+else
+  sacolas = 2
+end
+print("Itens: " .. itens .. ", sacolas: " .. sacolas)
+</pre>
+<pre class="solucao" data-file="main.lua">local itens = 12
+local sacolas = itens &lt;= 10 and 1 or 2
+print("Itens: " .. itens .. ", sacolas: " .. sacolas)
+</pre>
+</div>
+
+<h3>Três opções em fila</h3>
+<p>Dá para encadear, como um <code>elseif</code> numa linha:</p>
+
+<pre class="file" data-file="sinal.lua">local n = -3
+local sinal = n &gt; 0 and "positivo" or n &lt; 0 and "negativo" or "zero"
+print(n .. " é " .. sinal)
+</pre>
+
+<pre class="term">$ lua sinal.lua
+-3 é negativo
+</pre>
+
+<p>Com <code>n = 5</code> saiu <code>5 é positivo</code>, e com <code>n = 0</code>, <code>0 é zero</code>. Funciona, mas já está ficando difícil de ler. Com mais de duas opções, prefira um <code>if/elseif</code> de verdade (aula <a href="elseif.html">elseif</a>).</p>
+
+<hr>
+
+<h2>4. A armadilha: quando o valor do meio é <code>false</code> ou <code>nil</code></h2>
+<p>O truque <code>cond and a or b</code> só imita o <code>if/else</code> se o <code>a</code> (o valor do meio) for <strong>verdadeiro</strong>. Se o <code>a</code> for <code>false</code> ou <code>nil</code>, o <code>or</code> acha que "deu falso" e devolve o <code>b</code>, <strong>mesmo com a condição verdadeira</strong>. O programa a seguir pergunta se uma pessoa de 20 anos precisa de autorização dos pais:</p>
+
+<pre class="file" data-file="armadilha.lua">local idade = 20
+local precisa_autorizacao = idade &lt; 18 and true or false
+print("Precisa de autorização (1): " .. tostring(precisa_autorizacao))
+
+local livre = idade &gt;= 18 and true or false
+local precisa = idade &gt;= 18 and false or true
+print("Livre: " .. tostring(livre))
+print("Precisa de autorização (2): " .. tostring(precisa))
+</pre>
+
+<pre class="term">$ lua armadilha.lua
+Precisa de autorização (1): false
+Livre: true
+Precisa de autorização (2): true
+</pre>
+
+<p>As versões (1) e (2) deveriam dizer a mesma coisa: com 20 anos, <strong>não</strong> precisa de autorização. A (1) acertou. A (2) errou, e o Lua não reclamou de nada. Siga os passos da (2):</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Passo</th><th><code>idade &gt;= 18 and false or true</code>, com <code>idade = 20</code></th></tr>
+<tr><td>1. <code>idade &gt;= 18</code></td><td><code>true</code> (a condição é verdadeira)</td></tr>
+<tr><td>2. <code>true and false</code></td><td><code>false</code> (o valor que a gente queria!)</td></tr>
+<tr><td>3. <code>false or true</code></td><td><code>true</code>: o <code>or</code> vê um <code>false</code> e pega o lado direito</td></tr>
+</table>
+</div>
+
+<p>O <code>or</code> não tem como saber se o <code>false</code> veio da condição ou do valor que você escolheu. Com <code>nil</code> no meio acontece o mesmo:</p>
+
+<pre class="file" data-file="armadilha_nil.lua">local tem_desconto = true
+local desconto = tem_desconto and nil or 10
+print("Desconto:", desconto)
+</pre>
+
+<pre class="term">$ lua armadilha_nil.lua
+Desconto:	10
+</pre>
+
+<p>A intenção era "com desconto, <code>nil</code>; sem desconto, 10". Saiu 10 com <code>tem_desconto = true</code>.</p>
+
+<div class="warning">
+<strong>A regra de ouro do truque</strong>
+<p>Use <code>cond and a or b</code> <strong>só quando o <code>a</code> nunca puder ser <code>false</code> nem <code>nil</code></strong>: um texto fixo (<code>"aprovada"</code>), um número (<code>1</code>, até o <code>0</code>), uma tabela. Se o <code>a</code> for um booleano, <code>nil</code> ou uma variável que pode estar vazia, escreva o <code>if/else</code>.</p>
+</div>
+
+<h3>Como consertar</h3>
+<pre class="file" data-file="conserto.lua">local idade = 20
+local precisa
+if idade &gt;= 18 then
+  precisa = false
+else
+  precisa = true
+end
+print("Precisa de autorização: " .. tostring(precisa))
+print("Com not: " .. tostring(not (idade &gt;= 18)))
+</pre>
+
+<pre class="term">$ lua conserto.lua
+Precisa de autorização: false
+Com not: false
+</pre>
+
+<p>Quando o resultado é um booleano, nem precisa do truque: a própria comparação já é <code>true</code> ou <code>false</code>. <code>idade &lt; 18</code> ou <code>not (idade &gt;= 18)</code> respondem direto. (O <code>tostring</code> é necessário porque o <code>..</code> não junta booleanos com texto; veja <a href="conversao.html">Conversão</a>.)</p>
+
+<h3>A mesma armadilha no valor padrão</h3>
+<p>O <code>x or padrao</code> da seção 2 tem o mesmo problema quando <code>x</code> pode ser <code>false</code> de propósito:</p>
+
+<pre class="file" data-file="som.lua">local escolha_do_usuario = false
+local som_ligado = escolha_do_usuario or true
+print("Som ligado?", som_ligado)
+</pre>
+
+<pre class="term">$ lua som.lua
+Som ligado?	true
+</pre>
+
+<p>O usuário <strong>desligou</strong> o som (<code>false</code>), mas o <code>or</code> trocou o <code>false</code> pelo padrão <code>true</code>. Para "use o padrão só se não escolheram nada", compare com <code>nil</code>:</p>
+
+<pre class="file" data-file="som2.lua">local escolha_do_usuario = false
+local som_ligado
+if escolha_do_usuario == nil then
+  som_ligado = true
+else
+  som_ligado = escolha_do_usuario
+end
+print("Som ligado?", som_ligado)
+</pre>
+
+<pre class="term">$ lua som2.lua
+Som ligado?	false
+</pre>
+
+<div class="trylua" data-goal="out:Precisa de autorização: false;;semerro">
+<p class="try-task"><strong>Missão:</strong> este programa caiu na armadilha e diz que uma pessoa de 20 anos precisa de autorização. Conserte a linha do <code>precisa</code> (com um <code>if/else</code>, ou com a comparação direta <code>idade &lt; 18</code>) até aparecer <code>Precisa de autorização: false</code>.</p>
+<pre class="script" data-file="main.lua">local idade = 20
+local precisa = idade &gt;= 18 and false or true
+print("Precisa de autorização: " .. tostring(precisa))
+</pre>
+<pre class="solucao" data-file="main.lua">local idade = 20
+local precisa = idade &lt; 18
+print("Precisa de autorização: " .. tostring(precisa))
+</pre>
+</div>
+
+<hr>
+
+<h2 id="formas">Formas diferentes de fazer a mesma coisa</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Forma</th><th>Exemplo</th><th>Quando usar</th></tr>
+<tr><td><code>if/else</code></td><td><code>if nota &gt;= 6 then s = "aprovada" else s = "reprovada" end</code></td><td>Sempre funciona. Obrigatório quando o valor pode ser <code>false</code>/<code>nil</code>, ou quando cada caminho faz mais de uma coisa</td></tr>
+<tr><td><code>cond and a or b</code></td><td><code>local s = nota &gt;= 6 and "aprovada" or "reprovada"</code></td><td>Escolher entre dois valores, com <code>a</code> que nunca é <code>false</code>/<code>nil</code></td></tr>
+<tr><td><code>x or padrao</code></td><td><code>local nome = apelido or "visitante"</code></td><td>Valor padrão para algo que pode ser <code>nil</code> (mas nunca <code>false</code> de propósito)</td></tr>
+<tr><td><code>x and f(x)</code></td><td><code>local tam = texto and #texto</code></td><td>Calcular só se o valor existir</td></tr>
+<tr><td>A própria comparação</td><td><code>local maior = idade &gt;= 18</code></td><td>Quando o resultado é <code>true</code>/<code>false</code>: dispensa o truque</td></tr>
+</table>
+</div>
+
+<div class="note">
+<strong>E nas outras linguagens?</strong>
+<p>Em C, Java e JavaScript, o ternário é <code>cond ? a : b</code>; no Python, <code>a if cond else b</code>. Eles não têm a armadilha, porque são um comando de verdade, e não um truque. O Lua decidiu não ter um ternário e, até o 5.5, não tem. Se você vem de outra linguagem, a seção abaixo mostra o que acontece ao tentar o <code>? :</code>.</p>
+</div>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+
+<div class="cenario">
+<strong>Tentou usar <code>? :</code></strong>
+<pre class="file" data-file="interrog.lua">local idade = 20
+local tipo = idade &gt;= 18 ? "adulto" : "menor"
+print(tipo)
+</pre>
+<pre class="term">$ lua interrog.lua
+lua: interrog.lua:2: unexpected symbol near '?'
+</pre>
+<p>"Símbolo inesperado perto de <code>?</code>". O Lua não conhece o <code>?</code>. <strong>Como consertar:</strong> <code>local tipo = idade &gt;= 18 and "adulto" or "menor"</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Esqueceu os parênteses com o <code>..</code></strong>
+<pre class="file" data-file="concat.lua">local apelido = nil
+print("Oi, " .. apelido or "visitante")
+</pre>
+<pre class="term">$ lua concat.lua
+lua: concat.lua:2: attempt to concatenate a nil value (local 'apelido')
+stack traceback:
+	concat.lua:2: in main chunk
+	[C]: in ?
+</pre>
+<dl class="anatomy">
+  <dt>attempt to concatenate a nil value</dt><dd>"Tentativa de concatenar (juntar com <code>..</code>) um valor <code>nil</code>".</dd>
+  <dt>(local 'apelido')</dt><dd>O valor <code>nil</code> é a variável local <code>apelido</code>.</dd>
+</dl>
+<p>Mas o <code>or "visitante"</code> não estava ali justamente para isso? Estava, mas o <code>..</code> tem precedência <strong>maior</strong> que o <code>or</code>. O Lua leu <code>("Oi, " .. apelido) or "visitante"</code>: tentou juntar o texto com o <code>nil</code> primeiro, e deu erro antes de chegar ao <code>or</code>. <strong>Como consertar:</strong> parênteses em volta do <code>or</code>: <code>print("Oi, " .. (apelido or "visitante"))</code>, que mostra <code>Oi, visitante</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>O truque deu a resposta errada, sem erro</strong>
+<p>É a armadilha da seção 4. Se um <code>cond and a or b</code> está devolvendo o <code>b</code> mesmo com a condição verdadeira, olhe o <code>a</code>: ele é <code>false</code>, <code>nil</code> ou uma variável que pode estar vazia? <strong>Como consertar:</strong> troque por <code>if/else</code>.</p>
+</div>
+
+<hr>
+
+<h2>Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>Resultado</th></tr>
+<tr><td><code>a or b</code></td><td><code>a</code>, se <code>a</code> for verdadeiro; senão, <code>b</code></td></tr>
+<tr><td><code>a and b</code></td><td><code>a</code>, se <code>a</code> for falso; senão, <code>b</code></td></tr>
+<tr><td><code>x or padrao</code></td><td>Valor padrão quando <code>x</code> é <code>nil</code> (ou <code>false</code>!)</td></tr>
+<tr><td><code>cond and a or b</code></td><td>Como <code>if cond then a else b</code>, <strong>se <code>a</code> não for <code>false</code>/<code>nil</code></strong></td></tr>
+<tr><td><code>c1 and a or c2 and b or c</code></td><td>Três opções em fila (mesma ressalva)</td></tr>
+<tr><td><code>"…" .. (x or "padrão")</code></td><td>Parênteses obrigatórios com <code>..</code></td></tr>
+<tr><td><code>cond ? a : b</code></td><td>Não existe no Lua: <code>unexpected symbol near '?'</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. O valor padrão</h3>
+<p>Complete para <code>cidade</code> valer <code>"São Paulo"</code> quando <code>escolhida</code> for <code>nil</code>:</p>
+<div class="ex-code">local cidade = escolhida <input data-answer="or" aria-label="operador"> "São Paulo"</div>
+</div>
+
+<div class="exercise">
+<h3>2. O que aparece?</h3>
+<p>O que <code>print(nil and "a" or "b")</code> mostra?</p>
+<div class="ex-code"><input data-answer="b" aria-label="o que aparece"></div>
+</div>
+
+<div class="mc" data-answer="3">
+<p class="mc-q">3. O que <code>print("Ana" or "visitante")</code> mostra?</p>
+<label><input type="radio" name="q3"> <code>true</code></label>
+<label><input type="radio" name="q3"> <code>visitante</code></label>
+<label><input type="radio" name="q3"> <code>Ana</code></label>
+<label><input type="radio" name="q3"> <code>Ana visitante</code></label>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">4. Com <code>local x = 5</code>, quanto vale <code>x &gt; 3 and false or true</code>?</p>
+<label><input type="radio" name="q4"> <code>false</code>, porque a condição é verdadeira</label>
+<label><input type="radio" name="q4"> <code>true</code>: o <code>false</code> do meio faz o <code>or</code> pegar o último valor</label>
+<label><input type="radio" name="q4"> <code>nil</code></label>
+<label><input type="radio" name="q4"> Dá erro</label>
+</div>
+
+<div class="mc" data-answer="4">
+<p class="mc-q">5. Em qual destes o truque <code>cond and a or b</code> é <strong>seguro</strong>?</p>
+<label><input type="radio" name="q5"> <code>tem_frete and nil or 15</code></label>
+<label><input type="radio" name="q5"> <code>ligado and false or true</code></label>
+<label><input type="radio" name="q5"> <code>cond and variavel_que_pode_ser_nil or 0</code></label>
+<label><input type="radio" name="q5"> <code>n % 2 == 0 and "par" or "ímpar"</code></label>
+</div>
+
+<div class="mc" data-answer="1">
+<p class="mc-q">6. Por que <code>print("Oi, " .. nome or "visitante")</code> dá erro quando <code>nome</code> é <code>nil</code>?</p>
+<label><input type="radio" name="q6"> Porque o <code>..</code> é feito antes do <code>or</code></label>
+<label><input type="radio" name="q6"> Porque o <code>or</code> não funciona com textos</label>
+<label><input type="radio" name="q6"> Porque falta um <code>and</code></label>
+<label><input type="radio" name="q6"> Porque o <code>print</code> não aceita <code>or</code></label>
+</div>
+
+<h3>Missão final: a saudação</h3>
+
+<div class="trylua" data-goal="out:Oi, Ana!;;semerro;;src:\bor\b">
+<p class="try-task"><strong>Missão:</strong> este programa quer mostrar o apelido e, quando não houver apelido, o nome. Do jeito que está, ele dá <code>attempt to concatenate a nil value</code>. Use o <code>or</code> (com parênteses!) para ele mostrar <code>Oi, Ana!</code>. Depois teste com <code>local apelido = "Aninha"</code>.</p>
+<pre class="script" data-file="main.lua">local apelido = nil
+local nome = "Ana"
+print("Oi, " .. apelido .. "!")
+</pre>
+<pre class="solucao" data-file="main.lua">local apelido = nil
+local nome = "Ana"
+print("Oi, " .. (apelido or nome) .. "!")
+</pre>
+</div>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li><code>a or b</code> devolve <code>a</code> se ele for verdadeiro, senão <code>b</code>. <code>a and b</code> devolve <code>a</code> se ele for falso, senão <code>b</code>. Eles devolvem os <strong>valores</strong>, não só <code>true</code>/<code>false</code>.</li>
+  <li><code>x or padrao</code> é o jeito Lua de dar um valor padrão.</li>
+  <li><code>cond and a or b</code> escolhe entre dois valores numa linha, como um <code>if/else</code>. O Lua não tem <code>? :</code>.</li>
+  <li><strong>A armadilha:</strong> se o <code>a</code> for <code>false</code> ou <code>nil</code>, o truque devolve <code>b</code> mesmo com a condição verdadeira, sem erro. Nesses casos, escreva o <code>if/else</code>.</li>
+  <li>Com <code>..</code> ou outras contas em volta, ponha o truque entre parênteses.</li>
+  <li>Próxima parte do curso: os laços, que repetem um bloco. Começa em <a href="while.html">while</a>.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
