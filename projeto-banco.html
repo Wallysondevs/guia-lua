@@ -1,0 +1,1204 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua Projeto Conta Bancária (Classes) — metatabelas, __index, métodos com :, error/pcall e herança passo a passo | Guia Lua</title>
+<meta name="description" content="Projeto passo a passo: uma conta bancária em Lua 5.5, de tabelas e funções soltas até uma classe de verdade com setmetatable e __index, métodos com dois-pontos e self, erros com error e pcall, extrato, __tostring, e uma poupança que herda da conta (com a pegadinha dos metamétodos que não são herdados). Quatro versões com saídas reais e missões no editor.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Projeto <span class="hl">Conta Bancária (Classes)</span></h1>
+
+<p class="intro">O Lua não tem a palavra <code>class</code>. Mesmo assim, programas em Lua usam classes o tempo todo: elas são montadas com tabelas e <strong>metatabelas</strong>. Neste projeto a Ana modela as contas do "Banco da Ana", começando com tabelas e funções soltas e chegando, em quatro passos, a uma classe <code>Conta</code> com métodos, erros de verdade e uma <code>Poupanca</code> que herda da conta. O programa não conversa com o teclado: cada versão faz algumas operações e mostra o resultado.</p>
+
+<div class="note">
+<strong>Você vai praticar</strong>
+<ul>
+  <li>Guardar dados em <a href="tabelas.html">tabelas</a> e mexer neles com <a href="funcoes.html">funções</a>.</li>
+  <li>Criar uma classe com <a href="metatabelas.html">setmetatable</a> e <a href="index-newindex.html">__index</a> (veja <a href="classes.html">Classes com Metatabelas</a>).</li>
+  <li>Escrever e chamar <a href="metodos.html">métodos com o dois-pontos</a> (<code>:</code>) e o <code>self</code>.</li>
+  <li>Avisar problemas com <a href="error.html">error</a> e tratá-los com <a href="pcall.html">pcall</a>.</li>
+  <li>Mostrar um objeto com <a href="tostring-call-len.html">__tostring</a>.</li>
+  <li>Fazer uma classe herdar de outra (veja <a href="heranca.html">Herança</a>).</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>O que vamos construir</h2>
+<p>A versão final cria uma conta corrente e uma poupança, faz a poupança render e tenta três saques, um deles grande demais e outro com valor negativo. No terminal da Ana:</p>
+
+<pre class="term" data-cwd="~/projetos/banco">$ lua banco.lua
+Conta de Ana: R$ 300.00
+Conta de Ana: R$ 1000.00 (poupança, 1.0% ao mês)
+Rendeu R$ 10.00
+Conta de Ana: R$ 1010.00 (poupança, 1.0% ao mês)
+Saque de 50.00: ok
+Recusado por falta de saldo: saldo insuficiente (saldo R$ 960.00)
+Recusado (VALOR): valor inválido: -1
+Conta de Ana: R$ 960.00 (poupança, 1.0% ao mês)</pre>
+
+<ol class="passo">
+  <li><a href="#versao1">Tabelas e funções</a> (cada conta é uma tabela; as funções recebem a conta).</li>
+  <li><a href="#versao2">Uma classe</a> (<code>setmetatable</code>, <code>__index</code>, <code>:</code> e <code>self</code>).</li>
+  <li><a href="#versao3">Erros de verdade, extrato e __tostring</a> (<code>error</code>, <code>pcall</code>).</li>
+  <li><a href="#versao4">Herança e erros como tabelas</a> (a <code>Poupanca</code>).</li>
+</ol>
+
+<h3>Antes de começar</h3>
+<p>Ajuda ter passado por <a href="metatabelas.html">Metatabelas</a> e <a href="metodos.html">Métodos e o Dois-Pontos</a>; o projeto retoma cada ideia quando ela aparece. Crie a pasta; o programa vai se chamar <code>banco.lua</code>:</p>
+
+<pre class="term">$ mkdir -p projetos/banco
+$ cd projetos/banco</pre>
+
+<hr>
+
+<h2 id="versao1">Versão 1 · Tabelas e funções</h2>
+<p>Uma conta tem um titular e um saldo: uma tabela com dois campos resolve. Para depositar e sacar, funções que recebem a conta como primeiro argumento.</p>
+
+<pre class="file" data-file="banco.lua">-- Banco da Ana, versão 1: tabelas e funções soltas
+
+local function nova_conta(titular)
+  return { titular = titular, saldo = 0 }
+end
+
+local function depositar(conta, valor)
+  conta.saldo = conta.saldo + valor
+end
+
+local function sacar(conta, valor)
+  if valor &gt; conta.saldo then
+    print(string.format("%s: saldo insuficiente para sacar R$ %.2f", conta.titular, valor))
+    return false
+  end
+  conta.saldo = conta.saldo - valor
+  return true
+end
+
+local function mostrar(conta)
+  print(string.format("%s: R$ %.2f", conta.titular, conta.saldo))
+end
+
+local ana = nova_conta("Ana")
+local bia = nova_conta("Bia")
+depositar(ana, 100)
+depositar(bia, 50)
+sacar(ana, 30)
+sacar(bia, 80)
+mostrar(ana)
+mostrar(bia)
+</pre>
+
+<dl class="anatomy">
+  <dt>nova_conta(titular)</dt><dd>Uma "fábrica": devolve uma tabela nova a cada chamada. <code>ana</code> e <code>bia</code> são duas tabelas diferentes, cada uma com o seu saldo.</dd>
+  <dt>conta.saldo = conta.saldo + valor</dt><dd>A função mexe na tabela que recebeu. Como <a href="tabelas-referencia.html">tabelas são referências</a>, é a mesma tabela que o programa principal guarda em <code>ana</code>: a mudança aparece lá.</dd>
+  <dt>if valor &gt; conta.saldo then … return false</dt><dd>O banco não deixa o saldo ficar negativo: avisa e devolve <code>false</code> ("não deu"), sem mexer no saldo.</dd>
+  <dt>%.2f</dt><dd>Dinheiro com duas casas: <code>70.00</code>.</dd>
+</dl>
+
+<pre class="term" data-cwd="~/projetos/banco">$ lua banco.lua
+Bia: saldo insuficiente para sacar R$ 80.00
+Ana: R$ 70.00
+Bia: R$ 50.00</pre>
+
+<p>Funciona. Mas repare em dois incômodos. Primeiro, as funções (<code>depositar</code>, <code>sacar</code>) estão soltas no programa, e nada diz que elas são "coisas de conta": se o banco tiver também cartões, com outro <code>depositar</code>, os nomes se misturam. Segundo, a regra do saldo depende de todo mundo usar <code>sacar</code>: nada impede uma linha <code>bia.saldo = -1000</code>. A versão 2 resolve o primeiro; o segundo aparece nos desafios do fim.</p>
+
+<div class="trylua" data-goal="out:Bia: R$ 50.00;;out:saldo insuficiente">
+<p class="try-task"><strong>Missão (versão 1):</strong> a função <code>sacar</code> não confere o saldo, e a Bia termina com <code>R$ -30.00</code>. No lugar do comentário, recuse o saque quando <code>valor &gt; conta.saldo</code>: mostre <code>Bia: saldo insuficiente para sacar R$ 80.00</code> (com o titular e o valor) e devolva <code>false</code>.</p>
+<pre class="script" data-file="banco.lua">-- Banco da Ana, versão 1: tabelas e funções soltas
+
+local function nova_conta(titular)
+  return { titular = titular, saldo = 0 }
+end
+
+local function depositar(conta, valor)
+  conta.saldo = conta.saldo + valor
+end
+
+local function sacar(conta, valor)
+  -- recuse aqui o saque maior que o saldo
+  conta.saldo = conta.saldo - valor
+  return true
+end
+
+local function mostrar(conta)
+  print(string.format("%s: R$ %.2f", conta.titular, conta.saldo))
+end
+
+local ana = nova_conta("Ana")
+local bia = nova_conta("Bia")
+depositar(ana, 100)
+depositar(bia, 50)
+sacar(ana, 30)
+sacar(bia, 80)
+mostrar(ana)
+mostrar(bia)
+</pre>
+<pre class="solucao" data-file="banco.lua">-- Banco da Ana, versão 1: tabelas e funções soltas
+
+local function nova_conta(titular)
+  return { titular = titular, saldo = 0 }
+end
+
+local function depositar(conta, valor)
+  conta.saldo = conta.saldo + valor
+end
+
+local function sacar(conta, valor)
+  if valor &gt; conta.saldo then
+    print(string.format("%s: saldo insuficiente para sacar R$ %.2f", conta.titular, valor))
+    return false
+  end
+  conta.saldo = conta.saldo - valor
+  return true
+end
+
+local function mostrar(conta)
+  print(string.format("%s: R$ %.2f", conta.titular, conta.saldo))
+end
+
+local ana = nova_conta("Ana")
+local bia = nova_conta("Bia")
+depositar(ana, 100)
+depositar(bia, 50)
+sacar(ana, 30)
+sacar(bia, 80)
+mostrar(ana)
+mostrar(bia)
+</pre>
+</div>
+
+<hr>
+
+<h2 id="versao2">Versão 2 · Uma classe</h2>
+<p>A ideia de uma <strong>classe</strong>: reunir num lugar só o "molde" de um tipo de coisa (a conta) e tudo o que ela sabe fazer (os <strong>métodos</strong>: depositar, sacar, mostrar). Cada conta criada a partir do molde é um <strong>objeto</strong>, com os seus próprios dados. No Lua, o molde é uma tabela comum, <code>Conta</code>, e a ligação entre cada objeto e o molde é feita por uma metatabela.</p>
+
+<pre class="file" data-file="banco.lua">-- Banco da Ana, versão 2: uma classe
+
+local Conta = {}
+Conta.__index = Conta
+
+function Conta.nova(titular)
+  local conta = { titular = titular, saldo = 0 }
+  return setmetatable(conta, Conta)
+end
+
+function Conta:depositar(valor)
+  self.saldo = self.saldo + valor
+end
+
+function Conta:sacar(valor)
+  if valor &gt; self.saldo then
+    print(string.format("%s: saldo insuficiente para sacar R$ %.2f", self.titular, valor))
+    return false
+  end
+  self.saldo = self.saldo - valor
+  return true
+end
+
+function Conta:mostrar()
+  print(string.format("%s: R$ %.2f", self.titular, self.saldo))
+end
+
+local ana = Conta.nova("Ana")
+local bia = Conta.nova("Bia")
+ana:depositar(100)
+bia:depositar(50)
+ana:sacar(30)
+bia:sacar(80)
+ana:mostrar()
+bia:mostrar()
+print(getmetatable(ana) == Conta, rawget(ana, "depositar"), ana.depositar == Conta.depositar)
+</pre>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Peça</th><th>O que faz</th></tr>
+<tr><td><code>local Conta = {}</code></td><td>A classe: uma tabela que vai guardar os métodos. Nome com maiúscula, o costume para classes.</td></tr>
+<tr><td><code>Conta.__index = Conta</code></td><td>A peça-chave. Quando alguém procurar um campo que <strong>não existe</strong> num objeto (por exemplo, <code>ana.depositar</code>), o Lua olha a metatabela do objeto; se ela tiver <code>__index</code>, procura lá. Aqui, o <code>__index</code> da <code>Conta</code> é a própria <code>Conta</code> (veja <a href="index-newindex.html">__index</a>).</td></tr>
+<tr><td><code>setmetatable(conta, Conta)</code></td><td>Faz da <code>Conta</code> a metatabela do objeto novo, e devolve o objeto. A partir daí, <code>ana.depositar</code> é achado na <code>Conta</code>.</td></tr>
+<tr><td><code>function Conta:depositar(valor)</code></td><td>Um <strong>método</strong>. O <code>:</code> na definição acrescenta um primeiro parâmetro escondido, <code>self</code> ("o próprio"): é o mesmo que <code>function Conta.depositar(self, valor)</code>.</td></tr>
+<tr><td><code>self.saldo</code></td><td>O saldo <strong>do objeto que chamou</strong>: em <code>ana:depositar(100)</code>, o <code>self</code> é a <code>ana</code>; em <code>bia:depositar(50)</code>, é a <code>bia</code>.</td></tr>
+<tr><td><code>ana:depositar(100)</code></td><td>A chamada com <code>:</code> passa o objeto como primeiro argumento: é o mesmo que <code>ana.depositar(ana, 100)</code> (veja <a href="metodos.html">Métodos e o Dois-Pontos</a>).</td></tr>
+</table>
+</div>
+
+<pre class="term" data-cwd="~/projetos/banco">$ lua banco.lua
+Bia: saldo insuficiente para sacar R$ 80.00
+Ana: R$ 70.00
+Bia: R$ 50.00
+true	nil	true</pre>
+
+<p>O resultado é o mesmo da versão 1, e é isso que se quer: mudou a organização, não o comportamento. A última linha do programa confere três coisas sobre a <code>ana</code>:</p>
+<dl class="anatomy">
+  <dt>getmetatable(ana) == Conta → true</dt><dd>A metatabela da <code>ana</code> é a <code>Conta</code>.</dd>
+  <dt>rawget(ana, "depositar") → nil</dt><dd>O <a href="rawget-rawset.html">rawget</a> olha só dentro da tabela, sem passar pelo <code>__index</code>: a <code>ana</code> <strong>não tem</strong> um campo <code>depositar</code>. Ela só tem <code>titular</code> e <code>saldo</code>.</dd>
+  <dt>ana.depositar == Conta.depositar → true</dt><dd>Mesmo assim, <code>ana.depositar</code> funciona, e é exatamente a função guardada na <code>Conta</code>: o <code>__index</code> foi buscar lá. Mil contas compartilham os mesmos métodos, sem cópias.</dd>
+</dl>
+
+<h3>Quando dá errado na versão 2</h3>
+
+<div class="cenario">
+<strong>Ponto no lugar do dois-pontos: <code>attempt to index a number value (local 'self')</code></strong>
+<pre class="file" data-file="ponto.lua">local Conta = {}
+Conta.__index = Conta
+function Conta.nova(titular)
+  return setmetatable({ titular = titular, saldo = 0 }, Conta)
+end
+function Conta:depositar(valor)
+  self.saldo = self.saldo + valor
+end
+local ana = Conta.nova("Ana")
+ana.depositar(100)
+</pre>
+<pre class="term" data-cwd="~/projetos/banco">$ lua ponto.lua
+lua: ponto.lua:7: attempt to index a number value (local 'self')
+stack traceback:
+	ponto.lua:7: in field 'depositar'
+	ponto.lua:10: in main chunk
+	[C]: in ?</pre>
+<p>O erro mais comum com classes no Lua. Na linha 10, <code>ana.depositar(100)</code> (com <strong>ponto</strong>) chama a função passando só o <code>100</code>. Mas a função foi definida com <code>:</code>, e espera o objeto primeiro: o <code>self</code> recebeu o <code>100</code>, e o <code>valor</code> ficou <code>nil</code>. Na linha 7, <code>self.saldo</code> tenta olhar dentro do número 100: "tentativa de indexar um valor número (a local <code>self</code>)". O traceback mostra os dois lugares: o erro estourou na linha 7, dentro de <code>depositar</code>, que foi chamada na linha 10. <strong>Regra:</strong> definiu com <code>:</code>, chame com <code>:</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Esquecer o <code>Conta.__index = Conta</code>: <code>attempt to call a nil value (method 'depositar')</code></strong>
+<pre class="file" data-file="semindex.lua">local Conta = {}
+function Conta.nova(titular)
+  return setmetatable({ titular = titular, saldo = 0 }, Conta)
+end
+function Conta:depositar(valor)
+  self.saldo = self.saldo + valor
+end
+local ana = Conta.nova("Ana")
+ana:depositar(100)
+</pre>
+<pre class="term" data-cwd="~/projetos/banco">$ lua semindex.lua
+lua: semindex.lua:9: attempt to call a nil value (method 'depositar')
+stack traceback:
+	semindex.lua:9: in main chunk
+	[C]: in ?</pre>
+<p>A <code>Conta</code> é a metatabela da <code>ana</code>, mas sem o campo <code>__index</code> o Lua não sabe que deve procurar os campos que faltam na <code>Conta</code>. <code>ana.depositar</code> dá <code>nil</code>, e chamar <code>nil</code> é erro: "tentativa de chamar um valor nil (o método <code>depositar</code>)". Ter uma metatabela não basta: é o <code>__index</code> dela que faz a herança dos métodos.</p>
+</div>
+
+<div class="trylua" data-goal="out:Ana: R$ 70.00;;out:Bia: R$ 50.00;;src:function Conta:sacar">
+<p class="try-task"><strong>Missão (versão 2):</strong> a classe ainda não tem o método <code>sacar</code>, e o <code>ana:sacar(30)</code> para o programa com <code>attempt to call a nil value (method 'sacar')</code>. No lugar do comentário, crie <code>function Conta:sacar(valor)</code> com a regra da versão 1, usando <code>self</code> no lugar de <code>conta</code>.</p>
+<pre class="script" data-file="banco.lua">-- Banco da Ana, versão 2: uma classe
+
+local Conta = {}
+Conta.__index = Conta
+
+function Conta.nova(titular)
+  local conta = { titular = titular, saldo = 0 }
+  return setmetatable(conta, Conta)
+end
+
+function Conta:depositar(valor)
+  self.saldo = self.saldo + valor
+end
+
+-- crie aqui o método sacar (com a mesma regra da versão 1)
+
+function Conta:mostrar()
+  print(string.format("%s: R$ %.2f", self.titular, self.saldo))
+end
+
+local ana = Conta.nova("Ana")
+local bia = Conta.nova("Bia")
+ana:depositar(100)
+bia:depositar(50)
+ana:sacar(30)
+bia:sacar(80)
+ana:mostrar()
+bia:mostrar()
+print(getmetatable(ana) == Conta, rawget(ana, "depositar"), ana.depositar == Conta.depositar)
+</pre>
+<pre class="solucao" data-file="banco.lua">-- Banco da Ana, versão 2: uma classe
+
+local Conta = {}
+Conta.__index = Conta
+
+function Conta.nova(titular)
+  local conta = { titular = titular, saldo = 0 }
+  return setmetatable(conta, Conta)
+end
+
+function Conta:depositar(valor)
+  self.saldo = self.saldo + valor
+end
+
+function Conta:sacar(valor)
+  if valor &gt; self.saldo then
+    print(string.format("%s: saldo insuficiente para sacar R$ %.2f", self.titular, valor))
+    return false
+  end
+  self.saldo = self.saldo - valor
+  return true
+end
+
+function Conta:mostrar()
+  print(string.format("%s: R$ %.2f", self.titular, self.saldo))
+end
+
+local ana = Conta.nova("Ana")
+local bia = Conta.nova("Bia")
+ana:depositar(100)
+bia:depositar(50)
+ana:sacar(30)
+bia:sacar(80)
+ana:mostrar()
+bia:mostrar()
+print(getmetatable(ana) == Conta, rawget(ana, "depositar"), ana.depositar == Conta.depositar)
+</pre>
+</div>
+
+<hr>
+
+<h2 id="versao3">Versão 3 · Erros de verdade, extrato e __tostring</h2>
+<p>Até aqui, um saque grande demais só mostra um aviso e devolve <code>false</code>, e quem chamou pode nem olhar o <code>false</code>. Num banco, uma operação que não pode ser feita deve <strong>parar</strong>, a menos que alguém trate o problema. É o papel do <code>error</code>: ele interrompe a função com uma mensagem, e o <code>pcall</code> deixa quem chamou decidir o que fazer. A versão 3 também guarda um <strong>extrato</strong> e ensina o <code>print</code> a mostrar uma conta.</p>
+
+<pre class="file" data-file="banco.lua">-- Banco da Ana, versão 3: erros de verdade, extrato e __tostring
+
+local Conta = {}
+Conta.__index = Conta
+
+function Conta.nova(titular)
+  local conta = { titular = titular, saldo = 0, extrato = {} }
+  return setmetatable(conta, Conta)
+end
+
+-- Confere o valor; o 3 do error aponta para quem chamou depositar/sacar.
+local function conferir_valor(valor)
+  if type(valor) ~= "number" or valor &lt;= 0 then
+    error("valor inválido: " .. tostring(valor), 3)
+  end
+end
+
+function Conta:depositar(valor)
+  conferir_valor(valor)
+  self.saldo = self.saldo + valor
+  table.insert(self.extrato, string.format("depósito  +%8.2f", valor))
+end
+
+function Conta:sacar(valor)
+  conferir_valor(valor)
+  if valor &gt; self.saldo then
+    error(string.format("saldo insuficiente (saldo R$ %.2f, saque R$ %.2f)", self.saldo, valor), 2)
+  end
+  self.saldo = self.saldo - valor
+  table.insert(self.extrato, string.format("saque     -%8.2f", valor))
+end
+
+function Conta:transferir(destino, valor)
+  self:sacar(valor)
+  destino:depositar(valor)
+end
+
+function Conta:imprimir_extrato()
+  print("Extrato de " .. self.titular)
+  for _, linha in ipairs(self.extrato) do
+    print("  " .. linha)
+  end
+  print(string.format("  saldo      %9.2f", self.saldo))
+end
+
+-- print(conta) e tostring(conta) usam esta função
+function Conta.__tostring(conta)
+  return string.format("Conta de %s: R$ %.2f", conta.titular, conta.saldo)
+end
+
+local ana = Conta.nova("Ana")
+local bia = Conta.nova("Bia")
+ana:depositar(100)
+ana:transferir(bia, 40)
+print(ana)
+print(bia)
+
+local ok, erro = pcall(ana.sacar, ana, 500)
+print(ok, erro)
+
+ok, erro = pcall(function () bia:depositar(-5) end)
+print(ok, erro)
+
+ana:imprimir_extrato()
+</pre>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Peça</th><th>O que faz</th></tr>
+<tr><td><code>error("…", 2)</code></td><td>Interrompe a função com a mensagem (veja <a href="error.html">error</a>). O segundo argumento é o <strong>nível</strong>: <code>1</code> (o padrão) põe na mensagem a linha do próprio <code>error</code>; <code>2</code> põe a linha de <strong>quem chamou</strong> a função, que é onde está o engano.</td></tr>
+<tr><td><code>conferir_valor</code> com <code>error(…, 3)</code></td><td>Uma função auxiliar, chamada por <code>depositar</code> e <code>sacar</code>. Nível 3: subindo dois degraus, a mensagem aponta para quem chamou <code>depositar</code>/<code>sacar</code>.</td></tr>
+<tr><td><code>type(valor) ~= "number" or valor &lt;= 0</code></td><td>Recusa depósito de texto, de zero e de valor negativo (um "depósito" de −5 seria um saque disfarçado).</td></tr>
+<tr><td><code>table.insert(self.extrato, …)</code></td><td>Cada conta tem a sua lista de movimentos, criada em <code>Conta.nova</code>. <code>%8.2f</code> alinha os valores.</td></tr>
+<tr><td><code>Conta:transferir(destino, valor)</code></td><td>Um método que usa outros: saca desta conta e deposita na outra. Se o saque der erro, o <code>error</code> interrompe o <code>transferir</code> também, e o depósito não acontece: o dinheiro nunca "some no meio".</td></tr>
+<tr><td><code>function Conta.__tostring(conta)</code></td><td>Um <a href="tostring-call-len.html">metamétodo</a>: quando o <code>print</code> (ou o <code>tostring</code>) recebe um objeto cuja metatabela tem <code>__tostring</code>, ele usa o texto que essa função devolve. Sem ele, o <code>print(ana)</code> mostraria algo como <code>table: 0x55…</code>.</td></tr>
+<tr><td><code>pcall(ana.sacar, ana, 500)</code></td><td>Chama <code>ana.sacar(ana, 500)</code> em "modo protegido" (veja <a href="pcall.html">pcall</a>): se der erro, o programa não para; o <code>pcall</code> devolve <code>false</code> e a mensagem. Como a chamada é feita pelo <code>pcall</code>, o objeto vai escrito como primeiro argumento (o <code>:</code> não existe aqui).</td></tr>
+<tr><td><code>pcall(function () bia:depositar(-5) end)</code></td><td>O outro jeito: uma <a href="funcoes-valores.html">função anônima</a> com a chamada normal dentro.</td></tr>
+</table>
+</div>
+
+<pre class="term" data-cwd="~/projetos/banco">$ lua banco.lua
+Conta de Ana: R$ 60.00
+Conta de Bia: R$ 40.00
+false	saldo insuficiente (saldo R$ 60.00, saque R$ 500.00)
+false	banco.lua:61: valor inválido: -5
+Extrato de Ana
+  depósito  +  100.00
+  saque     -   40.00
+  saldo          60.00</pre>
+
+<p>Os dois <code>false</code> são os <code>pcall</code> devolvendo o erro em vez de parar o programa. A segunda mensagem começa com <code>banco.lua:61:</code>, a linha da função anônima que chamou <code>depositar(-5)</code>, graças ao nível 3. A primeira não tem linha: quem chamou o <code>sacar</code> foi o próprio <code>pcall</code>, que é uma função em C e não tem linha num arquivo <code>.lua</code>.</p>
+
+<div class="cenario">
+<strong>O erro sem <code>pcall</code>: o programa para</strong>
+<p>Trocando a última linha (o extrato) por um <code>ana:sacar(500)</code> direto, sem proteção, seguido de um <code>print("fim")</code>:</p>
+<pre class="term" data-cwd="~/projetos/banco">$ lua banco.lua
+Conta de Ana: R$ 60.00
+Conta de Bia: R$ 40.00
+false	saldo insuficiente (saldo R$ 60.00, saque R$ 500.00)
+false	banco.lua:61: valor inválido: -5
+lua: banco.lua:63: saldo insuficiente (saldo R$ 60.00, saque R$ 500.00)
+stack traceback:
+	[C]: in global 'error'
+	banco.lua:27: in method 'sacar'
+	banco.lua:63: in main chunk
+	[C]: in ?
+$ echo $?
+1</pre>
+<p>O <code>fim</code> nunca apareceu. A mensagem diz <code>banco.lua:63</code> (a linha do <code>ana:sacar(500)</code>, por causa do nível 2), e o traceback conta a história de baixo para cima: o programa principal, na linha 63, chamou o método <code>sacar</code>, que na linha 27 chamou o <code>error</code>. Um erro não tratado é melhor que um saldo errado em silêncio: ele aparece, com o lugar exato.</p>
+</div>
+
+<div class="trylua" data-goal="out:Não deu: saldo insuficiente;;semerro">
+<p class="try-task"><strong>Missão (versão 3):</strong> o saque de 500 está sem proteção, e o programa para antes do extrato. Troque o <code>ana:sacar(500)</code> por um <code>pcall</code>; se ele devolver <code>false</code>, mostre <code>Não deu: </code> seguido da mensagem do erro. O extrato precisa aparecer no fim.</p>
+<pre class="script" data-file="banco.lua">-- Banco da Ana, versão 3: erros de verdade, extrato e __tostring
+
+local Conta = {}
+Conta.__index = Conta
+
+function Conta.nova(titular)
+  local conta = { titular = titular, saldo = 0, extrato = {} }
+  return setmetatable(conta, Conta)
+end
+
+-- Confere o valor; o 3 do error aponta para quem chamou depositar/sacar.
+local function conferir_valor(valor)
+  if type(valor) ~= "number" or valor &lt;= 0 then
+    error("valor inválido: " .. tostring(valor), 3)
+  end
+end
+
+function Conta:depositar(valor)
+  conferir_valor(valor)
+  self.saldo = self.saldo + valor
+  table.insert(self.extrato, string.format("depósito  +%8.2f", valor))
+end
+
+function Conta:sacar(valor)
+  conferir_valor(valor)
+  if valor &gt; self.saldo then
+    error(string.format("saldo insuficiente (saldo R$ %.2f, saque R$ %.2f)", self.saldo, valor), 2)
+  end
+  self.saldo = self.saldo - valor
+  table.insert(self.extrato, string.format("saque     -%8.2f", valor))
+end
+
+function Conta:transferir(destino, valor)
+  self:sacar(valor)
+  destino:depositar(valor)
+end
+
+function Conta:imprimir_extrato()
+  print("Extrato de " .. self.titular)
+  for _, linha in ipairs(self.extrato) do
+    print("  " .. linha)
+  end
+  print(string.format("  saldo      %9.2f", self.saldo))
+end
+
+-- print(conta) e tostring(conta) usam esta função
+function Conta.__tostring(conta)
+  return string.format("Conta de %s: R$ %.2f", conta.titular, conta.saldo)
+end
+
+local ana = Conta.nova("Ana")
+local bia = Conta.nova("Bia")
+ana:depositar(100)
+ana:transferir(bia, 40)
+print(ana)
+print(bia)
+
+-- proteja este saque com pcall e mostre "Não deu: " e a mensagem
+ana:sacar(500)
+
+ana:imprimir_extrato()
+</pre>
+<pre class="solucao" data-file="banco.lua">-- Banco da Ana, versão 3: erros de verdade, extrato e __tostring
+
+local Conta = {}
+Conta.__index = Conta
+
+function Conta.nova(titular)
+  local conta = { titular = titular, saldo = 0, extrato = {} }
+  return setmetatable(conta, Conta)
+end
+
+-- Confere o valor; o 3 do error aponta para quem chamou depositar/sacar.
+local function conferir_valor(valor)
+  if type(valor) ~= "number" or valor &lt;= 0 then
+    error("valor inválido: " .. tostring(valor), 3)
+  end
+end
+
+function Conta:depositar(valor)
+  conferir_valor(valor)
+  self.saldo = self.saldo + valor
+  table.insert(self.extrato, string.format("depósito  +%8.2f", valor))
+end
+
+function Conta:sacar(valor)
+  conferir_valor(valor)
+  if valor &gt; self.saldo then
+    error(string.format("saldo insuficiente (saldo R$ %.2f, saque R$ %.2f)", self.saldo, valor), 2)
+  end
+  self.saldo = self.saldo - valor
+  table.insert(self.extrato, string.format("saque     -%8.2f", valor))
+end
+
+function Conta:transferir(destino, valor)
+  self:sacar(valor)
+  destino:depositar(valor)
+end
+
+function Conta:imprimir_extrato()
+  print("Extrato de " .. self.titular)
+  for _, linha in ipairs(self.extrato) do
+    print("  " .. linha)
+  end
+  print(string.format("  saldo      %9.2f", self.saldo))
+end
+
+-- print(conta) e tostring(conta) usam esta função
+function Conta.__tostring(conta)
+  return string.format("Conta de %s: R$ %.2f", conta.titular, conta.saldo)
+end
+
+local ana = Conta.nova("Ana")
+local bia = Conta.nova("Bia")
+ana:depositar(100)
+ana:transferir(bia, 40)
+print(ana)
+print(bia)
+
+local ok, erro = pcall(ana.sacar, ana, 500)
+if not ok then
+  print("Não deu: " .. erro)
+end
+
+ana:imprimir_extrato()
+</pre>
+</div>
+
+<hr>
+
+<h2 id="versao4">Versão 4 · Herança e erros como tabelas</h2>
+<p>A Ana abriu uma poupança. Uma poupança <strong>é uma conta</strong> (deposita, saca, tem extrato), com uma coisa a mais: ela rende juros. Copiar todos os métodos da <code>Conta</code> para uma classe nova seria repetir código. Com <strong>herança</strong>, a classe <code>Poupanca</code> guarda só o que é diferente, e o que ela não tiver é procurado na <code>Conta</code>.</p>
+
+<p>E os erros mudam de forma: em vez de um texto, o <code>error</code> recebe uma <strong>tabela</strong> com um código. Assim, quem trata o erro sabe <strong>qual</strong> problema foi (falta de saldo? valor inválido?) sem ter que procurar palavras na mensagem.</p>
+
+<pre class="file" data-file="banco.lua">-- Banco da Ana, versão 4: herança (a poupança) e erros como tabelas
+
+local Conta = {}
+Conta.__index = Conta
+
+function Conta.nova(titular)
+  local conta = { titular = titular, saldo = 0, extrato = {} }
+  return setmetatable(conta, Conta)
+end
+
+-- Um erro que o programa consegue reconhecer: uma tabela com código e mensagem.
+local function falhar(codigo, mensagem)
+  error({ codigo = codigo, mensagem = mensagem }, 2)
+end
+
+function Conta:depositar(valor)
+  if type(valor) ~= "number" or valor &lt;= 0 then
+    falhar("VALOR", "valor inválido: " .. tostring(valor))
+  end
+  self.saldo = self.saldo + valor
+  table.insert(self.extrato, string.format("depósito  +%8.2f", valor))
+end
+
+function Conta:sacar(valor)
+  if type(valor) ~= "number" or valor &lt;= 0 then
+    falhar("VALOR", "valor inválido: " .. tostring(valor))
+  end
+  if valor &gt; self.saldo then
+    falhar("SALDO", string.format("saldo insuficiente (saldo R$ %.2f)", self.saldo))
+  end
+  self.saldo = self.saldo - valor
+  table.insert(self.extrato, string.format("saque     -%8.2f", valor))
+end
+
+function Conta:descricao()
+  return string.format("Conta de %s: R$ %.2f", self.titular, self.saldo)
+end
+
+function Conta.__tostring(conta)
+  return conta:descricao()
+end
+
+-- A poupança é uma Conta com rendimento: o que ela não tiver, procura em Conta.
+local Poupanca = setmetatable({}, { __index = Conta })
+Poupanca.__index = Poupanca
+Poupanca.__tostring = Conta.__tostring   -- metamétodos não vêm pelo __index
+
+function Poupanca.nova(titular, taxa)
+  local conta = Conta.nova(titular)       -- monta a parte de Conta
+  conta.taxa = taxa
+  return setmetatable(conta, Poupanca)    -- e passa a ser uma Poupanca
+end
+
+function Poupanca:render()
+  local juros = self.saldo * self.taxa
+  self:depositar(juros)
+  return juros
+end
+
+-- Sobrescreve a descrição: mostra também a taxa.
+function Poupanca:descricao()
+  return Conta.descricao(self) .. string.format(" (poupança, %.1f%% ao mês)", self.taxa * 100)
+end
+
+local ana = Conta.nova("Ana")
+local cofrinho = Poupanca.nova("Ana", 0.01)
+ana:depositar(300)
+cofrinho:depositar(1000)
+print(ana)
+print(cofrinho)
+print(string.format("Rendeu R$ %.2f", cofrinho:render()))
+print(cofrinho)
+
+-- Tentar sacar demais, e reconhecer o tipo do erro pelo código.
+for _, valor in ipairs({ 50, 5000, -1 }) do
+  local ok, erro = pcall(cofrinho.sacar, cofrinho, valor)
+  if ok then
+    print(string.format("Saque de %.2f: ok", valor))
+  elseif erro.codigo == "SALDO" then
+    print("Recusado por falta de saldo: " .. erro.mensagem)
+  else
+    print("Recusado (" .. erro.codigo .. "): " .. erro.mensagem)
+  end
+end
+print(cofrinho)
+</pre>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Peça</th><th>O que faz</th></tr>
+<tr><td><code>error({ codigo = …, mensagem = … }, 2)</code></td><td>O <code>error</code> aceita qualquer valor, não só texto. O <code>pcall</code> devolve essa mesma tabela. (Com uma tabela, o Lua não acrescenta a posição na mensagem: o nível só importa para erros de texto.)</td></tr>
+<tr><td><code>erro.codigo == "SALDO"</code></td><td>Quem trata reconhece o tipo do erro pelo campo, com uma comparação simples.</td></tr>
+<tr><td><code>setmetatable({}, { __index = Conta })</code></td><td>A <code>Poupanca</code> é uma tabela cuja metatabela tem <code>__index = Conta</code>: o que não estiver na <code>Poupanca</code> é procurado na <code>Conta</code>.</td></tr>
+<tr><td><code>Poupanca.__index = Poupanca</code></td><td>O mesmo truque da versão 2, para os objetos da poupança acharem os métodos na <code>Poupanca</code>.</td></tr>
+<tr><td><code>Poupanca.nova</code>: <code>Conta.nova(titular)</code> e depois <code>setmetatable(conta, Poupanca)</code></td><td>Aproveita a fábrica da <code>Conta</code> para montar os campos comuns (<code>titular</code>, <code>saldo</code>, <code>extrato</code>), acrescenta a <code>taxa</code> e troca a metatabela: o objeto passa a ser uma poupança.</td></tr>
+<tr><td><code>Poupanca:render()</code></td><td>O método novo. Lá dentro, <code>self:depositar(juros)</code> usa o método herdado da <code>Conta</code>.</td></tr>
+<tr><td><code>Poupanca:descricao()</code> com <code>Conta.descricao(self)</code></td><td><strong>Sobrescreve</strong> o método da <code>Conta</code>, e ainda aproveita o original: chama a versão da <code>Conta</code> diretamente (com ponto, passando o <code>self</code>) e acrescenta a taxa. <code>%%</code> escreve um <code>%</code> de verdade.</td></tr>
+<tr><td><code>Poupanca.__tostring = Conta.__tostring</code></td><td>Parece repetido, mas é necessário: veja o cenário abaixo.</td></tr>
+</table>
+</div>
+
+<p>A saída está no começo da página. O caminho que o Lua faz para achar cada método, por exemplo em <code>cofrinho:sacar(50)</code>: procura <code>sacar</code> no próprio <code>cofrinho</code> (não tem) → no <code>__index</code> dele, a <code>Poupanca</code> (não tem) → no <code>__index</code> da <code>Poupanca</code>, a <code>Conta</code> (achou). Já <code>cofrinho:descricao()</code> para na <code>Poupanca</code>, que tem a sua própria versão.</p>
+
+<div class="cenario">
+<strong>Metamétodos não são herdados pelo <code>__index</code></strong>
+<p>Sem a linha <code>Poupanca.__tostring = Conta.__tostring</code>:</p>
+<pre class="term" data-cwd="~/projetos/banco">$ lua banco.lua
+Conta de Ana: R$ 300.00
+table: 0x55f5af8e4620
+Rendeu R$ 10.00
+…</pre>
+<p>A conta comum continua aparecendo bem, mas a poupança virou <code>table: 0x55f5af8e4620</code> (o endereço na memória; muda a cada execução). O motivo: para achar um metamétodo como o <code>__tostring</code>, o Lua olha <strong>direto</strong> na metatabela do objeto (a <code>Poupanca</code>), sem seguir o <code>__index</code>. O <code>__index</code> serve para os campos <strong>do objeto</strong> (<code>cofrinho.sacar</code>), não para os da metatabela. Cada classe filha precisa ter os seus metamétodos (<code>__tostring</code>, <code>__eq</code>, <code>__add</code>…), nem que seja copiando os da mãe. Veja <a href="ref-metametodos.html">Metamétodos</a>.</p>
+</div>
+
+<div class="trylua" data-goal="out:Rendeu R$ 10.00;;out:Conta de Ana: R$ 1010.00">
+<p class="try-task"><strong>Missão (versão 4):</strong> a <code>Poupanca</code> ainda não sabe render, e <code>cofrinho:render()</code> para o programa. No lugar do comentário, crie <code>function Poupanca:render()</code>: calcule os juros (<code>self.saldo * self.taxa</code>), deposite-os com <code>self:depositar</code> e devolva os juros.</p>
+<pre class="script" data-file="banco.lua">-- Banco da Ana, versão 4: herança (a poupança) e erros como tabelas
+
+local Conta = {}
+Conta.__index = Conta
+
+function Conta.nova(titular)
+  local conta = { titular = titular, saldo = 0, extrato = {} }
+  return setmetatable(conta, Conta)
+end
+
+-- Um erro que o programa consegue reconhecer: uma tabela com código e mensagem.
+local function falhar(codigo, mensagem)
+  error({ codigo = codigo, mensagem = mensagem }, 2)
+end
+
+function Conta:depositar(valor)
+  if type(valor) ~= "number" or valor &lt;= 0 then
+    falhar("VALOR", "valor inválido: " .. tostring(valor))
+  end
+  self.saldo = self.saldo + valor
+  table.insert(self.extrato, string.format("depósito  +%8.2f", valor))
+end
+
+function Conta:sacar(valor)
+  if type(valor) ~= "number" or valor &lt;= 0 then
+    falhar("VALOR", "valor inválido: " .. tostring(valor))
+  end
+  if valor &gt; self.saldo then
+    falhar("SALDO", string.format("saldo insuficiente (saldo R$ %.2f)", self.saldo))
+  end
+  self.saldo = self.saldo - valor
+  table.insert(self.extrato, string.format("saque     -%8.2f", valor))
+end
+
+function Conta:descricao()
+  return string.format("Conta de %s: R$ %.2f", self.titular, self.saldo)
+end
+
+function Conta.__tostring(conta)
+  return conta:descricao()
+end
+
+-- A poupança é uma Conta com rendimento: o que ela não tiver, procura em Conta.
+local Poupanca = setmetatable({}, { __index = Conta })
+Poupanca.__index = Poupanca
+Poupanca.__tostring = Conta.__tostring   -- metamétodos não vêm pelo __index
+
+function Poupanca.nova(titular, taxa)
+  local conta = Conta.nova(titular)       -- monta a parte de Conta
+  conta.taxa = taxa
+  return setmetatable(conta, Poupanca)    -- e passa a ser uma Poupanca
+end
+
+-- crie aqui o método render: deposita saldo * taxa e devolve os juros
+
+-- Sobrescreve a descrição: mostra também a taxa.
+function Poupanca:descricao()
+  return Conta.descricao(self) .. string.format(" (poupança, %.1f%% ao mês)", self.taxa * 100)
+end
+
+local ana = Conta.nova("Ana")
+local cofrinho = Poupanca.nova("Ana", 0.01)
+ana:depositar(300)
+cofrinho:depositar(1000)
+print(ana)
+print(cofrinho)
+print(string.format("Rendeu R$ %.2f", cofrinho:render()))
+print(cofrinho)
+
+-- Tentar sacar demais, e reconhecer o tipo do erro pelo código.
+for _, valor in ipairs({ 50, 5000, -1 }) do
+  local ok, erro = pcall(cofrinho.sacar, cofrinho, valor)
+  if ok then
+    print(string.format("Saque de %.2f: ok", valor))
+  elseif erro.codigo == "SALDO" then
+    print("Recusado por falta de saldo: " .. erro.mensagem)
+  else
+    print("Recusado (" .. erro.codigo .. "): " .. erro.mensagem)
+  end
+end
+print(cofrinho)
+</pre>
+<pre class="solucao" data-file="banco.lua">-- Banco da Ana, versão 4: herança (a poupança) e erros como tabelas
+
+local Conta = {}
+Conta.__index = Conta
+
+function Conta.nova(titular)
+  local conta = { titular = titular, saldo = 0, extrato = {} }
+  return setmetatable(conta, Conta)
+end
+
+-- Um erro que o programa consegue reconhecer: uma tabela com código e mensagem.
+local function falhar(codigo, mensagem)
+  error({ codigo = codigo, mensagem = mensagem }, 2)
+end
+
+function Conta:depositar(valor)
+  if type(valor) ~= "number" or valor &lt;= 0 then
+    falhar("VALOR", "valor inválido: " .. tostring(valor))
+  end
+  self.saldo = self.saldo + valor
+  table.insert(self.extrato, string.format("depósito  +%8.2f", valor))
+end
+
+function Conta:sacar(valor)
+  if type(valor) ~= "number" or valor &lt;= 0 then
+    falhar("VALOR", "valor inválido: " .. tostring(valor))
+  end
+  if valor &gt; self.saldo then
+    falhar("SALDO", string.format("saldo insuficiente (saldo R$ %.2f)", self.saldo))
+  end
+  self.saldo = self.saldo - valor
+  table.insert(self.extrato, string.format("saque     -%8.2f", valor))
+end
+
+function Conta:descricao()
+  return string.format("Conta de %s: R$ %.2f", self.titular, self.saldo)
+end
+
+function Conta.__tostring(conta)
+  return conta:descricao()
+end
+
+-- A poupança é uma Conta com rendimento: o que ela não tiver, procura em Conta.
+local Poupanca = setmetatable({}, { __index = Conta })
+Poupanca.__index = Poupanca
+Poupanca.__tostring = Conta.__tostring   -- metamétodos não vêm pelo __index
+
+function Poupanca.nova(titular, taxa)
+  local conta = Conta.nova(titular)       -- monta a parte de Conta
+  conta.taxa = taxa
+  return setmetatable(conta, Poupanca)    -- e passa a ser uma Poupanca
+end
+
+function Poupanca:render()
+  local juros = self.saldo * self.taxa
+  self:depositar(juros)
+  return juros
+end
+
+-- Sobrescreve a descrição: mostra também a taxa.
+function Poupanca:descricao()
+  return Conta.descricao(self) .. string.format(" (poupança, %.1f%% ao mês)", self.taxa * 100)
+end
+
+local ana = Conta.nova("Ana")
+local cofrinho = Poupanca.nova("Ana", 0.01)
+ana:depositar(300)
+cofrinho:depositar(1000)
+print(ana)
+print(cofrinho)
+print(string.format("Rendeu R$ %.2f", cofrinho:render()))
+print(cofrinho)
+
+-- Tentar sacar demais, e reconhecer o tipo do erro pelo código.
+for _, valor in ipairs({ 50, 5000, -1 }) do
+  local ok, erro = pcall(cofrinho.sacar, cofrinho, valor)
+  if ok then
+    print(string.format("Saque de %.2f: ok", valor))
+  elseif erro.codigo == "SALDO" then
+    print("Recusado por falta de saldo: " .. erro.mensagem)
+  else
+    print("Recusado (" .. erro.codigo .. "): " .. erro.mensagem)
+  end
+end
+print(cofrinho)
+</pre>
+</div>
+
+<div class="trylua" data-goal="out:Conta de Ana: R$ 1000.00 (poupança, 1.0% ao mês)">
+<p class="try-task"><strong>Missão (o metamétodo da filha):</strong> este programa é a versão 4 sem a linha do <code>__tostring</code> da poupança, e o <code>print(cofrinho)</code> mostra um endereço de memória. Logo depois de <code>Poupanca.__index = Poupanca</code>, dê à <code>Poupanca</code> o mesmo <code>__tostring</code> da <code>Conta</code>.</p>
+<pre class="script" data-file="banco.lua">-- Banco da Ana, versão 4: herança (a poupança) e erros como tabelas
+
+local Conta = {}
+Conta.__index = Conta
+
+function Conta.nova(titular)
+  local conta = { titular = titular, saldo = 0, extrato = {} }
+  return setmetatable(conta, Conta)
+end
+
+-- Um erro que o programa consegue reconhecer: uma tabela com código e mensagem.
+local function falhar(codigo, mensagem)
+  error({ codigo = codigo, mensagem = mensagem }, 2)
+end
+
+function Conta:depositar(valor)
+  if type(valor) ~= "number" or valor &lt;= 0 then
+    falhar("VALOR", "valor inválido: " .. tostring(valor))
+  end
+  self.saldo = self.saldo + valor
+  table.insert(self.extrato, string.format("depósito  +%8.2f", valor))
+end
+
+function Conta:sacar(valor)
+  if type(valor) ~= "number" or valor &lt;= 0 then
+    falhar("VALOR", "valor inválido: " .. tostring(valor))
+  end
+  if valor &gt; self.saldo then
+    falhar("SALDO", string.format("saldo insuficiente (saldo R$ %.2f)", self.saldo))
+  end
+  self.saldo = self.saldo - valor
+  table.insert(self.extrato, string.format("saque     -%8.2f", valor))
+end
+
+function Conta:descricao()
+  return string.format("Conta de %s: R$ %.2f", self.titular, self.saldo)
+end
+
+function Conta.__tostring(conta)
+  return conta:descricao()
+end
+
+-- A poupança é uma Conta com rendimento: o que ela não tiver, procura em Conta.
+local Poupanca = setmetatable({}, { __index = Conta })
+Poupanca.__index = Poupanca
+
+function Poupanca.nova(titular, taxa)
+  local conta = Conta.nova(titular)       -- monta a parte de Conta
+  conta.taxa = taxa
+  return setmetatable(conta, Poupanca)    -- e passa a ser uma Poupanca
+end
+
+function Poupanca:render()
+  local juros = self.saldo * self.taxa
+  self:depositar(juros)
+  return juros
+end
+
+-- Sobrescreve a descrição: mostra também a taxa.
+function Poupanca:descricao()
+  return Conta.descricao(self) .. string.format(" (poupança, %.1f%% ao mês)", self.taxa * 100)
+end
+
+local ana = Conta.nova("Ana")
+local cofrinho = Poupanca.nova("Ana", 0.01)
+ana:depositar(300)
+cofrinho:depositar(1000)
+print(ana)
+print(cofrinho)
+print(string.format("Rendeu R$ %.2f", cofrinho:render()))
+print(cofrinho)
+
+-- Tentar sacar demais, e reconhecer o tipo do erro pelo código.
+for _, valor in ipairs({ 50, 5000, -1 }) do
+  local ok, erro = pcall(cofrinho.sacar, cofrinho, valor)
+  if ok then
+    print(string.format("Saque de %.2f: ok", valor))
+  elseif erro.codigo == "SALDO" then
+    print("Recusado por falta de saldo: " .. erro.mensagem)
+  else
+    print("Recusado (" .. erro.codigo .. "): " .. erro.mensagem)
+  end
+end
+print(cofrinho)
+</pre>
+<pre class="solucao" data-file="banco.lua">-- Banco da Ana, versão 4: herança (a poupança) e erros como tabelas
+
+local Conta = {}
+Conta.__index = Conta
+
+function Conta.nova(titular)
+  local conta = { titular = titular, saldo = 0, extrato = {} }
+  return setmetatable(conta, Conta)
+end
+
+-- Um erro que o programa consegue reconhecer: uma tabela com código e mensagem.
+local function falhar(codigo, mensagem)
+  error({ codigo = codigo, mensagem = mensagem }, 2)
+end
+
+function Conta:depositar(valor)
+  if type(valor) ~= "number" or valor &lt;= 0 then
+    falhar("VALOR", "valor inválido: " .. tostring(valor))
+  end
+  self.saldo = self.saldo + valor
+  table.insert(self.extrato, string.format("depósito  +%8.2f", valor))
+end
+
+function Conta:sacar(valor)
+  if type(valor) ~= "number" or valor &lt;= 0 then
+    falhar("VALOR", "valor inválido: " .. tostring(valor))
+  end
+  if valor &gt; self.saldo then
+    falhar("SALDO", string.format("saldo insuficiente (saldo R$ %.2f)", self.saldo))
+  end
+  self.saldo = self.saldo - valor
+  table.insert(self.extrato, string.format("saque     -%8.2f", valor))
+end
+
+function Conta:descricao()
+  return string.format("Conta de %s: R$ %.2f", self.titular, self.saldo)
+end
+
+function Conta.__tostring(conta)
+  return conta:descricao()
+end
+
+-- A poupança é uma Conta com rendimento: o que ela não tiver, procura em Conta.
+local Poupanca = setmetatable({}, { __index = Conta })
+Poupanca.__index = Poupanca
+Poupanca.__tostring = Conta.__tostring   -- metamétodos não vêm pelo __index
+
+function Poupanca.nova(titular, taxa)
+  local conta = Conta.nova(titular)       -- monta a parte de Conta
+  conta.taxa = taxa
+  return setmetatable(conta, Poupanca)    -- e passa a ser uma Poupanca
+end
+
+function Poupanca:render()
+  local juros = self.saldo * self.taxa
+  self:depositar(juros)
+  return juros
+end
+
+-- Sobrescreve a descrição: mostra também a taxa.
+function Poupanca:descricao()
+  return Conta.descricao(self) .. string.format(" (poupança, %.1f%% ao mês)", self.taxa * 100)
+end
+
+local ana = Conta.nova("Ana")
+local cofrinho = Poupanca.nova("Ana", 0.01)
+ana:depositar(300)
+cofrinho:depositar(1000)
+print(ana)
+print(cofrinho)
+print(string.format("Rendeu R$ %.2f", cofrinho:render()))
+print(cofrinho)
+
+-- Tentar sacar demais, e reconhecer o tipo do erro pelo código.
+for _, valor in ipairs({ 50, 5000, -1 }) do
+  local ok, erro = pcall(cofrinho.sacar, cofrinho, valor)
+  if ok then
+    print(string.format("Saque de %.2f: ok", valor))
+  elseif erro.codigo == "SALDO" then
+    print("Recusado por falta de saldo: " .. erro.mensagem)
+  else
+    print("Recusado (" .. erro.codigo .. "): " .. erro.mensagem)
+  end
+end
+print(cofrinho)
+</pre>
+</div>
+
+<hr>
+
+<h2>As quatro versões lado a lado</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th></th><th>Versão 1</th><th>Versão 2</th><th>Versão 3</th><th>Versão 4</th></tr>
+<tr><td>Criar</td><td><code>nova_conta("Ana")</code></td><td><code>Conta.nova("Ana")</code></td><td><code>Conta.nova("Ana")</code></td><td><code>Conta.nova</code> / <code>Poupanca.nova("Ana", 0.01)</code></td></tr>
+<tr><td>Depositar</td><td><code>depositar(ana, 100)</code></td><td><code>ana:depositar(100)</code></td><td><code>ana:depositar(100)</code></td><td><code>cofrinho:depositar(100)</code> (herdado)</td></tr>
+<tr><td>Saque recusado</td><td>aviso + <code>false</code></td><td>aviso + <code>false</code></td><td><code>error</code> com texto</td><td><code>error</code> com tabela <code>{ codigo, mensagem }</code></td></tr>
+<tr><td>Mostrar</td><td><code>mostrar(ana)</code></td><td><code>ana:mostrar()</code></td><td><code>print(ana)</code> (<code>__tostring</code>)</td><td><code>print(cofrinho)</code> (<code>__tostring</code> + <code>descricao</code> sobrescrita)</td></tr>
+<tr><td>Onde ficam as funções</td><td>Soltas no programa</td><td>Na tabela <code>Conta</code></td><td>Na tabela <code>Conta</code></td><td><code>Conta</code> e <code>Poupanca</code> (só o que muda)</td></tr>
+</table>
+</div>
+
+<div class="note">
+<strong>Por que não existe <code>class</code> no Lua</strong>
+<p>O Lua prefere dar poucos mecanismos gerais (tabelas, metatabelas, funções) a muitos recursos prontos. Com eles, cada programa monta o tipo de classe que precisa. Por isso você vai encontrar outros estilos em código alheio: <code>Conta.new</code> em vez de <code>Conta.nova</code>, o <code>setmetatable</code> dentro de um método <code>Conta:new(o)</code>, ou bibliotecas como <code>middleclass</code> e <code>classic</code>. Por baixo, todos usam o mesmo <code>__index</code>. Mais em <a href="classes.html">Classes com Metatabelas</a>.</p>
+</div>
+
+<h2>Desafios extras</h2>
+<ul>
+  <li><strong>Saldo protegido.</strong> Na versão 4, nada impede <code>ana.saldo = 1000000</code>. Reescreva <code>Conta.nova</code> guardando o saldo numa variável local e devolvendo uma tabela de funções que a enxergam (uma <a href="closures.html">closure</a>). Veja <a href="encapsulamento.html">Privacidade com Closures</a>.</li>
+  <li><strong>Limite de saques na poupança.</strong> Sobrescreva <code>Poupanca:sacar</code> para recusar (com o código <code>"LIMITE"</code>) mais de dois saques; dentro dela, chame <code>Conta.sacar(self, valor)</code> para fazer o saque de verdade.</li>
+  <li><strong>Comparar contas.</strong> Dê à <code>Conta</code> um <code>__lt</code> (veja <a href="metametodos-aritmeticos.html">Metamétodos de Operadores</a>) que compare os saldos, e ordene uma lista de contas com <code>table.sort(contas)</code>.</li>
+</ul>
+
+<hr>
+
+<h2>Referência rápida do projeto</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>Para que serviu</th></tr>
+<tr><td><code>local Conta = {}</code> + <code>Conta.__index = Conta</code></td><td>Criar a classe</td></tr>
+<tr><td><code>setmetatable({ … }, Conta)</code></td><td>Criar um objeto da classe</td></tr>
+<tr><td><code>function Conta:metodo(…)</code> … <code>self</code></td><td>Um método; <code>self</code> é o objeto que chamou</td></tr>
+<tr><td><code>objeto:metodo(…)</code></td><td>Chamar o método (o mesmo que <code>objeto.metodo(objeto, …)</code>)</td></tr>
+<tr><td><code>error("mensagem", 2)</code></td><td>Interromper, apontando a linha de quem chamou</td></tr>
+<tr><td><code>error({ codigo = "SALDO", … })</code></td><td>Um erro que dá para reconhecer pelo código</td></tr>
+<tr><td><code>local ok, erro = pcall(f, a, b)</code></td><td>Chamar sem deixar o erro parar o programa</td></tr>
+<tr><td><code>function Conta.__tostring(c)</code></td><td>Como o <code>print</code> mostra o objeto</td></tr>
+<tr><td><code>setmetatable({}, { __index = Conta })</code></td><td>Uma classe filha que herda da <code>Conta</code></td></tr>
+<tr><td><code>Conta.descricao(self)</code></td><td>Chamar a versão da classe mãe dentro de um método sobrescrito</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Sintoma</th><th>Causa provável</th></tr>
+<tr><td><code>attempt to index a number value (local 'self')</code></td><td>Chamou com ponto (<code>ana.depositar(100)</code>) um método definido com <code>:</code></td></tr>
+<tr><td><code>attempt to call a nil value (method '…')</code></td><td>O método não existe, ou faltou o <code>Classe.__index = Classe</code></td></tr>
+<tr><td><code>print(objeto)</code> mostra <code>table: 0x…</code></td><td>Falta o <code>__tostring</code> na metatabela do objeto (na classe filha, ele não é herdado)</td></tr>
+<tr><td>A mensagem de erro aponta para dentro da classe</td><td><code>error</code> com o nível padrão (1): use <code>2</code> para apontar quem chamou</td></tr>
+<tr><td>O saldo fica negativo</td><td>Alguém mexeu em <code>conta.saldo</code> direto, sem passar pelo método</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. A ligação com a classe</h3>
+<p>Complete para os objetos acharem os métodos na <code>Conta</code>:</p>
+<div class="ex-code">Conta.<input data-answer="__index" aria-label="campo"> = Conta</div>
+</div>
+
+<div class="exercise">
+<h3>2. Criar o objeto</h3>
+<p>Complete a função que liga a tabela nova à classe:</p>
+<div class="ex-code">return <input data-answer="setmetatable" aria-label="função">({ titular = titular, saldo = 0 }, Conta)</div>
+</div>
+
+<div class="exercise">
+<h3>3. O próprio objeto</h3>
+<p>Dentro de <code>function Conta:depositar(valor)</code>, qual é o nome do parâmetro escondido que guarda a conta?</p>
+<div class="ex-code"><input data-answer="self" aria-label="nome"></div>
+</div>
+
+<div class="exercise">
+<h3>4. Chamar protegido</h3>
+<p>Complete para chamar o saque sem deixar um erro parar o programa:</p>
+<div class="ex-code">local ok, erro = <input data-answer="pcall" aria-label="função">(ana.sacar, ana, 500)</div>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">5. <code>ana:depositar(100)</code> é o mesmo que:</p>
+<label><input type="radio" name="q5"> <code>Conta.depositar(100)</code></label>
+<label><input type="radio" name="q5"> <code>ana.depositar(ana, 100)</code></label>
+<label><input type="radio" name="q5"> <code>ana.depositar(100)</code></label>
+<label><input type="radio" name="q5"> <code>depositar(ana, 100)</code></label>
+</div>
+
+<div class="mc" data-answer="3">
+<p class="mc-q">6. A <code>ana</code> não tem um campo <code>depositar</code> (o <code>rawget</code> dá <code>nil</code>). Por que <code>ana:depositar(100)</code> funciona?</p>
+<label><input type="radio" name="q6"> Porque o <code>setmetatable</code> copiou os métodos para dentro da <code>ana</code></label>
+<label><input type="radio" name="q6"> Porque <code>depositar</code> é uma função global</label>
+<label><input type="radio" name="q6"> Porque o campo que falta é procurado no <code>__index</code> da metatabela, que é a <code>Conta</code></label>
+<label><input type="radio" name="q6"> Porque o <code>:</code> procura em todas as tabelas do programa</label>
+</div>
+
+<div class="mc" data-answer="4">
+<p class="mc-q">7. A <code>Poupanca</code> herda da <code>Conta</code> pelo <code>__index</code>, mas o <code>print(cofrinho)</code> mostrou <code>table: 0x…</code>. Por quê?</p>
+<label><input type="radio" name="q7"> Porque a <code>Poupanca</code> não tem o método <code>descricao</code></label>
+<label><input type="radio" name="q7"> Porque o <code>print</code> não funciona com objetos herdados</label>
+<label><input type="radio" name="q7"> Porque faltou chamar <code>Conta.nova</code></label>
+<label><input type="radio" name="q7"> Porque o Lua procura o <code>__tostring</code> direto na metatabela (<code>Poupanca</code>), sem seguir o <code>__index</code></label>
+</div>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li>Uma classe no Lua é uma tabela com os métodos; cada objeto é uma tabela com os dados, ligada à classe por <code>setmetatable</code>.</li>
+  <li><code>Classe.__index = Classe</code> faz o objeto achar na classe os campos que ele não tem: os métodos ficam num lugar só.</li>
+  <li><code>function Classe:metodo()</code> ganha o parâmetro <code>self</code>; <code>objeto:metodo()</code> o preenche. Definiu com <code>:</code>, chame com <code>:</code>.</li>
+  <li><code>error</code> interrompe uma operação impossível (nível 2 aponta quem chamou); <code>pcall</code> deixa tratar. Um erro pode ser uma tabela com código.</li>
+  <li><code>__tostring</code> ensina o <code>print</code> a mostrar o objeto.</li>
+  <li>Herança: a classe filha tem um <code>__index</code> que aponta para a mãe; ela guarda só o que muda, e pode sobrescrever métodos. Metamétodos precisam ser repetidos na filha.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
