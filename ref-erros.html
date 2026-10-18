@@ -241,7 +241,7 @@ stack traceback:
         [C]: in ?
 Total de leite: $
 </pre>
-<p>O <code>Total de leite: </code> apareceu <strong>depois</strong> da mensagem de erro, colado no <code>$</code>. Motivo: o texto normal (a saída padrão) fica guardado na memória até a linha terminar, e a mensagem de erro (a saída de erros) é escrita na hora; o texto guardado só sai quando o <code>lua</code> fecha. Isso confunde: parece que o erro aconteceu antes do <code>io.write</code>. Quando a ordem importa, use <code>print</code> (que termina a linha) ou chame <code>io.flush()</code> depois do <code>io.write</code>. No editor do guia, a ordem pode sair diferente.</p>
+<p>O <code>Total de leite: </code> apareceu <strong>depois</strong> da mensagem de erro, colado no <code>$</code>. Motivo: o texto normal (a saída padrão) fica guardado na memória até a linha terminar, e a mensagem de erro (a saída de erros) é escrita na hora; o texto guardado só sai quando o <code>lua</code> fecha. Isso confunde: parece que o erro aconteceu antes do <code>io.write</code>. Quando a ordem importa, use <code>print</code> (que termina a linha) ou chame <code>io.flush()</code> depois do <code>io.write</code>. No editor do guia acontece o mesmo: o <code>Total de leite: </code> sai depois da mensagem de erro.</p>
 </div>
 
 <hr>
