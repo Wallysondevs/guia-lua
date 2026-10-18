@@ -1,0 +1,495 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua coroutine.wrap — geradores com corrotinas | Guia Lua</title>
+<meta name="description" content="coroutine.wrap no Lua 5.5 para quem está começando: a corrotina que vira uma função comum, geradores usados direto no for, gerador com vários valores, gerador infinito (Fibonacci) com break, gerador recursivo (permutações), passar valores para dentro, e os erros reais: cannot resume dead coroutine como erro de verdade, a mensagem com duas posições, attempt to yield from outside a coroutine.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">coroutine.wrap</span></h1>
+
+<p class="intro">Nas duas aulas anteriores, você usou corrotinas com <code>coroutine.create</code> e <code>coroutine.resume</code>, e todo <code>resume</code> vinha com aquele <code>true</code> na frente, que era preciso conferir e jogar fora. O <code>coroutine.wrap</code> ("embrulhar") faz a mesma corrotina, mas a entrega <strong>embrulhada numa função comum</strong>: cada vez que você chama essa função, a corrotina continua e a função devolve o que ela cedeu. O uso mais famoso disso são os <strong>geradores</strong>: funções que "geram" valores um por um e que você põe direto num <code>for</code>.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O que o <code>coroutine.wrap</code> devolve e como ele se compara com <code>create</code> + <code>resume</code>.</li>
+  <li>Como escrever um <strong>gerador</strong> e usá-lo direto no <code>for</code>, como um iterador.</li>
+  <li>Geradores com vários valores, geradores sem fim (com <code>break</code>) e um gerador recursivo, onde a corrotina brilha de verdade.</li>
+  <li>Como passar valores para dentro do gerador.</li>
+  <li>Os erros reais: <code>cannot resume dead coroutine</code>, que aqui <strong>para</strong> o programa, e a mensagem com duas posições.</li>
+</ul>
+</div>
+
+<p>Todos os programas desta aula rodaram no <strong>Lua 5.5</strong> da máquina da Ana (usuária <code>ana</code>, computador <code>notebook</code>), na pasta pessoal dela, com <code>lua arquivo.lua</code>. Antes, veja <a href="corrotinas.html">Corrotinas</a> e <a href="iteradores.html">Iteradores Próprios</a>.</p>
+
+<hr>
+
+<h2>A ideia: o controle remoto</h2>
+<p>Com <code>create</code> e <code>resume</code>, a corrotina é como uma televisão em que você precisa ir até o aparelho, apertar o botão e conferir se a luz acendeu (<code>true</code>) toda vez que quer trocar de canal. O <code>wrap</code> te dá um <strong>controle remoto</strong>: um botão só. Apertou (chamou a função), a TV avança para o próximo canal e você já vê a imagem (o valor). Se a TV quebrar, você fica sabendo na hora: o controle não "finge" que deu certo.</p>
+
+<hr>
+
+<h2>1. O primeiro <code>wrap</code></h2>
+
+<pre class="file" data-file="w1.lua">local proximo = coroutine.wrap(function ()
+  for i = 1, 3 do
+    coroutine.yield(i)
+  end
+end)
+print(type(proximo))
+print(proximo())
+print(proximo())
+print(proximo())
+print("quarta:", proximo())
+print("quinta:", proximo())
+</pre>
+
+<pre class="term">$ lua w1.lua
+function
+1
+2
+3
+quarta:
+lua: w1.lua:11: cannot resume dead coroutine
+stack traceback:
+	[C]: in local 'proximo'
+	w1.lua:11: in main chunk
+	[C]: in ?</pre>
+
+<dl class="anatomy">
+  <dt>coroutine.wrap(function () … end)</dt><dd>Cria uma corrotina com esse corpo, igual ao <code>create</code>, mas devolve uma <strong>função</strong> (o <code>type</code> mostrou <code>function</code>, e não <code>thread</code>).</dd>
+  <dt>proximo()</dt><dd>Chamar a função é dar um <code>resume</code>. Ela devolve o que o corpo passou para o <code>yield</code>, <strong>sem</strong> o <code>true</code> na frente: <code>1</code>, <code>2</code>, <code>3</code>.</dd>
+  <dt>"quarta:", proximo()</dt><dd>Na 4ª chamada, o <code>for</code> do corpo terminou e a corrotina chegou ao fim sem ceder nada. A função devolveu <strong>nada</strong>, e o <code>print</code> só mostrou <code>quarta:</code>.</dd>
+  <dt>"quinta:", proximo()</dt><dd>A corrotina já estava morta. Com <code>resume</code>, isso dava <code>false</code> e uma mensagem; com <code>wrap</code>, é um <strong>erro de verdade</strong>, que para o programa (o <code>quinta:</code> nem chegou a aparecer).</dd>
+</dl>
+
+<p>Compare com o <code>create</code> da aula <a href="corrotinas.html">Corrotinas</a>:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th></th><th><code>coroutine.create</code> + <code>resume</code></th><th><code>coroutine.wrap</code></th></tr>
+<tr><td>O que devolve</td><td>uma <code>thread</code></td><td>uma <code>function</code></td></tr>
+<tr><td>Para continuar</td><td><code>coroutine.resume(co, …)</code></td><td><code>f(…)</code></td></tr>
+<tr><td>Resposta</td><td><code>true, valores</code> ou <code>false, erro</code></td><td>só os <code>valores</code></td></tr>
+<tr><td>Erro dentro, ou retomar morta</td><td><code>resume</code> devolve <code>false</code>; o programa continua</td><td>o erro <strong>sobe</strong> para quem chamou</td></tr>
+<tr><td>Saber o estado</td><td><code>coroutine.status(co)</code></td><td>não dá: você não tem a <code>thread</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>2. Geradores: o <code>wrap</code> direto no <code>for</code></h2>
+<p>Agora junte duas coisas: a função do <code>wrap</code> devolve o próximo valor a cada chamada, e devolve nada quando acaba. É <strong>exatamente</strong> o que o <code>for</code> genérico espera de um iterador (aula <a href="iteradores.html">Iteradores Próprios</a>). Então a função do <code>wrap</code> pode ir direto no <code>for</code>:</p>
+
+<pre class="file" data-file="w2.lua">local function sabores()
+  return coroutine.wrap(function ()
+    coroutine.yield("queijo")
+    coroutine.yield("chocolate")
+    coroutine.yield("coco")
+  end)
+end
+for s in sabores() do
+  print("pão de " .. s)
+end
+</pre>
+
+<pre class="term">$ lua w2.lua
+pão de queijo
+pão de chocolate
+pão de coco</pre>
+
+<p>Uma função como <code>sabores</code>, que devolve um <code>coroutine.wrap</code>, se chama <strong>gerador</strong>. O corpo dela não tem variável de "onde parou", nem <code>if</code> para saber se acabou: ela só <strong>cede um valor de cada vez</strong>, na ordem, e a própria corrotina lembra onde está. O <code>for</code> chamou a função 4 vezes: 3 deram um sabor, a 4ª deu nada, e o laço parou (sem chegar a retomar uma corrotina morta).</p>
+
+<h3>Vários valores por volta</h3>
+<p>O que for passado ao <code>yield</code> sai inteiro na chamada, então o gerador pode entregar vários valores:</p>
+
+<pre class="file" data-file="w3.lua">local function pares_ate(max)
+  return coroutine.wrap(function ()
+    for n = 2, max, 2 do
+      coroutine.yield(n, n * n)
+    end
+  end)
+end
+for n, quadrado in pares_ate(8) do
+  print(n, quadrado)
+end
+</pre>
+
+<pre class="term">$ lua w3.lua
+2	4
+4	16
+6	36
+8	64</pre>
+
+<div class="trylua" data-goal="outre:^3\n6\n9\n12\n15\n$;;src:coroutine\.wrap;;src:coroutine\.yield">
+<p class="try-task"><strong>Missão:</strong> escreva o corpo do gerador <code>multiplos_de_3</code>: ele deve ceder 3, 6, 9… até <code>max</code>. O <code>for</code> de baixo já está pronto e deve mostrar <code>3</code>, <code>6</code>, <code>9</code>, <code>12</code> e <code>15</code>, um por linha. (Dica: um <code>for</code> numérico com passo 3 e um <code>coroutine.yield</code> dentro.)</p>
+<pre class="script" data-file="main.lua">local function multiplos_de_3(max)
+  return coroutine.wrap(function ()
+    -- ceda 3, 6, 9... até max
+  end)
+end
+for n in multiplos_de_3(15) do
+  print(n)
+end
+</pre>
+<pre class="solucao" data-file="main.lua">local function multiplos_de_3(max)
+  return coroutine.wrap(function ()
+    for n = 3, max, 3 do
+      coroutine.yield(n)
+    end
+  end)
+end
+for n in multiplos_de_3(15) do
+  print(n)
+end
+</pre>
+</div>
+
+<hr>
+
+<h2>3. Um gerador sem fim</h2>
+<p>Como a corrotina só roda quando alguém pede, o corpo pode ser um <strong>laço infinito</strong>: ele nunca vai rodar "sozinho" para sempre, porque pausa a cada valor. Quem usa decide quando parar, com <code>break</code>. Aqui, a sequência de Fibonacci (cada número é a soma dos dois anteriores):</p>
+
+<pre class="file" data-file="w4.lua">local function fibonacci()
+  return coroutine.wrap(function ()
+    local a, b = 0, 1
+    while true do
+      coroutine.yield(a)
+      a, b = b, a + b
+    end
+  end)
+end
+for n in fibonacci() do
+  if n &gt; 100 then break end
+  io.write(n, " ")
+end
+print()
+</pre>
+
+<pre class="term">$ lua w4.lua
+0 1 1 2 3 5 8 13 21 34 55 89 </pre>
+
+<p>O <code>while true</code> do gerador rodou só 13 voltas: 12 números mostrados e o 144, que fez o <code>for</code> dar <code>break</code>. Depois disso, ninguém mais chamou a função, e a corrotina ficou pausada até o programa acabar. (O <code>a, b = b, a + b</code> é uma atribuição múltipla: veja <a href="atribuicao-multipla.html">Atribuição Múltipla</a>.)</p>
+
+<hr>
+
+<h2>4. Onde o gerador brilha: percursos complicados</h2>
+<p>Para um percurso simples, uma closure (aula <a href="iteradores.html">Iteradores Próprios</a>) e um gerador dão no mesmo. A diferença aparece quando o percurso tem <strong>laços dentro de laços</strong>, ou <strong>recursão</strong>. Escrever isso como closure obriga a guardar "em qual laço eu estava, e em qual volta" em variáveis. Com o gerador, você escreve o percurso normal, com quantos laços quiser, e põe um <code>yield</code> onde quer entregar.</p>
+
+<p>Um exemplo clássico: todas as ordens possíveis (as <strong>permutações</strong>) de uma fila de três pessoas. A função <code>permutacoes</code> é recursiva (aula <a href="recursao.html">Recursão</a>): ela troca as pessoas de lugar e chama a si mesma para o resto da fila. Quando chega ao fim, cede a fila pronta:</p>
+
+<pre class="file" data-file="w5.lua">local function permutacoes(lista, n)
+  n = n or #lista
+  if n &lt;= 1 then
+    coroutine.yield(lista)
+  else
+    for i = 1, n do
+      lista[n], lista[i] = lista[i], lista[n]
+      permutacoes(lista, n - 1)
+      lista[n], lista[i] = lista[i], lista[n]
+    end
+  end
+end
+local function todas(lista)
+  return coroutine.wrap(function () permutacoes(lista) end)
+end
+for p in todas({ "Ana", "Bia", "Caio" }) do
+  print(table.concat(p, ", "))
+end
+</pre>
+
+<pre class="term">$ lua w5.lua
+Bia, Caio, Ana
+Caio, Bia, Ana
+Caio, Ana, Bia
+Ana, Caio, Bia
+Bia, Ana, Caio
+Ana, Bia, Caio</pre>
+
+<p>As 6 ordens. Repare que o <code>yield</code> está <strong>lá no fundo</strong> da recursão, várias chamadas abaixo do corpo da corrotina. Mesmo assim funciona: o <code>yield</code> congela a pilha inteira de chamadas e, na próxima volta do <code>for</code>, tudo continua de onde estava. Escrever isso sem corrotina seria bem mais difícil.</p>
+
+<hr>
+
+<h2>5. Mandando valores para dentro</h2>
+<p>O que você passa para a função do <code>wrap</code> entra na corrotina, como no <code>resume</code>: na primeira chamada vira o parâmetro do corpo; nas seguintes, sai como resultado do <code>yield</code>:</p>
+
+<pre class="file" data-file="w7.lua">local eco = coroutine.wrap(function (primeiro)
+  local recebido = primeiro
+  while true do
+    recebido = coroutine.yield("ouvi: " .. recebido)
+  end
+end)
+print(eco("oi"))
+print(eco("tudo bem?"))
+print(eco("tchau"))
+</pre>
+
+<pre class="term">$ lua w7.lua
+ouvi: oi
+ouvi: tudo bem?
+ouvi: tchau</pre>
+
+<p>A função <code>eco</code> parece uma função comum, que responde ao que recebe. Mas por dentro ela é uma corrotina, com um laço e uma memória: daria para ela contar quantas mensagens já ouviu, sem nenhuma variável fora dela.</p>
+
+<hr>
+
+<h2 id="formas">Formas diferentes de fazer a mesma coisa</h2>
+<p>Entregar 1, 2 e 3 num <code>for</code>, com uma closure e com um gerador:</p>
+
+<pre class="file" data-file="w12.lua">local i = 0
+local function contagem_closure()
+  return function ()
+    i = i + 1
+    if i &lt;= 3 then return i end
+  end
+end
+local function contagem_wrap()
+  return coroutine.wrap(function ()
+    for j = 1, 3 do coroutine.yield(j) end
+  end)
+end
+for n in contagem_closure() do io.write(n, " ") end
+for n in contagem_wrap() do io.write(n, " ") end
+print()
+</pre>
+
+<pre class="term">$ lua w12.lua
+1 2 3 1 2 3 </pre>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Situação</th><th>Qual usar</th></tr>
+<tr><td>Um percurso simples, que roda muitas e muitas vezes (o mais rápido)</td><td>Iterador com closure ou sem estado (aula <a href="iteradores.html">Iteradores Próprios</a>)</td></tr>
+<tr><td>Um percurso com laços dentro de laços, recursão, ou várias etapas</td><td>Gerador com <code>coroutine.wrap</code></td></tr>
+<tr><td>Você precisa saber o estado da corrotina, ou tratar o erro sem parar o programa</td><td><code>coroutine.create</code> + <code>resume</code></td></tr>
+<tr><td>O produtor do padrão produtor/consumidor</td><td>Os dois servem; com <code>wrap</code>, o <code>receber</code> vira só uma chamada (veja <a href="corrotinas-produtor.html">Produtor e Consumidor</a>)</td></tr>
+</table>
+</div>
+
+<div class="note">
+<strong>E nas outras versões?</strong>
+<p>O <code>coroutine.wrap</code> existe desde que as corrotinas existem, e funciona igual: o <code>w5.lua</code> (permutações) deu a mesma saída no <code>lua5.1</code> do lab, e o <code>w4.lua</code> (Fibonacci), no <code>luajit</code>. E, nas versões que têm <code>&lt;close&gt;</code> (5.4 e 5.5), o manual garante que, quando dá um erro, a função do <code>wrap</code> <strong>fecha</strong> a corrotina, fechando as variáveis <code>&lt;close&gt;</code> dela: o <code>w10.lua</code> da seção "Quando dá errado" deu a mesma saída no <code>lua5.4</code>. Mais em <a href="versoes.html">as diferenças entre as versões</a>.</p>
+</div>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+
+<div class="cenario">
+<strong>Chamou o gerador depois do fim</strong>
+<pre class="term">$ lua w1.lua
+function
+1
+2
+3
+quarta:
+lua: w1.lua:11: cannot resume dead coroutine
+stack traceback:
+	[C]: in local 'proximo'
+	w1.lua:11: in main chunk
+	[C]: in ?</pre>
+<p>"Não dá para retomar uma corrotina morta". Com <code>wrap</code>, isso é um <strong>erro</strong>, não um <code>false</code>. O rastro mostra quem deu o erro: <code>[C]: in local 'proximo'</code>, a função do <code>wrap</code> (que é escrita em C), chamada na linha 11. <strong>Como evitar:</strong> pare de chamar no primeiro resultado vazio. Dentro de um <code>for</code>, isso é automático; se precisar de novo dos valores, chame o gerador outra vez (<code>sabores()</code>) e ganhe uma corrotina nova.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro dentro do gerador: a mensagem com duas posições</strong>
+<pre class="file" data-file="w6.lua">local gen = coroutine.wrap(function ()
+  coroutine.yield("primeiro")
+  local t = nil
+  coroutine.yield(t.nome)
+end)
+print(gen())
+print(gen())
+print("esta linha não aparece")
+</pre>
+<pre class="term">$ lua w6.lua
+primeiro
+lua: w6.lua:7: w6.lua:4: attempt to index a nil value (local 't')
+stack traceback:
+	[C]: in local 'gen'
+	w6.lua:7: in main chunk
+	[C]: in ?</pre>
+<p>A mensagem tem <strong>duas</strong> posições, e cada uma conta uma parte:</p>
+<dl class="anatomy">
+  <dt>w6.lua:4: attempt to index a nil value (local 't')</dt><dd>O erro de verdade, lá dentro do corpo: a linha 4, onde <code>t</code> é <code>nil</code>.</dd>
+  <dt>w6.lua:7:</dt><dd>Posta na frente quando o erro <strong>subiu</strong> para fora da corrotina: é a linha onde o programa chamou <code>gen()</code>.</dd>
+</dl>
+<p>O rastro (<code>stack traceback</code>) só mostra o lado de fora (a linha 7); o caminho de dentro da corrotina não aparece nele. Por isso, leia a mensagem até o fim: a segunda posição é a que aponta o defeito. Se quiser tratar o erro sem parar o programa, use <code>pcall(gen)</code> (aula <a href="pcall.html">pcall</a>).</p>
+</div>
+
+<div class="cenario">
+<strong>Um <code>nil</code> no meio dos valores para o <code>for</code></strong>
+<pre class="file" data-file="w8.lua">local gen = coroutine.wrap(function ()
+  coroutine.yield(1)
+  coroutine.yield(nil)
+  coroutine.yield(3)
+end)
+for x in gen do print(x) end
+print("acabou?")
+</pre>
+<pre class="term">$ lua w8.lua
+1
+acabou?</pre>
+<p>O <code>3</code> nunca apareceu, e não houve erro. Para o <code>for</code>, um primeiro valor <code>nil</code> quer dizer "acabou", venha de onde vier. <strong>Como evitar:</strong> nunca ceda <code>nil</code> como dado num gerador usado no <code>for</code>. Se o dado pode faltar, ceda outra coisa (<code>false</code>, <code>""</code>) ou ceda dois valores, com o primeiro sempre preenchido: <code>coroutine.yield(i, valor)</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Chamou a função em vez de passá-la</strong>
+<pre class="file" data-file="w9.lua">local function contar()
+  for i = 1, 3 do coroutine.yield(i) end
+end
+local gen = coroutine.wrap(contar())
+</pre>
+<pre class="term">$ lua w9.lua
+lua: attempt to yield from outside a coroutine
+stack traceback:
+	[C]: in field 'yield'
+	w9.lua:2: in local 'contar'
+	w9.lua:4: in main chunk
+	[C]: in ?</pre>
+<p>Com os parênteses, <code>contar()</code> rodou <strong>na hora</strong>, no programa principal, antes de o <code>wrap</code> receber qualquer coisa. E o <code>yield</code> dela não tinha corrotina nenhuma para pausar: "tentativa de ceder de fora de uma corrotina". O rastro mostra isso: o <code>yield</code> foi chamado por <code>contar</code> (linha 2), que foi chamada pelo programa principal na linha 4. <strong>Como consertar:</strong> passe a função, sem chamá-la: <code>coroutine.wrap(contar)</code>. (E se passar algo que não é função, como <code>coroutine.wrap(nil)</code>, o erro é <code>bad argument #1 to 'wrap' (function expected, got nil)</code>.)</p>
+</div>
+
+<div class="cenario">
+<strong>Erro com variáveis <code>&lt;close&gt;</code> dentro</strong>
+<pre class="file" data-file="w10.lua">local gen = coroutine.wrap(function ()
+  local porta &lt;close&gt; = setmetatable({}, { __close = function () print("porta fechada") end })
+  coroutine.yield("aberta")
+  error("deu ruim")
+end)
+print(gen())
+print(pcall(gen))
+</pre>
+<pre class="term">$ lua w10.lua
+aberta
+porta fechada
+false	w10.lua:4: deu ruim</pre>
+<p>Não é bem um problema, é uma garantia: quando o corpo dá erro, a função do <code>wrap</code> <strong>fecha</strong> a corrotina antes de passar o erro adiante, e a porta foi fechada. O <code>pcall</code> segurou o erro, e o programa continuou. (Com <code>create</code> + <code>resume</code>, isso não acontece sozinho: é preciso chamar <code>coroutine.close</code>; veja a aula <a href="corrotinas.html">Corrotinas</a>.)</p>
+</div>
+
+<hr>
+
+<h2>Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>O que faz</th></tr>
+<tr><td><code>local f = coroutine.wrap(corpo)</code></td><td>Cria a corrotina e devolve uma função que a retoma</td></tr>
+<tr><td><code>f(…)</code></td><td>Continua a corrotina; devolve o que ela cedeu (sem o <code>true</code>)</td></tr>
+<tr><td><code>local function g() return coroutine.wrap(function () … end) end</code></td><td>Um gerador: cada chamada de <code>g()</code> dá uma sequência nova</td></tr>
+<tr><td><code>for x in g() do … end</code></td><td>Usa o gerador como iterador</td></tr>
+<tr><td><code>coroutine.yield(a, b)</code></td><td>Entrega vários valores numa volta: <code>for a, b in g() do</code></td></tr>
+<tr><td><code>pcall(f)</code></td><td>Retoma sem deixar um erro parar o programa</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. Complete o gerador</h3>
+<div class="ex-code">local function vogais()<br>&nbsp;&nbsp;return coroutine.<input data-answer="wrap" aria-label="função">(function ()<br>&nbsp;&nbsp;&nbsp;&nbsp;for _, v in ipairs({ "a", "e", "i", "o", "u" }) do<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;coroutine.<input data-answer="yield" aria-label="função">(v)<br>&nbsp;&nbsp;&nbsp;&nbsp;end<br>&nbsp;&nbsp;end)<br>end</div>
+</div>
+
+<div class="exercise">
+<h3>2. O tipo</h3>
+<p>O que <code>type(coroutine.wrap(function () end))</code> devolve?</p>
+<div class="ex-code"><input data-answer="function" aria-label="tipo"></div>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">3. A função de um <code>wrap</code> é chamada depois que a corrotina terminou. O que acontece?</p>
+<label><input type="radio" name="q3"> Devolve <code>false</code> e uma mensagem</label>
+<label><input type="radio" name="q3"> Dá o erro <code>cannot resume dead coroutine</code>, que para o programa (se ninguém usar <code>pcall</code>)</label>
+<label><input type="radio" name="q3"> Recomeça do início</label>
+<label><input type="radio" name="q3"> Devolve <code>nil</code> para sempre</label>
+</div>
+
+<div class="mc" data-answer="4">
+<p class="mc-q">4. Por que um gerador com <code>while true do … end</code> no corpo não trava o programa?</p>
+<label><input type="radio" name="q4"> Porque o Lua para os laços infinitos sozinho</label>
+<label><input type="radio" name="q4"> Porque o <code>wrap</code> limita a 100 voltas</label>
+<label><input type="radio" name="q4"> Porque o <code>while true</code> é ignorado dentro de corrotinas</label>
+<label><input type="radio" name="q4"> Porque a corrotina pausa a cada <code>yield</code> e só continua quando alguém pede</label>
+</div>
+
+<div class="mc" data-answer="1">
+<p class="mc-q">5. Em <code>lua: a.lua:7: a.lua:4: attempt to …</code>, vinda de um gerador, onde está o defeito?</p>
+<label><input type="radio" name="q5"> Na linha 4, dentro do corpo do gerador</label>
+<label><input type="radio" name="q5"> Na linha 7</label>
+<label><input type="radio" name="q5"> Nas linhas 4 a 7</label>
+<label><input type="radio" name="q5"> No próprio <code>coroutine.wrap</code></label>
+</div>
+
+<h3>Missão final: o cardápio inteiro</h3>
+
+<div class="trylua" data-goal="outre:^Pães: francês\nPães: de queijo\nBolos: cenoura\nBolos: fubá\nBebidas: café\n$;;src:coroutine\.yield">
+<p class="try-task"><strong>Missão:</strong> o cardápio da padaria está dividido em grupos. Escreva o corpo do gerador <code>todos_os_itens</code>: para cada grupo do menu, e para cada item desse grupo, ele deve ceder dois valores, a <strong>categoria</strong> e o <strong>item</strong>. O <code>for</code> de baixo vai mostrar <code>Pães: francês</code>, <code>Pães: de queijo</code>, <code>Bolos: cenoura</code>… (Dica: dois <code>for … in ipairs(…)</code>, um dentro do outro, com o <code>yield</code> no de dentro.)</p>
+<pre class="script" data-file="main.lua">local cardapio = {
+  { categoria = "Pães", itens = { "francês", "de queijo" } },
+  { categoria = "Bolos", itens = { "cenoura", "fubá" } },
+  { categoria = "Bebidas", itens = { "café" } },
+}
+local function todos_os_itens(menu)
+  return coroutine.wrap(function ()
+    -- para cada grupo, e para cada item do grupo:
+    -- ceda grupo.categoria e o item
+  end)
+end
+for categoria, item in todos_os_itens(cardapio) do
+  print(categoria .. ": " .. item)
+end
+</pre>
+<pre class="solucao" data-file="main.lua">local cardapio = {
+  { categoria = "Pães", itens = { "francês", "de queijo" } },
+  { categoria = "Bolos", itens = { "cenoura", "fubá" } },
+  { categoria = "Bebidas", itens = { "café" } },
+}
+local function todos_os_itens(menu)
+  return coroutine.wrap(function ()
+    for _, grupo in ipairs(menu) do
+      for _, item in ipairs(grupo.itens) do
+        coroutine.yield(grupo.categoria, item)
+      end
+    end
+  end)
+end
+for categoria, item in todos_os_itens(cardapio) do
+  print(categoria .. ": " .. item)
+end
+</pre>
+</div>
+
+<p>Com uma closure, você precisaria de duas variáveis de "onde parou" (o grupo e o item) e de um <code>if</code> para pular de um grupo para o outro. Com o gerador, são só os dois laços que você escreveria para mostrar o cardápio.</p>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li><code>coroutine.wrap(corpo)</code> cria uma corrotina e devolve uma <strong>função</strong>: chamá-la é retomar, e ela devolve só o que foi cedido, sem o <code>true</code>.</li>
+  <li>Erros dentro do corpo, e chamar depois do fim (<code>cannot resume dead coroutine</code>), <strong>sobem</strong> para quem chamou; use <code>pcall</code> se precisar continuar.</li>
+  <li>Um <strong>gerador</strong> é uma função que devolve um <code>coroutine.wrap</code>; ele vai direto no <code>for</code>, como um iterador.</li>
+  <li>O corpo pode ter laços dentro de laços, recursão e até <code>while true</code>: ele só anda quando alguém pede.</li>
+  <li>Nunca ceda <code>nil</code> como dado num gerador usado no <code>for</code>: o laço para ali.</li>
+  <li>Passe a função para o <code>wrap</code> sem chamá-la: <code>coroutine.wrap(f)</code>, não <code>coroutine.wrap(f())</code>.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
