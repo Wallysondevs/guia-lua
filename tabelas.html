@@ -1,0 +1,569 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua Tabelas — a única estrutura de dados do Lua | Guia Lua</title>
+<meta name="description" content="Tabelas no Lua para quem nunca programou: a única estrutura de dados da linguagem, que serve de lista, dicionário e objeto. Criar com {}, guardar e ler com t[chave] e t.campo, o nil das gavetas vazias, o construtor, mudar e apagar campos, o que o print(t) mostra (table: 0x…) e os erros reais do Lua 5.5.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">Tabelas</span>: a Estrutura de Tudo</h1>
+
+<p class="intro">Até aqui, cada variável guardou <strong>um</strong> valor: um número, um texto, um <code>true</code>. Mas a lista de compras da Ana tem vários itens, a ficha de um cliente tem nome, telefone e endereço, e o estoque da padaria tem dezenas de produtos. Para guardar muitos valores juntos, o Lua tem <strong>uma única</strong> ferramenta: a <strong>tabela</strong> (em inglês, <em>table</em>). Outras linguagens têm um tipo para listas, outro para dicionários, outro para objetos. O Lua tem só a tabela, e ela faz o papel de todos.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O que é uma tabela: um armário de gavetas com etiquetas (<strong>chaves</strong>) e conteúdo (<strong>valores</strong>).</li>
+  <li>Como criar uma tabela com <code>{}</code>, guardar e ler com <code>t[chave]</code> e com o atalho <code>t.campo</code>.</li>
+  <li>Por que uma gaveta que não existe devolve <code>nil</code>.</li>
+  <li>Os três papéis da tabela: <strong>lista</strong>, <strong>dicionário</strong> e <strong>objeto</strong> (ficha).</li>
+  <li>O construtor completo: <code>{"a", "b", nome = "Ana", ["com espaço"] = 1}</code>.</li>
+  <li>Como mudar e apagar um campo, e quais valores podem ser chave.</li>
+  <li>O que o <code>print(t)</code> mostra (<code>table: 0x…</code>) e por que esse número muda.</li>
+  <li>Os erros reais: indexar <code>nil</code>, chave <code>nil</code>, juntar tabela com texto, vírgula esquecida.</li>
+</ul>
+</div>
+
+<p>Todos os programas desta aula rodaram no <strong>Lua 5.5</strong> da máquina da Ana (usuária <code>ana</code>, computador <code>notebook</code>), com <code>lua arquivo.lua</code>. As próximas aulas aprofundam cada papel da tabela: <a href="listas.html">Tabelas como Listas</a> e <a href="dicionarios.html">Tabelas como Dicionários</a>.</p>
+
+<hr>
+
+<h2>A ideia: um armário de gavetas com etiquetas</h2>
+<p>Imagine um armário com gavetas. Cada gaveta tem uma <strong>etiqueta</strong> na frente e guarda <strong>uma coisa</strong> dentro. Para pegar algo, você não precisa saber em que posição a gaveta está: basta ler a etiqueta.</p>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Etiqueta (chave)</th><th>Conteúdo (valor)</th></tr>
+<tr><td><code>"nome"</code></td><td><code>"Ana"</code></td></tr>
+<tr><td><code>"idade"</code></td><td><code>30</code></td></tr>
+<tr><td><code>1</code></td><td><code>"primeira gaveta"</code></td></tr>
+</table>
+</div>
+<p>Uma tabela do Lua é exatamente isso: um conjunto de pares <strong>chave → valor</strong>. A chave é a etiqueta; o valor, o que está guardado. A etiqueta pode ser um texto (<code>"nome"</code>) ou um número (<code>1</code>). E o armário cresce sozinho: quantas gavetas você quiser, sem precisar avisar antes.</p>
+
+<hr>
+
+<h2>1. Criando uma tabela: <code>{}</code></h2>
+<p>Uma tabela nova e vazia se cria com um par de chaves, <code>{}</code>:</p>
+
+<pre class="file" data-file="vazia.lua">local t = {}
+print(type(t))
+print(t)
+</pre>
+
+<pre class="term">$ lua vazia.lua
+table
+table: 0x55c77b3bb4e0</pre>
+
+<dl class="anatomy">
+  <dt>{}</dt><dd>O <strong>construtor</strong> de tabela: cria uma tabela nova. Vazia, por enquanto.</dd>
+  <dt>type(t)</dt><dd>O tipo do valor (veja <a href="type.html">Descobrindo o Tipo</a>): <code>table</code>. É um dos tipos do Lua, como <code>number</code> e <code>string</code>.</dd>
+  <dt>print(t) → table: 0x55c77b3bb4e0</dt><dd>O <code>print</code> <strong>não mostra o que tem dentro</strong> da tabela. Ele mostra a palavra <code>table</code> e um número em hexadecimal (o <code>0x</code> avisa: base 16, com dígitos de 0 a 9 e de a a f). Esse número é o <strong>endereço</strong>: o lugar da memória onde a tabela foi guardada. É como o número do armário no depósito, não o conteúdo dele.</dd>
+</dl>
+
+<p>Rodando o mesmo programa mais duas vezes, o endereço mudou a cada vez:</p>
+
+<pre class="term">$ lua vazia.lua
+table
+table: 0x55a9bee3f4e0
+$ lua vazia.lua
+table
+table: 0x55cbde5784e0</pre>
+
+<p>Cada vez que o programa roda, o sistema dá ao Lua um pedaço diferente da memória, então o endereço que <strong>você</strong> vai ver será outro. No editor do guia ele também é diferente (e mais curto, porque o Lua de lá roda dentro do navegador). Não tente decorar nem comparar esse número com o desta página: ele só serve para dizer "é uma tabela, e é <strong>esta</strong> tabela". Para ver o conteúdo, é preciso pedir gaveta por gaveta, como nas próximas seções.</p>
+
+<hr>
+
+<h2>2. Guardando e lendo: <code>t[chave]</code></h2>
+<p>Para guardar um valor numa gaveta, escreva o nome da tabela, a chave entre colchetes, <code>=</code> e o valor. Para ler, a mesma coisa sem o <code>=</code>:</p>
+
+<pre class="file" data-file="gavetas.lua">local armario = {}
+armario["nome"] = "Ana"
+armario["idade"] = 30
+armario[1] = "primeira gaveta"
+print(armario["nome"])
+print(armario["idade"])
+print(armario[1])
+print(armario["telefone"])
+</pre>
+
+<dl class="anatomy">
+  <dt>armario["nome"] = "Ana"</dt><dd>"Na gaveta de etiqueta <code>"nome"</code>, guarde <code>"Ana"</code>." Se a gaveta não existia, ela passa a existir.</dd>
+  <dt>armario[1] = …</dt><dd>A etiqueta também pode ser um número. <code>1</code> (número) e <code>"1"</code> (texto) são etiquetas <strong>diferentes</strong>.</dd>
+  <dt>armario["nome"]</dt><dd>Sem <code>=</code>, é leitura: devolve o que está na gaveta.</dd>
+  <dt>armario["telefone"]</dt><dd>Uma gaveta que ninguém criou. Não é erro: o Lua devolve <a href="nil.html">nil</a>, o "nada".</dd>
+</dl>
+
+<pre class="term">$ lua gavetas.lua
+Ana
+30
+primeira gaveta
+nil</pre>
+
+<p>Esse <code>nil</code> é importante: numa tabela, <strong>toda</strong> chave que não foi usada vale <code>nil</code>. Ler uma gaveta vazia nunca dá erro; o erro só aparece depois, se você tentar fazer conta ou juntar texto com esse <code>nil</code> (veja <a href="#errado">Quando dá errado</a>).</p>
+
+<h3>O atalho do ponto: <code>t.campo</code></h3>
+<p>Quando a chave é um texto que poderia ser um nome de variável (letras, números e <code>_</code>, sem espaço e sem começar com número), dá para trocar <code>t["nome"]</code> por <code>t.nome</code>. As duas formas são <strong>a mesma gaveta</strong>:</p>
+
+<pre class="file" data-file="ponto.lua">local ficha = {}
+ficha.nome = "Ana"
+ficha.idade = 30
+print(ficha.nome, ficha["nome"])
+print(ficha.idade + 1)
+</pre>
+
+<pre class="term">$ lua ponto.lua
+Ana	Ana
+31</pre>
+
+<p>O ponto é só uma forma mais curta de escrever. <code>ficha.nome</code> é <code>ficha["nome"]</code>, com aspas e tudo. Cuidado: <code>ficha[nome]</code>, <strong>sem aspas</strong>, é outra coisa: usa o valor da <strong>variável</strong> <code>nome</code> como chave.</p>
+
+<h3>No modo interativo</h3>
+<p>No <a href="repl.html">modo interativo</a>, digitar o nome de um campo mostra o valor; digitar a tabela inteira mostra só o endereço:</p>
+
+<pre class="term">$ lua
+Lua 5.5.0  Copyright (C) 1994-2025 Lua.org, PUC-Rio
+&gt; ficha = {nome = "Ana", idade = 30}
+&gt; ficha.nome
+Ana
+&gt; ficha.idade + 1
+31
+&gt; ficha
+table: 0x55c2979c9e70
+&gt; ficha.telefone
+nil
+&gt; type(ficha)
+table
+&gt; os.exit()</pre>
+
+<p>(No modo interativo a <code>ficha</code> foi criada sem <code>local</code>, porque um <code>local</code> não sobrevive de uma linha para a outra lá; veja <a href="repl.html">O Modo Interativo</a>.)</p>
+
+<hr>
+
+<h2>3. Os três papéis da tabela</h2>
+<p>A mesma ferramenta, usada de três jeitos:</p>
+
+<pre class="file" data-file="tres_usos.lua">-- 1) lista: itens em ordem, chaves 1, 2, 3...
+local compras = {"pão", "leite", "café"}
+print(compras[1], compras[3], #compras)
+
+-- 2) dicionário: cada chave é um nome
+local precos = {pao = 0.75, leite = 5.49, cafe = 18.90}
+print(precos.leite, precos["cafe"])
+
+-- 3) objeto (ficha): as informações de uma coisa só
+local produto = {nome = "Café", preco = 18.90, estoque = 5}
+print(produto.nome .. " custa R$ " .. produto.preco)
+</pre>
+
+<pre class="term">$ lua tres_usos.lua
+pão	café	3
+5.49	18.9
+Café custa R$ 18.9</pre>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Papel</th><th>Como se escreve</th><th>As chaves são…</th><th>Para quê</th><th>Aula</th></tr>
+<tr><td><strong>Lista</strong> (sequência)</td><td><code>{"pão", "leite", "café"}</code></td><td>1, 2, 3… (o Lua numera sozinho, <strong>a partir do 1</strong>)</td><td>Coisas em ordem: compras, notas, fila</td><td><a href="listas.html">Tabelas como Listas</a></td></tr>
+<tr><td><strong>Dicionário</strong></td><td><code>{pao = 0.75, leite = 5.49}</code></td><td>Nomes escolhidos por você</td><td>Procurar pelo nome: preço de cada produto, telefone de cada amigo</td><td><a href="dicionarios.html">Tabelas como Dicionários</a></td></tr>
+<tr><td><strong>Objeto</strong> (ficha, registro)</td><td><code>{nome = "Café", preco = 18.90}</code></td><td>Os "campos" de uma coisa</td><td>Juntar as informações de um produto, um aluno, uma conta</td><td><a href="metodos.html">Métodos</a> e <a href="classes.html">Classes</a></td></tr>
+</table>
+</div>
+
+<p>Repare que o dicionário e o objeto se escrevem igual. A diferença está no uso: no dicionário, todas as chaves são "do mesmo tipo" (todas são produtos); no objeto, cada chave é uma característica diferente da mesma coisa. Para o Lua, tanto faz: é tudo tabela. Duas coisas do resultado:</p>
+<ul>
+  <li><code>#compras</code> deu <code>3</code>: o <code>#</code> conta os itens de uma lista (veja <a href="operador-tamanho.html">O Operador de Tamanho</a>).</li>
+  <li><code>18.90</code> apareceu como <code>18.9</code>: o Lua guarda o <strong>número</strong>, não o jeito que você o escreveu, e o zero do fim não muda o número. Para mostrar dinheiro com duas casas, use <code>string.format("%.2f", preco)</code> (veja <a href="string-format.html">string.format</a>).</li>
+</ul>
+
+<div class="trylua" data-goal="out:Leite: R$ 5.49 (12 no estoque);;semerro">
+<p class="try-task"><strong>Missão:</strong> o programa quer mostrar a ficha do leite, mas a tabela só tem o nome, e por isso termina com um erro. Complete a ficha com <code>preco = 5.49</code> e <code>estoque = 12</code> para sair <code>Leite: R$ 5.49 (12 no estoque)</code>.</p>
+<pre class="script" data-file="main.lua">local produto = {nome = "Leite"}
+print(produto.nome .. ": R$ " .. produto.preco .. " (" .. produto.estoque .. " no estoque)")
+</pre>
+<pre class="solucao" data-file="main.lua">local produto = {nome = "Leite", preco = 5.49, estoque = 12}
+print(produto.nome .. ": R$ " .. produto.preco .. " (" .. produto.estoque .. " no estoque)")
+</pre>
+</div>
+
+<hr>
+
+<h2>4. O construtor por inteiro</h2>
+<p>Dentro das chaves do construtor <code>{ }</code>, dá para misturar tudo:</p>
+
+<pre class="file" data-file="construtor.lua">local t = {
+  "pão",
+  "leite",
+  nome = "Ana",
+  ["meu apelido"] = "Aninha",
+  [10] = "dez",
+}
+print(t[1], t[2], t.nome, t["meu apelido"], t[10])
+local u = {1, 2, 3,}
+local v = {x = 1; y = 2}
+print(#u, v.x, v.y)
+</pre>
+
+<pre class="term">$ lua construtor.lua
+pão	leite	Ana	Aninha	dez
+3	1	2</pre>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Dentro do <code>{ }</code></th><th>Vira</th><th>Quando usar</th></tr>
+<tr><td><code>"pão"</code> (só o valor)</td><td>A próxima posição da lista: <code>t[1]</code>, depois <code>t[2]</code>…</td><td>Listas</td></tr>
+<tr><td><code>nome = "Ana"</code></td><td><code>t["nome"]</code></td><td>Chave que é um nome comum</td></tr>
+<tr><td><code>["meu apelido"] = "Aninha"</code></td><td><code>t["meu apelido"]</code></td><td>Chave com espaço, acento ou símbolo; chave que vem de uma conta</td></tr>
+<tr><td><code>[10] = "dez"</code></td><td><code>t[10]</code></td><td>Chave numérica escolhida por você</td></tr>
+<tr><td>vírgula <code>,</code> ou ponto e vírgula <code>;</code></td><td>Separa os itens</td><td>Os dois servem; a vírgula é o comum. Uma vírgula sobrando no fim (<code>{1, 2, 3,}</code>) é permitida.</td></tr>
+</table>
+</div>
+
+<div class="tip">
+<strong>A vírgula do fim é sua amiga</strong>
+<p>Tabelas grandes ficam melhores com um item por linha, como a <code>t</code> acima. Deixando uma vírgula depois do último item, para acrescentar um item novo basta escrever uma linha a mais, sem mexer na anterior. Esquecer a vírgula <strong>entre</strong> dois itens é que dá erro (veja <a href="#errado">Quando dá errado</a>).</p>
+</div>
+
+<hr>
+
+<h2>5. Mudando e apagando</h2>
+<p>Guardar numa gaveta que já tem algo <strong>troca</strong> o conteúdo. E guardar <code>nil</code> <strong>apaga</strong> a gaveta:</p>
+
+<pre class="file" data-file="mudar.lua">local ficha = {nome = "Ana", idade = 30}
+print(ficha.idade)
+ficha.idade = 31
+print(ficha.idade)
+ficha.cidade = "Recife"
+print(ficha.cidade)
+ficha.cidade = nil
+print(ficha.cidade)
+</pre>
+
+<pre class="term">$ lua mudar.lua
+30
+31
+Recife
+nil</pre>
+
+<p>A tabela mudou <strong>sem ser criada de novo</strong>: é a mesma <code>ficha</code>, com uma gaveta trocada, uma criada e depois apagada. Não existe um comando "apagar" separado: no Lua, uma chave com valor <code>nil</code> e uma chave que não existe são a mesma coisa.</p>
+
+<hr>
+
+<h2>6. O que pode ser chave</h2>
+
+<pre class="file" data-file="chaves.lua">local t = {}
+t[1] = "número um"
+t["1"] = "texto um"
+print(t[1], t["1"])
+t[2.0] = "dois"
+print(t[2])
+t[true] = "sim"
+print(t[true])
+print(#t)
+</pre>
+
+<pre class="term">$ lua chaves.lua
+número um	texto um
+dois
+sim
+2</pre>
+
+<ul>
+  <li><code>1</code> e <code>"1"</code> são chaves diferentes: um é número, o outro é texto (veja <a href="conversao.html">Conversão</a>). Isso pega muita gente que lê números do teclado com <a href="io-read.html">io.read</a>, que devolve texto.</li>
+  <li><code>2.0</code> e <code>2</code> são a <strong>mesma</strong> chave: um float com valor inteiro vira o inteiro na hora de ser chave (veja <a href="numeros.html">Números</a>).</li>
+  <li>Até <code>true</code> pode ser chave. Na verdade, <strong>qualquer valor</strong> pode, inclusive outra tabela ou uma função, com <strong>uma exceção</strong>: <code>nil</code> (e o número especial <code>0/0</code>, o "não é um número").</li>
+  <li>O <code>#t</code> deu <code>2</code>: ele conta só a parte "lista" (as chaves 1, 2…), ignorando <code>"1"</code> e <code>true</code>.</li>
+</ul>
+
+<hr>
+
+<h2>7. A variável guarda a tabela, ou só o caminho até ela?</h2>
+<p>Com números e textos, <code>b = a</code> faz uma cópia. Com tabelas, <strong>não</strong>: as duas variáveis passam a apontar para <strong>o mesmo armário</strong>.</p>
+
+<pre class="file" data-file="referencia.lua">local a = {nome = "Ana"}
+local b = a
+b.nome = "Bia"
+print(a.nome)
+print(a == b)
+print({} == {})
+local c = {nome = "Bia"}
+print(b == c)
+</pre>
+
+<pre class="term">$ lua referencia.lua
+Bia
+true
+false
+false</pre>
+
+<p>Mudar <code>b.nome</code> mudou <code>a.nome</code>, porque <code>a</code> e <code>b</code> são o mesmo armário com dois nomes. E o <code>==</code> entre tabelas pergunta "é o mesmo armário?", não "têm o mesmo conteúdo?": dois <code>{}</code> são armários diferentes (dois endereços diferentes), e <code>b</code> e <code>c</code> também, mesmo com o mesmo nome dentro. Isso tem aula própria: <a href="tabelas-referencia.html">Tabelas São Referências</a>.</p>
+
+<hr>
+
+<h2>8. Mostrando o que tem dentro</h2>
+<p>Como o <code>print(t)</code> só mostra o endereço, para ver o conteúdo de uma lista percorra as posições com um <a href="for-numerico.html">for</a> de 1 até <code>#t</code>:</p>
+
+<pre class="file" data-file="mostrar.lua">local compras = {"pão", "leite", "café"}
+print(compras)
+for i = 1, #compras do
+  print(i, compras[i])
+end
+</pre>
+
+<pre class="term">$ lua mostrar.lua
+table: 0x56284d6db6f0
+1	pão
+2	leite
+3	café</pre>
+
+<p>Há outros jeitos, cada um com a sua aula: <a href="ipairs.html">ipairs</a> (percorrer uma lista), <a href="table-concat.html">table.concat</a> (juntar os itens num texto só) e <a href="pairs.html">pairs</a> (percorrer <strong>todas</strong> as chaves, inclusive as de texto, numa ordem que o Lua escolhe).</p>
+
+<div class="trylua">
+<p class="try-task"><strong>Experimente:</strong> rode e veja o endereço que o <strong>seu</strong> editor mostra (vai ser diferente do desta página). Depois acrescente <code>"manteiga"</code> à lista e rode de novo: o <code>for</code> se ajusta sozinho, porque usa <code>#compras</code>.</p>
+<pre class="script" data-file="main.lua">local compras = {"pão", "leite", "café"}
+print(compras)
+for i = 1, #compras do
+  print(i, compras[i])
+end
+</pre>
+</div>
+
+<hr>
+
+<h2 id="formas">Formas diferentes de fazer a mesma coisa</h2>
+<p>A mesma ficha, de três jeitos. Todos criam uma tabela igual:</p>
+
+<pre class="file" data-file="tres_jeitos.lua">-- tudo no construtor (o mais comum)
+local f1 = {nome = "Ana", idade = 30}
+
+-- vazia, campo por campo, com o ponto
+local f2 = {}
+f2.nome = "Ana"
+f2.idade = 30
+
+-- vazia, com colchetes
+local f3 = {}
+f3["nome"] = "Ana"
+f3["idade"] = 30
+</pre>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Situação</th><th>Qual usar</th></tr>
+<tr><td>Você já sabe os campos ao criar</td><td>Tudo no construtor: <code>{nome = "Ana", idade = 30}</code></td></tr>
+<tr><td>Os campos chegam aos poucos (lidos do teclado, calculados)</td><td><code>{}</code> e depois <code>t.campo = valor</code></td></tr>
+<tr><td>A chave é um nome comum</td><td><code>t.nome</code></td></tr>
+<tr><td>A chave tem espaço, acento ou símbolo, é um número, ou está numa variável</td><td><code>t["meu apelido"]</code>, <code>t[1]</code>, <code>t[chave]</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+
+<div class="cenario">
+<strong>Usou um campo que não existe numa conta</strong>
+<pre class="file" data-file="campo_nil.lua">local produto = {nome = "Café", preco = 18.90}
+print(produto.preco * produto.quantidade)
+</pre>
+<pre class="term">$ lua campo_nil.lua
+lua: campo_nil.lua:2: attempt to perform arithmetic on a nil value (field 'quantidade')
+stack traceback:
+	campo_nil.lua:2: in main chunk
+	[C]: in ?</pre>
+<p>Linha por linha:</p>
+<dl class="anatomy">
+  <dt>lua: campo_nil.lua:2:</dt><dd>O erro foi na linha 2 do arquivo <code>campo_nil.lua</code>.</dd>
+  <dt>attempt to perform arithmetic on a nil value</dt><dd>"Tentativa de fazer conta com um valor nil."</dd>
+  <dt>(field 'quantidade')</dt><dd>O <code>nil</code> veio do <strong>campo</strong> (<em>field</em>) <code>quantidade</code> de uma tabela: a gaveta que ninguém criou.</dd>
+  <dt>stack traceback: …</dt><dd>O rastro: linha 2 do programa principal (<code>main chunk</code>), chamado pelo próprio <code>lua</code> (<code>[C]: in ?</code>).</dd>
+</dl>
+<p><strong>Como consertar:</strong> crie o campo (<code>quantidade = 2</code> no construtor) ou confira o nome. A mesma coisa acontece com letra maiúscula: <code>produto.Nome</code> é outra gaveta, e devolve <code>nil</code> (no lab, <code>print(produto.Nome)</code> mostrou <code>nil</code> e <code>print(produto.nome)</code> mostrou <code>Café</code>).</p>
+</div>
+
+<div class="cenario">
+<strong>Pediu o campo de um campo que não existe</strong>
+<pre class="file" data-file="indexar_nil.lua">local ficha = {nome = "Ana"}
+print(ficha.endereco.rua)
+</pre>
+<pre class="term">$ lua indexar_nil.lua
+lua: indexar_nil.lua:2: attempt to index a nil value (field 'endereco')
+stack traceback:
+	indexar_nil.lua:2: in main chunk
+	[C]: in ?</pre>
+<p>"Tentativa de indexar um valor nil (o campo <code>endereco</code>)." <strong>Indexar</strong> é abrir uma gaveta (<code>[ ]</code> ou <code>.</code>). <code>ficha.endereco</code> é <code>nil</code>, e não dá para abrir a gaveta <code>rua</code> de um <code>nil</code>: ele não é uma tabela. O mesmo erro aparece com uma variável que nunca recebeu tabela: <code>local t</code> e depois <code>t.nome</code> dá <code>attempt to index a nil value (local 't')</code>. <strong>Como consertar:</strong> crie a tabela antes (<code>ficha.endereco = {rua = "…"}</code>), ou confira antes de abrir: <code>if ficha.endereco then … end</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>A chave era <code>nil</code></strong>
+<pre class="file" data-file="chave_nil.lua">local t = {}
+local chave
+t[chave] = "algo"
+</pre>
+<pre class="term">$ lua chave_nil.lua
+lua: chave_nil.lua:3: table index is nil
+stack traceback:
+	chave_nil.lua:3: in main chunk
+	[C]: in ?</pre>
+<p>"O índice da tabela é nil." A variável <code>chave</code> foi declarada sem valor, então vale <code>nil</code>, e <code>nil</code> não pode ser etiqueta de gaveta. Ler <code>t[nil]</code> não dá erro (devolve <code>nil</code>); <strong>guardar</strong> dá. Acontece muito quando a chave vem de uma variável com o nome digitado errado. <strong>Como consertar:</strong> dê um valor à variável da chave.</p>
+</div>
+
+<div class="cenario">
+<strong>Tentou juntar a tabela com um texto</strong>
+<pre class="file" data-file="concat_tab.lua">local compras = {"pão", "leite"}
+print("Lista: " .. compras)
+</pre>
+<pre class="term">$ lua concat_tab.lua
+lua: concat_tab.lua:2: attempt to concatenate a table value (local 'compras')
+stack traceback:
+	concat_tab.lua:2: in main chunk
+	[C]: in ?</pre>
+<p>"Tentativa de concatenar (juntar) um valor do tipo tabela (a variável local <code>compras</code>)." O <code>..</code> só junta textos e números (veja <a href="concatenacao.html">Juntando Textos</a>). <strong>Como consertar:</strong> junte os itens antes, com <code>table.concat(compras, ", ")</code> (aula <a href="table-concat.html">table.concat</a>), ou junte um item: <code>"Lista: " .. compras[1]</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Esqueceu a vírgula entre dois itens</strong>
+<pre class="file" data-file="sem_virgula.lua">local compras = {"pão" "leite"}
+</pre>
+<pre class="term">$ lua sem_virgula.lua
+lua: sem_virgula.lua:1: '}' expected near '"leite"'</pre>
+<p>"Era esperado <code>}</code> perto de <code>"leite"</code>." Depois de <code>"pão"</code>, o Lua esperava uma vírgula (mais um item) ou o <code>}</code> (fim da tabela), e achou outro texto. É um erro de sintaxe: o programa não roda e não há traceback. <strong>Como consertar:</strong> <code>{"pão", "leite"}</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Usou o ponto com um número</strong>
+<pre class="file" data-file="ponto_numero.lua">local compras = {"pão", "leite"}
+print(compras.1)
+</pre>
+<pre class="term">$ lua ponto_numero.lua
+lua: ponto_numero.lua:2: ')' expected near '.1'</pre>
+<p>O atalho do ponto só vale para chaves que são nomes. <code>.1</code> o Lua lê como o número <code>0.1</code> escrito sem o zero, e não entende o que um número está fazendo ali. <strong>Como consertar:</strong> posições de lista sempre com colchetes: <code>compras[1]</code>.</p>
+</div>
+
+<hr>
+
+<h2>Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>O que faz</th></tr>
+<tr><td><code>{}</code></td><td>Cria uma tabela nova, vazia</td></tr>
+<tr><td><code>{"a", "b"}</code></td><td>Lista: <code>t[1] = "a"</code>, <code>t[2] = "b"</code></td></tr>
+<tr><td><code>{nome = "Ana"}</code></td><td>Campo de nome comum: <code>t.nome</code></td></tr>
+<tr><td><code>{["com espaço"] = 1, [10] = "dez"}</code></td><td>Chave qualquer, entre colchetes</td></tr>
+<tr><td><code>t[chave] = valor</code></td><td>Guarda (cria ou troca)</td></tr>
+<tr><td><code>t[chave]</code> / <code>t.campo</code></td><td>Lê; chave sem nada devolve <code>nil</code></td></tr>
+<tr><td><code>t.campo = nil</code></td><td>Apaga o campo</td></tr>
+<tr><td><code>#t</code></td><td>Quantos itens tem a parte lista</td></tr>
+<tr><td><code>type(t)</code></td><td><code>"table"</code></td></tr>
+<tr><td><code>print(t)</code></td><td><code>table: 0x…</code>: o endereço, não o conteúdo (muda a cada execução)</td></tr>
+<tr><td><code>a == b</code></td><td><code>true</code> só se for <strong>a mesma</strong> tabela</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Mensagem</th><th>Causa provável</th></tr>
+<tr><td><code>attempt to perform arithmetic on a nil value (field 'x')</code></td><td>Conta com um campo que não existe (nome errado, maiúscula)</td></tr>
+<tr><td><code>attempt to index a nil value (field 'x')</code> / <code>(local 't')</code></td><td>Abriu uma gaveta de algo que é <code>nil</code>, não tabela</td></tr>
+<tr><td><code>table index is nil</code></td><td>Guardou com uma chave <code>nil</code></td></tr>
+<tr><td><code>attempt to concatenate a table value</code></td><td>Usou <code>..</code> com uma tabela</td></tr>
+<tr><td><code>'}' expected near …</code></td><td>Faltou uma vírgula entre os itens do construtor</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. Complete a ficha</h3>
+<p>Complete para criar a tabela e mostrar <code>Bia</code>:</p>
+<div class="ex-code">local aluna = <input data-answer="{" aria-label="abre a tabela">nome = "Bia", nota = 9}<br>print(aluna<input data-answer="." aria-label="atalho do campo">nome)</div>
+</div>
+
+<div class="exercise">
+<h3>2. O que aparece?</h3>
+<p>O que este programa mostra?</p>
+<pre class="file" data-file="ex2.lua">local t = {cor = "azul"}
+print(t.tamanho)
+</pre>
+<div class="ex-code">Mostra <input data-answer="nil" aria-label="resultado"></div>
+</div>
+
+<div class="mc" data-answer="3">
+<p class="mc-q">3. Quantas estruturas de dados (como lista, dicionário, objeto) o Lua tem?</p>
+<label><input type="radio" name="q3"> Três: lista, dicionário e objeto</label>
+<label><input type="radio" name="q3"> Duas: <code>array</code> e <code>table</code></label>
+<label><input type="radio" name="q3"> Uma só: a tabela, que faz todos esses papéis</label>
+<label><input type="radio" name="q3"> Nenhuma: só variáveis simples</label>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">4. <code>print(compras)</code> mostrou <code>table: 0x55c77b3bb4e0</code>. O que é esse número?</p>
+<label><input type="radio" name="q4"> A quantidade de itens da tabela</label>
+<label><input type="radio" name="q4"> O endereço na memória, que muda a cada execução</label>
+<label><input type="radio" name="q4"> Um código de erro</label>
+<label><input type="radio" name="q4"> O conteúdo da tabela em hexadecimal</label>
+</div>
+
+<div class="mc" data-answer="1">
+<p class="mc-q">5. Como se apaga o campo <code>cidade</code> da tabela <code>ficha</code>?</p>
+<label><input type="radio" name="q5"> <code>ficha.cidade = nil</code></label>
+<label><input type="radio" name="q5"> <code>delete ficha.cidade</code></label>
+<label><input type="radio" name="q5"> <code>ficha.cidade = ""</code></label>
+<label><input type="radio" name="q5"> Não dá para apagar</label>
+</div>
+
+<h3>Missão final: atualizando a ficha do café</h3>
+
+<div class="trylua" data-goal="out:Café: 3 no estoque;;out:Fornecedor: Sítio Boa Vista;;semerro">
+<p class="try-task"><strong>Missão:</strong> a Ana vendeu 2 pacotes de café. No lugar dos comentários, (1) tire 2 do <code>estoque</code> do produto e (2) crie o campo <code>fornecedor</code> com o texto <code>"Sítio Boa Vista"</code>. As linhas do <code>print</code> não precisam mudar.</p>
+<pre class="script" data-file="main.lua">local produto = {nome = "Café", preco = 18.90, estoque = 5}
+-- 1) tire 2 do estoque
+
+-- 2) crie o campo fornecedor
+
+print(produto.nome .. ": " .. produto.estoque .. " no estoque")
+print("Fornecedor: " .. tostring(produto.fornecedor))
+</pre>
+<pre class="solucao" data-file="main.lua">local produto = {nome = "Café", preco = 18.90, estoque = 5}
+-- 1) tire 2 do estoque
+produto.estoque = produto.estoque - 2
+-- 2) crie o campo fornecedor
+produto.fornecedor = "Sítio Boa Vista"
+print(produto.nome .. ": " .. produto.estoque .. " no estoque")
+print("Fornecedor: " .. tostring(produto.fornecedor))
+</pre>
+</div>
+
+<p>Rodando o código sem mexer, sai <code>Café: 5 no estoque</code> e <code>Fornecedor: nil</code> (o <a href="conversao.html">tostring</a> transforma o <code>nil</code> no texto <code>"nil"</code>, para o <code>..</code> não dar erro).</p>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li>A <strong>tabela</strong> é a única estrutura de dados do Lua: um conjunto de pares <strong>chave → valor</strong>, como gavetas com etiquetas. Ela faz o papel de lista, de dicionário e de objeto.</li>
+  <li><code>{}</code> cria uma tabela. <code>t[chave] = valor</code> guarda; <code>t[chave]</code> lê. Para chaves que são nomes, <code>t.nome</code> é o mesmo que <code>t["nome"]</code>.</li>
+  <li>Chave que não existe vale <code>nil</code>. Guardar <code>nil</code> apaga o campo. A chave não pode ser <code>nil</code>.</li>
+  <li>No construtor: valores soltos viram a lista (1, 2, 3…), <code>nome = valor</code> vira campo, <code>[qualquer] = valor</code> aceita qualquer chave.</li>
+  <li><code>print(t)</code> mostra <code>table: 0x…</code>, o endereço da tabela na memória, que muda a cada execução. Para ver o conteúdo, leia campo por campo ou percorra com um laço.</li>
+  <li>Duas variáveis podem apontar para a mesma tabela; <code>==</code> compara se é a mesma, não se o conteúdo é igual.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
