@@ -1,0 +1,552 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua collectgarbage — a coleta de lixo e a memória do programa | Guia Lua</title>
+<meta name="description" content="A coleta de lixo do Lua para quem nunca programou: o que é lixo na memória, collectgarbage(&quot;count&quot;), &quot;collect&quot;, &quot;step&quot;, &quot;stop&quot; e &quot;restart&quot;, os modos incremental e generacional, a opção &quot;param&quot; nova do Lua 5.5, o metamétodo __gc e os erros reais.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">collectgarbage</span></h1>
+
+<p class="intro">Todo valor que o seu programa cria (uma tabela, um texto, uma função) ocupa um pedacinho da <strong>memória</strong> do computador. Em algumas linguagens, o programador precisa devolver essa memória à mão, e esquecer disso é uma fonte enorme de defeitos. No Lua, não: um ajudante chamado <strong>coletor de lixo</strong> (em inglês, <em>garbage collector</em>, ou só <em>GC</em>) descobre sozinho o que o programa não usa mais e libera o espaço. Nesta aula você vai ver esse ajudante trabalhando, com a função <code>collectgarbage</code> ("coletar lixo").</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O que é "lixo" na memória e quando um valor vira lixo.</li>
+  <li>Como medir a memória do programa com <code>collectgarbage("count")</code>.</li>
+  <li>Como mandar o coletor trabalhar na hora: <code>"collect"</code> (tudo de uma vez) e <code>"step"</code> (um passo).</li>
+  <li>Como desligar e religar o coletor: <code>"stop"</code>, <code>"restart"</code> e <code>"isrunning"</code>.</li>
+  <li>Os dois modos do coletor, <strong>incremental</strong> e <strong>generacional</strong>, e a opção <code>"param"</code>, nova no Lua 5.5 <span class="versao">5.5</span>.</li>
+  <li>Como pedir um aviso quando um valor é recolhido: o metamétodo <code>__gc</code>.</li>
+  <li>Os erros reais mais comuns.</li>
+</ul>
+</div>
+
+<p>Os programas desta aula rodaram no <strong>Lua 5.5</strong> da máquina da Ana (usuária <code>ana</code>, computador <code>notebook</code>), com <code>lua arquivo.lua</code> (veja <a href="executar.html">Rodando um Programa</a>).</p>
+
+<div class="warning">
+<strong>Os números de memória desta aula vão ser outros no seu computador</strong>
+<p>Quantos KB um programa ocupa depende da versão do Lua, do sistema, de ser 32 ou 64 bits, e até de quando o coletor resolveu passar. Os números que aparecem aqui são os que saíram no lab, só para você ter uma ideia. <strong>O seu número vai ser outro</strong> (no editor do guia também), e está tudo bem: o que importa é a <strong>diferença</strong> entre um número e outro (subiu muito, caiu muito).</p>
+</div>
+
+<hr>
+
+<h2>A ideia: o lixeiro que passa sozinho</h2>
+<p>Pense na casa da Ana. Ela vive guardando coisas em caixas: uma caixa de brinquedos, uma de livros, uma de roupas. Cada caixa tem uma <strong>etiqueta</strong> com o nome dela, colada na parede da sala. Enquanto a etiqueta está na parede, a Ana sabe onde a caixa está e pode abrir quando quiser.</p>
+<p>Um dia a Ana arranca a etiqueta da caixa de brinquedos. A caixa continua lá, no quarto, ocupando espaço, mas <strong>ninguém mais sabe chegar até ela</strong>. Ela virou lixo. De tempos em tempos passa um <strong>lixeiro</strong> que olha a casa toda, vê quais caixas não têm mais nenhuma etiqueta apontando para elas e as leva embora. A Ana não precisa chamar o lixeiro: ele passa sozinho.</p>
+<p>No Lua é igual:</p>
+<ul>
+  <li>a <strong>caixa</strong> é o valor (uma tabela, um texto, uma função);</li>
+  <li>a <strong>etiqueta</strong> é a variável (ou o campo de outra tabela) que guarda esse valor (veja <a href="tabelas-referencia.html">Tabelas São Referências</a>);</li>
+  <li>o <strong>lixeiro</strong> é o coletor de lixo. Um valor vira lixo quando <strong>nenhuma</strong> variável, nenhuma tabela e nenhuma função que ainda está em uso aponta mais para ele.</li>
+</ul>
+<p>O manual do Lua resume assim: o Lua nunca recolhe um valor que o programa ainda pode usar, e <strong>em algum momento</strong> recolhe o que não dá mais para alcançar. Repare no "em algum momento": o lixeiro não passa no segundo em que a etiqueta sai da parede. A função <code>collectgarbage</code> serve justamente para você <strong>olhar</strong> o que ele está fazendo e, se precisar, <strong>chamar</strong> o lixeiro na hora.</p>
+
+<hr>
+
+<h2>1. Quanto de memória o programa usa: <code>"count"</code></h2>
+<p><code>collectgarbage("count")</code> devolve quanta memória o Lua está usando agora, em <strong>KB</strong> (kilobytes; 1 KB = 1024 bytes). O número vem com casas decimais:</p>
+
+<pre class="file" data-file="kb.lua">local kb = collectgarbage("count")
+print(kb)
+print(kb * 1024)
+print(math.type(kb))
+</pre>
+
+<pre class="term">$ lua kb.lua
+19.5693359375
+20039.0
+float</pre>
+
+<dl class="anatomy">
+  <dt>collectgarbage("count")</dt><dd>Pergunta ao coletor: "quanta memória o Lua está usando?". A opção vai entre aspas, como texto.</dd>
+  <dt>19.5693359375</dt><dd>Cerca de 19,6 KB. É o que um programa quase vazio ocupa: as bibliotecas (<code>string</code>, <code>table</code>, <code>math</code>…), as funções prontas e o próprio programa. O seu número vai ser outro.</dd>
+  <dt>kb * 1024</dt><dd>O manual garante que a parte decimal é exata: multiplicando por 1024 sai o número de <strong>bytes</strong>, 20039.</dd>
+  <dt>float</dt><dd>O valor é um número com vírgula, um <code>float</code> (veja <a href="numeros.html">Números</a>).</dd>
+</dl>
+
+<p>Para mostrar com uma casa decimal, use o <code>%.1f</code> do <a href="string-format.html">string.format</a>. Agora um programa que cria uma lista grande, com 100 mil textos, e mede antes e depois:</p>
+
+<pre class="file" data-file="memoria.lua">print(string.format("Antes:            %8.1f KB", collectgarbage("count")))
+local lista = {}
+for i = 1, 100000 do
+  lista[i] = "item " .. i
+end
+print(string.format("Com a lista:      %8.1f KB", collectgarbage("count")))
+lista = nil
+collectgarbage("collect")
+print(string.format("Depois de limpar: %8.1f KB", collectgarbage("count")))
+</pre>
+
+<pre class="term">$ lua memoria.lua
+Antes:                20.5 KB
+Com a lista:        5777.8 KB
+Depois de limpar:    529.6 KB</pre>
+
+<dl class="anatomy">
+  <dt>%8.1f</dt><dd>Um número com 1 casa decimal, ocupando 8 posições (alinhado à direita), para os três números ficarem um embaixo do outro.</dd>
+  <dt>lista[i] = "item " .. i</dt><dd>Cria 100 mil textos diferentes (<code>"item 1"</code>, <code>"item 2"</code>…). A memória subiu de uns 20 KB para quase 6 MB.</dd>
+  <dt>lista = nil</dt><dd><strong>Arranca a etiqueta.</strong> A variável <code>lista</code> não aponta mais para a tabela, e ninguém mais aponta para ela: a tabela e os 100 mil textos viraram lixo.</dd>
+  <dt>collectgarbage("collect")</dt><dd>Chama o lixeiro <strong>agora</strong>, para um ciclo completo de coleta. Sem esta linha, o lixo também seria recolhido, mas só quando o coletor achasse que era hora.</dd>
+  <dt>529.6 KB</dt><dd>Caiu de 5777,8 para 529,6 KB. Não voltou aos 20 KB do começo porque o Lua tem estruturas internas que cresceram junto com a lista e que ele encolhe aos poucos, a cada coleta (no lab, uma segunda <code>collectgarbage("collect")</code> logo em seguida baixou para 145,8 KB).</dd>
+</dl>
+
+<div class="tip">
+<strong>Você quase nunca precisa chamar o coletor</strong>
+<p>Ele já trabalha sozinho, o tempo todo. O <code>collectgarbage("collect")</code> desta aula serve para <strong>ver</strong> o efeito na hora. Num programa de verdade, chamar o coletor a toda hora só deixa tudo mais lento. Quem usa essas opções é quem está medindo memória ou ajustando um programa grande, como um jogo.</p>
+</div>
+
+<div class="trylua" data-goal="out:Liberou mais da metade?	true;;semerro">
+<p class="try-task"><strong>Missão:</strong> este programa chama o coletor, mas a memória quase não cai. Falta uma linha: a que "arranca a etiqueta" da lista antes do <code>collectgarbage("collect")</code>. Ponha essa linha e rode de novo. (Os números em KB vão ser outros; olhe o <code>true</code>/<code>false</code> da última linha.)</p>
+<pre class="script" data-file="main.lua">local lista = {}
+for i = 1, 100000 do
+  lista[i] = "item " .. i
+end
+local com_lista = collectgarbage("count")
+print(string.format("Com a lista:      %8.1f KB", com_lista))
+
+collectgarbage("collect")
+local depois = collectgarbage("count")
+print(string.format("Depois de limpar: %8.1f KB", depois))
+print("Liberou mais da metade?", depois &lt; com_lista / 2)
+</pre>
+<pre class="solucao" data-file="main.lua">local lista = {}
+for i = 1, 100000 do
+  lista[i] = "item " .. i
+end
+local com_lista = collectgarbage("count")
+print(string.format("Com a lista:      %8.1f KB", com_lista))
+lista = nil
+collectgarbage("collect")
+local depois = collectgarbage("count")
+print(string.format("Depois de limpar: %8.1f KB", depois))
+print("Liberou mais da metade?", depois &lt; com_lista / 2)
+</pre>
+</div>
+
+<hr>
+
+<h2>2. Quando o lixo não é lixo: ainda tem etiqueta</h2>
+<p>O coletor só leva o que <strong>ninguém</strong> alcança. Se outra variável ainda aponta para a mesma tabela, ela não é lixo, mesmo depois do <code>lista = nil</code>:</p>
+
+<pre class="file" data-file="ainda.lua">local lista = {}
+for i = 1, 100000 do
+  lista[i] = "item " .. i
+end
+local copia = lista
+print(string.format("Com a lista:      %8.1f KB", collectgarbage("count")))
+lista = nil
+collectgarbage("collect")
+print(string.format("Depois de limpar: %8.1f KB", collectgarbage("count")))
+print(#copia, copia[1])
+</pre>
+
+<pre class="term">$ lua ainda.lua
+Com a lista:        5607.8 KB
+Depois de limpar:   5600.8 KB
+100000	item 1</pre>
+
+<p>A linha <code>local copia = lista</code> <strong>não copia</strong> a tabela: ela cola uma segunda etiqueta na mesma caixa. Quando <code>lista</code> vira <code>nil</code>, ainda sobra a etiqueta <code>copia</code>, e a tabela continua viva (a última linha prova: os 100 mil itens estão lá). A memória quase não mudou.</p>
+
+<p>É assim que um programa "vaza" memória no Lua: não é o coletor que falha, é o programa que esqueceu uma etiqueta em algum lugar. Os esconderijos mais comuns:</p>
+<ul>
+  <li>uma <strong>variável global</strong>, que vive até o fim do programa (mais um motivo para usar <code>local</code>; veja <a href="local.html">local × Global</a>);</li>
+  <li>uma <strong>tabela de "guardados"</strong> (um cache, uma lista de todos os inimigos do jogo) onde as coisas entram e nunca saem;</li>
+  <li>uma <strong>função</strong> que lembra da variável (uma <a href="closures.html">closure</a>).</li>
+</ul>
+<p>Para guardar algo numa tabela <strong>sem</strong> impedir o coletor de levá-lo, existem as tabelas fracas, na aula <a href="tabelas-fracas.html">Tabelas Fracas (__mode)</a>.</p>
+
+<div class="note">
+<strong>E a variável <code>local</code> que acabou o bloco?</strong>
+<p>Uma variável <code>local</code> criada dentro de uma função ou de um bloco <code>do … end</code> deixa de existir quando o bloco termina (veja <a href="escopo.html">Escopo e Blocos</a>). Se ela era a única etiqueta de uma tabela, a tabela vira lixo nessa hora, sem você escrever <code>= nil</code>. O <code>= nil</code> só é necessário quando a variável ainda vai continuar existindo por muito tempo.</p>
+</div>
+
+<hr>
+
+<h2>3. Desligar e religar: <code>"stop"</code>, <code>"restart"</code> e <code>"isrunning"</code></h2>
+<p>Dá para mandar o lixeiro tirar folga. Com <code>"stop"</code> o coletor para de trabalhar sozinho; com <code>"restart"</code> volta; e <code>"isrunning"</code> ("está rodando?") responde <code>true</code> ou <code>false</code>:</p>
+
+<pre class="file" data-file="parar.lua">collectgarbage("stop")
+print("Coletor ligado?", collectgarbage("isrunning"))
+for i = 1, 100000 do
+  local lixo = { i }
+end
+print(string.format("Sem coletor: %.1f KB", collectgarbage("count")))
+collectgarbage("restart")
+collectgarbage()
+print("Coletor ligado?", collectgarbage("isrunning"))
+print(string.format("Depois de coletar: %.1f KB", collectgarbage("count")))
+</pre>
+
+<pre class="term">$ lua parar.lua
+Coletor ligado?	false
+Sem coletor: 5977.6 KB
+Coletor ligado?	true
+Depois de coletar: 19.7 KB</pre>
+
+<p>Cada volta do <code>for</code> cria uma tabelinha <code>{ i }</code> que vira lixo no fim da volta (a variável <code>lixo</code> só existe dentro dela). Com o coletor parado, ninguém recolhe: as 100 mil tabelinhas se acumulam e a memória passa de 5 MB. Depois do <code>"restart"</code> e de um <code>collectgarbage()</code>, tudo some.</p>
+<p>Repare no <code>collectgarbage()</code> <strong>sem nada</strong> dentro dos parênteses: a opção padrão é <code>"collect"</code>, então ele faz o mesmo que <code>collectgarbage("collect")</code>.</p>
+
+<div class="warning">
+<strong>Coletor parado é memória que só cresce</strong>
+<p>Com o <code>"stop"</code>, o lixo nunca vai embora sozinho. Um programa que fica muito tempo assim pode encher a memória do computador. Se usar, use por pouco tempo e sempre com o <code>"restart"</code> depois.</p>
+</div>
+
+<hr>
+
+<h2>4. Um passo de cada vez: <code>"step"</code></h2>
+<p>O coletor do Lua não precisa parar o programa inteiro para limpar a casa toda de uma vez. Ele pode trabalhar em <strong>passos</strong> pequenos, misturados com o seu programa, como um lixeiro que recolhe um pouco a cada rua. <code>collectgarbage("step")</code> manda dar <strong>um</strong> passo e devolve <code>true</code> se esse passo terminou um ciclo inteiro de coleta (senão, <code>false</code>):</p>
+
+<pre class="file" data-file="passos.lua">collectgarbage("incremental")
+local lista = {}
+for i = 1, 100000 do
+  lista[i] = { numero = i }
+end
+print(string.format("Com a lista: %8.1f KB", collectgarbage("count")))
+lista = nil
+local passos, ciclos = 0, 0
+while ciclos &lt; 2 do
+  passos = passos + 1
+  if collectgarbage("step") then
+    ciclos = ciclos + 1
+    print(string.format("Ciclo %d terminou no passo %d: %8.1f KB", ciclos, passos, collectgarbage("count")))
+  end
+end
+</pre>
+
+<pre class="term">$ lua passos.lua
+Com a lista:   8203.0 KB
+Ciclo 1 terminou no passo 2:     19.7 KB
+Ciclo 2 terminou no passo 4:     19.7 KB</pre>
+
+<p>A primeira linha põe o coletor no modo <strong>incremental</strong> (a seção 5 explica os modos). Depois, o <code>while</code> dá passos até ver <strong>dois</strong> ciclos terminarem. No lab, o primeiro ciclo já recolheu a lista inteira em 2 passos.</p>
+<p>No editor do guia, o mesmo programa deu números bem diferentes: <code>Com a lista: 6245.7 KB</code>, o ciclo 1 terminou no passo 120 ainda com <code>6245.7 KB</code>, e só o ciclo 2 (passo 122) baixou para <code>15.5 KB</code>. Os dois estão certos. Quando a lista virou lixo, o coletor do editor estava no meio de um ciclo que já tinha visto a lista "viva"; esse ciclo terminou sem levá-la, e foi o ciclo seguinte que a recolheu. É o "em algum momento" do manual na prática, e é por isso que <strong>nenhum programa deve depender</strong> de quantos passos o coletor leva.</p>
+
+<div class="note">
+<strong>O número entre parênteses</strong>
+<p><code>collectgarbage("step", n)</code> aceita um número inteiro: com <code>n</code> positivo, o coletor trabalha como se o programa tivesse criado <code>n</code> bytes novos (um passo maior); com <code>0</code>, dá um passo básico. É ajuste fino; o <code>"step"</code> sozinho basta para entender a ideia.</p>
+</div>
+
+<hr>
+
+<h2>5. Os dois modos: incremental e generacional</h2>
+<p>O coletor do Lua sabe trabalhar de dois jeitos (dois <strong>modos</strong>):</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Modo</th><th>Como trabalha</th><th>Na casa da Ana</th></tr>
+<tr><td><strong>incremental</strong></td><td>Cada ciclo olha <strong>todos</strong> os valores, mas em passos pequenos, misturados com o programa.</td><td>O lixeiro passa pela casa inteira, um cômodo de cada vez.</td></tr>
+<tr><td><strong>generacional</strong></td><td>Faz coletas pequenas e frequentes só com os valores <strong>recém-criados</strong> (as coletas "menores") e, de vez em quando, uma coleta grande com tudo (a "maior").</td><td>O lixeiro olha quase sempre só as caixas novas da semana (a maioria das coisas novas vira lixo logo), e de vez em quando faz a faxina geral.</td></tr>
+</table>
+</div>
+
+<p>A ideia do generacional vem de uma observação antiga: a maioria dos valores <strong>morre jovem</strong> (como a tabelinha <code>{ i }</code> da seção 3, que vira lixo no fim da volta). Olhar só os novos economiza trabalho.</p>
+
+<p>Para trocar de modo, use <code>"incremental"</code> ou <code>"generational"</code>. A função devolve o modo que estava <strong>antes</strong>:</p>
+
+<pre class="file" data-file="modo.lua">print("Modo de antes:", collectgarbage("incremental"))
+print("Modo de antes:", collectgarbage("generational"))
+print("pause:", collectgarbage("param", "pause"))
+print("pause (antigo):", collectgarbage("param", "pause", 300))
+print("pause (novo):", collectgarbage("param", "pause"))
+</pre>
+
+<pre class="term">$ lua modo.lua
+Modo de antes:	generational
+Modo de antes:	incremental
+pause:	250
+pause (antigo):	250
+pause (novo):	300</pre>
+
+<p>A primeira linha revela uma curiosidade: o programa <strong>já estava</strong> no modo generacional. O manual diz que o modo padrão do coletor é o incremental, mas o programa <code>lua</code> (o interpretador que você roda no terminal, e o mesmo do editor do guia) liga o generacional logo ao começar: no código dele, o <code>lua.c</code> do Lua 5.5, está escrito <code>lua_gc(L, LUA_GCGEN);  /* ...in generational mode */</code>. Um jogo ou programa que usa o Lua por dentro (veja <a href="lua-no-mundo.html">Onde o Lua É Usado</a>) começa no incremental, a menos que escolha outro.</p>
+
+<h3>Os ajustes do coletor: <code>"param"</code> <span class="versao">5.5</span></h3>
+<p>Cada modo tem números que controlam o ritmo do lixeiro. No Lua 5.5, você lê e muda esses números com a opção <code>"param"</code>: <code>collectgarbage("param", "nome")</code> lê o valor, e <code>collectgarbage("param", "nome", novo)</code> troca e devolve o valor <strong>antigo</strong>. No exemplo acima, o <code>"pause"</code> era 250 e virou 300.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Nome</th><th>Modo</th><th>No lab</th><th>O que controla</th></tr>
+<tr><td><code>"pause"</code></td><td>incremental</td><td>250</td><td>Quanto esperar antes de começar outro ciclo: com 250, o coletor espera a memória chegar a 250% do que sobrou depois da última coleta. Maior = lixeiro mais preguiçoso.</td></tr>
+<tr><td><code>"stepmul"</code></td><td>incremental</td><td>200</td><td>Quanto trabalho cada passo faz. Maior = lixeiro mais apressado.</td></tr>
+<tr><td><code>"stepsize"</code></td><td>incremental</td><td>9600</td><td>Quantos bytes o programa cria entre um passo e outro (no editor do guia, que é de 32 bits, deu 5600).</td></tr>
+<tr><td><code>"minormul"</code></td><td>generacional</td><td>20</td><td>Uma coleta menor acontece quando a memória cresce 20% em relação à última coleta maior.</td></tr>
+<tr><td><code>"minormajor"</code></td><td>generacional</td><td>68</td><td>Quando passar para uma coleta maior (a memória dos valores velhos cresceu esse tanto por cento).</td></tr>
+<tr><td><code>"majorminor"</code></td><td>generacional</td><td>50</td><td>Quando voltar para as coletas menores, depois de uma maior.</td></tr>
+</table>
+</div>
+
+<p>O manual avisa duas coisas que valem a pena repetir: os valores padrão servem para quase todo programa, e o melhor ajuste muda de um computador para outro e de uma versão do Lua para outra. Mexa só se estiver medindo um problema de verdade.</p>
+
+<div class="note">
+<strong>O que mudou no Lua 5.5</strong> <span class="versao">5.5</span>
+<ul>
+  <li><strong>A opção <code>"param"</code> é nova.</strong> No Lua 5.4, os números iam junto com o modo: <code>collectgarbage("incremental", 200, 100)</code>. No 5.5, <code>"incremental"</code> e <code>"generational"</code> só trocam o modo (os números extras são ignorados) e os ajustes ficaram no <code>"param"</code> (manual 5.5, §8.2). Alguns parâmetros também mudaram de significado.</li>
+  <li><strong>As coletas maiores do modo generacional agora também são feitas aos pouquinhos</strong> (incrementalmente), sem travar o programa de uma vez ("major garbage collections done incrementally", na lista de mudanças do 5.5).</li>
+  <li><strong>Listas grandes gastam menos memória.</strong> A lista de mudanças fala em "cerca de 60% menos" para a parte de lista das tabelas grandes. No lab, uma tabela com os inteiros de 1 a 100 000 deu <code>Lua 5.5: 1172.0 KB</code> contra <code>Lua 5.4: 2069.5 KB</code> no programa inteiro.</li>
+</ul>
+<p>No Lua 5.1 e no LuaJIT, as opções <code>"incremental"</code>, <code>"generational"</code> e <code>"param"</code> nem existem (o 5.1 também não tem <code>"isrunning"</code>). Veja <a href="versoes.html">as diferenças entre as versões</a> e <a href="novidades.html">Novidades do Lua 5.5</a>.</p>
+</div>
+
+<hr>
+
+<h2>6. Um aviso na hora da coleta: <code>__gc</code></h2>
+<p>Às vezes você quer <strong>saber</strong> quando uma tabela foi recolhida, ou fazer alguma arrumação nessa hora (fechar um arquivo, avisar alguém). Para isso existe o metamétodo <code>__gc</code>: uma função guardada na <a href="metatabelas.html">metatabela</a> que o coletor chama logo antes de levar o valor embora. Essa função se chama <strong>finalizador</strong>.</p>
+
+<pre class="file" data-file="adeus.lua">local function nova_caixa(nome)
+  local caixa = { nome = nome }
+  setmetatable(caixa, { __gc = function (c)
+    print("Lixeiro levou a caixa: " .. c.nome)
+  end })
+  return caixa
+end
+local a = nova_caixa("brinquedos")
+local b = nova_caixa("livros")
+print("Joguei fora a caixa de brinquedos")
+a = nil
+collectgarbage()
+print("Fim do programa")
+</pre>
+
+<pre class="term">$ lua adeus.lua
+Joguei fora a caixa de brinquedos
+Lixeiro levou a caixa: brinquedos
+Fim do programa
+Lixeiro levou a caixa: livros</pre>
+
+<dl class="anatomy">
+  <dt>setmetatable(caixa, { __gc = … })</dt><dd>Marca a caixa: "quando você for recolhê-la, chame esta função antes". O <code>__gc</code> precisa estar na metatabela <strong>na hora</strong> do <code>setmetatable</code>; pôr depois não vale.</dd>
+  <dt>function (c) … end</dt><dd>O finalizador recebe a própria caixa (<code>c</code>), ainda inteira, e pode ler o <code>c.nome</code>.</dd>
+  <dt>a = nil e collectgarbage()</dt><dd>A caixa de brinquedos perdeu a etiqueta e o coletor passou: o finalizador rodou <strong>antes</strong> do <code>Fim do programa</code>.</dd>
+  <dt>Lixeiro levou a caixa: livros</dt><dd>A caixa de livros ainda tinha a etiqueta <code>b</code>. Ela só foi recolhida no <strong>fim</strong> do programa: quando o <code>lua</code> termina normalmente, ele fecha tudo e chama os finalizadores que faltavam.</dd>
+</dl>
+
+<p>Sem o <code>collectgarbage()</code>, o aviso dos brinquedos sairia "em algum momento", talvez só no fim. Por isso o <code>__gc</code> é bom para arrumação de segurança, mas <strong>não</strong> para coisas que precisam acontecer numa hora certa. Para fechar um arquivo assim que a variável sai do bloco, o Lua tem um recurso feito para isso: <a href="close.html">Fechamento Automático (&lt;close&gt;)</a>.</p>
+
+<hr>
+
+<h2 id="formas">Formas diferentes de fazer a mesma coisa</h2>
+<p>Para "deixar a tabela ir embora", há três jeitos, e todos funcionam porque tiram a última etiqueta:</p>
+
+<pre class="file" data-file="soltar.lua">-- 1) Pôr nil na variável
+local lista = { 1, 2, 3 }
+lista = nil
+
+-- 2) Deixar a variável local sair do bloco
+do
+  local temporaria = { 1, 2, 3 }
+end   -- aqui "temporaria" deixa de existir
+
+-- 3) Guardar numa tabela fraca (aula tabelas-fracas.html)
+local cache = setmetatable({}, { __mode = "v" })
+cache.x = { 1, 2, 3 }   -- o coletor pode levar a qualquer hora
+</pre>
+
+<p>E para "mandar o lixeiro trabalhar":</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Situação</th><th>Qual usar</th></tr>
+<tr><td>O dia a dia de quase todo programa</td><td>Nada: o coletor trabalha sozinho</td></tr>
+<tr><td>Medir quanta memória uma parte do programa gasta</td><td><code>collectgarbage("count")</code> antes e depois (com um <code>collectgarbage()</code> antes de medir, para o lixo antigo não atrapalhar)</td></tr>
+<tr><td>Limpar tudo numa hora boa (entre duas fases de um jogo, numa tela de "carregando")</td><td><code>collectgarbage()</code> ou <code>collectgarbage("collect")</code></td></tr>
+<tr><td>Adiantar um pouco do trabalho, sem parar muito tempo</td><td><code>collectgarbage("step")</code></td></tr>
+<tr><td>Um trecho curto em que o coletor não pode atrapalhar</td><td><code>"stop"</code> … <code>"restart"</code></td></tr>
+<tr><td>Ajustar o ritmo do coletor (programas grandes)</td><td><code>"incremental"</code>/<code>"generational"</code> e <code>"param"</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+
+<div class="cenario">
+<strong>Opção escrita errado (ou em português)</strong>
+<pre class="term">$ lua -e 'collectgarbage("contar")'
+lua: (command line):1: bad argument #1 to 'collectgarbage' (invalid option 'contar')
+stack traceback:
+	[C]: in global 'collectgarbage'
+	(command line):1: in main chunk
+	[C]: in ?</pre>
+<dl class="anatomy">
+  <dt>lua: (command line):1:</dt><dd>O erro veio do programa escrito na própria linha de comando (o <code>-e</code>), linha 1. Num arquivo, apareceria o nome dele, como <code>main.lua:1:</code>.</dd>
+  <dt>bad argument #1 to 'collectgarbage'</dt><dd>"Argumento ruim, o nº 1, para a <code>collectgarbage</code>": o problema está no primeiro valor entre os parênteses.</dd>
+  <dt>(invalid option 'contar')</dt><dd>"Opção inválida <code>'contar'</code>". As opções são palavras fixas, em inglês: <code>"count"</code>, <code>"collect"</code>, <code>"step"</code>…</dd>
+  <dt>[C]: in global 'collectgarbage'</dt><dd>O erro aconteceu dentro da função <code>collectgarbage</code>, que é escrita em C (por isso o <code>[C]</code>).</dd>
+</dl>
+<p><strong>Como consertar:</strong> use o nome certo (a tabela de referência abaixo tem todos).</p>
+</div>
+
+<div class="cenario">
+<strong>Nome de parâmetro errado no <code>"param"</code></strong>
+<pre class="file" data-file="erros.lua">print(pcall(collectgarbage, "param", "pausa"))
+</pre>
+<pre class="term">$ lua erros.lua
+false	bad argument #2 to 'collectgarbage' (invalid option 'pausa')</pre>
+<p>Agora é o argumento <strong>nº 2</strong> que está errado: o nome do parâmetro é <code>"pause"</code>, em inglês. (O <a href="pcall.html">pcall</a> só está aí para mostrar a mensagem sem parar o programa.)</p>
+</div>
+
+<div class="cenario">
+<strong>Código do Lua 5.4 que usava <code>"param"</code>… ao contrário</strong>
+<p>Um programa escrito para o 5.5 que use <code>"param"</code> não roda no Lua 5.4 (nem no 5.1, nem no LuaJIT):</p>
+<pre class="term">$ lua5.4 gc1.lua
+22.6357421875
+true
+generational
+incremental
+generational
+lua5.4: gc1.lua:6: bad argument #1 to 'collectgarbage' (invalid option 'param')
+stack traceback:
+	[C]: in function 'collectgarbage'
+	gc1.lua:6: in main chunk
+	[C]: in ?</pre>
+<p>E o caminho inverso engana: o jeito antigo do 5.4, <code>collectgarbage("incremental", 200, 100)</code>, <strong>não dá erro</strong> no 5.5. Ele troca o modo e simplesmente ignora o 200 e o 100. Se você trouxe um ajuste de um programa antigo, troque por <code>"param"</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>"Pus <code>nil</code> e a memória não caiu"</strong>
+<p>Sem mensagem de erro: o programa da seção 2 mostrou <code>5607.8 KB</code> e depois <code>5600.8 KB</code>. Quase sempre o motivo é outra etiqueta esquecida (uma cópia da variável, uma global, uma tabela que guarda tudo). Procure quem mais aponta para aquela tabela. O outro motivo possível é não ter chamado o coletor: sem o <code>collectgarbage()</code>, a memória só cai quando ele passar sozinho.</p>
+</div>
+
+<div class="cenario">
+<strong>Esperar o <code>__gc</code> numa hora certa</strong>
+<p>Se o programa da seção 6 não tivesse o <code>collectgarbage()</code>, o aviso dos brinquedos podia sair só no fim, depois do <code>Fim do programa</code>. Não é defeito: o coletor decide a hora. Quem precisa de hora certa usa <a href="close.html">&lt;close&gt;</a> ou chama a arrumação à mão.</p>
+</div>
+
+<hr>
+
+<h2>Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Chamada</th><th>O que faz</th><th>Devolve</th></tr>
+<tr><td><code>collectgarbage()</code> ou <code>collectgarbage("collect")</code></td><td>Um ciclo completo de coleta, agora</td><td><code>0</code></td></tr>
+<tr><td><code>collectgarbage("count")</code></td><td>A memória em uso, em KB (× 1024 = bytes)</td><td>um <code>float</code></td></tr>
+<tr><td><code>collectgarbage("step")</code></td><td>Um passo de coleta (<code>"step", n</code>: um passo maior)</td><td><code>true</code> se terminou um ciclo</td></tr>
+<tr><td><code>collectgarbage("stop")</code> / <code>("restart")</code></td><td>Para / volta a coleta automática</td><td><code>0</code></td></tr>
+<tr><td><code>collectgarbage("isrunning")</code></td><td>O coletor está ligado?</td><td><code>true</code>/<code>false</code></td></tr>
+<tr><td><code>collectgarbage("incremental")</code> / <code>("generational")</code></td><td>Troca o modo</td><td>o modo anterior</td></tr>
+<tr><td><code>collectgarbage("param", nome [, valor])</code> <span class="versao">5.5</span></td><td>Lê ou muda um ajuste: <code>"pause"</code>, <code>"stepmul"</code>, <code>"stepsize"</code>, <code>"minormul"</code>, <code>"minormajor"</code>, <code>"majorminor"</code></td><td>o valor anterior</td></tr>
+<tr><td><code>__gc</code> na metatabela</td><td>Finalizador: chamado antes de o valor ser recolhido (e no fim do programa)</td><td>—</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. Complete</h3>
+<p>Complete para mostrar a memória em uso, em KB:</p>
+<div class="ex-code">print(collectgarbage("<input data-answer="count" aria-label="opção">"))</div>
+</div>
+
+<div class="exercise">
+<h3>2. A opção padrão</h3>
+<p><code>collectgarbage()</code>, sem nada entre os parênteses, faz o mesmo que <code>collectgarbage("?")</code>. Qual é a opção?</p>
+<div class="ex-code">collectgarbage("<input data-answer="collect" aria-label="opção padrão">")</div>
+</div>
+
+<div class="mc" data-answer="3">
+<p class="mc-q">3. Quando uma tabela vira lixo?</p>
+<label><input type="radio" name="q3"> Quando o programa termina de usá-la numa linha</label>
+<label><input type="radio" name="q3"> Quando ela fica vazia</label>
+<label><input type="radio" name="q3"> Quando nenhuma variável, tabela ou função em uso aponta mais para ela</label>
+<label><input type="radio" name="q3"> Só quando você chama <code>collectgarbage()</code></label>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">4. <code>local a = {}</code> / <code>local b = a</code> / <code>a = nil</code> / <code>collectgarbage()</code>. O que acontece com a tabela?</p>
+<label><input type="radio" name="q4"> É recolhida, porque <code>a</code> virou <code>nil</code></label>
+<label><input type="radio" name="q4"> Continua viva, porque <code>b</code> ainda aponta para ela</label>
+<label><input type="radio" name="q4"> Dá erro</label>
+<label><input type="radio" name="q4"> <code>b</code> também vira <code>nil</code></label>
+</div>
+
+<div class="mc" data-answer="4">
+<p class="mc-q">5. No Lua 5.5, como se muda o ajuste <code>"pause"</code> do coletor para 300?</p>
+<label><input type="radio" name="q5"> <code>collectgarbage("incremental", 300)</code></label>
+<label><input type="radio" name="q5"> <code>collectgarbage("pause", 300)</code></label>
+<label><input type="radio" name="q5"> <code>collectgarbage.pause = 300</code></label>
+<label><input type="radio" name="q5"> <code>collectgarbage("param", "pause", 300)</code></label>
+</div>
+
+<div class="mc" data-answer="1">
+<p class="mc-q">6. Por que esta aula nunca diz "o seu programa vai mostrar 5777.8 KB"?</p>
+<label><input type="radio" name="q6"> Porque a memória usada muda com a versão do Lua, o sistema e o momento em que o coletor passa</label>
+<label><input type="radio" name="q6"> Porque o <code>"count"</code> devolve um número aleatório</label>
+<label><input type="radio" name="q6"> Porque o <code>"count"</code> só funciona no editor</label>
+<label><input type="radio" name="q6"> Porque o Lua 5.5 não mede memória</label>
+</div>
+
+<h3>Missão final: as duas caixas</h3>
+
+<div class="trylua" data-goal="outre:Fim do programa\n$;;out:levou a caixa: livros">
+<p class="try-task"><strong>Missão:</strong> do jeito que está, a caixa de livros só é recolhida <strong>depois</strong> do <code>Fim do programa</code>. Faça as <strong>duas</strong> caixas serem recolhidas antes dele, para <code>Fim do programa</code> ser a última linha. (Dica: quem ainda tem etiqueta?)</p>
+<pre class="script" data-file="main.lua">local function nova_caixa(nome)
+  local caixa = { nome = nome }
+  setmetatable(caixa, { __gc = function (c)
+    print("Lixeiro levou a caixa: " .. c.nome)
+  end })
+  return caixa
+end
+local a = nova_caixa("brinquedos")
+local b = nova_caixa("livros")
+a = nil
+collectgarbage()
+print("Fim do programa")
+</pre>
+<pre class="solucao" data-file="main.lua">local function nova_caixa(nome)
+  local caixa = { nome = nome }
+  setmetatable(caixa, { __gc = function (c)
+    print("Lixeiro levou a caixa: " .. c.nome)
+  end })
+  return caixa
+end
+local a = nova_caixa("brinquedos")
+local b = nova_caixa("livros")
+a = nil
+b = nil
+collectgarbage()
+print("Fim do programa")
+</pre>
+</div>
+
+<p>Com <code>b = nil</code> também, as duas caixas ficam sem etiqueta e o mesmo <code>collectgarbage()</code> leva as duas. No lab, a solução mostrou:</p>
+
+<pre class="term">$ lua caixas.lua
+Lixeiro levou a caixa: livros
+Lixeiro levou a caixa: brinquedos
+Fim do programa</pre>
+
+<p>Repare na ordem em que os avisos aparecem: o Lua chama os finalizadores na ordem <strong>contrária</strong> à da marcação (a última caixa marcada com <code>setmetatable</code> sai primeiro).</p>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li>O <strong>coletor de lixo</strong> libera sozinho a memória dos valores que ninguém mais alcança. Um valor vira lixo quando perde a última "etiqueta" (variável, campo de tabela, closure).</li>
+  <li><code>collectgarbage("count")</code> mostra a memória em KB. <strong>O seu número vai ser outro</strong>: compare diferenças, não valores exatos.</li>
+  <li><code>collectgarbage()</code> (= <code>"collect"</code>) faz uma coleta completa agora; <code>"step"</code> dá um passo; <code>"stop"</code>/<code>"restart"</code>/<code>"isrunning"</code> desligam, religam e consultam.</li>
+  <li>Há dois modos, <strong>incremental</strong> (tudo, em passos) e <strong>generacional</strong> (os novos com frequência, tudo de vez em quando). O programa <code>lua</code> começa no generacional.</li>
+  <li>No Lua 5.5, os ajustes ficam em <code>collectgarbage("param", nome, valor)</code> <span class="versao">5.5</span>; o jeito do 5.4 (números junto com o modo) é ignorado.</li>
+  <li>O <code>__gc</code> na metatabela avisa quando o valor é recolhido, mas na hora que o coletor escolher (ou no fim do programa).</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
