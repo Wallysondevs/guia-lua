@@ -1,0 +1,527 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua repeat … until — repetir até que | Guia Lua</title>
+<meta name="description" content="O laço repeat … until do Lua para quem nunca programou: o bloco que roda pelo menos uma vez, a condição de parada (o contrário do while), pedir a nota até ser válida, o menu da padaria, jogar o dado até sair 6, a local do corpo que o until enxerga, e os erros reais do Lua 5.5 (until esquecido, end a mais, condição invertida).">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">repeat … until</span></h1>
+
+<p class="intro">O <a href="while.html">while</a> pergunta <strong>antes</strong> de cada volta; se a resposta for "não" logo de cara, o bloco nem roda. Às vezes, porém, você precisa fazer a coisa <strong>primeiro</strong> e só depois decidir se repete: perguntar a nota e <em>depois</em> ver se ela presta; mostrar o menu e <em>depois</em> ver se a pessoa quer sair. Para isso o Lua tem o <code>repeat … until</code>: "<strong>repita</strong> … <strong>até que</strong>".</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>Como se escreve um <code>repeat … until</code>, e por que ele <strong>não tem <code>end</code></strong>.</li>
+  <li>Que o bloco roda <strong>pelo menos uma vez</strong>, porque o teste fica no fim.</li>
+  <li>Que a condição do <code>until</code> é a de <strong>parada</strong>: o contrário da condição do <code>while</code>.</li>
+  <li>Três usos clássicos: validar a nota, o menu que se repete até "Sair", e jogar o dado até sair 6.</li>
+  <li>Um detalhe só do <code>repeat</code>: o <code>until</code> enxerga as variáveis <code>local</code> criadas dentro do bloco.</li>
+  <li>Os erros reais: o <code>until</code> esquecido, o <code>end</code> a mais, o <code>until</code> sem condição e a condição invertida.</li>
+</ul>
+</div>
+
+<p>Todos os programas desta aula rodaram no <strong>Lua 5.5</strong> da máquina da Ana (usuária <code>ana</code>, computador <code>notebook</code>), com <code>lua arquivo.lua</code>. Você pode rodar cada um no editor do guia.</p>
+
+<hr>
+
+<h2>A ideia: "mexa até engrossar"</h2>
+<p>Na receita de brigadeiro da avó da Ana está escrito: <em>"Mexa a panela até a massa desgrudar do fundo."</em> Repare na ordem:</p>
+<ol class="passo">
+  <li>Você <strong>mexe</strong> (a ação vem primeiro).</li>
+  <li>Depois <strong>olha</strong>: já desgrudou? Se <strong>não</strong>, volta a mexer.</li>
+  <li>Quando a resposta for <strong>sim</strong>, para.</li>
+</ol>
+<p>Ninguém olha a panela antes de mexer a primeira vez: pelo menos uma mexida sempre acontece. E a pergunta é sobre <strong>quando parar</strong> ("até desgrudar"), e não sobre quando continuar. Esse é o <code>repeat … until</code>.</p>
+
+<hr>
+
+<h2>1. O primeiro <code>repeat</code>: contar de 1 a 5</h2>
+
+<pre class="file" data-file="contar.lua">local contador = 1
+repeat
+  print("Volta " .. contador)
+  contador = contador + 1
+until contador &gt; 5
+print("Fim! contador agora vale " .. contador)
+</pre>
+
+<dl class="anatomy">
+  <dt>local contador = 1</dt><dd>O início, como no <code>while</code>.</dd>
+  <dt>repeat</dt><dd>"Repita". Começa o laço. Não tem condição nem <code>do</code>: o bloco começa logo depois.</dd>
+  <dt>print(…) / contador = contador + 1</dt><dd>O corpo do laço, com o passo.</dd>
+  <dt>until contador &gt; 5</dt><dd>"<strong>Até que</strong> o contador seja maior que 5". É a condição de <strong>parada</strong>, testada <strong>depois</strong> de cada volta. Se ela der <code>true</code>, o laço acaba; se der <code>false</code>, o Lua volta para o <code>repeat</code>. O <code>until</code> também <strong>fecha</strong> o laço: não existe <code>end</code> no <code>repeat</code>.</dd>
+</dl>
+
+<pre class="term">$ lua contar.lua
+Volta 1
+Volta 2
+Volta 3
+Volta 4
+Volta 5
+Fim! contador agora vale 6
+</pre>
+
+<p>O mesmo resultado do contador da aula <a href="while.html">while</a>. Compare as duas condições:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Laço</th><th>Condição</th><th>Pergunta</th></tr>
+<tr><td><code>while … do … end</code></td><td><code>contador &lt;= 5</code></td><td>"Continuo?" (repete enquanto for <code>true</code>)</td></tr>
+<tr><td><code>repeat … until</code></td><td><code>contador &gt; 5</code></td><td>"Paro?" (repete enquanto for <code>false</code>)</td></tr>
+</table>
+</div>
+
+<p>Uma é o contrário da outra: <code>contador &gt; 5</code> é o mesmo que <code>not (contador &lt;= 5)</code>. Na hora de trocar um laço pelo outro, é só inverter a condição.</p>
+
+<div class="trylua" data-goal="out:1...;;src:\brepeat\b">
+<p class="try-task"><strong>Missão:</strong> esta contagem regressiva deveria ir de 5 até 1, mas só mostra o <code>5...</code>. A condição do <code>until</code> foi escrita como se fosse a de um <code>while</code>. Conserte a condição de parada (dica: o laço deve parar quando <code>segundos</code> chegar a 0).</p>
+<pre class="script" data-file="main.lua">local segundos = 5
+repeat
+  print(segundos .. "...")
+  segundos = segundos - 1
+until segundos &gt; 0
+print("Já!")
+</pre>
+<pre class="solucao" data-file="main.lua">local segundos = 5
+repeat
+  print(segundos .. "...")
+  segundos = segundos - 1
+until segundos == 0
+print("Já!")
+</pre>
+</div>
+
+<hr>
+
+<h2>2. Pelo menos uma vez</h2>
+<p>A grande diferença para o <code>while</code> aparece quando a condição já está "resolvida" desde o começo. A Ana já tem R$ 1200 e a meta é R$ 1000:</p>
+
+<pre class="file" data-file="umavez.lua">local saldo = 1200
+repeat
+  print("Entrei no repeat com saldo " .. saldo)
+  saldo = saldo + 150
+until saldo &gt;= 1000
+print("Saldo final: " .. saldo)
+
+local saldo2 = 1200
+while saldo2 &lt; 1000 do
+  print("Entrei no while")
+  saldo2 = saldo2 + 150
+end
+print("Saldo final (while): " .. saldo2)
+</pre>
+
+<pre class="term">$ lua umavez.lua
+Entrei no repeat com saldo 1200
+Saldo final: 1350
+Saldo final (while): 1200
+</pre>
+
+<p>O <code>while</code> testou primeiro (<code>1200 &lt; 1000</code> é falso) e não entrou nenhuma vez. O <code>repeat</code> entrou, somou 150, e só <strong>então</strong> testou (<code>1350 &gt;= 1000</code>, verdadeiro) e parou. Por isso:</p>
+<ul>
+  <li>use <code>repeat</code> quando a primeira volta tem de acontecer <strong>sempre</strong> (perguntar algo, mostrar um menu, jogar o dado);</li>
+  <li>use <code>while</code> quando, dependendo da situação, <strong>nenhuma</strong> volta deve acontecer (o cesto pode começar vazio).</li>
+</ul>
+
+<hr>
+
+<h2>3. Pedir a nota até ser válida</h2>
+<p>Na aula <a href="while.html">while</a>, o programa da nota tinha a pergunta escrita <strong>duas vezes</strong> (antes do laço e no fim dele). Com <code>repeat</code>, como a primeira volta sempre acontece, a pergunta aparece uma vez só:</p>
+
+<pre class="file" data-file="nota.lua">local nota
+repeat
+  io.write("Digite a nota (0 a 10): ")
+  nota = tonumber(io.read())
+until nota and nota &gt;= 0 and nota &lt;= 10
+print("Nota aceita: " .. nota)
+</pre>
+
+<dl class="anatomy">
+  <dt>local nota</dt><dd>Criada antes do laço, porque o <code>print</code> do fim (fora do laço) precisa dela.</dd>
+  <dt>nota = tonumber(io.read())</dt><dd>Lê a resposta e converte em número; se não for um número, vira <code>nil</code> (veja <a href="conversao.html">Conversão</a>).</dd>
+  <dt>until nota and nota &gt;= 0 and nota &lt;= 10</dt><dd>"Até que a nota exista <strong>e</strong> esteja entre 0 e 10". O primeiro <code>nota</code> protege as comparações: se ele for <code>nil</code>, o <code>and</code> para ali e nem compara (veja <a href="condicoes-aninhadas.html">Condições Aninhadas</a>).</dd>
+</dl>
+
+<p>A Ana digitou <code>15</code>, <code>-2</code> e <code>8</code>:</p>
+
+<pre class="term">$ lua nota.lua
+Digite a nota (0 a 10): 15
+Digite a nota (0 a 10): -2
+Digite a nota (0 a 10): 8
+Nota aceita: 8
+</pre>
+
+<p>Mais curto que a versão com <code>while</code>, e ainda aguenta quem digita <code>oito</code> (pergunta de novo, em vez de dar erro). Só falta uma mensagem de "nota inválida"; a seção 5 mostra como pôr.</p>
+
+<div class="trylua" data-stdin="15\n-3\n8" data-goal="out:Nota aceita: 8;;src:\buntil\b">
+<p class="try-task"><strong>Missão:</strong> a condição de parada deste programa esqueceu o limite de cima, e ele aceita o <code>15</code>. A caixa vai "digitar" <code>15</code>, <code>-3</code> e <code>8</code>. Complete o <code>until</code> para o programa só aceitar notas de 0 a 10.</p>
+<pre class="script" data-file="main.lua">local nota
+repeat
+  io.write("Digite a nota (0 a 10): ")
+  nota = tonumber(io.read())
+until nota &gt;= 0
+print("Nota aceita: " .. nota)
+</pre>
+<pre class="solucao" data-file="main.lua">local nota
+repeat
+  io.write("Digite a nota (0 a 10): ")
+  nota = tonumber(io.read())
+until nota &gt;= 0 and nota &lt;= 10
+print("Nota aceita: " .. nota)
+</pre>
+</div>
+
+<hr>
+
+<h2>4. O menu que se repete até "Sair"</h2>
+<p>Quase todo programa de terminal com menu é um <code>repeat</code>: mostra as opções, faz o que a pessoa escolheu, e repete <strong>até</strong> ela escolher sair.</p>
+
+<pre class="file" data-file="menu.lua">local opcao
+repeat
+  print("--- Padaria da Ana ---")
+  print("1) Ver o cardápio")
+  print("2) Fazer um pedido")
+  print("0) Sair")
+  io.write("Escolha: ")
+  opcao = io.read()
+  if opcao == "1" then
+    print("Pão francês, pão de queijo, bolo de fubá.")
+  elseif opcao == "2" then
+    print("Pedido anotado!")
+  elseif opcao ~= "0" then
+    print("Opção inválida.")
+  end
+until opcao == "0"
+print("Até logo!")
+</pre>
+
+<p>A Ana escolheu <code>1</code>, depois <code>3</code> (que não existe), depois <code>2</code> e, por fim, <code>0</code>:</p>
+
+<pre class="term">$ lua menu.lua
+--- Padaria da Ana ---
+1) Ver o cardápio
+2) Fazer um pedido
+0) Sair
+Escolha: 1
+Pão francês, pão de queijo, bolo de fubá.
+--- Padaria da Ana ---
+1) Ver o cardápio
+2) Fazer um pedido
+0) Sair
+Escolha: 3
+Opção inválida.
+--- Padaria da Ana ---
+1) Ver o cardápio
+2) Fazer um pedido
+0) Sair
+Escolha: 2
+Pedido anotado!
+--- Padaria da Ana ---
+1) Ver o cardápio
+2) Fazer um pedido
+0) Sair
+Escolha: 0
+Até logo!
+</pre>
+
+<p>Repare que a opção é comparada como <strong>texto</strong> (<code>"1"</code>, com aspas): o <code>io.read()</code> devolve texto, e <code>"1" == 1</code> dá <code>false</code> no Lua. A escada de <code>elseif</code> (veja <a href="elseif.html">elseif</a>) decide o que fazer, e o <code>elseif opcao ~= "0"</code> pega todo o resto, menos o "Sair".</p>
+
+<h3>Jogar o dado até sair 6</h3>
+<p>Outro caso típico: repetir uma tentativa até dar certo. O <code>math.random(1, 6)</code> sorteia um número de 1 a 6 (veja <a href="math-random.html">Números Aleatórios</a>). O <code>math.randomseed(7)</code> do começo fixa o sorteio, para o resultado ser sempre o mesmo e você poder conferir com o da Ana:</p>
+
+<pre class="file" data-file="dado.lua">math.randomseed(7)
+local jogadas = 0
+local dado
+repeat
+  dado = math.random(1, 6)
+  jogadas = jogadas + 1
+  print("Jogada " .. jogadas .. ": " .. dado)
+until dado == 6
+print("Saiu 6 depois de " .. jogadas .. " jogadas.")
+</pre>
+
+<pre class="term">$ lua dado.lua
+Jogada 1: 3
+Jogada 2: 2
+Jogada 3: 2
+Jogada 4: 6
+Saiu 6 depois de 4 jogadas.
+</pre>
+
+<div class="trylua">
+<p class="try-task"><strong>Experimente:</strong> troque o 7 do <code>math.randomseed(7)</code> por outros números (3, 9, 12…) e veja quantas jogadas leva. Depois apague a linha do <code>randomseed</code> inteira: a cada Rodar, o sorteio muda.</p>
+<pre class="script" data-file="main.lua">math.randomseed(7)
+local jogadas = 0
+local dado
+repeat
+  dado = math.random(1, 6)
+  jogadas = jogadas + 1
+  print("Jogada " .. jogadas .. ": " .. dado)
+until dado == 6
+print("Saiu 6 depois de " .. jogadas .. " jogadas.")
+</pre>
+</div>
+
+<hr>
+
+<h2>5. O <code>until</code> enxerga as <code>local</code> do bloco</h2>
+<p>Este é um detalhe que só o <code>repeat</code> tem. Uma variável <code>local</code> criada <strong>dentro</strong> do corpo continua visível na condição do <code>until</code>. Assim, a nota pode ser criada dentro do laço:</p>
+
+<pre class="file" data-file="nota_local.lua">repeat
+  io.write("Digite a nota (0 a 10): ")
+  local nota = tonumber(io.read())
+  if not (nota and nota &gt;= 0 and nota &lt;= 10) then
+    print("Nota inválida! Tem de ser de 0 a 10.")
+  end
+until nota and nota &gt;= 0 and nota &lt;= 10
+print("Depois do laço, nota vale:", nota)
+</pre>
+
+<p>A Ana digitou <code>12</code> e depois <code>7</code>:</p>
+
+<pre class="term">$ lua nota_local.lua
+Digite a nota (0 a 10): 12
+Nota inválida! Tem de ser de 0 a 10.
+Digite a nota (0 a 10): 7
+Depois do laço, nota vale:	nil
+</pre>
+
+<p>Duas coisas para reparar:</p>
+<ul>
+  <li>O <code>until</code> usou a <code>local nota</code> de dentro do bloco, e funcionou: o laço parou no 7. Num <code>while</code> isso <strong>não</strong> dá: a condição fica antes do bloco e não enxerga nada que foi criado nele (por isso, na aula <a href="while.html">while</a>, a <code>nota</code> sempre era criada antes do laço).</li>
+  <li>Depois do <code>until</code>, a <code>local</code> some: o <code>print</code> de fora mostrou <code>nil</code>. Se você precisa do valor depois do laço, crie a variável <strong>antes</strong> do <code>repeat</code>, como na seção 3.</li>
+</ul>
+
+<div class="note">
+<strong>Nas outras versões</strong>
+<p>Isso vale para todas as versões do Lua: a Ana rodou o <code>nota_local.lua</code> também com <code>lua5.4</code>, <code>lua5.1</code> e <code>luajit</code>, e o resultado foi o mesmo.</p>
+</div>
+
+<hr>
+
+<h2 id="formas">Formas diferentes de fazer a mesma coisa</h2>
+<p>Todo <code>repeat</code> pode ser escrito com <code>while</code>, e vice-versa. As três formas abaixo pedem a nota até ser válida:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Forma</th><th>Como fica</th><th>Comentário</th></tr>
+<tr><td><code>while</code> clássico</td><td>Lê antes do laço; <code>while</code> inválida <code>do</code> … lê de novo … <code>end</code></td><td>A pergunta aparece duas vezes</td></tr>
+<tr><td><code>repeat</code></td><td><code>repeat</code> lê <code>until</code> válida</td><td>A pergunta aparece uma vez; o laço roda pelo menos uma vez</td></tr>
+<tr><td><code>while true</code> + <code>break</code></td><td><code>while true do</code> lê; <code>if</code> válida <code>then break end</code> … <code>end</code></td><td>Saída no meio do bloco (aula <a href="break.html">break</a>)</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Situação</th><th>Qual usar</th></tr>
+<tr><td>O bloco tem de rodar pelo menos uma vez (perguntar, mostrar o menu, tentar)</td><td><code>repeat … until</code></td></tr>
+<tr><td>Pode ser que nenhuma volta deva acontecer</td><td><code>while … do … end</code></td></tr>
+<tr><td>A decisão de parar fica no meio do bloco</td><td><code>while true do</code> com <code>break</code></td></tr>
+<tr><td>Um número conhecido de voltas</td><td><code>for</code> (aula <a href="for-numerico.html">for Numérico</a>)</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+
+<div class="cenario">
+<strong>Esqueceu o <code>until</code></strong>
+<pre class="file" data-file="semuntil.lua">local contador = 1
+repeat
+  print("Volta " .. contador)
+  contador = contador + 1
+</pre>
+<pre class="term">$ lua semuntil.lua
+lua: semuntil.lua:5: 'until' expected (to close 'repeat' at line 2) near &lt;eof&gt;
+</pre>
+<p>"Era esperado <code>until</code> para fechar o <code>repeat</code> da linha 2, perto do fim do arquivo". É a mesma mensagem do <code>end</code> esquecido, só que agora o Lua pede o <code>until</code>: é ele que fecha o <code>repeat</code>. <strong>Como consertar:</strong> <code>until contador &gt; 5</code> depois da última linha do bloco.</p>
+</div>
+
+<div class="cenario">
+<strong>Pôs um <code>end</code> depois do <code>until</code></strong>
+<pre class="file" data-file="comend.lua">local contador = 1
+repeat
+  print("Volta " .. contador)
+  contador = contador + 1
+until contador &gt; 5
+end
+</pre>
+<pre class="term">$ lua comend.lua
+lua: comend.lua:6: &lt;eof&gt; expected near 'end'
+</pre>
+<p>O hábito do <code>while … end</code> faz muita gente pôr um <code>end</code> aqui. Mas o <code>until</code> já fechou o laço, e o <code>end</code> da linha 6 não tem o que fechar: "era esperado o fim do arquivo perto de <code>end</code>". <strong>Como consertar:</strong> apague o <code>end</code>. <strong><code>repeat</code> termina em <code>until</code>, nunca em <code>end</code>.</strong></p>
+</div>
+
+<div class="cenario">
+<strong>O <code>until</code> sem condição</strong>
+<pre class="file" data-file="semcond.lua">local contador = 1
+repeat
+  print("Volta " .. contador)
+  contador = contador + 1
+until
+</pre>
+<pre class="term">$ lua semcond.lua
+lua: semcond.lua:6: unexpected symbol near &lt;eof&gt;
+</pre>
+<p>"Símbolo inesperado perto do fim do arquivo": depois do <code>until</code>, o Lua esperava a condição, e o arquivo acabou. <strong>Como consertar:</strong> escreva a condição de parada na mesma linha: <code>until contador &gt; 5</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Escreveu <code>repeat do</code></strong>
+<pre class="file" data-file="repeatdo.lua">local contador = 1
+repeat do
+  print("Volta " .. contador)
+  contador = contador + 1
+until contador &gt; 5
+</pre>
+<pre class="term">$ lua repeatdo.lua
+lua: repeatdo.lua:5: 'end' expected (to close 'do' at line 2) near 'until'
+</pre>
+<p>Uma mensagem confusa à primeira vista: o Lua quer um <code>end</code> para fechar um <code>do</code>. Acontece que <code>do … end</code> é um bloco do Lua (veja <a href="sintaxe.html">Sintaxe e Blocos</a>): o <code>do</code> depois do <code>repeat</code> abriu um bloco novo, que precisava do seu <code>end</code> antes do <code>until</code>. <strong>Como consertar:</strong> o <code>repeat</code> não leva <code>do</code>; apague-o. (Escrever <code>until contador &gt; 5 do</code> dá um erro parecido: <code>'end' expected (to close 'do' at line 5) near &lt;eof&gt;</code>.)</p>
+</div>
+
+<div class="cenario">
+<strong>A condição invertida: o laço roda uma vez só (ou nunca para)</strong>
+<pre class="file" data-file="invertida.lua">local contador = 1
+repeat
+  print("Volta " .. contador)
+  contador = contador + 1
+until contador &lt;= 5
+print("Fim! contador vale " .. contador)
+</pre>
+<pre class="term">$ lua invertida.lua
+Volta 1
+Fim! contador vale 2
+</pre>
+<p>Sem erro nenhum, mas só uma volta. A condição <code>contador &lt;= 5</code> é a de <strong>continuar</strong> (a de um <code>while</code>); no <code>until</code>, ela vira a de <strong>parar</strong>. Depois da primeira volta, <code>2 &lt;= 5</code> deu <code>true</code>, e o laço parou. O engano contrário também acontece: uma condição de parada que nunca fica verdadeira (<code>until contador == 0</code> com o contador subindo) vira um laço infinito, como os da aula <a href="while.html">while</a>. <strong>Como consertar:</strong> leia em voz alta: "repita… <strong>até que</strong> o contador passe de 5": <code>until contador &gt; 5</code>.</p>
+</div>
+
+<hr>
+
+<h2>Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>O que faz</th></tr>
+<tr><td><code>repeat … until condição</code></td><td>Roda o bloco e depois testa; para quando a condição for <strong>verdadeira</strong>. Roda pelo menos uma vez</td></tr>
+<tr><td><code>until</code></td><td>Fecha o laço (não há <code>end</code>) e leva a condição de parada</td></tr>
+<tr><td><code>while c do … end</code> ↔ <code>repeat … until not c</code></td><td>Mesma condição, invertida (mas o <code>repeat</code> sempre faz a primeira volta)</td></tr>
+<tr><td><code>local x</code> dentro do bloco</td><td>Visível no <code>until</code>; some depois dele</td></tr>
+<tr><td><code>until nota and nota &gt;= 0 and nota &lt;= 10</code></td><td>Parar só com um número válido (protege do <code>nil</code>)</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Sintoma</th><th>Causa provável</th></tr>
+<tr><td><code>'until' expected (to close 'repeat' at line N)</code></td><td>Faltou o <code>until</code></td></tr>
+<tr><td><code>&lt;eof&gt; expected near 'end'</code> (logo depois do <code>until</code>)</td><td>Pôs um <code>end</code> no <code>repeat</code></td></tr>
+<tr><td><code>unexpected symbol near &lt;eof&gt;</code></td><td>O <code>until</code> ficou sem condição</td></tr>
+<tr><td><code>'end' expected (to close 'do' at line N)</code></td><td>Escreveu <code>repeat do</code> (ou <code>until … do</code>)</td></tr>
+<tr><td>Uma volta só, ou laço sem fim, sem erro</td><td>A condição do <code>until</code> está invertida (é a de continuar, não a de parar)</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. Complete o laço</h3>
+<p>Complete para mostrar os números de 1 a 3:</p>
+<div class="ex-code">local n = 1<br><input data-answer="repeat" aria-label="palavra-chave do começo"><br>&nbsp;&nbsp;print(n)<br>&nbsp;&nbsp;n = n + 1<br><input data-answer="until" aria-label="palavra-chave do fim"> n &gt; 3</div>
+</div>
+
+<div class="exercise">
+<h3>2. Quantas vezes?</h3>
+<p>Quantas vezes aparece <code>Oi</code>? <code>local x = 100</code> / <code>repeat print("Oi") x = x + 1 until x &gt; 10</code></p>
+<div class="ex-code">Aparece <input data-answer="1" aria-label="número de vezes"> vez(es).</div>
+</div>
+
+<div class="mc" data-answer="3">
+<p class="mc-q">3. Qual é a principal diferença entre <code>while</code> e <code>repeat</code>?</p>
+<label><input type="radio" name="q3"> O <code>repeat</code> é mais rápido</label>
+<label><input type="radio" name="q3"> O <code>while</code> não aceita <code>and</code> na condição</label>
+<label><input type="radio" name="q3"> O <code>repeat</code> testa no fim, então roda pelo menos uma vez</label>
+<label><input type="radio" name="q3"> O <code>repeat</code> nunca pode virar laço infinito</label>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">4. Como termina um <code>repeat</code>?</p>
+<label><input type="radio" name="q4"> Com <code>end</code></label>
+<label><input type="radio" name="q4"> Com <code>until</code> e uma condição</label>
+<label><input type="radio" name="q4"> Com <code>until</code> e depois <code>end</code></label>
+<label><input type="radio" name="q4"> Com <code>done</code></label>
+</div>
+
+<div class="mc" data-answer="1">
+<p class="mc-q">5. Um <code>while contador &lt;= 5 do … end</code> vai virar <code>repeat … until ?</code>. Qual condição põe no lugar do <code>?</code></p>
+<label><input type="radio" name="q5"> <code>contador &gt; 5</code></label>
+<label><input type="radio" name="q5"> <code>contador &lt;= 5</code></label>
+<label><input type="radio" name="q5"> <code>contador == 5</code></label>
+<label><input type="radio" name="q5"> <code>contador &lt; 5</code></label>
+</div>
+
+<div class="mc" data-answer="4">
+<p class="mc-q">6. Uma <code>local resposta</code> criada dentro do bloco de um <code>repeat</code>…</p>
+<label><input type="radio" name="q6"> …dá erro se for usada no <code>until</code></label>
+<label><input type="radio" name="q6"> …continua existindo depois do laço</label>
+<label><input type="radio" name="q6"> …vira global</label>
+<label><input type="radio" name="q6"> …pode ser usada no <code>until</code>, mas some depois dele</label>
+</div>
+
+<h3>Missão final: adivinhe a senha</h3>
+
+<div class="trylua" data-stdin="abc\n123\npao123" data-goal="out:Acertou em 3 tentativas;;src:\buntil\b">
+<p class="try-task"><strong>Missão:</strong> escreva um <code>repeat</code> que pergunte a senha (<code>io.write("Senha: ")</code> e <code>io.read()</code>), some 1 em <code>tentativas</code> a cada volta, e pare <strong>até que</strong> a resposta seja <code>"pao123"</code>. A caixa vai "digitar" <code>abc</code>, <code>123</code> e <code>pao123</code>; no fim tem de aparecer <code>Acertou em 3 tentativas</code>.</p>
+<pre class="script" data-file="main.lua">local tentativas = 0
+local resposta
+-- escreva o repeat aqui
+
+print("Acertou em " .. tentativas .. " tentativas")
+</pre>
+<pre class="solucao" data-file="main.lua">local tentativas = 0
+local resposta
+repeat
+  io.write("Senha: ")
+  resposta = io.read()
+  tentativas = tentativas + 1
+until resposta == "pao123"
+print("Acertou em " .. tentativas .. " tentativas")
+</pre>
+</div>
+
+<p>Desafio: mostre <code>Senha errada!</code> a cada tentativa errada (um <code>if</code> dentro do laço). E se a entrada acabar sem a senha certa? O <code>io.read()</code> devolve <code>nil</code> e o laço não para nunca; uma condição como <code>until resposta == "pao123" or resposta == nil</code> resolve.</p>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li><code>repeat … until condição</code> ("repita … até que") roda o bloco e só <strong>depois</strong> testa. Por isso ele sempre faz pelo menos uma volta.</li>
+  <li>A condição do <code>until</code> é a de <strong>parada</strong>: o contrário da condição do <code>while</code>. Leia em voz alta: "até que…".</li>
+  <li>O <code>until</code> fecha o laço: <strong>não há <code>end</code></strong> no <code>repeat</code>, nem <code>do</code>.</li>
+  <li>O <code>until</code> enxerga as <code>local</code> criadas no bloco, mas elas somem depois dele.</li>
+  <li>Bons usos: validar uma resposta, o menu que se repete até "Sair", tentar até dar certo.</li>
+  <li>Próxima aula: o laço que conta sozinho, <a href="for-numerico.html">for Numérico</a>.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
