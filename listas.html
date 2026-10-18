@@ -1,0 +1,456 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua Listas — tabelas com posições 1, 2, 3… | Guia Lua</title>
+<meta name="description" content="Listas no Lua para quem nunca programou: uma tabela com as posições 1, 2, 3…, por que a contagem começa em 1 (e não em 0), ler e trocar itens, o tamanho com #, acrescentar no fim com t[#t + 1], percorrer de frente para trás e de trás para frente, soma, média e maior valor, e os erros reais do Lua 5.5.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">Tabelas como Listas</span></h1>
+
+<p class="intro">A lista de compras da Ana, a fila do caixa da padaria, as notas de uma aluna: são coisas <strong>em ordem</strong>, uma depois da outra. No Lua, uma <strong>lista</strong> é uma <a href="tabelas.html">tabela</a> cujas chaves são as posições <code>1</code>, <code>2</code>, <code>3</code>… Não existe um tipo "lista" separado: é a mesma tabela, usada de um jeito especial. E um detalhe que diferencia o Lua de muitas outras linguagens: <strong>a primeira posição é a 1</strong>, não a 0.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>Como criar uma lista e ler o item de cada posição, a partir do <strong>1</strong>.</li>
+  <li>Como saber quantos itens a lista tem (<code>#</code>) e pegar o último (<code>t[#t]</code>).</li>
+  <li>Como trocar um item e acrescentar no fim com <code>t[#t + 1] = valor</code>.</li>
+  <li>Como percorrer a lista com <code>for</code>, de frente para trás e de trás para frente.</li>
+  <li>Soma, média, maior e menor valor de uma lista de números.</li>
+  <li>Como montar uma lista dentro de um laço.</li>
+  <li>Por que <code>t[0]</code> e <code>t[-1]</code> não são o que quem vem de outra linguagem espera.</li>
+  <li>Os erros reais: começar do 0, passar do fim, procurar um <code>.size()</code> que não existe.</li>
+</ul>
+</div>
+
+<p>Todos os programas desta aula rodaram no <strong>Lua 5.5</strong> da máquina da Ana (usuária <code>ana</code>, computador <code>notebook</code>), com <code>lua arquivo.lua</code>. Se você caiu aqui direto, leia antes <a href="tabelas.html">Tabelas: a Estrutura de Tudo</a>.</p>
+
+<hr>
+
+<h2>A ideia: a lista de compras numerada</h2>
+<p>A Ana escreve a lista de compras num papel, um item por linha, e numera as linhas: 1. pão, 2. leite, 3. café. Ninguém começa uma lista de compras pelo "item zero". O Lua pensa igual: o primeiro item é o de número 1.</p>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Posição (chave)</th><th>Item (valor)</th></tr>
+<tr><td><code>1</code></td><td><code>"pão"</code></td></tr>
+<tr><td><code>2</code></td><td><code>"leite"</code></td></tr>
+<tr><td><code>3</code></td><td><code>"café"</code></td></tr>
+</table>
+</div>
+<p>É a mesma tabela "chave → valor" da aula anterior, só que as chaves são números inteiros seguidos, começando em 1 e sem buracos. Uma tabela assim o manual do Lua chama de <strong>sequência</strong>, e é com ela que o <code>#</code>, o <a href="ipairs.html">ipairs</a> e as funções <code>table.*</code> trabalham.</p>
+
+<hr>
+
+<h2>1. Criando a lista e lendo cada posição</h2>
+
+<pre class="file" data-file="lista.lua">local compras = {"pão", "leite", "café"}
+print(compras[1])
+print(compras[2])
+print(compras[3])
+print(compras[4])
+print(compras[0])
+print(#compras)
+print(compras[#compras])
+</pre>
+
+<dl class="anatomy">
+  <dt>{"pão", "leite", "café"}</dt><dd>Valores separados por vírgula, sem chave: o Lua numera sozinho, <strong>a partir do 1</strong>. É o mesmo que <code>{[1] = "pão", [2] = "leite", [3] = "café"}</code>.</dd>
+  <dt>compras[1]</dt><dd>O item da posição 1, entre colchetes. Também se diz "o item de <strong>índice</strong> 1".</dd>
+  <dt>compras[4] e compras[0]</dt><dd>Posições onde nada foi guardado: <code>nil</code>, sem erro. A lista tem as posições de 1 a 3, e só.</dd>
+  <dt>#compras</dt><dd>O <a href="operador-tamanho.html">operador de tamanho</a>: quantos itens a lista tem.</dd>
+  <dt>compras[#compras]</dt><dd>O <strong>último</strong> item: a posição de número igual ao tamanho. Aqui, <code>compras[3]</code>.</dd>
+</dl>
+
+<pre class="term">$ lua lista.lua
+pão
+leite
+café
+nil
+nil
+3
+café</pre>
+
+<div class="note">
+<strong>Por que começa no 1?</strong>
+<p>Em C, Java, Python e JavaScript, a primeira posição é a 0. O Lua nasceu em 1993, na PUC-Rio, pensado também para gente que não era programadora de profissão, e escolheu contar como as pessoas contam. Para quem nunca programou, isso é uma vantagem: o terceiro item é o <code>[3]</code>, e o último é o <code>[#t]</code>. Para quem vem de outra linguagem, é a pegadinha mais comum dos primeiros dias (veja <a href="#errado">Quando dá errado</a>).</p>
+</div>
+
+<hr>
+
+<h2>2. Trocando e acrescentando itens</h2>
+<p>Guardar numa posição que já existe <strong>troca</strong> o item. Para acrescentar no <strong>fim</strong>, guarde na posição logo depois do último: <code>#compras + 1</code>.</p>
+
+<pre class="file" data-file="mudar_item.lua">local compras = {"pão", "leite", "café"}
+compras[2] = "leite sem lactose"
+compras[#compras + 1] = "manteiga"
+compras[#compras + 1] = "queijo"
+print(#compras)
+for i = 1, #compras do
+  print(i .. ". " .. compras[i])
+end
+</pre>
+
+<pre class="term">$ lua mudar_item.lua
+5
+1. pão
+2. leite sem lactose
+3. café
+4. manteiga
+5. queijo</pre>
+
+<dl class="anatomy">
+  <dt>compras[2] = "leite sem lactose"</dt><dd>A posição 2 já existia: o <code>"leite"</code> foi trocado.</dd>
+  <dt>compras[#compras + 1] = "manteiga"</dt><dd>Naquele momento <code>#compras</code> era 3, então isso é <code>compras[4] = "manteiga"</code>. A lista passa a ter 4 itens.</dd>
+  <dt>compras[#compras + 1] = "queijo"</dt><dd>A mesma linha de novo, mas agora <code>#compras</code> é 4: o queijo vai para a posição 5. Por isso essa é a forma de "pôr no fim": ela sempre acerta a próxima posição livre.</dd>
+</dl>
+
+<p>Também dá para acrescentar com <code>table.insert(compras, "manteiga")</code>, que faz o mesmo e ainda sabe pôr um item <strong>no meio</strong>. Isso tem aula própria: <a href="table-insert-remove.html">table.insert e table.remove</a>.</p>
+
+<div class="trylua" data-goal="out:5 itens; o último é queijo;;src:#compras\s*\+\s*1">
+<p class="try-task"><strong>Missão:</strong> acrescente <code>"manteiga"</code> e depois <code>"queijo"</code> no fim da lista, usando <code>compras[#compras + 1]</code>, no lugar do comentário. A última linha deve mostrar <code>5 itens; o último é queijo</code>.</p>
+<pre class="script" data-file="main.lua">local compras = {"pão", "leite", "café"}
+-- acrescente aqui
+
+print(#compras .. " itens; o último é " .. compras[#compras])
+</pre>
+<pre class="solucao" data-file="main.lua">local compras = {"pão", "leite", "café"}
+compras[#compras + 1] = "manteiga"
+compras[#compras + 1] = "queijo"
+print(#compras .. " itens; o último é " .. compras[#compras])
+</pre>
+</div>
+
+<hr>
+
+<h2>3. Percorrendo a lista</h2>
+<p>O jeito mais direto de passar por todos os itens é um <a href="for-numerico.html">for numérico</a> de <code>1</code> até <code>#lista</code>, como no <code>mudar_item.lua</code>. A variável do <code>for</code> é a posição; <code>lista[i]</code> é o item. Para ir <strong>de trás para frente</strong>, comece do tamanho e ande com passo <code>-1</code>:</p>
+
+<pre class="file" data-file="reverso.lua">local fila = {"Ana", "Bia", "Caio", "Davi"}
+for i = #fila, 1, -1 do
+  print(i, fila[i])
+end
+</pre>
+
+<pre class="term">$ lua reverso.lua
+4	Davi
+3	Caio
+2	Bia
+1	Ana</pre>
+
+<p>Há um jeito feito sob medida para percorrer listas, o <code>for i, item in ipairs(lista)</code>, que entrega a posição e o item juntos. Ele é o assunto da próxima aula: <a href="ipairs.html">Percorrendo uma Lista (ipairs)</a>.</p>
+
+<hr>
+
+<h2>4. Listas de números: soma, média e maior</h2>
+<p>Com uma lista de notas, um laço faz as contas de sempre. A soma usa um <strong>acumulador</strong>; o maior valor começa com o primeiro item e é trocado cada vez que aparece um maior:</p>
+
+<pre class="file" data-file="numeros.lua">local notas = {7.5, 9, 6, 8.5, 10}
+local soma = 0
+local maior = notas[1]
+for i = 1, #notas do
+  soma = soma + notas[i]
+  if notas[i] &gt; maior then
+    maior = notas[i]
+  end
+end
+print("soma:", soma)
+print("média:", soma / #notas)
+print("maior:", maior)
+</pre>
+
+<pre class="term">$ lua numeros.lua
+soma:	41.0
+média:	8.2
+maior:	10</pre>
+
+<p>A soma saiu <code>41.0</code> (com <code>.0</code>) porque a lista tem números com vírgula (floats), e inteiro + float dá float. O <code>maior</code> é o próprio item <code>10</code>, que foi escrito como inteiro (veja <a href="numeros.html">Números</a>). Por que o <code>maior</code> começa com <code>notas[1]</code>, e não com 0? Porque, se todas as notas fossem negativas (temperaturas no inverno, por exemplo), o 0 "ganharia" de todas e a resposta estaria errada. Começar com um item da própria lista sempre funciona.</p>
+
+<hr>
+
+<h2>5. Montando uma lista num laço</h2>
+<p>Uma lista pode começar vazia, <code>{}</code>, e ser preenchida aos poucos:</p>
+
+<pre class="file" data-file="construir.lua">local quadrados = {}
+print(#quadrados)
+for n = 1, 5 do
+  quadrados[n] = n * n
+end
+print(#quadrados, quadrados[1], quadrados[5])
+</pre>
+
+<pre class="term">$ lua construir.lua
+0
+5	1	25</pre>
+
+<p>A lista vazia tem tamanho 0. Depois do laço, ela tem 5 itens: 1, 4, 9, 16, 25. Aqui o <code>quadrados[n]</code> funciona porque o <code>n</code> anda de 1 em 1, sem pular posição. Quando os itens chegam de outro jeito (lidos do teclado, filtrados de outra lista), use <code>quadrados[#quadrados + 1]</code>, que nunca pula.</p>
+
+<h3>Uma lista pode misturar tipos</h3>
+
+<pre class="file" data-file="mistura.lua">local coisas = {"Ana", 30, true, 1.75}
+for i = 1, #coisas do
+  print(i, coisas[i], type(coisas[i]))
+end
+</pre>
+
+<pre class="term">$ lua mistura.lua
+1	Ana	string
+2	30	number
+3	true	boolean
+4	1.75	number</pre>
+
+<p>O Lua deixa, mas na prática uma lista guarda coisas do <strong>mesmo tipo</strong> (só nomes, só notas). Para juntar informações diferentes de uma coisa só, como nome, idade e altura da Ana, uma tabela com campos (<code>{nome = "Ana", idade = 30}</code>) é muito mais clara.</p>
+
+<div class="trylua">
+<p class="try-task"><strong>Experimente:</strong> mude o laço para guardar os <strong>dobros</strong> (<code>n * 2</code>) de 1 a 10 e mostre o último com <code>quadrados[#quadrados]</code>. Depois troque o nome da lista para algo que combine com o conteúdo.</p>
+<pre class="script" data-file="main.lua">local quadrados = {}
+for n = 1, 5 do
+  quadrados[n] = n * n
+end
+for i = 1, #quadrados do
+  print(i, quadrados[i])
+end
+</pre>
+</div>
+
+<hr>
+
+<h2>6. <code>t[0]</code> e <code>t[-1]</code>: o que não é o que parece</h2>
+<p>Quem vem do Python espera que <code>lista[-1]</code> seja o último item. No Lua, <code>-1</code> é só mais uma chave, onde ninguém guardou nada:</p>
+
+<pre class="file" data-file="negativo.lua">local compras = {"pão", "leite", "café"}
+print(compras[-1])
+print(compras[#compras])
+</pre>
+
+<pre class="term">$ lua negativo.lua
+nil
+café</pre>
+
+<p>E dá para guardar algo na posição 0? Dá, como em qualquer chave. Mas ela fica <strong>fora</strong> da lista: o <code>#</code> não a conta, e o laço de 1 a <code>#t</code> não passa por ela.</p>
+
+<pre class="file" data-file="zero.lua">local t = {[0] = "zero", "um", "dois"}
+print(t[0], t[1], t[2])
+print(#t)
+for i = 1, #t do
+  print(i, t[i])
+end
+</pre>
+
+<pre class="term">$ lua zero.lua
+zero	um	dois
+2
+1	um
+2	dois</pre>
+
+<p>Por isso, no Lua, comece suas listas sempre do 1. Todas as ferramentas da linguagem esperam isso.</p>
+
+<div class="note">
+<strong>Buracos na lista</strong>
+<p>Se você guardar <code>nil</code> no meio de uma lista (<code>compras[2] = nil</code>), ela fica com um "buraco", e o <code>#</code> passa a poder dar mais de uma resposta. Para apagar um item do meio de uma lista, use <code>table.remove</code>, que fecha o buraco (aula <a href="table-insert-remove.html">table.insert e table.remove</a>). Os detalhes dos buracos estão em <a href="sequencias.html">Sequências e Buracos</a>.</p>
+</div>
+
+<hr>
+
+<h2 id="formas">Formas diferentes de fazer a mesma coisa</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Para</th><th>Forma desta aula</th><th>Outra forma</th></tr>
+<tr><td>Acrescentar no fim</td><td><code>t[#t + 1] = valor</code></td><td><code>table.insert(t, valor)</code> (<a href="table-insert-remove.html">aula</a>)</td></tr>
+<tr><td>Percorrer</td><td><code>for i = 1, #t do … t[i] … end</code></td><td><code>for i, item in ipairs(t) do … end</code> (<a href="ipairs.html">aula</a>)</td></tr>
+<tr><td>Mostrar todos numa linha</td><td>Um laço com <code>io.write</code></td><td><code>print(table.concat(t, ", "))</code> (<a href="table-concat.html">aula</a>)</td></tr>
+<tr><td>Ordenar</td><td>(dá trabalho escrever à mão)</td><td><code>table.sort(t)</code> (<a href="table-sort.html">aula</a>)</td></tr>
+<tr><td>Último item</td><td><code>t[#t]</code></td><td>(não use <code>t[-1]</code>: é <code>nil</code>)</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+
+<div class="cenario">
+<strong>Começou do 0, como em outras linguagens</strong>
+<pre class="file" data-file="de_zero.lua">local compras = {"pão", "leite", "café"}
+for i = 0, #compras do
+  print("Item: " .. compras[i])
+end
+</pre>
+<pre class="term">$ lua de_zero.lua
+lua: de_zero.lua:3: attempt to concatenate a nil value (field '?')
+stack traceback:
+	de_zero.lua:3: in main chunk
+	[C]: in ?</pre>
+<p>Linha por linha:</p>
+<dl class="anatomy">
+  <dt>de_zero.lua:3:</dt><dd>O erro foi na linha 3, logo na primeira volta (nenhum item chegou a aparecer).</dd>
+  <dt>attempt to concatenate a nil value</dt><dd>"Tentativa de juntar (<code>..</code>) um valor nil." Com <code>i = 0</code>, <code>compras[0]</code> é <code>nil</code>, e o <code>..</code> não junta <code>nil</code>.</dd>
+  <dt>(field '?')</dt><dd>O <code>nil</code> veio de um campo da tabela cujo nome o Lua não sabe dizer, porque a posição estava numa variável (<code>i</code>).</dd>
+  <dt>stack traceback: …</dt><dd>O rastro: linha 3 do programa principal, chamado pelo próprio <code>lua</code>.</dd>
+</dl>
+<p><strong>Como consertar:</strong> <code>for i = 1, #compras do</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Passou do fim</strong>
+<pre class="file" data-file="passou.lua">local compras = {"pão", "leite", "café"}
+for i = 1, #compras + 1 do
+  print(i, compras[i])
+end
+</pre>
+<pre class="term">$ lua passou.lua
+1	pão
+2	leite
+3	café
+4	nil</pre>
+<p>Sem mensagem de erro, porque o <code>print</code> aceita <code>nil</code>. Mas apareceu um item 4 que não existe. Com <code>..</code> ou uma conta no lugar do <code>print</code>, seria o mesmo erro do cenário anterior, só que na <strong>última</strong> volta. <strong>Como consertar:</strong> o laço vai até <code>#compras</code>, exatamente.</p>
+</div>
+
+<div class="cenario">
+<strong>Procurou <code>.length</code> ou <code>.size()</code></strong>
+<pre class="file" data-file="size.lua">local compras = {"pão", "leite", "café"}
+print(compras.length)
+print(compras:size())
+</pre>
+<pre class="term">$ lua size.lua
+nil
+lua: size.lua:3: attempt to call a nil value (method 'size')
+stack traceback:
+	size.lua:3: in main chunk
+	[C]: in ?</pre>
+<p>Para o Lua, <code>compras.length</code> é só a gaveta <code>"length"</code>, que ninguém criou: <code>nil</code>. E <code>compras:size()</code> tenta <strong>chamar</strong> (<em>call</em>) um método <code>size</code> que não existe: "tentativa de chamar um valor nil (o método <code>size</code>)". <strong>Como consertar:</strong> o tamanho de uma lista no Lua é <code>#compras</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Achou que um texto também era uma lista</strong>
+<pre class="file" data-file="string_index.lua">local nome = "Ana"
+print(nome[1])
+print(nome:sub(1, 1))
+</pre>
+<pre class="term">$ lua string_index.lua
+nil
+A</pre>
+<p>Em algumas linguagens, <code>nome[1]</code> pega uma letra. No Lua, um texto não é uma tabela, e <code>nome[1]</code> dá <code>nil</code>. Para pegar letras, use <code>nome:sub(1, 1)</code> (veja <a href="string-sub.html">Pedaços de Texto</a>).</p>
+</div>
+
+<hr>
+
+<h2>Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>O que faz</th></tr>
+<tr><td><code>local t = {"a", "b", "c"}</code></td><td>Cria a lista: <code>t[1]</code>, <code>t[2]</code>, <code>t[3]</code></td></tr>
+<tr><td><code>local t = {}</code></td><td>Lista vazia (<code>#t</code> é 0)</td></tr>
+<tr><td><code>t[i]</code></td><td>O item da posição <code>i</code> (de 1 a <code>#t</code>); fora disso, <code>nil</code></td></tr>
+<tr><td><code>#t</code></td><td>Quantos itens</td></tr>
+<tr><td><code>t[#t]</code></td><td>O último item</td></tr>
+<tr><td><code>t[i] = valor</code></td><td>Troca o item da posição <code>i</code></td></tr>
+<tr><td><code>t[#t + 1] = valor</code></td><td>Acrescenta no fim</td></tr>
+<tr><td><code>for i = 1, #t do … end</code></td><td>Percorre do primeiro ao último</td></tr>
+<tr><td><code>for i = #t, 1, -1 do … end</code></td><td>Percorre do último ao primeiro</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. Qual é o item?</h3>
+<p>Com <code>local frutas = {"maçã", "banana", "uva", "pera"}</code>, o que é <code>frutas[3]</code>? E <code>#frutas</code>?</p>
+<div class="ex-code">frutas[3] é <input data-answer="uva|&quot;uva&quot;" aria-label="item 3"> e #frutas é <input data-answer="4" aria-label="tamanho"></div>
+</div>
+
+<div class="exercise">
+<h3>2. Acrescente no fim</h3>
+<p>Complete para pôr <code>"kiwi"</code> no fim da lista:</p>
+<div class="ex-code">frutas[<input data-answer="#frutas + 1|#frutas+1" aria-label="posição"> ] = "kiwi"</div>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">3. <code>local t = {"a", "b", "c"}</code>. O que é <code>t[0]</code>?</p>
+<label><input type="radio" name="q3"> <code>"a"</code></label>
+<label><input type="radio" name="q3"> <code>nil</code></label>
+<label><input type="radio" name="q3"> <code>"c"</code></label>
+<label><input type="radio" name="q3"> Dá erro</label>
+</div>
+
+<div class="mc" data-answer="3">
+<p class="mc-q">4. Como se pega o último item de uma lista <code>t</code> no Lua?</p>
+<label><input type="radio" name="q4"> <code>t[-1]</code></label>
+<label><input type="radio" name="q4"> <code>t.last</code></label>
+<label><input type="radio" name="q4"> <code>t[#t]</code></label>
+<label><input type="radio" name="q4"> <code>t[#t + 1]</code></label>
+</div>
+
+<div class="mc" data-answer="1">
+<p class="mc-q">5. Qual laço passa por todos os itens de <code>t</code>, do primeiro ao último?</p>
+<label><input type="radio" name="q5"> <code>for i = 1, #t do</code></label>
+<label><input type="radio" name="q5"> <code>for i = 0, #t do</code></label>
+<label><input type="radio" name="q5"> <code>for i = 0, #t - 1 do</code></label>
+<label><input type="radio" name="q5"> <code>for i = 1, #t + 1 do</code></label>
+</div>
+
+<h3>Missão final: a menor nota</h3>
+
+<div class="trylua" data-goal="out:menor: 6;;out:maior: 10;;src:&lt;">
+<p class="try-task"><strong>Missão:</strong> o programa já acha a maior nota. No lugar do comentário, faça ele achar também a <strong>menor</strong>: se <code>notas[i]</code> for menor que <code>menor</code>, troque o <code>menor</code>. A resposta certa é <code>menor: 6</code>.</p>
+<pre class="script" data-file="main.lua">local notas = {7.5, 9, 6, 8.5, 10}
+local maior = notas[1]
+local menor = notas[1]
+for i = 1, #notas do
+  if notas[i] &gt; maior then
+    maior = notas[i]
+  end
+  -- confira aqui se notas[i] é menor que o menor
+end
+print("maior: " .. maior)
+print("menor: " .. menor)
+</pre>
+<pre class="solucao" data-file="main.lua">local notas = {7.5, 9, 6, 8.5, 10}
+local maior = notas[1]
+local menor = notas[1]
+for i = 1, #notas do
+  if notas[i] &gt; maior then
+    maior = notas[i]
+  end
+  if notas[i] &lt; menor then
+    menor = notas[i]
+  end
+end
+print("maior: " .. maior)
+print("menor: " .. menor)
+</pre>
+</div>
+
+<p>Sem mexer no código, ele mostra <code>menor: 7.5</code>: o <code>menor</code> começou com a primeira nota e ninguém o trocou.</p>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li>Uma lista é uma tabela com as chaves <code>1</code>, <code>2</code>, <code>3</code>… sem buracos (uma <strong>sequência</strong>). <code>{"a", "b"}</code> numera sozinho.</li>
+  <li>No Lua, a primeira posição é a <strong>1</strong>. <code>t[0]</code> e <code>t[-1]</code> são chaves comuns, normalmente <code>nil</code>.</li>
+  <li><code>#t</code> é o tamanho; <code>t[#t]</code>, o último item; <code>t[#t + 1] = valor</code> acrescenta no fim.</li>
+  <li>Percorra com <code>for i = 1, #t do</code> (ou de trás para frente com <code>for i = #t, 1, -1 do</code>).</li>
+  <li>Para o maior/menor, comece com <code>t[1]</code>, não com 0.</li>
+  <li>Não existe <code>.length</code> nem <code>.size()</code>: é <code>#t</code>. E um texto não é uma lista: <code>nome[1]</code> é <code>nil</code>.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
