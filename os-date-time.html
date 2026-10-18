@@ -1,0 +1,538 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua os.date e os.time — datas e horas | Guia Lua</title>
+<meta name="description" content="Datas e horas no Lua 5.5 para quem nunca programou: os.time e os segundos desde 1970, os.date com formatos (%d/%m/%Y, %H:%M), por que sai em inglês e como o os.setlocale(&quot;&quot;) põe em português, a tabela &quot;*t&quot;, montar uma data com os.time{…}, somar dias, os.difftime para contar dias, UTC com &quot;!&quot;, e os erros reais do Lua.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">os.date</span> e <span class="hl">os.time</span></h1>
+
+<p class="intro">"Hoje é domingo, 18 de outubro." "Faltam 68 dias para o Natal." "Bom dia!" ou "Boa noite!" conforme a hora. "Venda registrada em 18/10/2026 às 16h53." Quase todo programa de verdade precisa de datas e horas. No Lua, tudo isso sai de duas funções da biblioteca <code>os</code>: <code>os.time</code> ("tempo"), que conta, e <code>os.date</code> ("data"), que mostra.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>Como o computador guarda a hora: um número de segundos, o <code>os.time()</code>.</li>
+  <li>Como mostrar a data e a hora do jeito que você quiser com <code>os.date</code> e os códigos <code>%d</code>, <code>%m</code>, <code>%Y</code>, <code>%H</code>, <code>%M</code>…</li>
+  <li>Por que o <code>os.date</code> fala inglês, e como o <code>os.setlocale("")</code> faz ele falar português.</li>
+  <li>Como pegar cada pedaço da data numa tabela com <code>os.date("*t")</code>.</li>
+  <li>Como montar uma data qualquer com <code>os.time{…}</code>, somar dias e contar quantos dias faltam com <code>os.difftime</code>.</li>
+  <li>O horário UTC com <code>"!"</code>, e os erros reais.</li>
+</ul>
+</div>
+
+<p>Todos os programas desta aula rodaram no <strong>Lua 5.5</strong> da máquina da Ana (usuária <code>ana</code>, computador <code>notebook</code>), no fuso de Brasília (−03), na tarde de <strong>18 de outubro de 2026</strong>. Quando você rodar, as datas e horas serão as <strong>suas</strong>, do seu relógio: é para sair diferente.</p>
+
+<hr>
+
+<h2>A ideia: o relógio de ponto</h2>
+<p>Pense no relógio de ponto de uma fábrica antiga. Ele não escreve "terça de manhã" no cartão; ele carimba um <strong>número</strong>. Com números, fica fácil fazer conta: quem entrou no número 1000 e saiu no 1480 ficou 480 unidades lá dentro. Na hora de mostrar para as pessoas, alguém transforma o número em "08:00" e "16:00".</p>
+<p>O computador faz igual:</p>
+<ul>
+  <li>Por dentro, o momento é um número: <strong>quantos segundos se passaram desde 1º de janeiro de 1970, à meia-noite, no horário UTC</strong> (o horário de referência do mundo, o de Greenwich). Esse ponto de partida foi uma escolha dos criadores do Unix, e todo sistema usa até hoje. É o <code>os.time()</code>.</li>
+  <li>Para mostrar, transforma o número em texto, do jeito que você pedir. É o <code>os.date</code>.</li>
+</ul>
+
+<hr>
+
+<h2>1. <code>os.time()</code> e <code>os.date()</code>: o agora</h2>
+
+<pre class="file" data-file="agora.lua">print(os.time())
+print(os.date())
+</pre>
+
+<p>A Ana rodou duas vezes, com 3 segundos de intervalo (o <code>sleep 3</code> do terminal só espera 3 segundos):</p>
+
+<pre class="term">$ lua agora.lua
+1792353228
+Sun Oct 18 16:53:48 2026
+$ sleep 3
+$ lua agora.lua
+1792353231
+Sun Oct 18 16:53:51 2026</pre>
+
+<dl class="anatomy">
+  <dt>os.time() → 1792353228</dt><dd>O número de segundos desde 1970. São quase 1,8 bilhão. Entre as duas execuções ele aumentou 3: os 3 segundos do <code>sleep</code>.</dd>
+  <dt>os.date() → Sun Oct 18 16:53:48 2026</dt><dd>O mesmo momento, em texto: "domingo, outubro, dia 18, 16:53:48, 2026", em inglês e num formato fixo. Logo você escolhe o seu formato.</dd>
+</dl>
+
+<p>O <code>os.time()</code> sozinho não é para mostrar a ninguém; ele serve para <strong>contas</strong> (quanto tempo passou, que dia vai ser daqui a 30 dias) e para guardar o momento num arquivo.</p>
+
+<hr>
+
+<h2>2. <code>os.date</code> com formato: a data do seu jeito</h2>
+<p>O <code>os.date</code> recebe um texto com <strong>códigos</strong> que começam com <code>%</code>. Cada código vira um pedaço da data; o resto do texto fica como está:</p>
+
+<pre class="file" data-file="formatos.lua">print(os.date("%d/%m/%Y"))
+print(os.date("%H:%M:%S"))
+print(os.date("%d/%m/%Y às %Hh%M"))
+print(os.date("Hoje é %A, %d de %B de %Y."))
+print(os.date("%Y-%m-%d"))
+print(os.date("dia %j do ano, dia %w da semana"))
+</pre>
+
+<pre class="term">$ lua formatos.lua
+18/10/2026
+16:53:40
+18/10/2026 às 16h53
+Hoje é Sunday, 18 de October de 2026.
+2026-10-18
+dia 291 do ano, dia 0 da semana</pre>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Código</th><th>O que vira</th><th>No exemplo</th></tr>
+<tr><td><code>%d</code></td><td>dia do mês, com 2 dígitos</td><td><code>18</code></td></tr>
+<tr><td><code>%m</code></td><td>mês, com 2 dígitos (<strong>m</strong> minúsculo)</td><td><code>10</code></td></tr>
+<tr><td><code>%Y</code></td><td>ano com 4 dígitos (<code>%y</code>: só os 2 últimos)</td><td><code>2026</code></td></tr>
+<tr><td><code>%H</code></td><td>hora, de 00 a 23 (<code>%I</code>: de 01 a 12)</td><td><code>16</code></td></tr>
+<tr><td><code>%M</code></td><td>minuto (<strong>M</strong> maiúsculo)</td><td><code>53</code></td></tr>
+<tr><td><code>%S</code></td><td>segundo</td><td><code>40</code></td></tr>
+<tr><td><code>%A</code> / <code>%a</code></td><td>dia da semana por extenso / abreviado</td><td><code>Sunday</code> / <code>Sun</code></td></tr>
+<tr><td><code>%B</code> / <code>%b</code></td><td>mês por extenso / abreviado</td><td><code>October</code> / <code>Oct</code></td></tr>
+<tr><td><code>%j</code></td><td>dia do ano (001 a 366)</td><td><code>291</code></td></tr>
+<tr><td><code>%w</code></td><td>dia da semana, de 0 (domingo) a 6 (sábado)</td><td><code>0</code></td></tr>
+<tr><td><code>%Z</code> / <code>%z</code></td><td>o fuso horário</td><td><code>-03</code> / <code>-0300</code></td></tr>
+<tr><td><code>%c</code> / <code>%x</code> / <code>%X</code></td><td>data e hora / só data / só hora, no formato do idioma</td><td>veja a seção 3</td></tr>
+<tr><td><code>%%</code></td><td>o próprio <code>%</code></td><td><code>%</code></td></tr>
+</table>
+</div>
+
+<p>O formato <code>%Y-%m-%d</code> (ano-mês-dia) parece estranho, mas é o preferido para nomes de arquivo: <code>vendas-2026-10-18.txt</code>. Em ordem alfabética, os arquivos ficam também em ordem de data.</p>
+
+<hr>
+
+<h2>3. Por que inglês? <code>os.setlocale("")</code></h2>
+<p>Repare no <code>Hoje é Sunday, 18 de October</code> da seção anterior. O computador da Ana está todo em português, e mesmo assim saiu inglês. Não é defeito: todo programa em Lua (e em C) <strong>começa</strong> no idioma neutro, chamado <code>"C"</code>, que é o inglês. Assim um programa se comporta igual em qualquer computador do mundo. Para usar o idioma do sistema, o programa precisa pedir, com <code>os.setlocale("")</code> ("ajustar o idioma"; o <code>""</code> quer dizer "o que o sistema estiver usando"):</p>
+
+<pre class="file" data-file="portugues.lua">print(os.setlocale())
+print(os.setlocale(""))
+print(os.date("Hoje é %A, %d de %B de %Y."))
+print(os.date("%c"))
+print(os.date("%x"))
+</pre>
+
+<pre class="term">$ lua portugues.lua
+C
+pt_BR.UTF-8
+Hoje é domingo, 18 de outubro de 2026.
+dom 18 out 2026 16:53:40
+18/10/2026</pre>
+
+<dl class="anatomy">
+  <dt>os.setlocale() → C</dt><dd>Sem argumento, ele só <strong>diz</strong> qual é o idioma atual: <code>C</code>, o neutro.</dd>
+  <dt>os.setlocale("") → pt_BR.UTF-8</dt><dd>Muda para o idioma do sistema e devolve o nome dele: português do Brasil, com acentos em UTF-8.</dd>
+  <dt>domingo, 18 de outubro</dt><dd>Agora o <code>%A</code> e o <code>%B</code> saem em português.</dd>
+  <dt>%c e %x</dt><dd>Os formatos "do idioma" também mudam: <code>%x</code> já sai como <code>18/10/2026</code>, o jeito brasileiro.</dd>
+</dl>
+
+<div class="warning">
+<strong>O <code>setlocale</code> depende do computador</strong>
+<p>O <code>os.setlocale("")</code> usa o idioma de <strong>quem roda</strong> o programa. Num computador em inglês, continua <code>Sunday</code>; num em espanhol, sai <code>domingo</code> de novo, mas <code>octubre</code>. E ele muda outras coisas além das datas (em alguns idiomas, até o jeito de escrever números). Se o programa <strong>precisa</strong> do nome em português em qualquer computador, o mais seguro é ter a sua própria lista de nomes, como na missão final desta aula. No editor do guia, o <code>os.setlocale("")</code> também dá <code>pt_BR.UTF-8</code>.</p>
+</div>
+
+<div class="trylua" data-goal="out:25/12/2026;;src:os\.date">
+<p class="try-task"><strong>Missão:</strong> o programa monta a data do Natal (você vai ver como na seção 5) e mostra no formato americano, com o mês primeiro: <code>12/25/2026</code>. Troque o formato para o brasileiro, <code>25/12/2026</code>.</p>
+<pre class="script" data-file="main.lua">local natal = os.time({year = 2026, month = 12, day = 25})
+print("Natal: " .. os.date("%m/%d/%Y", natal))
+</pre>
+<pre class="solucao" data-file="main.lua">local natal = os.time({year = 2026, month = 12, day = 25})
+print("Natal: " .. os.date("%d/%m/%Y", natal))
+</pre>
+</div>
+
+<hr>
+
+<h2>4. <code>os.date("*t")</code>: cada pedaço numa tabela</h2>
+<p>Para fazer <strong>contas</strong> e <strong>decisões</strong> com a data (é de manhã? é fim de semana?), texto não ajuda. Com o formato especial <code>"*t"</code>, o <code>os.date</code> devolve uma <a href="tabelas.html">tabela</a> com cada pedaço como número:</p>
+
+<pre class="file" data-file="tabela.lua">local t = os.date("*t")
+print("ano:", t.year)
+print("mês:", t.month)
+print("dia:", t.day)
+print("hora:", t.hour)
+print("minuto:", t.min)
+print("segundo:", t.sec)
+print("dia da semana:", t.wday)
+print("dia do ano:", t.yday)
+print("horário de verão?", t.isdst)
+</pre>
+
+<pre class="term">$ lua tabela.lua
+ano:	2026
+mês:	10
+dia:	18
+hora:	16
+minuto:	53
+segundo:	40
+dia da semana:	1
+dia do ano:	291
+horário de verão?	false</pre>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Campo</th><th>Vem de</th><th>Valores</th></tr>
+<tr><td><code>year</code></td><td>ano</td><td><code>2026</code></td></tr>
+<tr><td><code>month</code></td><td>mês</td><td>1 a 12</td></tr>
+<tr><td><code>day</code></td><td>dia</td><td>1 a 31</td></tr>
+<tr><td><code>hour</code>, <code>min</code>, <code>sec</code></td><td>hora, minuto, segundo</td><td>0 a 23, 0 a 59, 0 a 59</td></tr>
+<tr><td><code>wday</code></td><td><em>week day</em>, dia da semana</td><td><strong>1 = domingo</strong>, 2 = segunda … 7 = sábado</td></tr>
+<tr><td><code>yday</code></td><td><em>year day</em>, dia do ano</td><td>1 a 366</td></tr>
+<tr><td><code>isdst</code></td><td><em>is daylight saving time</em>, "é horário de verão?"</td><td><code>true</code> ou <code>false</code></td></tr>
+</table>
+</div>
+
+<div class="note">
+<strong>Dois jeitos de contar a semana</strong>
+<p>Cuidado: no <code>t.wday</code> o domingo é <strong>1</strong> (como as listas do Lua, que começam em 1), mas no código <code>%w</code> do <code>os.date</code> o domingo é <strong>0</strong>. Os dois vieram de lugares diferentes. Para escolher o nome do dia numa lista, use o <code>wday</code>: <code>dias[t.wday]</code>.</p>
+</div>
+
+<p>Com a tabela, decidir fica fácil. Uma saudação conforme a hora (veja <a href="elseif.html">elseif</a>):</p>
+
+<pre class="file" data-file="saudacao.lua">local hora = os.date("*t").hour
+if hora &lt; 12 then
+  print("Bom dia, Ana!")
+elseif hora &lt; 18 then
+  print("Boa tarde, Ana!")
+else
+  print("Boa noite, Ana!")
+end
+</pre>
+
+<pre class="term">$ lua saudacao.lua
+Boa tarde, Ana!</pre>
+
+<p>Eram 16h: boa tarde. Rodando à noite, a resposta muda sozinha.</p>
+
+<hr>
+
+<h2>5. <code>os.time{…}</code>: montando uma data qualquer</h2>
+<p>O <code>os.time</code> também faz o caminho contrário: recebe uma tabela com os pedaços de uma data e devolve o número de segundos daquele momento. É assim que se fala de datas que não são "agora", como o Natal:</p>
+
+<pre class="file" data-file="montar.lua">local natal = os.time({year = 2026, month = 12, day = 25, hour = 0})
+print(natal)
+print(os.date("%d/%m/%Y %H:%M", natal))
+local sem_hora = os.time({year = 2026, month = 12, day = 25})
+print(os.date("%d/%m/%Y %H:%M", sem_hora))
+</pre>
+
+<pre class="term">$ lua montar.lua
+1798167600
+25/12/2026 00:00
+25/12/2026 12:00</pre>
+
+<dl class="anatomy">
+  <dt>os.time({year = …, month = …, day = …})</dt><dd>Os campos têm os mesmos nomes da tabela <code>"*t"</code>. <code>year</code>, <code>month</code> e <code>day</code> são obrigatórios; os outros são opcionais. A data é entendida no <strong>fuso do computador</strong>.</dd>
+  <dt>os.date(formato, natal)</dt><dd>O segundo argumento do <code>os.date</code> diz <strong>qual momento</strong> mostrar. Sem ele, é agora; com ele, é o momento que você montou.</dd>
+  <dt>sem hora → 12:00</dt><dd>Sem o campo <code>hour</code>, o Lua usa <strong>meio-dia</strong>, não meia-noite. Parece estranho, mas evita problemas com o horário de verão, que costuma mudar de madrugada.</dd>
+</dl>
+
+<div class="tip">
+<strong>Parênteses opcionais: <code>os.time{…}</code></strong>
+<p>Quando o único argumento de uma função é uma tabela escrita ali mesmo, o Lua deixa tirar os parênteses: <code>os.time{year = 2026, month = 12, day = 25}</code> é o mesmo que <code>os.time({year = 2026, month = 12, day = 25})</code>. Você vai ver muito das duas formas.</p>
+</div>
+
+<h3>Somando dias: o Lua acerta o calendário</h3>
+<p>"Que dia vai ser daqui a 30 dias?" Pegue a data em tabela, some 30 no campo <code>day</code> e passe de novo pelo <code>os.time</code>. O dia 48 de outubro não existe, mas o <code>os.time</code> <strong>ajusta</strong> sozinho, passando para o mês seguinte:</p>
+
+<pre class="file" data-file="ajustar.lua">local t = os.date("*t", os.time({year = 2026, month = 10, day = 18}))
+t.day = t.day + 30
+print(os.date("%d/%m/%Y", os.time(t)))
+print(os.date("%d/%m/%Y", os.time({year = 2026, month = 13, day = 1})))
+print(os.date("%d/%m/%Y", os.time({year = 2026, month = 3, day = 0})))
+</pre>
+
+<pre class="term">$ lua ajustar.lua
+17/11/2026
+01/01/2027
+28/02/2026</pre>
+
+<p>18 de outubro + 30 dias = 17 de novembro (outubro tem 31 dias). O "mês 13 de 2026" virou janeiro de 2027. E o "dia 0 de março" virou o último dia de fevereiro: um truque conhecido para descobrir quantos dias tem um mês (2026 não é bissexto, então 28).</p>
+
+<hr>
+
+<h2>6. <code>os.difftime</code>: quanto tempo entre duas datas</h2>
+<p>Como as datas são números de segundos, a diferença entre elas também é. O <code>os.difftime(depois, antes)</code> faz essa conta:</p>
+
+<pre class="file" data-file="diferenca.lua">local hoje = os.time({year = 2026, month = 10, day = 18})
+local natal = os.time({year = 2026, month = 12, day = 25})
+local segundos = os.difftime(natal, hoje)
+print(segundos, math.type(segundos))
+local dias = segundos / (24 * 60 * 60)
+print("Faltam " .. dias .. " dias para o Natal.")
+print(string.format("Faltam %d dias para o Natal.", math.floor(dias + 0.5)))
+</pre>
+
+<pre class="term">$ lua diferenca.lua
+5875200.0	float
+Faltam 68.0 dias para o Natal.
+Faltam 68 dias para o Natal.</pre>
+
+<dl class="anatomy">
+  <dt>os.difftime(natal, hoje)</dt><dd>O <strong>depois</strong> vem primeiro: <code>natal - hoje</code>. São 5 875 200 segundos, e o resultado é sempre um <code>float</code> (por isso o <code>.0</code>).</dd>
+  <dt>24 * 60 * 60</dt><dd>Os segundos de um dia: 24 horas × 60 minutos × 60 segundos = 86 400. Dividindo, sobram os dias: 68.</dd>
+  <dt>68.0 × 68</dt><dd>Juntado com <code>..</code>, o float aparece como <code>68.0</code>. O <code>math.floor(dias + 0.5)</code> arredonda para o inteiro mais perto (veja <a href="math.html">math</a>), e o <code>%d</code> mostra sem casas.</dd>
+</dl>
+
+<div class="note">
+<strong>Por que arredondar, se deu 68 certinho?</strong>
+<p>No Brasil não há mais horário de verão, e a conta deu exata. Mas em lugares que ainda têm (Portugal, boa parte da Europa e dos Estados Unidos), entre uma data e outra pode existir um dia de 23 ou de 25 horas, e a divisão daria algo como <code>67.958</code>. O <code>+ 0.5</code> com o <code>math.floor</code> deixa o programa certo em qualquer fuso. E a diferença entre dois <code>os.time()</code> dá o tempo que passou, em segundos:</p>
+<pre class="file" data-file="cronometro.lua">local inicio = os.time()
+io.write("Aperte Enter quando quiser parar... ")
+io.read()
+local fim = os.time()
+print("Passaram " .. os.difftime(fim, inicio) .. " segundos.")
+</pre>
+<pre class="term">$ lua cronometro.lua
+Aperte Enter quando quiser parar...
+Passaram 3.0 segundos.</pre>
+<p>O <code>os.time()</code> conta segundos inteiros. Para medir pedaços de segundo (quanto tempo um cálculo demora), existe o <code>os.clock()</code>, da aula <a href="os-funcoes.html">os.getenv, os.clock e os.exit</a>.</p>
+</div>
+
+<div class="trylua" data-goal="out:Faltam 75 dias;;semerro">
+<p class="try-task"><strong>Missão:</strong> quantos dias faltam de 18/10/2026 até o Ano-Novo (01/01/2027)? O programa divide pelo número errado e mostra um resultado enorme. Conserte a conta dos segundos de um dia para aparecer <code>Faltam 75 dias</code>.</p>
+<pre class="script" data-file="main.lua">local hoje = os.time({year = 2026, month = 10, day = 18})
+local ano_novo = os.time({year = 2027, month = 1, day = 1})
+local segundos = os.difftime(ano_novo, hoje)
+local dias = segundos / (60 * 60)
+print(string.format("Faltam %d dias", math.floor(dias + 0.5)))
+</pre>
+<pre class="solucao" data-file="main.lua">local hoje = os.time({year = 2026, month = 10, day = 18})
+local ano_novo = os.time({year = 2027, month = 1, day = 1})
+local segundos = os.difftime(ano_novo, hoje)
+local dias = segundos / (24 * 60 * 60)
+print(string.format("Faltam %d dias", math.floor(dias + 0.5)))
+</pre>
+</div>
+
+<hr>
+
+<h2>7. O horário do mundo: UTC com <code>"!"</code></h2>
+<p>Um <code>!</code> no começo do formato faz o <code>os.date</code> mostrar o horário <strong>UTC</strong> (o de referência, sem fuso) em vez do horário local:</p>
+
+<pre class="file" data-file="utc.lua">print(os.date("%H:%M %Z"))
+print(os.date("!%H:%M UTC"))
+print(os.date("!%d/%m/%Y %H:%M:%S", 0))
+print(os.date("%d/%m/%Y %H:%M:%S", 0))
+</pre>
+
+<pre class="term">$ lua utc.lua
+16:53 -03
+19:53 UTC
+01/01/1970 00:00:00
+31/12/1969 21:00:00</pre>
+
+<p>Em Brasília eram 16:53 (fuso <code>-03</code>, três horas atrás de Greenwich); em UTC, 19:53. E o momento <code>0</code>, o ponto de partida da contagem, é <code>01/01/1970 00:00:00</code> em UTC, que em Brasília ainda era a noite de 31 de dezembro de 1969. Também existe o <code>os.date("!*t")</code>, a tabela em UTC. O UTC serve para registros que pessoas de vários fusos vão ler, ou para comparar horários de servidores em lugares diferentes.</p>
+
+<hr>
+
+<h2 id="formas">Formas diferentes de mostrar a mesma data</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Forma</th><th>Resultado (18/10/2026, 16:53)</th><th>Quando usar</th></tr>
+<tr><td><code>os.date("%d/%m/%Y")</code></td><td><code>18/10/2026</code></td><td>Sempre igual, em qualquer computador. O mais comum</td></tr>
+<tr><td><code>os.setlocale("")</code> + <code>os.date("%x")</code></td><td><code>18/10/2026</code> (num computador em português)</td><td>Quando quer o formato <strong>de quem usa</strong>: num computador em inglês americano sairia <code>10/18/2026</code>, e sem o <code>setlocale</code>, <code>10/18/26</code></td></tr>
+<tr><td><code>os.date("%Y-%m-%d")</code></td><td><code>2026-10-18</code></td><td>Nomes de arquivo, registros, dados para outros programas</td></tr>
+<tr><td><code>local t = os.date("*t")</code> + <code>string.format("%02d/%02d/%d", t.day, t.month, t.year)</code></td><td><code>18/10/2026</code></td><td>Quando você vai mexer nos números antes de mostrar</td></tr>
+<tr><td><code>os.time()</code></td><td><code>1792353220</code></td><td>Para contas e para guardar o momento; nunca para mostrar a uma pessoa</td></tr>
+</table>
+</div>
+
+<p>(O <code>%02d</code> do <a href="string-format.html">string.format</a> escreve o número com 2 dígitos, completando com zero: <code>7</code> vira <code>07</code>.)</p>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+
+<div class="cenario">
+<strong>Faltou o dia na tabela</strong>
+<pre class="file" data-file="sem_dia.lua">print(os.time({year = 2026, month = 10}))
+</pre>
+<pre class="term">$ lua sem_dia.lua
+lua: sem_dia.lua:1: field 'day' missing in date table
+stack traceback:
+	[C]: in field 'time'
+	sem_dia.lua:1: in main chunk
+	[C]: in ?</pre>
+<p>"O campo <code>day</code> está faltando na tabela de data". O <code>os.time</code> precisa de pelo menos <code>year</code>, <code>month</code> e <code>day</code>, com esses nomes, em inglês. Escrever <code>dia = 18</code> ou <code>ano = 2026</code> dá o mesmo erro, porque para o Lua esses campos não existem. <strong>Como consertar:</strong> <code>os.time({year = 2026, month = 10, day = 1})</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>O mês escrito por extenso</strong>
+<pre class="file" data-file="mes_texto.lua">print(os.time({year = 2026, month = "dez", day = 25}))
+</pre>
+<pre class="term">$ lua mes_texto.lua
+lua: mes_texto.lua:1: field 'month' is not an integer
+stack traceback:
+	[C]: in field 'time'
+	mes_texto.lua:1: in main chunk
+	[C]: in ?</pre>
+<p>"O campo <code>month</code> não é um inteiro". Os campos são <strong>números</strong>: dezembro é <code>12</code>. Um texto com número dentro, como <code>"12"</code>, o Lua até converte; <code>"dez"</code>, não.</p>
+</div>
+
+<div class="cenario">
+<strong>Passou a data como texto para o <code>os.date</code></strong>
+<pre class="file" data-file="texto_data.lua">print(os.date("%d/%m/%Y", "18/10/2026"))
+</pre>
+<pre class="term">$ lua texto_data.lua
+lua: texto_data.lua:1: bad argument #2 to 'date' (number expected, got string)
+stack traceback:
+	[C]: in field 'date'
+	texto_data.lua:1: in main chunk
+	[C]: in ?</pre>
+<p>"Argumento ruim nº 2 para o <code>date</code> (esperava um número, veio uma string)". O segundo argumento do <code>os.date</code> é o momento em <strong>segundos</strong> (o número do <code>os.time</code>), não uma data escrita. O Lua não sabe ler <code>"18/10/2026"</code> sozinho. <strong>Como consertar:</strong> separe os pedaços (com <code>match</code>, veja <a href="string-find.html">Procurando no Texto</a>) e monte com <code>os.time({year = 2026, month = 10, day = 18})</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Código que não existe</strong>
+<pre class="file" data-file="formato_ruim.lua">print(os.date("%d/%m/%Y %Q"))
+</pre>
+<pre class="term">$ lua formato_ruim.lua
+lua: formato_ruim.lua:1: bad argument #1 to 'date' (invalid conversion specifier '%Q')
+stack traceback:
+	[C]: in field 'date'
+	formato_ruim.lua:1: in main chunk
+	[C]: in ?</pre>
+<p>"Especificador de conversão inválido <code>'%Q'</code>": não existe código <code>%Q</code>. O Lua avisa qual foi. Para escrever um <code>%</code> de verdade no texto, use <code>%%</code>.</p>
+</div>
+
+<div class="cenario">
+<strong><code>%m</code> no lugar de <code>%M</code>: o minuto errado, sem erro nenhum</strong>
+<pre class="file" data-file="minuto.lua">print(os.date("%d/%m/%Y %H:%m", os.time({year = 2026, month = 10, day = 18, hour = 9, min = 45})))
+print(os.date("%d/%m/%Y %H:%M", os.time({year = 2026, month = 10, day = 18, hour = 9, min = 45})))
+</pre>
+<pre class="term">$ lua minuto.lua
+18/10/2026 09:10
+18/10/2026 09:45</pre>
+<p>Este é o mais traiçoeiro: o Lua não reclama. Eram 9h45, mas a primeira linha mostrou <code>09:10</code>, porque <code>%m</code> (minúsculo) é o <strong>mês</strong> (10, outubro). O minuto é <code>%M</code>, maiúsculo. Regra para decorar: <strong>m</strong>inúsculo = <strong>m</strong>ês, como em <code>%d/%m/%Y</code>; <strong>M</strong>aiúsculo = <strong>M</strong>inuto, como em <code>%H:%M</code>.</p>
+</div>
+
+<hr>
+
+<h2>Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>O que faz</th></tr>
+<tr><td><code>os.time()</code></td><td>Agora, em segundos desde 01/01/1970 00:00 UTC</td></tr>
+<tr><td><code>os.time({year=, month=, day=, hour=, min=, sec=})</code></td><td>Uma data qualquer (no fuso local) em segundos; sem <code>hour</code>, meio-dia. Datas "impossíveis" são ajustadas</td></tr>
+<tr><td><code>os.date()</code></td><td>Agora, em texto, no formato <code>%c</code> (em inglês, sem <code>setlocale</code>)</td></tr>
+<tr><td><code>os.date(formato)</code></td><td>Agora, no formato pedido (<code>%d/%m/%Y %H:%M</code>…)</td></tr>
+<tr><td><code>os.date(formato, segundos)</code></td><td>Um momento qualquer, no formato pedido</td></tr>
+<tr><td><code>os.date("*t")</code> / <code>os.date("*t", s)</code></td><td>Tabela com <code>year</code>, <code>month</code>, <code>day</code>, <code>hour</code>, <code>min</code>, <code>sec</code>, <code>wday</code> (1 = domingo), <code>yday</code>, <code>isdst</code></td></tr>
+<tr><td><code>os.date("!…")</code></td><td>O mesmo, em UTC</td></tr>
+<tr><td><code>os.difftime(depois, antes)</code></td><td>Diferença em segundos (float). Dias: divida por <code>86400</code> e arredonde</td></tr>
+<tr><td><code>os.setlocale("")</code> / <code>os.setlocale()</code></td><td>Usa o idioma do sistema / diz o idioma atual (começa em <code>C</code>)</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Sintoma</th><th>Causa provável</th></tr>
+<tr><td><code>Sunday</code>, <code>October</code> num computador em português</td><td>Faltou <code>os.setlocale("")</code> no começo do programa</td></tr>
+<tr><td><code>field 'day' missing in date table</code></td><td>Faltou <code>day</code> (ou <code>year</code>, <code>month</code>), ou o nome está em português</td></tr>
+<tr><td><code>field 'month' is not an integer</code></td><td>Mês como texto (<code>"dez"</code>) em vez de número</td></tr>
+<tr><td><code>bad argument #2 to 'date' (number expected, got string)</code></td><td>Passou uma data escrita no lugar dos segundos</td></tr>
+<tr><td><code>invalid conversion specifier</code></td><td>Código <code>%</code> que não existe</td></tr>
+<tr><td>Minuto errado, sem erro</td><td><code>%m</code> (mês) no lugar de <code>%M</code> (minuto)</td></tr>
+<tr><td>Dias com <code>.0</code> ou <code>67.958…</code></td><td><code>os.difftime</code> dá float; horário de verão: arredonde</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. Complete o formato</h3>
+<p>Complete para mostrar a hora no formato <code>14:05</code>:</p>
+<div class="ex-code">print(os.date("%<input data-answer="H" aria-label="código da hora">:%<input data-answer="M" aria-label="código do minuto">"))</div>
+</div>
+
+<div class="exercise">
+<h3>2. O dia da semana</h3>
+<p>No campo <code>wday</code> da tabela <code>os.date("*t")</code>, que número é o domingo?</p>
+<div class="ex-code">O domingo é <input data-answer="1" aria-label="número">.</div>
+</div>
+
+<div class="exercise">
+<h3>3. Segundos de um dia</h3>
+<p>Quantos segundos tem um dia (24 × 60 × 60)?</p>
+<div class="ex-code"><input data-answer="86400" aria-label="segundos"> segundos.</div>
+</div>
+
+<div class="mc" data-answer="3">
+<p class="mc-q">4. Num computador todo em português, <code>print(os.date("%A"))</code> mostrou <code>Sunday</code>. Por quê?</p>
+<label><input type="radio" name="q4"> O Lua só sabe inglês</label>
+<label><input type="radio" name="q4"> O <code>%A</code> está errado; o certo é <code>%a</code></label>
+<label><input type="radio" name="q4"> Todo programa começa no idioma neutro <code>C</code>; faltou <code>os.setlocale("")</code></label>
+<label><input type="radio" name="q4"> O relógio do computador está errado</label>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">5. Que horas tem a data <code>os.time({year = 2026, month = 5, day = 1})</code>?</p>
+<label><input type="radio" name="q5"> 00:00, meia-noite</label>
+<label><input type="radio" name="q5"> 12:00, meio-dia</label>
+<label><input type="radio" name="q5"> A hora de agora</label>
+<label><input type="radio" name="q5"> Dá erro, porque faltou a hora</label>
+</div>
+
+<div class="mc" data-answer="1">
+<p class="mc-q">6. O que <code>os.time({year = 2026, month = 1, day = 32})</code> representa?</p>
+<label><input type="radio" name="q6"> 1º de fevereiro de 2026: o Lua ajusta o dia que passou do mês</label>
+<label><input type="radio" name="q6"> 31 de janeiro: o Lua corta no último dia</label>
+<label><input type="radio" name="q6"> Dá erro: janeiro não tem dia 32</label>
+<label><input type="radio" name="q6"> <code>nil</code></label>
+</div>
+
+<h3>Missão final: em que dia da semana cai o Natal?</h3>
+
+<div class="trylua" data-goal="out:O Natal de 2026 cai numa sexta-feira.;;semerro">
+<p class="try-task"><strong>Missão:</strong> para o nome sair em português em qualquer computador, o programa tem a própria lista de dias. Mas ele pega o campo errado da tabela: o <code>day</code> (25), e a lista só tem 7 nomes. Troque pelo campo do <strong>dia da semana</strong>, até aparecer <code>O Natal de 2026 cai numa sexta-feira.</code></p>
+<pre class="script" data-file="main.lua">local dias = {"domingo", "segunda-feira", "terça-feira", "quarta-feira",
+              "quinta-feira", "sexta-feira", "sábado"}
+local natal = os.time({year = 2026, month = 12, day = 25})
+local t = os.date("*t", natal)
+print("O Natal de 2026 cai numa " .. dias[t.day] .. ".")
+</pre>
+<pre class="solucao" data-file="main.lua">local dias = {"domingo", "segunda-feira", "terça-feira", "quarta-feira",
+              "quinta-feira", "sexta-feira", "sábado"}
+local natal = os.time({year = 2026, month = 12, day = 25})
+local t = os.date("*t", natal)
+print("O Natal de 2026 cai numa " .. dias[t.wday] .. ".")
+</pre>
+</div>
+
+<p>Depois, troque o ano para o do seu próximo aniversário, e o mês e o dia para os seus. (O "numa" fica estranho com "sábado" e "domingo"; consertar isso com um <code>if</code> é um bom exercício extra.)</p>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li><code>os.time()</code> é o agora em <strong>segundos desde 1970</strong> (UTC): bom para contas, não para mostrar.</li>
+  <li><code>os.date(formato, segundos)</code> transforma em texto: <code>%d/%m/%Y</code> para a data, <code>%H:%M</code> para a hora (<code>%m</code> é mês, <code>%M</code> é minuto). Sem segundos, é agora; com <code>!</code> no começo, é UTC.</li>
+  <li>Nomes de dias e meses (<code>%A</code>, <code>%B</code>) saem em inglês até o programa chamar <code>os.setlocale("")</code>, que usa o idioma do computador de quem roda.</li>
+  <li><code>os.date("*t")</code> dá uma tabela com <code>year</code>, <code>month</code>, <code>day</code>, <code>hour</code>, <code>min</code>, <code>sec</code>, <code>wday</code> (1 = domingo), <code>yday</code>.</li>
+  <li><code>os.time{year=, month=, day=}</code> monta qualquer data (sem hora, meio-dia) e ajusta datas como o dia 32. Para somar dias, mude o <code>day</code> e passe de novo pelo <code>os.time</code>.</li>
+  <li><code>os.difftime(depois, antes)</code> dá a diferença em segundos (float); divida por 86400 e arredonde para ter os dias.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
