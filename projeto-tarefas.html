@@ -1,0 +1,1436 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua Projeto Lista de Tarefas — menu, tabelas de tabelas, table.insert/remove e arquivo passo a passo | Guia Lua</title>
+<meta name="description" content="Projeto passo a passo: uma lista de tarefas de terminal em Lua 5.5. Um menu com while e if/elseif, a lista com table.insert e ipairs, cada tarefa como uma tabela {texto, feita}, concluir e remover com table.remove (e a armadilha do table.remove com nil), funções com número validado e, no fim, as tarefas guardadas num arquivo de texto. Quatro versões com sessões reais e missões no editor.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Projeto <span class="hl">Lista de Tarefas</span></h1>
+
+<p class="intro">A Ana vive esquecendo o que tem para fazer. Neste projeto ela ganha uma lista de tarefas no terminal: um menu para ver, adicionar, concluir e remover tarefas, que no fim <strong>guarda tudo num arquivo</strong>, para a lista continuar lá no dia seguinte. É o primeiro projeto do guia que guarda dados entre uma execução e outra.</p>
+
+<div class="note">
+<strong>Você vai praticar</strong>
+<ul>
+  <li>Montar um menu com <a href="while.html">while</a> e <a href="elseif.html">if/elseif</a>.</li>
+  <li>Guardar a lista numa <a href="listas.html">tabela</a>, com <a href="table-insert-remove.html">table.insert e table.remove</a>, e percorrê-la com <a href="ipairs.html">ipairs</a>.</li>
+  <li>Representar cada tarefa como uma tabela com campos (<code>{ texto = …, feita = false }</code>): <a href="tabelas-aninhadas.html">tabelas dentro de tabelas</a>.</li>
+  <li>Separar o programa em <a href="funcoes.html">funções</a> e validar o número digitado.</li>
+  <li>Gravar e ler um arquivo de texto com <a href="io-open.html">io.open</a>, <a href="arquivos-escrever.html">write</a> e <a href="io-lines.html">lines</a>, separando os campos com um <a href="padroes.html">padrão</a>.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>O que vamos construir</h2>
+<p>A lista pronta, em duas execuções no terminal da Ana. <strong>O que vem depois de "Escolha:", "Nova tarefa:" e "Número…:" foi digitado por ela.</strong> Na segunda vez, a lista continua lá:</p>
+
+<pre class="term" data-cwd="~/projetos/tarefas">$ lua tarefas.lua
+=== Lista de Tarefas da Ana ===
+0 tarefa(s) carregada(s) de tarefas.txt.
+
+1) Ver  2) Adicionar  3) Concluir  4) Remover  0) Sair
+Escolha: 2
+Nova tarefa: Comprar pão
+Anotado: Comprar pão
+
+1) Ver  2) Adicionar  3) Concluir  4) Remover  0) Sair
+Escolha: 2
+Nova tarefa: Pagar a conta de luz; vence dia 20
+Anotado: Pagar a conta de luz; vence dia 20
+
+1) Ver  2) Adicionar  3) Concluir  4) Remover  0) Sair
+Escolha: 3
+Número da tarefa concluída: 1
+Feito: Comprar pão
+
+1) Ver  2) Adicionar  3) Concluir  4) Remover  0) Sair
+Escolha: 0
+Até logo!
+$ cat tarefas.txt
+1;Comprar pão
+0;Pagar a conta de luz; vence dia 20
+$ lua tarefas.lua
+=== Lista de Tarefas da Ana ===
+2 tarefa(s) carregada(s) de tarefas.txt.            « o arquivo guardou a lista
+
+1) Ver  2) Adicionar  3) Concluir  4) Remover  0) Sair
+Escolha: 1
+1. [x] Comprar pão
+2. [ ] Pagar a conta de luz; vence dia 20
+
+1) Ver  2) Adicionar  3) Concluir  4) Remover  0) Sair
+Escolha: 0
+Até logo!</pre>
+
+<p>Quatro versões, uma novidade em cada:</p>
+
+<ol class="passo">
+  <li><a href="#versao1">O menu e a lista</a> (<code>while</code>, <code>table.insert</code>, <code>ipairs</code>).</li>
+  <li><a href="#versao2">Concluir e remover</a> (cada tarefa vira uma tabela; <code>table.remove</code>).</li>
+  <li><a href="#versao3">Funções e número validado</a>.</li>
+  <li><a href="#versao4">Guardar num arquivo</a> (<code>io.open</code>, <code>write</code>, <code>lines</code>, <code>match</code>).</li>
+</ol>
+
+<h3>Antes de começar</h3>
+<p>Este projeto usa o que você viu na <a href="projeto-calculadora.html">Calculadora</a> (<code>io.read</code>, <code>while true</code>, funções) e na <a href="projeto-forca.html">Forca</a> (listas e <code>#</code>). Crie a pasta; o arquivo vai se chamar <code>tarefas.lua</code>:</p>
+
+<pre class="term">$ mkdir -p projetos/tarefas
+$ cd projetos/tarefas</pre>
+
+<hr>
+
+<h2 id="versao1">Versão 1 · O menu e a lista</h2>
+<p>A primeira versão mostra um menu, lê a opção e faz o que foi pedido, até a Ana escolher <code>0</code>. As tarefas ficam numa lista de textos: <code>tarefas[1]</code> é a primeira, <code>tarefas[2]</code> a segunda, e <code>#tarefas</code> diz quantas são.</p>
+
+<pre class="file" data-file="tarefas.lua">local tarefas = {}
+
+print("=== Lista de Tarefas da Ana ===")
+
+while true do
+  print()
+  print("1) Ver tarefas")
+  print("2) Adicionar tarefa")
+  print("0) Sair")
+  io.write("Escolha: ")
+  local opcao = io.read()
+
+  if opcao == "1" then
+    if #tarefas == 0 then
+      print("Nenhuma tarefa. Que tranquilidade!")
+    else
+      for i, tarefa in ipairs(tarefas) do
+        print(i .. ". " .. tarefa)
+      end
+    end
+  elseif opcao == "2" then
+    io.write("Nova tarefa: ")
+    local texto = io.read()
+    table.insert(tarefas, texto)
+    print("Anotado: " .. texto)
+  elseif opcao == "0" or opcao == nil then
+    print("Até logo!")
+    break
+  else
+    print("Opção inválida: " .. opcao)
+  end
+end
+</pre>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Peça</th><th>O que faz</th></tr>
+<tr><td><code>local tarefas = {}</code></td><td>A lista, vazia. Fica <strong>fora</strong> do laço: se ficasse dentro, voltaria a ser vazia a cada volta do menu.</td></tr>
+<tr><td><code>print()</code></td><td>Sem nada dentro, pula uma linha: separa um menu do outro.</td></tr>
+<tr><td><code>if opcao == "1" then</code></td><td>A opção fica como <strong>texto</strong> (<code>"1"</code>, com aspas): não é preciso converter, e um <code>"abc"</code> cai no <code>else</code> em vez de dar erro.</td></tr>
+<tr><td><code>for i, tarefa in ipairs(tarefas) do</code></td><td>Percorre a lista na ordem: em cada volta, <code>i</code> é a posição (1, 2, 3…) e <code>tarefa</code> é o item (veja <a href="ipairs.html">ipairs</a>).</td></tr>
+<tr><td><code>table.insert(tarefas, texto)</code></td><td>Põe o texto no <strong>fim</strong> da lista (veja <a href="table-insert-remove.html">table.insert</a>).</td></tr>
+<tr><td><code>opcao == "0" or opcao == nil</code></td><td>Sai com <code>0</code> ou quando a entrada acaba (<kbd>Ctrl</kbd>+<kbd>D</kbd>, ou as linhas da caixa "Experimente" acabam).</td></tr>
+</table>
+</div>
+
+<pre class="term" data-cwd="~/projetos/tarefas">$ lua tarefas.lua
+=== Lista de Tarefas da Ana ===
+
+1) Ver tarefas
+2) Adicionar tarefa
+0) Sair
+Escolha: 1
+Nenhuma tarefa. Que tranquilidade!
+
+1) Ver tarefas
+2) Adicionar tarefa
+0) Sair
+Escolha: 2
+Nova tarefa: Comprar pão
+Anotado: Comprar pão
+
+1) Ver tarefas
+2) Adicionar tarefa
+0) Sair
+Escolha: 2
+Nova tarefa: Pagar a conta de luz
+Anotado: Pagar a conta de luz
+
+1) Ver tarefas
+2) Adicionar tarefa
+0) Sair
+Escolha: 1
+1. Comprar pão
+2. Pagar a conta de luz
+
+1) Ver tarefas
+2) Adicionar tarefa
+0) Sair
+Escolha: 5
+Opção inválida: 5
+
+1) Ver tarefas
+2) Adicionar tarefa
+0) Sair
+Escolha: 0
+Até logo!</pre>
+
+<div class="tip">
+<strong>A lista some quando o programa termina</strong>
+<p>Rode de novo e escolha <code>1</code>: "Nenhuma tarefa". A tabela <code>tarefas</code> vive na memória do programa, e a memória é devolvida ao sistema quando o <code>lua</code> termina. Guardar de verdade exige um arquivo: é a versão 4.</p>
+</div>
+
+<div class="trylua" data-stdin="2\nComprar pão\n2\nPagar a conta\n1\n0" data-goal="out:1. Comprar pão;;out:2. Pagar a conta">
+<p class="try-task"><strong>Missão (versão 1):</strong> a opção <code>1</code> ainda não mostra as tarefas. No lugar do comentário, percorra a lista com <code>for i, tarefa in ipairs(tarefas) do</code> e mostre cada uma com o número: <code>1. Comprar pão</code>. A entrada adiciona duas tarefas e escolhe <code>1</code>.</p>
+<pre class="script" data-file="tarefas.lua">local tarefas = {}
+
+print("=== Lista de Tarefas da Ana ===")
+
+while true do
+  print()
+  print("1) Ver tarefas")
+  print("2) Adicionar tarefa")
+  print("0) Sair")
+  io.write("Escolha: ")
+  local opcao = io.read()
+
+  if opcao == "1" then
+    if #tarefas == 0 then
+      print("Nenhuma tarefa. Que tranquilidade!")
+    else
+      -- mostre cada tarefa com o número dela: "1. Comprar pão"
+    end
+  elseif opcao == "2" then
+    io.write("Nova tarefa: ")
+    local texto = io.read()
+    table.insert(tarefas, texto)
+    print("Anotado: " .. texto)
+  elseif opcao == "0" or opcao == nil then
+    print("Até logo!")
+    break
+  else
+    print("Opção inválida: " .. opcao)
+  end
+end
+</pre>
+<pre class="solucao" data-file="tarefas.lua">local tarefas = {}
+
+print("=== Lista de Tarefas da Ana ===")
+
+while true do
+  print()
+  print("1) Ver tarefas")
+  print("2) Adicionar tarefa")
+  print("0) Sair")
+  io.write("Escolha: ")
+  local opcao = io.read()
+
+  if opcao == "1" then
+    if #tarefas == 0 then
+      print("Nenhuma tarefa. Que tranquilidade!")
+    else
+      for i, tarefa in ipairs(tarefas) do
+        print(i .. ". " .. tarefa)
+      end
+    end
+  elseif opcao == "2" then
+    io.write("Nova tarefa: ")
+    local texto = io.read()
+    table.insert(tarefas, texto)
+    print("Anotado: " .. texto)
+  elseif opcao == "0" or opcao == nil then
+    print("Até logo!")
+    break
+  else
+    print("Opção inválida: " .. opcao)
+  end
+end
+</pre>
+</div>
+
+<hr>
+
+<h2 id="versao2">Versão 2 · Concluir e remover</h2>
+<p>Uma tarefa agora tem duas informações: o texto e se já foi feita. Um texto sozinho não guarda isso, então cada tarefa vira uma <strong>tabela com campos</strong>: <code>{ texto = "Comprar pão", feita = false }</code>. A lista <code>tarefas</code> passa a ser uma lista de tabelas (veja <a href="tabelas-aninhadas.html">Tabelas Aninhadas</a>). E o menu ganha as opções 3 e 4.</p>
+
+<pre class="file" data-file="tarefas.lua">local tarefas = {}
+
+print("=== Lista de Tarefas da Ana ===")
+
+while true do
+  print()
+  print("1) Ver tarefas")
+  print("2) Adicionar tarefa")
+  print("3) Concluir tarefa")
+  print("4) Remover tarefa")
+  print("0) Sair")
+  io.write("Escolha: ")
+  local opcao = io.read()
+
+  if opcao == "1" then
+    if #tarefas == 0 then
+      print("Nenhuma tarefa. Que tranquilidade!")
+    else
+      for i, tarefa in ipairs(tarefas) do
+        local marca = tarefa.feita and "[x]" or "[ ]"
+        print(string.format("%d. %s %s", i, marca, tarefa.texto))
+      end
+    end
+  elseif opcao == "2" then
+    io.write("Nova tarefa: ")
+    local texto = io.read()
+    table.insert(tarefas, { texto = texto, feita = false })
+    print("Anotado: " .. texto)
+  elseif opcao == "3" then
+    io.write("Número da tarefa concluída: ")
+    local n = tonumber(io.read())
+    tarefas[n].feita = true
+    print("Feito: " .. tarefas[n].texto)
+  elseif opcao == "4" then
+    io.write("Número da tarefa a remover: ")
+    local n = tonumber(io.read())
+    local removida = table.remove(tarefas, n)
+    print("Removida: " .. removida.texto)
+  elseif opcao == "0" or opcao == nil then
+    print("Até logo!")
+    break
+  else
+    print("Opção inválida: " .. opcao)
+  end
+end
+</pre>
+
+<dl class="anatomy">
+  <dt>{ texto = texto, feita = false }</dt><dd>Uma tabela nova com dois campos. Do lado esquerdo do <code>=</code>, o <strong>nome do campo</strong>; do lado direito, o <strong>valor</strong>. <code>texto = texto</code> parece estranho, mas quer dizer "o campo <code>texto</code> recebe o valor da variável <code>texto</code>".</dd>
+  <dt>tarefa.feita and "[x]" or "[ ]"</dt><dd>O <a href="and-or-ternario.html">truque do and/or</a>: <code>[x]</code> se feita, <code>[ ]</code> se não.</dd>
+  <dt>tarefas[n].feita = true</dt><dd>Duas etapas: <code>tarefas[n]</code> pega a tarefa número <code>n</code> (uma tabela) e <code>.feita = true</code> muda o campo dela. A tarefa continua no mesmo lugar da lista.</dd>
+  <dt>table.remove(tarefas, n)</dt><dd>Tira o item da posição <code>n</code>, <strong>puxa os de baixo para cima</strong> (a 3 vira 2…) e devolve o item tirado, que o programa usa para dizer qual foi.</dd>
+</dl>
+
+<pre class="term" data-cwd="~/projetos/tarefas">$ lua tarefas.lua
+=== Lista de Tarefas da Ana ===
+
+1) Ver tarefas
+2) Adicionar tarefa
+3) Concluir tarefa
+4) Remover tarefa
+0) Sair
+Escolha: 2
+Nova tarefa: Comprar pão
+Anotado: Comprar pão
+…                                                   « mais duas tarefas adicionadas
+Escolha: 3
+Número da tarefa concluída: 2
+Feito: Pagar a conta de luz
+
+1) Ver tarefas
+2) Adicionar tarefa
+3) Concluir tarefa
+4) Remover tarefa
+0) Sair
+Escolha: 4
+Número da tarefa a remover: 1
+Removida: Comprar pão
+
+1) Ver tarefas
+2) Adicionar tarefa
+3) Concluir tarefa
+4) Remover tarefa
+0) Sair
+Escolha: 1
+1. [x] Pagar a conta de luz
+2. [ ] Ligar para a Bia</pre>
+
+<p>Depois de remover a tarefa 1, a "Pagar a conta de luz" (que era a 2) virou a 1: o <code>table.remove</code> fechou o buraco. Por isso o programa mostra os números de novo antes de cada pedido: eles mudam.</p>
+
+<h3>Quando dá errado na versão 2</h3>
+
+<div class="cenario">
+<strong>Número que não existe: <code>attempt to index a nil value (field '?')</code></strong>
+<pre class="term" data-cwd="~/projetos/tarefas">Escolha: 3
+Número da tarefa concluída: 9
+lua: tarefas.lua:32: attempt to index a nil value (field '?')
+stack traceback:
+        tarefas.lua:32: in main chunk
+        [C]: in ?</pre>
+<p>Só há duas tarefas: <code>tarefas[9]</code> é <code>nil</code>, e <code>nil.feita</code> não existe. "Tentativa de indexar um valor nil (campo <code>'?'</code>)": o Lua diz que o <code>nil</code> veio de um campo de tabela, mas não sabe o nome, porque a chave (<code>n</code>) só existe na hora de rodar; por isso o <code>?</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Remover um número que não existe: <code>position out of bounds</code></strong>
+<pre class="term" data-cwd="~/projetos/tarefas">Escolha: 4
+Número da tarefa a remover: 9
+lua: tarefas.lua:37: bad argument #2 to 'remove' (position out of bounds)
+stack traceback:
+        [C]: in field 'remove'
+        tarefas.lua:37: in main chunk
+        [C]: in ?</pre>
+<p>"Argumento nº 2 ruim para o <code>remove</code> (posição fora dos limites)". Desta vez quem reclamou foi o próprio <code>table.remove</code> (o <code>[C]: in field 'remove'</code>): ele confere a posição antes de mexer na lista.</p>
+</div>
+
+<div class="cenario">
+<strong>O pior: digitar letras no "remover" apaga a última tarefa</strong>
+<pre class="term" data-cwd="~/projetos/tarefas">Escolha: 4
+Número da tarefa a remover: abc
+Removida: Ligar para a Bia
+
+1) Ver tarefas
+2) Adicionar tarefa
+3) Concluir tarefa
+4) Remover tarefa
+0) Sair
+Escolha: 1
+1. [ ] Comprar pão</pre>
+<p>Nenhum erro, e a tarefa "Ligar para a Bia" sumiu. O <code>tonumber("abc")</code> deu <code>nil</code>, e <code>table.remove(tarefas, nil)</code> é o mesmo que <code>table.remove(tarefas)</code>, sem posição, que quer dizer "remova o <strong>último</strong>". Um defeito silencioso, que apaga dados: é o motivo mais forte para a versão 3 validar o número <strong>antes</strong> de usá-lo.</p>
+</div>
+
+<div class="trylua" data-stdin="2\nComprar pão\n2\nLigar para a Bia\n3\n2\n1\n0" data-goal="out:Feito: Ligar para a Bia;;out:2. [x] Ligar para a Bia">
+<p class="try-task"><strong>Missão (versão 2):</strong> o menu oferece a opção <code>3</code>, mas não há o <code>elseif</code> dela, e ela cai em "Opção inválida". Acrescente o <code>elseif opcao == "3" then</code>: pergunte <code>Número da tarefa concluída: </code>, converta com <code>tonumber</code>, marque <code>tarefas[n].feita = true</code> e mostre <code>Feito: </code> com o texto da tarefa. A entrada adiciona duas tarefas, conclui a 2 e mostra a lista.</p>
+<pre class="script" data-file="tarefas.lua">local tarefas = {}
+
+print("=== Lista de Tarefas da Ana ===")
+
+while true do
+  print()
+  print("1) Ver tarefas")
+  print("2) Adicionar tarefa")
+  print("3) Concluir tarefa")
+  print("4) Remover tarefa")
+  print("0) Sair")
+  io.write("Escolha: ")
+  local opcao = io.read()
+
+  if opcao == "1" then
+    if #tarefas == 0 then
+      print("Nenhuma tarefa. Que tranquilidade!")
+    else
+      for i, tarefa in ipairs(tarefas) do
+        local marca = tarefa.feita and "[x]" or "[ ]"
+        print(string.format("%d. %s %s", i, marca, tarefa.texto))
+      end
+    end
+  elseif opcao == "2" then
+    io.write("Nova tarefa: ")
+    local texto = io.read()
+    table.insert(tarefas, { texto = texto, feita = false })
+    print("Anotado: " .. texto)
+  elseif opcao == "4" then
+    io.write("Número da tarefa a remover: ")
+    local n = tonumber(io.read())
+    local removida = table.remove(tarefas, n)
+    print("Removida: " .. removida.texto)
+  elseif opcao == "0" or opcao == nil then
+    print("Até logo!")
+    break
+  else
+    print("Opção inválida: " .. opcao)
+  end
+end
+</pre>
+<pre class="solucao" data-file="tarefas.lua">local tarefas = {}
+
+print("=== Lista de Tarefas da Ana ===")
+
+while true do
+  print()
+  print("1) Ver tarefas")
+  print("2) Adicionar tarefa")
+  print("3) Concluir tarefa")
+  print("4) Remover tarefa")
+  print("0) Sair")
+  io.write("Escolha: ")
+  local opcao = io.read()
+
+  if opcao == "1" then
+    if #tarefas == 0 then
+      print("Nenhuma tarefa. Que tranquilidade!")
+    else
+      for i, tarefa in ipairs(tarefas) do
+        local marca = tarefa.feita and "[x]" or "[ ]"
+        print(string.format("%d. %s %s", i, marca, tarefa.texto))
+      end
+    end
+  elseif opcao == "2" then
+    io.write("Nova tarefa: ")
+    local texto = io.read()
+    table.insert(tarefas, { texto = texto, feita = false })
+    print("Anotado: " .. texto)
+  elseif opcao == "3" then
+    io.write("Número da tarefa concluída: ")
+    local n = tonumber(io.read())
+    tarefas[n].feita = true
+    print("Feito: " .. tarefas[n].texto)
+  elseif opcao == "4" then
+    io.write("Número da tarefa a remover: ")
+    local n = tonumber(io.read())
+    local removida = table.remove(tarefas, n)
+    print("Removida: " .. removida.texto)
+  elseif opcao == "0" or opcao == nil then
+    print("Até logo!")
+    break
+  else
+    print("Opção inválida: " .. opcao)
+  end
+end
+</pre>
+</div>
+
+<hr>
+
+<h2 id="versao3">Versão 3 · Funções e número validado</h2>
+<p>A versão 3 conserta os três defeitos de uma vez, com uma função <code>ler_numero</code> que só devolve um número se ele for um inteiro de 1 até <code>#tarefas</code>. E aproveita para separar cada opção do menu numa função; o laço principal fica curto. O menu também fica numa linha só, para a tela não encher.</p>
+
+<pre class="file" data-file="tarefas.lua">-- Lista de Tarefas da Ana, versão 3: funções e número validado
+
+-- Pergunta e devolve a resposta sem espaços nas pontas (ou nil no fim da entrada).
+local function perguntar(texto)
+  io.write(texto)
+  local resposta = io.read()
+  if resposta == nil then
+    return nil
+  end
+  return resposta:match("^%s*(.-)%s*$")
+end
+
+local function mostrar(tarefas)
+  if #tarefas == 0 then
+    print("Nenhuma tarefa. Que tranquilidade!")
+    return
+  end
+  for i, tarefa in ipairs(tarefas) do
+    local marca = tarefa.feita and "[x]" or "[ ]"
+    print(string.format("%d. %s %s", i, marca, tarefa.texto))
+  end
+end
+
+-- Pede o número de uma tarefa. Devolve o número, ou nil (com aviso) se não servir.
+local function ler_numero(tarefas, pergunta)
+  if #tarefas == 0 then
+    print("Ainda não há tarefas.")
+    return nil
+  end
+  local n = tonumber(perguntar(pergunta) or "")
+  if n == nil or math.type(n) ~= "integer" or n &lt; 1 or n &gt; #tarefas then
+    print(string.format("Digite um número de 1 a %d.", #tarefas))
+    return nil
+  end
+  return n
+end
+
+local function adicionar(tarefas)
+  local texto = perguntar("Nova tarefa: ")
+  if texto == nil or texto == "" then
+    print("Tarefa vazia: nada foi anotado.")
+    return
+  end
+  table.insert(tarefas, { texto = texto, feita = false })
+  print("Anotado: " .. texto)
+end
+
+local function concluir(tarefas)
+  local n = ler_numero(tarefas, "Número da tarefa concluída: ")
+  if n then
+    tarefas[n].feita = true
+    print("Feito: " .. tarefas[n].texto)
+  end
+end
+
+local function remover(tarefas)
+  local n = ler_numero(tarefas, "Número da tarefa a remover: ")
+  if n then
+    local removida = table.remove(tarefas, n)
+    print("Removida: " .. removida.texto)
+  end
+end
+
+local tarefas = {}
+print("=== Lista de Tarefas da Ana ===")
+
+while true do
+  print()
+  print("1) Ver  2) Adicionar  3) Concluir  4) Remover  0) Sair")
+  local opcao = perguntar("Escolha: ")
+
+  if opcao == "1" then
+    mostrar(tarefas)
+  elseif opcao == "2" then
+    adicionar(tarefas)
+  elseif opcao == "3" then
+    concluir(tarefas)
+  elseif opcao == "4" then
+    remover(tarefas)
+  elseif opcao == "0" or opcao == nil then
+    print("Até logo!")
+    break
+  else
+    print("Opção inválida: " .. opcao)
+  end
+end
+</pre>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Peça</th><th>O que faz</th></tr>
+<tr><td><code>perguntar(texto)</code></td><td>Mostra a pergunta, lê a resposta e tira os espaços das pontas. Devolve <code>nil</code> se a entrada acabou. Todas as perguntas passam por ela.</td></tr>
+<tr><td><code>mostrar(tarefas)</code></td><td>A listagem. O <code>return</code> sozinho, na lista vazia, sai da função sem devolver nada: o <code>for</code> nem chega a rodar.</td></tr>
+<tr><td><code>tonumber(perguntar(pergunta) or "")</code></td><td>Se <code>perguntar</code> der <code>nil</code> (fim da entrada), o <code>or ""</code> troca por um texto vazio, e o <code>tonumber("")</code> dá <code>nil</code> sem erro.</td></tr>
+<tr><td><code>n == nil or math.type(n) ~= "integer" or n &lt; 1 or n &gt; #tarefas</code></td><td>Recusa, nesta ordem: o que não é número, o que não é inteiro (<code>1.5</code>), e o que está fora da lista. Por causa do <code>or</code>, o Lua para no primeiro <code>true</code>: se <code>n</code> for <code>nil</code>, as comparações com <code>&lt;</code> nem rodam (e não dão erro).</td></tr>
+<tr><td><code>return nil</code> + aviso</td><td>Quem chama (<code>concluir</code>, <code>remover</code>) só faz alguma coisa <code>if n then</code>. Assim o <code>table.remove</code> nunca recebe <code>nil</code>.</td></tr>
+<tr><td><code>texto == nil or texto == ""</code></td><td>Em <code>adicionar</code>: não anota tarefa vazia (só <kbd>Enter</kbd>).</td></tr>
+<tr><td><code>adicionar(tarefas)</code>, <code>concluir(tarefas)</code>…</td><td>A lista é passada para as funções. Como <a href="tabelas-referencia.html">tabelas são referências</a>, a função mexe na <strong>mesma</strong> lista do programa principal, e não numa cópia.</td></tr>
+</table>
+</div>
+
+<pre class="term" data-cwd="~/projetos/tarefas">$ lua tarefas.lua
+=== Lista de Tarefas da Ana ===
+
+1) Ver  2) Adicionar  3) Concluir  4) Remover  0) Sair
+Escolha: 3
+Ainda não há tarefas.
+
+1) Ver  2) Adicionar  3) Concluir  4) Remover  0) Sair
+Escolha: 2
+Nova tarefa:
+Tarefa vazia: nada foi anotado.                     « só Enter
+…                                                   « duas tarefas adicionadas
+1) Ver  2) Adicionar  3) Concluir  4) Remover  0) Sair
+Escolha: 3
+Número da tarefa concluída: abc
+Digite um número de 1 a 2.
+
+1) Ver  2) Adicionar  3) Concluir  4) Remover  0) Sair
+Escolha: 3
+Número da tarefa concluída: 1.5
+Digite um número de 1 a 2.
+
+1) Ver  2) Adicionar  3) Concluir  4) Remover  0) Sair
+Escolha: 4
+Número da tarefa a remover: 7
+Digite um número de 1 a 2.
+
+1) Ver  2) Adicionar  3) Concluir  4) Remover  0) Sair
+Escolha: 3
+Número da tarefa concluída: 1
+Feito: Comprar pão
+
+1) Ver  2) Adicionar  3) Concluir  4) Remover  0) Sair
+Escolha: 1
+1. [x] Comprar pão
+2. [ ] Ligar para a Bia
+
+1) Ver  2) Adicionar  3) Concluir  4) Remover  0) Sair
+Escolha: 0
+Até logo!</pre>
+
+<div class="trylua" data-stdin="2\nComprar pão\n2\nLigar para a Bia\n4\n7\n1\n0" data-goal="out:Digite um número de 1 a 2.;;out:2. [ ] Ligar para a Bia;;semerro">
+<p class="try-task"><strong>Missão (versão 3):</strong> a função <code>ler_numero</code> ainda não recusa nada. A entrada da missão adiciona duas tarefas, escolhe <code>4</code> (remover) e digita <code>7</code>: o <code>table.remove</code> para o programa com <code>position out of bounds</code>. Onde está o comentário, recuse o que não for um inteiro de 1 a <code>#tarefas</code>: mostre <code>Digite um número de 1 a 2.</code> (com <code>string.format</code> e o <code>#tarefas</code>) e devolva <code>nil</code>. As duas tarefas precisam continuar na lista.</p>
+<pre class="script" data-file="tarefas.lua">-- Lista de Tarefas da Ana, versão 3: funções e número validado
+
+-- Pergunta e devolve a resposta sem espaços nas pontas (ou nil no fim da entrada).
+local function perguntar(texto)
+  io.write(texto)
+  local resposta = io.read()
+  if resposta == nil then
+    return nil
+  end
+  return resposta:match("^%s*(.-)%s*$")
+end
+
+local function mostrar(tarefas)
+  if #tarefas == 0 then
+    print("Nenhuma tarefa. Que tranquilidade!")
+    return
+  end
+  for i, tarefa in ipairs(tarefas) do
+    local marca = tarefa.feita and "[x]" or "[ ]"
+    print(string.format("%d. %s %s", i, marca, tarefa.texto))
+  end
+end
+
+-- Pede o número de uma tarefa. Devolve o número, ou nil (com aviso) se não servir.
+local function ler_numero(tarefas, pergunta)
+  if #tarefas == 0 then
+    print("Ainda não há tarefas.")
+    return nil
+  end
+  local n = tonumber(perguntar(pergunta) or "")
+  -- recuse aqui o que não for um número inteiro de 1 a #tarefas
+  return n
+end
+
+local function adicionar(tarefas)
+  local texto = perguntar("Nova tarefa: ")
+  if texto == nil or texto == "" then
+    print("Tarefa vazia: nada foi anotado.")
+    return
+  end
+  table.insert(tarefas, { texto = texto, feita = false })
+  print("Anotado: " .. texto)
+end
+
+local function concluir(tarefas)
+  local n = ler_numero(tarefas, "Número da tarefa concluída: ")
+  if n then
+    tarefas[n].feita = true
+    print("Feito: " .. tarefas[n].texto)
+  end
+end
+
+local function remover(tarefas)
+  local n = ler_numero(tarefas, "Número da tarefa a remover: ")
+  if n then
+    local removida = table.remove(tarefas, n)
+    print("Removida: " .. removida.texto)
+  end
+end
+
+local tarefas = {}
+print("=== Lista de Tarefas da Ana ===")
+
+while true do
+  print()
+  print("1) Ver  2) Adicionar  3) Concluir  4) Remover  0) Sair")
+  local opcao = perguntar("Escolha: ")
+
+  if opcao == "1" then
+    mostrar(tarefas)
+  elseif opcao == "2" then
+    adicionar(tarefas)
+  elseif opcao == "3" then
+    concluir(tarefas)
+  elseif opcao == "4" then
+    remover(tarefas)
+  elseif opcao == "0" or opcao == nil then
+    print("Até logo!")
+    break
+  else
+    print("Opção inválida: " .. opcao)
+  end
+end
+</pre>
+<pre class="solucao" data-file="tarefas.lua">-- Lista de Tarefas da Ana, versão 3: funções e número validado
+
+-- Pergunta e devolve a resposta sem espaços nas pontas (ou nil no fim da entrada).
+local function perguntar(texto)
+  io.write(texto)
+  local resposta = io.read()
+  if resposta == nil then
+    return nil
+  end
+  return resposta:match("^%s*(.-)%s*$")
+end
+
+local function mostrar(tarefas)
+  if #tarefas == 0 then
+    print("Nenhuma tarefa. Que tranquilidade!")
+    return
+  end
+  for i, tarefa in ipairs(tarefas) do
+    local marca = tarefa.feita and "[x]" or "[ ]"
+    print(string.format("%d. %s %s", i, marca, tarefa.texto))
+  end
+end
+
+-- Pede o número de uma tarefa. Devolve o número, ou nil (com aviso) se não servir.
+local function ler_numero(tarefas, pergunta)
+  if #tarefas == 0 then
+    print("Ainda não há tarefas.")
+    return nil
+  end
+  local n = tonumber(perguntar(pergunta) or "")
+  if n == nil or math.type(n) ~= "integer" or n &lt; 1 or n &gt; #tarefas then
+    print(string.format("Digite um número de 1 a %d.", #tarefas))
+    return nil
+  end
+  return n
+end
+
+local function adicionar(tarefas)
+  local texto = perguntar("Nova tarefa: ")
+  if texto == nil or texto == "" then
+    print("Tarefa vazia: nada foi anotado.")
+    return
+  end
+  table.insert(tarefas, { texto = texto, feita = false })
+  print("Anotado: " .. texto)
+end
+
+local function concluir(tarefas)
+  local n = ler_numero(tarefas, "Número da tarefa concluída: ")
+  if n then
+    tarefas[n].feita = true
+    print("Feito: " .. tarefas[n].texto)
+  end
+end
+
+local function remover(tarefas)
+  local n = ler_numero(tarefas, "Número da tarefa a remover: ")
+  if n then
+    local removida = table.remove(tarefas, n)
+    print("Removida: " .. removida.texto)
+  end
+end
+
+local tarefas = {}
+print("=== Lista de Tarefas da Ana ===")
+
+while true do
+  print()
+  print("1) Ver  2) Adicionar  3) Concluir  4) Remover  0) Sair")
+  local opcao = perguntar("Escolha: ")
+
+  if opcao == "1" then
+    mostrar(tarefas)
+  elseif opcao == "2" then
+    adicionar(tarefas)
+  elseif opcao == "3" then
+    concluir(tarefas)
+  elseif opcao == "4" then
+    remover(tarefas)
+  elseif opcao == "0" or opcao == nil then
+    print("Até logo!")
+    break
+  else
+    print("Opção inválida: " .. opcao)
+  end
+end
+</pre>
+</div>
+
+<hr>
+
+<h2 id="versao4">Versão 4 · Guardar num arquivo</h2>
+<p>Agora a lista sobrevive ao fim do programa. A ideia: no começo, <strong>carregar</strong> as tarefas de um arquivo de texto; depois de cada mudança, <strong>salvar</strong> a lista inteira de novo. O formato do arquivo é simples, uma tarefa por linha, com a marca na frente:</p>
+
+<pre class="file" data-file="tarefas.txt">1;Comprar pão
+0;Pagar a conta de luz; vence dia 20
+</pre>
+
+<p><code>1</code> quer dizer "feita", <code>0</code> "por fazer", e o <code>;</code> separa a marca do texto. Um arquivo assim dá para ler e até consertar à mão, com qualquer editor. O programa completo (as funções novas são <code>carregar</code> e <code>salvar</code>; o resto é a versão 3):</p>
+
+<pre class="file" data-file="tarefas.lua">-- Lista de Tarefas da Ana, versão 4: as tarefas guardadas num arquivo
+
+local ARQUIVO = "tarefas.txt"
+
+-- Pergunta e devolve a resposta sem espaços nas pontas (ou nil no fim da entrada).
+local function perguntar(texto)
+  io.write(texto)
+  local resposta = io.read()
+  if resposta == nil then
+    return nil
+  end
+  return resposta:match("^%s*(.-)%s*$")
+end
+
+local function mostrar(tarefas)
+  if #tarefas == 0 then
+    print("Nenhuma tarefa. Que tranquilidade!")
+    return
+  end
+  for i, tarefa in ipairs(tarefas) do
+    local marca = tarefa.feita and "[x]" or "[ ]"
+    print(string.format("%d. %s %s", i, marca, tarefa.texto))
+  end
+end
+
+-- Pede o número de uma tarefa. Devolve o número, ou nil (com aviso) se não servir.
+local function ler_numero(tarefas, pergunta)
+  if #tarefas == 0 then
+    print("Ainda não há tarefas.")
+    return nil
+  end
+  local n = tonumber(perguntar(pergunta) or "")
+  if n == nil or math.type(n) ~= "integer" or n &lt; 1 or n &gt; #tarefas then
+    print(string.format("Digite um número de 1 a %d.", #tarefas))
+    return nil
+  end
+  return n
+end
+
+-- Lê o arquivo. Cada linha é "1;texto" (feita) ou "0;texto" (por fazer).
+local function carregar()
+  local tarefas = {}
+  local arquivo = io.open(ARQUIVO, "r")
+  if not arquivo then
+    return tarefas            -- primeira vez: ainda não há arquivo
+  end
+  local numero_linha = 0
+  for linha in arquivo:lines() do
+    numero_linha = numero_linha + 1
+    local marca, texto = linha:match("^([01]);(.*)$")
+    if marca then
+      table.insert(tarefas, { texto = texto, feita = (marca == "1") })
+    else
+      print(string.format("Aviso: a linha %d de %s foi ignorada.", numero_linha, ARQUIVO))
+    end
+  end
+  arquivo:close()
+  return tarefas
+end
+
+-- Grava todas as tarefas no arquivo (apaga o que havia antes).
+local function salvar(tarefas)
+  local arquivo = assert(io.open(ARQUIVO, "w"))
+  for _, tarefa in ipairs(tarefas) do
+    arquivo:write(tarefa.feita and "1" or "0", ";", tarefa.texto, "\n")
+  end
+  arquivo:close()
+end
+
+local function adicionar(tarefas)
+  local texto = perguntar("Nova tarefa: ")
+  if texto == nil or texto == "" then
+    print("Tarefa vazia: nada foi anotado.")
+    return
+  end
+  table.insert(tarefas, { texto = texto, feita = false })
+  print("Anotado: " .. texto)
+end
+
+local function concluir(tarefas)
+  local n = ler_numero(tarefas, "Número da tarefa concluída: ")
+  if n then
+    tarefas[n].feita = true
+    print("Feito: " .. tarefas[n].texto)
+  end
+end
+
+local function remover(tarefas)
+  local n = ler_numero(tarefas, "Número da tarefa a remover: ")
+  if n then
+    local removida = table.remove(tarefas, n)
+    print("Removida: " .. removida.texto)
+  end
+end
+
+local tarefas = carregar()
+print("=== Lista de Tarefas da Ana ===")
+print(string.format("%d tarefa(s) carregada(s) de %s.", #tarefas, ARQUIVO))
+
+while true do
+  print()
+  print("1) Ver  2) Adicionar  3) Concluir  4) Remover  0) Sair")
+  local opcao = perguntar("Escolha: ")
+
+  if opcao == "1" then
+    mostrar(tarefas)
+  elseif opcao == "2" then
+    adicionar(tarefas)
+    salvar(tarefas)
+  elseif opcao == "3" then
+    concluir(tarefas)
+    salvar(tarefas)
+  elseif opcao == "4" then
+    remover(tarefas)
+    salvar(tarefas)
+  elseif opcao == "0" or opcao == nil then
+    print("Até logo!")
+    break
+  else
+    print("Opção inválida: " .. opcao)
+  end
+end
+</pre>
+
+<dl class="anatomy">
+  <dt>io.open(ARQUIVO, "r")</dt><dd>Tenta abrir para leitura. Na primeira vez o arquivo ainda não existe: o <code>io.open</code> devolve <code>nil</code> e o <code>carregar</code> devolve a lista vazia, sem erro. É o comportamento certo, não um problema.</dd>
+  <dt>linha:match("^([01]);(.*)$")</dt><dd>O <a href="padroes.html">padrão</a> que separa a linha: <code>^</code> começo; <code>([01])</code> um <code>0</code> ou um <code>1</code>, guardado (é a primeira captura); <code>;</code> o separador; <code>(.*)</code> todo o resto até o fim, guardado (a segunda). O <code>match</code> devolve as duas capturas, que vão para <code>marca</code> e <code>texto</code>. Se a linha não tiver esse formato, devolve <code>nil</code>.</dd>
+  <dt>feita = (marca == "1")</dt><dd>A comparação já dá <code>true</code> ou <code>false</code>: é exatamente o valor do campo.</dd>
+  <dt>numero_linha</dt><dd>Conta as linhas, só para o aviso dizer <strong>qual</strong> linha estava estragada.</dd>
+  <dt>assert(io.open(ARQUIVO, "w"))</dt><dd>Abre para <strong>escrita</strong> (<code>"w"</code>, de <em>write</em>): cria o arquivo, ou <strong>apaga</strong> o que havia nele. Como o <code>salvar</code> grava a lista inteira toda vez, é isso mesmo que se quer. O <a href="assert.html">assert</a> para o programa com a mensagem do <code>io.open</code> se não der para abrir (disco cheio, pasta sem permissão).</dd>
+  <dt>arquivo:write(…, ";", tarefa.texto, "\n")</dt><dd>Escreve os pedaços em sequência; o <code>"\n"</code> termina a linha. O <code>write</code> não pula linha sozinho, ao contrário do <code>print</code>.</dd>
+  <dt>salvar(tarefas)</dt><dd>Chamado logo depois de <code>adicionar</code>, <code>concluir</code> e <code>remover</code>. Se a luz acabar no meio do uso, nada se perde.</dd>
+</dl>
+
+<p>A sessão completa está no começo da página. E o texto "Pagar a conta de luz; vence dia 20" tem um <code>;</code> dentro, e mesmo assim voltou inteiro: o padrão pega só o <strong>primeiro</strong> <code>;</code> (logo depois da marca) e o <code>(.*)</code> fica com todo o resto.</p>
+
+<div class="cenario">
+<strong>Uma linha estragada no arquivo</strong>
+<p>A Ana abriu o <code>tarefas.txt</code> num editor e escreveu uma linha sem a marca:</p>
+<pre class="term" data-cwd="~/projetos/tarefas">$ echo "lembrar da Bia" &gt;&gt; tarefas.txt
+$ cat tarefas.txt
+1;Comprar pão
+0;Pagar a conta de luz; vence dia 20
+lembrar da Bia
+$ lua tarefas.lua
+Aviso: a linha 3 de tarefas.txt foi ignorada.
+=== Lista de Tarefas da Ana ===
+2 tarefa(s) carregada(s) de tarefas.txt.
+
+1) Ver  2) Adicionar  3) Concluir  4) Remover  0) Sair
+Escolha: 0
+Até logo!</pre>
+<p>O <code>match</code> deu <code>nil</code> para a linha 3, e o programa avisou em vez de quebrar. (O aviso sai antes do título porque o <code>carregar()</code> roda antes do primeiro <code>print</code>.) Atenção: no próximo <code>salvar</code>, a linha ignorada some do arquivo, porque ele é regravado com a lista da memória. Escreva <code>0;lembrar da Bia</code> e ela entra na lista.</p>
+</div>
+
+<div class="cenario">
+<strong>Abrir com <code>"a"</code> em vez de <code>"w"</code>: tudo duplicado</strong>
+<p>O modo <code>"a"</code> (<em>append</em>, "acrescentar") escreve no <strong>fim</strong> do arquivo, sem apagar o que havia. Parece mais seguro, mas com um <code>salvar</code> que grava a lista inteira:</p>
+<pre class="term" data-cwd="~/projetos/tarefas">$ sed 's/io.open(ARQUIVO, "w")/io.open(ARQUIVO, "a")/' tarefas.lua &gt; anexar.lua
+$ rm -f tarefas.txt
+$ lua anexar.lua
+=== Lista de Tarefas da Ana ===
+0 tarefa(s) carregada(s) de tarefas.txt.
+
+1) Ver  2) Adicionar  3) Concluir  4) Remover  0) Sair
+Escolha: 2
+Nova tarefa: Comprar pão
+Anotado: Comprar pão
+
+1) Ver  2) Adicionar  3) Concluir  4) Remover  0) Sair
+Escolha: 2
+Nova tarefa: Ligar para a Bia
+Anotado: Ligar para a Bia
+
+1) Ver  2) Adicionar  3) Concluir  4) Remover  0) Sair
+Escolha: 0
+Até logo!
+$ cat tarefas.txt
+0;Comprar pão
+0;Comprar pão
+0;Ligar para a Bia</pre>
+<p>O primeiro <code>salvar</code> gravou "Comprar pão"; o segundo acrescentou a lista inteira de novo. Cada mudança duplica tudo. O <code>"a"</code> serve para <strong>diários</strong> (um registro que só cresce, como um log); para regravar uma lista, é <code>"w"</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Esquecer o modo: <code>io.open(ARQUIVO)</code> abre só para ler</strong>
+<pre class="term" data-cwd="~/projetos/tarefas">$ sed 's/io.open(ARQUIVO, "w")/io.open(ARQUIVO)/' tarefas.lua &gt; semw.lua
+$ rm -f tarefas.txt
+$ lua semw.lua
+=== Lista de Tarefas da Ana ===
+0 tarefa(s) carregada(s) de tarefas.txt.
+
+1) Ver  2) Adicionar  3) Concluir  4) Remover  0) Sair
+Escolha: 2
+Nova tarefa: Comprar pão
+Anotado: Comprar pão
+lua: semw.lua:63: tarefas.txt: No such file or directory
+stack traceback:
+        [C]: in global 'assert'
+        semw.lua:63: in local 'salvar'
+        semw.lua:109: in main chunk
+        [C]: in ?</pre>
+<p>Sem o segundo argumento, o <code>io.open</code> abre para <strong>leitura</strong> (<code>"r"</code>), e um arquivo que não existe não dá para ler: "nenhum arquivo ou diretório com esse nome". O <code>assert</code> transformou o <code>nil</code> do <code>io.open</code> num erro, e o traceback conta a história de baixo para cima: o programa principal (linha 109) chamou a função local <code>salvar</code>, que na linha 63 chamou o <code>assert</code>, que parou tudo. Graças ao <code>assert</code>, o defeito apareceu na hora, com a causa escrita.</p>
+</div>
+
+<div class="trylua" data-stdin="2\nComprar pão\n2\nLigar para a Bia\n3\n1\n0" data-goal="arquivo:tarefas.txt~1;Comprar pão;;arquivo:tarefas.txt~0;Ligar para a Bia">
+<p class="try-task"><strong>Missão (versão 4):</strong> a função <code>salvar</code> está vazia, e o <code>tarefas.txt</code> nunca é criado. Complete: abra o <code>ARQUIVO</code> com <code>assert(io.open(ARQUIVO, "w"))</code>, escreva uma linha por tarefa (<code>"1"</code> ou <code>"0"</code>, um <code>";"</code>, o texto e <code>"\n"</code>) e feche com <code>arquivo:close()</code>. A entrada adiciona duas tarefas e conclui a primeira; o arquivo deve terminar com <code>1;Comprar pão</code> e <code>0;Ligar para a Bia</code>. (No editor, cada Rodar começa sem o arquivo.)</p>
+<pre class="script" data-file="tarefas.lua">-- Lista de Tarefas da Ana, versão 4: as tarefas guardadas num arquivo
+
+local ARQUIVO = "tarefas.txt"
+
+-- Pergunta e devolve a resposta sem espaços nas pontas (ou nil no fim da entrada).
+local function perguntar(texto)
+  io.write(texto)
+  local resposta = io.read()
+  if resposta == nil then
+    return nil
+  end
+  return resposta:match("^%s*(.-)%s*$")
+end
+
+local function mostrar(tarefas)
+  if #tarefas == 0 then
+    print("Nenhuma tarefa. Que tranquilidade!")
+    return
+  end
+  for i, tarefa in ipairs(tarefas) do
+    local marca = tarefa.feita and "[x]" or "[ ]"
+    print(string.format("%d. %s %s", i, marca, tarefa.texto))
+  end
+end
+
+-- Pede o número de uma tarefa. Devolve o número, ou nil (com aviso) se não servir.
+local function ler_numero(tarefas, pergunta)
+  if #tarefas == 0 then
+    print("Ainda não há tarefas.")
+    return nil
+  end
+  local n = tonumber(perguntar(pergunta) or "")
+  if n == nil or math.type(n) ~= "integer" or n &lt; 1 or n &gt; #tarefas then
+    print(string.format("Digite um número de 1 a %d.", #tarefas))
+    return nil
+  end
+  return n
+end
+
+-- Lê o arquivo. Cada linha é "1;texto" (feita) ou "0;texto" (por fazer).
+local function carregar()
+  local tarefas = {}
+  local arquivo = io.open(ARQUIVO, "r")
+  if not arquivo then
+    return tarefas            -- primeira vez: ainda não há arquivo
+  end
+  local numero_linha = 0
+  for linha in arquivo:lines() do
+    numero_linha = numero_linha + 1
+    local marca, texto = linha:match("^([01]);(.*)$")
+    if marca then
+      table.insert(tarefas, { texto = texto, feita = (marca == "1") })
+    else
+      print(string.format("Aviso: a linha %d de %s foi ignorada.", numero_linha, ARQUIVO))
+    end
+  end
+  arquivo:close()
+  return tarefas
+end
+
+-- Grava todas as tarefas no arquivo (apaga o que havia antes).
+local function salvar(tarefas)
+  -- abra o ARQUIVO com "w", escreva uma linha por tarefa e feche
+end
+
+local function adicionar(tarefas)
+  local texto = perguntar("Nova tarefa: ")
+  if texto == nil or texto == "" then
+    print("Tarefa vazia: nada foi anotado.")
+    return
+  end
+  table.insert(tarefas, { texto = texto, feita = false })
+  print("Anotado: " .. texto)
+end
+
+local function concluir(tarefas)
+  local n = ler_numero(tarefas, "Número da tarefa concluída: ")
+  if n then
+    tarefas[n].feita = true
+    print("Feito: " .. tarefas[n].texto)
+  end
+end
+
+local function remover(tarefas)
+  local n = ler_numero(tarefas, "Número da tarefa a remover: ")
+  if n then
+    local removida = table.remove(tarefas, n)
+    print("Removida: " .. removida.texto)
+  end
+end
+
+local tarefas = carregar()
+print("=== Lista de Tarefas da Ana ===")
+print(string.format("%d tarefa(s) carregada(s) de %s.", #tarefas, ARQUIVO))
+
+while true do
+  print()
+  print("1) Ver  2) Adicionar  3) Concluir  4) Remover  0) Sair")
+  local opcao = perguntar("Escolha: ")
+
+  if opcao == "1" then
+    mostrar(tarefas)
+  elseif opcao == "2" then
+    adicionar(tarefas)
+    salvar(tarefas)
+  elseif opcao == "3" then
+    concluir(tarefas)
+    salvar(tarefas)
+  elseif opcao == "4" then
+    remover(tarefas)
+    salvar(tarefas)
+  elseif opcao == "0" or opcao == nil then
+    print("Até logo!")
+    break
+  else
+    print("Opção inválida: " .. opcao)
+  end
+end
+</pre>
+<pre class="solucao" data-file="tarefas.lua">-- Lista de Tarefas da Ana, versão 4: as tarefas guardadas num arquivo
+
+local ARQUIVO = "tarefas.txt"
+
+-- Pergunta e devolve a resposta sem espaços nas pontas (ou nil no fim da entrada).
+local function perguntar(texto)
+  io.write(texto)
+  local resposta = io.read()
+  if resposta == nil then
+    return nil
+  end
+  return resposta:match("^%s*(.-)%s*$")
+end
+
+local function mostrar(tarefas)
+  if #tarefas == 0 then
+    print("Nenhuma tarefa. Que tranquilidade!")
+    return
+  end
+  for i, tarefa in ipairs(tarefas) do
+    local marca = tarefa.feita and "[x]" or "[ ]"
+    print(string.format("%d. %s %s", i, marca, tarefa.texto))
+  end
+end
+
+-- Pede o número de uma tarefa. Devolve o número, ou nil (com aviso) se não servir.
+local function ler_numero(tarefas, pergunta)
+  if #tarefas == 0 then
+    print("Ainda não há tarefas.")
+    return nil
+  end
+  local n = tonumber(perguntar(pergunta) or "")
+  if n == nil or math.type(n) ~= "integer" or n &lt; 1 or n &gt; #tarefas then
+    print(string.format("Digite um número de 1 a %d.", #tarefas))
+    return nil
+  end
+  return n
+end
+
+-- Lê o arquivo. Cada linha é "1;texto" (feita) ou "0;texto" (por fazer).
+local function carregar()
+  local tarefas = {}
+  local arquivo = io.open(ARQUIVO, "r")
+  if not arquivo then
+    return tarefas            -- primeira vez: ainda não há arquivo
+  end
+  local numero_linha = 0
+  for linha in arquivo:lines() do
+    numero_linha = numero_linha + 1
+    local marca, texto = linha:match("^([01]);(.*)$")
+    if marca then
+      table.insert(tarefas, { texto = texto, feita = (marca == "1") })
+    else
+      print(string.format("Aviso: a linha %d de %s foi ignorada.", numero_linha, ARQUIVO))
+    end
+  end
+  arquivo:close()
+  return tarefas
+end
+
+-- Grava todas as tarefas no arquivo (apaga o que havia antes).
+local function salvar(tarefas)
+  local arquivo = assert(io.open(ARQUIVO, "w"))
+  for _, tarefa in ipairs(tarefas) do
+    arquivo:write(tarefa.feita and "1" or "0", ";", tarefa.texto, "\n")
+  end
+  arquivo:close()
+end
+
+local function adicionar(tarefas)
+  local texto = perguntar("Nova tarefa: ")
+  if texto == nil or texto == "" then
+    print("Tarefa vazia: nada foi anotado.")
+    return
+  end
+  table.insert(tarefas, { texto = texto, feita = false })
+  print("Anotado: " .. texto)
+end
+
+local function concluir(tarefas)
+  local n = ler_numero(tarefas, "Número da tarefa concluída: ")
+  if n then
+    tarefas[n].feita = true
+    print("Feito: " .. tarefas[n].texto)
+  end
+end
+
+local function remover(tarefas)
+  local n = ler_numero(tarefas, "Número da tarefa a remover: ")
+  if n then
+    local removida = table.remove(tarefas, n)
+    print("Removida: " .. removida.texto)
+  end
+end
+
+local tarefas = carregar()
+print("=== Lista de Tarefas da Ana ===")
+print(string.format("%d tarefa(s) carregada(s) de %s.", #tarefas, ARQUIVO))
+
+while true do
+  print()
+  print("1) Ver  2) Adicionar  3) Concluir  4) Remover  0) Sair")
+  local opcao = perguntar("Escolha: ")
+
+  if opcao == "1" then
+    mostrar(tarefas)
+  elseif opcao == "2" then
+    adicionar(tarefas)
+    salvar(tarefas)
+  elseif opcao == "3" then
+    concluir(tarefas)
+    salvar(tarefas)
+  elseif opcao == "4" then
+    remover(tarefas)
+    salvar(tarefas)
+  elseif opcao == "0" or opcao == nil then
+    print("Até logo!")
+    break
+  else
+    print("Opção inválida: " .. opcao)
+  end
+end
+</pre>
+</div>
+
+<hr>
+
+<h2>Formas diferentes de fazer</h2>
+
+<h3>O menu com uma tabela de funções</h3>
+<p>Como na <a href="projeto-calculadora.html">Calculadora</a>, a escada de <code>elseif</code> do menu pode virar uma tabela que liga cada opção a uma função. Como todas as funções da versão 3 recebem a mesma coisa (a lista), a troca é direta; o laço principal fica assim:</p>
+
+<pre class="file" data-file="tarefas.lua">local tarefas = {}
+local acoes = {
+  ["1"] = mostrar,
+  ["2"] = adicionar,
+  ["3"] = concluir,
+  ["4"] = remover,
+}
+
+print("=== Lista de Tarefas da Ana ===")
+while true do
+  print()
+  print("1) Ver  2) Adicionar  3) Concluir  4) Remover  0) Sair")
+  local opcao = perguntar("Escolha: ")
+  if opcao == "0" or opcao == nil then
+    print("Até logo!")
+    break
+  end
+  local acao = acoes[opcao]
+  if acao then
+    acao(tarefas)
+  else
+    print("Opção inválida: " .. opcao)
+  end
+end
+</pre>
+
+<pre class="term" data-cwd="~/projetos/tarefas">$ lua tarefas.lua
+=== Lista de Tarefas da Ana ===
+
+1) Ver  2) Adicionar  3) Concluir  4) Remover  0) Sair
+Escolha: 2
+Nova tarefa: Comprar pão
+Anotado: Comprar pão
+
+1) Ver  2) Adicionar  3) Concluir  4) Remover  0) Sair
+Escolha: 1
+1. [ ] Comprar pão
+
+1) Ver  2) Adicionar  3) Concluir  4) Remover  0) Sair
+Escolha: 9
+Opção inválida: 9
+
+1) Ver  2) Adicionar  3) Concluir  4) Remover  0) Sair
+Escolha: 0
+Até logo!</pre>
+
+<p>Repare que <code>["1"] = mostrar</code> guarda a <strong>função</strong> (sem parênteses), e não o resultado de chamá-la. A chamada acontece depois, em <code>acao(tarefas)</code>.</p>
+
+<h3>O formato do arquivo</h3>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Formato</th><th>Exemplo de linha</th><th>Quando usar</th></tr>
+<tr><td>Marca e texto com separador (este projeto)</td><td><code>1;Comprar pão</code></td><td>Poucos campos, e só o último pode ter o separador dentro. Fácil de ler e consertar à mão.</td></tr>
+<tr><td>CSV (valores separados por vírgula)</td><td><code>Ana,8.5,7.0</code></td><td>Vários campos, para abrir numa planilha. Veja o projeto <a href="projeto-notas.html">Notas da Turma</a>.</td></tr>
+<tr><td>A tabela escrita em Lua, lida com <code>dofile</code></td><td><code>{ texto = "Comprar pão", feita = true },</code></td><td>Dados com vários campos de tipos diferentes, sem escrever um leitor. Veja o projeto <a href="projeto-agenda.html">Agenda de Contatos</a>.</td></tr>
+</table>
+</div>
+
+<h2>Ideias para continuar</h2>
+<ul>
+  <li>Uma opção <code>5) Limpar concluídas</code>, que remove todas as tarefas feitas. Cuidado: remover de uma lista enquanto se anda nela pula itens; ande de trás para frente (<code>for i = #tarefas, 1, -1 do</code>).</li>
+  <li>Mostrar no fim da listagem quantas faltam: <code>2 de 5 feitas</code>.</li>
+  <li>Uma data de vencimento por tarefa (<code>0;2026-10-20;Pagar a luz</code>), com o padrão <code>"^([01]);([^;]*);(.*)$"</code>.</li>
+</ul>
+
+<hr>
+
+<h2>Referência rápida do projeto</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>Para que serviu</th></tr>
+<tr><td><code>while true do</code> … <code>if opcao == "1"</code> … <code>break</code></td><td>O menu que se repete até a pessoa sair</td></tr>
+<tr><td><code>table.insert(lista, x)</code></td><td>Pôr no fim da lista</td></tr>
+<tr><td><code>for i, item in ipairs(lista) do</code></td><td>Percorrer na ordem, com a posição</td></tr>
+<tr><td><code>{ texto = texto, feita = false }</code></td><td>Uma tarefa com dois campos</td></tr>
+<tr><td><code>tarefas[n].feita = true</code></td><td>Mudar um campo da tarefa <code>n</code></td></tr>
+<tr><td><code>table.remove(lista, n)</code></td><td>Tirar a posição <code>n</code> (e devolver o item); com <code>nil</code>, tira o <strong>último</strong></td></tr>
+<tr><td><code>io.open(nome, "r")</code> / <code>"w"</code> / <code>"a"</code></td><td>Abrir para ler / regravar do zero / acrescentar no fim</td></tr>
+<tr><td><code>arquivo:write(a, b, "\n")</code></td><td>Escrever uma linha</td></tr>
+<tr><td><code>linha:match("^([01]);(.*)$")</code></td><td>Separar a marca do texto</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Sintoma</th><th>Causa provável</th></tr>
+<tr><td><code>attempt to index a nil value (field '?')</code></td><td><code>tarefas[n]</code> com um <code>n</code> que não existe na lista</td></tr>
+<tr><td><code>bad argument #2 to 'remove' (position out of bounds)</code></td><td><code>table.remove</code> com uma posição fora da lista</td></tr>
+<tr><td>A última tarefa some sem erro</td><td><code>table.remove(lista, nil)</code>: o número digitado não foi validado</td></tr>
+<tr><td>A lista some quando o programa termina</td><td>Ela só existe na memória: salve num arquivo</td></tr>
+<tr><td>O arquivo fica com tudo repetido</td><td><code>io.open(…, "a")</code> num <code>salvar</code> que grava a lista inteira: use <code>"w"</code></td></tr>
+<tr><td><code>tarefas.txt: No such file or directory</code> ao salvar</td><td><code>io.open</code> sem o <code>"w"</code> (abre só para ler)</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. No fim da lista</h3>
+<p>Complete para pôr a tarefa nova no fim da lista:</p>
+<div class="ex-code">table.<input data-answer="insert" aria-label="função">(tarefas, { texto = texto, feita = false })</div>
+</div>
+
+<div class="exercise">
+<h3>2. Percorrer na ordem</h3>
+<p>Complete o laço que percorre a lista com a posição:</p>
+<div class="ex-code">for i, tarefa in <input data-answer="ipairs" aria-label="função">(tarefas) do</div>
+</div>
+
+<div class="exercise">
+<h3>3. Regravar o arquivo</h3>
+<p>Complete o modo que cria o arquivo ou apaga o que havia nele:</p>
+<div class="ex-code">local arquivo = assert(io.open("tarefas.txt", "<input data-answer="w" aria-label="modo">"))</div>
+</div>
+
+<div class="mc" data-answer="3">
+<p class="mc-q">4. A lista tem 3 tarefas e o programa faz <code>table.remove(tarefas, nil)</code>. O que acontece?</p>
+<label><input type="radio" name="q4"> Dá erro: <code>position out of bounds</code></label>
+<label><input type="radio" name="q4"> Nada: <code>nil</code> não remove ninguém</label>
+<label><input type="radio" name="q4"> Remove a 3ª tarefa, a última, sem erro</label>
+<label><input type="radio" name="q4"> Remove a 1ª tarefa</label>
+</div>
+
+<div class="mc" data-answer="1">
+<p class="mc-q">5. Para a linha <code>0;Pagar a luz; dia 20</code>, o que <code>linha:match("^([01]);(.*)$")</code> devolve?</p>
+<label><input type="radio" name="q5"> <code>"0"</code> e <code>"Pagar a luz; dia 20"</code></label>
+<label><input type="radio" name="q5"> <code>"0"</code> e <code>"Pagar a luz"</code></label>
+<label><input type="radio" name="q5"> <code>nil</code>, porque há dois <code>;</code></label>
+<label><input type="radio" name="q5"> <code>0</code> (número) e <code>"Pagar a luz; dia 20"</code></label>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">6. Por que <code>concluir(tarefas)</code> consegue mudar a lista do programa principal?</p>
+<label><input type="radio" name="q6"> Porque <code>tarefas</code> é uma variável global</label>
+<label><input type="radio" name="q6"> Porque tabelas são passadas por referência: a função recebe a mesma tabela, não uma cópia</label>
+<label><input type="radio" name="q6"> Porque a função devolve a lista nova com <code>return</code></label>
+<label><input type="radio" name="q6"> Porque o <code>salvar</code> atualiza a memória</label>
+</div>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li>Um menu é um <code>while true</code> com <code>if</code>/<code>elseif</code> sobre a opção lida como texto, e um <code>break</code> para sair.</li>
+  <li>A lista é uma tabela: <code>table.insert</code> põe no fim, <code>ipairs</code> percorre, <code>table.remove</code> tira e fecha o buraco.</li>
+  <li>Quando cada item tem várias informações, cada item vira uma tabela com campos: <code>{ texto = …, feita = false }</code>.</li>
+  <li>Valide o número antes de usá-lo como posição: <code>tarefas[9]</code> é <code>nil</code>, e <code>table.remove(lista, nil)</code> apaga o último sem avisar.</li>
+  <li>Para a lista sobreviver ao fim do programa: carregue de um arquivo no começo e salve depois de cada mudança, com <code>"w"</code>.</li>
+  <li>Um formato de uma linha por item (<code>1;texto</code>), lido com <code>lines</code> e <code>match</code>, é simples de ler, de escrever e de consertar à mão.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
