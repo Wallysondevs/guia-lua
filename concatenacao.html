@@ -1,0 +1,563 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua concatenação (..) — juntando textos | Guia Lua</title>
+<meta name="description" content="O operador .. do Lua para quem nunca programou: juntar textos, colocar os espaços, juntar texto com número (e o erro malformed number do 1..2), por que o texto original não muda, e os erros reais de concatenar nil, boolean e tabela no Lua 5.5.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">..</span> (concatenação)</h1>
+
+<p class="intro">Quase todo programa precisa <strong>montar um texto</strong> a partir de pedaços: "Olá, " + o nome da pessoa + "!", ou "Total: R$ " + o valor da compra. Juntar textos, um atrás do outro, tem um nome técnico: <strong>concatenação</strong> (do latim <em>catena</em>, "corrente": os pedaços viram elos de uma corrente). No Lua, quem faz isso são <strong>dois pontos seguidos</strong>: <code>..</code>.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>Como juntar dois ou mais textos com <code>..</code>, e por que o espaço entre as palavras é responsabilidade sua.</li>
+  <li>Como juntar texto com número (<code>"Total: " .. 30</code>), e por que <code>1..2</code>, tudo colado, é erro.</li>
+  <li>Que o <code>..</code> <strong>cria um texto novo</strong>: a variável original não muda, a não ser que você guarde o resultado nela.</li>
+  <li>A diferença entre <code>..</code> (juntar) e <code>+</code> (somar).</li>
+  <li>Os erros reais: concatenar <code>nil</code>, <code>true</code>/<code>false</code> e tabelas, e como consertar cada um.</li>
+  <li>Outras formas de montar texto: as vírgulas do <code>print</code>, o <code>io.write</code>, o <code>string.format</code> e o <code>table.concat</code>.</li>
+</ul>
+</div>
+
+<p>Todos os programas desta aula rodaram no <strong>Lua 5.5</strong> da máquina da Ana (usuária <code>ana</code>, computador <code>notebook</code>), salvos na pasta pessoal dela e executados com <code>lua arquivo.lua</code> (veja <a href="executar.html">Rodando um Programa</a>). Você pode rodar cada um no editor do guia.</p>
+
+<hr>
+
+<h2>A ideia: montar um bilhete com etiquetas</h2>
+<p>Imagine que a Ana tem uma cartela de etiquetas adesivas, cada uma com um pedaço de texto: <code>Olá, </code> numa, <code>Ana</code> em outra, <code>!</code> numa terceira. Para montar o bilhete, ela cola as etiquetas <strong>uma ao lado da outra</strong>, na ordem, sem nada no meio:</p>
+<ol class="passo">
+  <li><code>Olá, </code> (repare: essa etiqueta já termina com um espaço)</li>
+  <li><code>Olá, </code> + <code>Ana</code> → <code>Olá, Ana</code></li>
+  <li><code>Olá, Ana</code> + <code>!</code> → <code>Olá, Ana!</code></li>
+</ol>
+<p>Duas regras do bilhete valem para o <code>..</code> do Lua:</p>
+<ul>
+  <li>As etiquetas são coladas <strong>encostadas</strong>. Se você quer um espaço entre duas palavras, o espaço tem de estar <strong>dentro</strong> de uma das etiquetas (ou ser uma etiqueta só com o espaço, <code>" "</code>).</li>
+  <li>As etiquetas originais <strong>continuam na cartela</strong>: o que você ganha é um bilhete novo. Daqui a pouco você vai ver que, no Lua, o texto <code>"Ana"</code> não muda quando é colado em outro.</li>
+</ul>
+
+<hr>
+
+<h2>1. O primeiro <code>..</code></h2>
+
+<pre class="file" data-file="ola.lua">local nome = "Ana"
+print("Olá, " .. nome .. "!")
+</pre>
+
+<dl class="anatomy">
+  <dt>local nome = "Ana"</dt><dd>Uma variável com um texto (veja <a href="variaveis.html">Variáveis</a> e <a href="local.html">local × Global</a>). Texto, em programação, se chama <strong>string</strong> ("cordão", em inglês): uma sequência de caracteres entre aspas. A aula <a href="strings.html">Strings</a> conta tudo sobre eles.</dd>
+  <dt>"Olá, "</dt><dd>O primeiro pedaço: um texto escrito direto no código, com um espaço <strong>no fim</strong>, antes da aspa.</dd>
+  <dt>..</dt><dd>O operador de <strong>concatenação</strong>: dois pontos seguidos, sem nada entre eles. Ele pega o que está à esquerda e o que está à direita e devolve um texto só, com os dois encostados.</dd>
+  <dt>nome</dt><dd>O segundo pedaço: o <strong>valor</strong> da variável (<code>Ana</code>), não a palavra "nome". Sem aspas, o Lua entende que é uma variável.</dd>
+  <dt>.. "!"</dt><dd>Mais um <code>..</code>, mais um pedaço. Dá para encadear quantos você quiser: o Lua junta todos, da esquerda para a direita, num texto só.</dd>
+  <dt>print(…)</dt><dd>Mostra o texto pronto (veja <a href="print.html">print()</a>). O <code>print</code> recebe <strong>um</strong> valor só: o bilhete já montado.</dd>
+</dl>
+
+<pre class="term">$ lua ola.lua
+Olá, Ana!</pre>
+
+<h3>No modo interativo</h3>
+<p>O <code>&gt;</code> do Lua (veja <a href="repl.html">O Modo Interativo</a>) é um ótimo lugar para brincar com o <code>..</code>: digite a expressão e ele mostra o resultado na hora, sem precisar de <code>print</code>.</p>
+
+<pre class="term">$ lua
+Lua 5.5.0  Copyright (C) 1994-2025 Lua.org, PUC-Rio
+&gt; "Ana" .. " " .. "Lima"
+Ana Lima
+&gt; nome = "Ana"
+&gt; "Olá, " .. nome .. "!"
+Olá, Ana!
+&gt; os.exit()</pre>
+
+<p>Na primeira linha, o pedaço do meio é <code>" "</code>: um texto que tem só um espaço dentro. É a "etiqueta do espaço".</p>
+
+<hr>
+
+<h2>2. O espaço é por sua conta</h2>
+<p>O <code>..</code> não adivinha nada: ele cola os pedaços <strong>exatamente</strong> como estão. Compare as duas linhas:</p>
+
+<pre class="file" data-file="nome_completo.lua">local nome = "Ana"
+local sobrenome = "Lima"
+print(nome .. sobrenome)
+print(nome .. " " .. sobrenome)
+local completo = nome .. " " .. sobrenome
+print("Nome completo: " .. completo)
+print(#completo)
+</pre>
+
+<pre class="term">$ lua nome_completo.lua
+AnaLima
+Ana Lima
+Nome completo: Ana Lima
+8</pre>
+
+<ul>
+  <li><code>nome .. sobrenome</code> deu <code>AnaLima</code>, tudo grudado. Nenhum dos dois textos tinha espaço.</li>
+  <li><code>nome .. " " .. sobrenome</code> deu <code>Ana Lima</code>: o espaço entrou como um pedaço próprio.</li>
+  <li><code>local completo = …</code> guardou o resultado numa variável nova. Um texto montado com <code>..</code> é um texto como outro qualquer: pode ser guardado, mostrado, juntado de novo.</li>
+  <li><code>#completo</code> mostra o <strong>tamanho</strong> do texto: 8 (3 letras de "Ana", 1 espaço, 4 de "Lima"). O <code>#</code> tem aula própria: <a href="operador-tamanho.html">O Operador de Tamanho (#)</a>.</li>
+</ul>
+
+<div class="tip">
+<strong>Os espaços em volta do <code>..</code> não contam</strong>
+<p>Os espaços que você põe <strong>fora</strong> das aspas, em volta do operador (<code>nome .. " "</code>), são só para o código ficar legível; o Lua ignora. <code>"Total: "..total</code> e <code>"Total: " .. total</code> dão o mesmo resultado. Os espaços que aparecem na saída são os de <strong>dentro</strong> das aspas. Neste guia, escrevemos sempre com um espaço de cada lado do <code>..</code>, que é mais fácil de ler (e, com números, evita um erro que você vai ver na seção 3).</p>
+</div>
+
+<div class="trylua" data-goal="out:Olá, Ana Lima!">
+<p class="try-task"><strong>Missão:</strong> o programa já tem o sobrenome guardado, mas não usa. Faça ele mostrar <code>Olá, Ana Lima!</code>, com um espaço entre o nome e o sobrenome. Depois, troque os nomes pelos seus.</p>
+<pre class="script" data-file="main.lua">local nome = "Ana"
+local sobrenome = "Lima"
+print("Olá, " .. nome .. "!")
+</pre>
+<pre class="solucao" data-file="main.lua">local nome = "Ana"
+local sobrenome = "Lima"
+print("Olá, " .. nome .. " " .. sobrenome .. "!")
+</pre>
+</div>
+
+<hr>
+
+<h2>3. Texto com número</h2>
+<p>Na padaria, a Ana quer mostrar a quantidade de pães e o preço. Esses valores são <strong>números</strong>, não textos (veja <a href="numeros.html">Números</a>). O <code>..</code> aceita números: ele os transforma em texto antes de colar.</p>
+
+<pre class="file" data-file="numeros.lua">local quantidade = 3
+local preco = 4.5
+print("Pães: " .. quantidade)
+print("Preço: R$ " .. preco)
+print("Total: R$ " .. quantidade * preco)
+print("Metade: " .. 10 / 2)
+print(1 .. 2)
+print(type(1 .. 2))
+print(10 .. "")
+</pre>
+
+<pre class="term">$ lua numeros.lua
+Pães: 3
+Preço: R$ 4.5
+Total: R$ 13.5
+Metade: 5.0
+12
+string
+10</pre>
+
+<dl class="anatomy">
+  <dt>"Pães: " .. quantidade</dt><dd>O número 3 virou o texto <code>3</code> e foi colado.</dd>
+  <dt>"Preço: R$ " .. preco</dt><dd>O número com casas decimais (um <strong>float</strong>) aparece como o Lua o escreve: <code>4.5</code>, com <strong>ponto</strong>, e sem o zero do fim (não é <code>4.50</code>). Para mostrar dinheiro com duas casas, use o <code>string.format</code> (aula <a href="string-format.html">string.format</a>).</dd>
+  <dt>"Total: R$ " .. quantidade * preco</dt><dd>Primeiro o Lua faz a conta (<code>3 * 4.5</code> = <code>13.5</code>), depois cola. A multiplicação vem antes da concatenação: a seção 5 explica.</dd>
+  <dt>"Metade: " .. 10 / 2</dt><dd>A divisão com <code>/</code> sempre dá float, então o texto sai <code>5.0</code>, e não <code>5</code> (veja <a href="divisao.html">Divisão</a>).</dd>
+  <dt>1 .. 2</dt><dd>Dois números colados viram o <strong>texto</strong> <code>12</code>. Não é uma conta: é o 1 encostado no 2.</dd>
+  <dt>type(1 .. 2)</dt><dd>O <code>type</code> confirma (veja <a href="type.html">type</a>): o resultado de um <code>..</code> é <strong>sempre</strong> uma <code>string</code>, mesmo quando os dois lados são números.</dd>
+  <dt>10 .. ""</dt><dd>Colar um texto vazio (<code>""</code>, duas aspas sem nada dentro) é um truque para transformar um número em texto. O jeito mais claro de fazer isso é <code>tostring(10)</code> (veja <a href="conversao.html">Conversão</a>).</dd>
+</dl>
+
+<div class="note">
+<strong>Em outras versões do Lua</strong>
+<p>No Lua 5.1 e no LuaJIT (usados no Neovim, no LÖVE e no OpenResty), não existe a separação entre inteiro e float, e o <code>10 / 2</code> é escrito sem o <code>.0</code>. No lab, a mesma linha deu:</p>
+<pre class="term">$ lua -e 'print("Metade: " .. 10 / 2)'
+Metade: 5.0
+$ lua5.4 -e 'print("Metade: " .. 10 / 2)'
+Metade: 5.0
+$ lua5.1 -e 'print("Metade: " .. 10 / 2)'
+Metade: 5
+$ luajit -e 'print("Metade: " .. 10 / 2)'
+Metade: 5</pre>
+<p>Mais diferenças em <a href="versoes.html">Lua 5.1, LuaJIT, 5.4 e 5.5</a>.</p>
+</div>
+
+<h3>Cuidado: <code>1..2</code>, tudo colado, é erro</h3>
+<p>Com <strong>números escritos direto no código</strong>, os espaços em volta do <code>..</code> fazem diferença. Veja o que acontece sem eles:</p>
+
+<pre class="file" data-file="colado.lua">print(1..2)
+</pre>
+
+<pre class="term">$ lua colado.lua
+lua: colado.lua:1: malformed number near '1..2'</pre>
+
+<p>"Número malformado perto de <code>1..2</code>". Quando o Lua lê um número, ele aceita um ponto no meio (<code>1.5</code>). Ao ver <code>1.</code>, ele acha que vem um número com casas decimais, encontra outro ponto e não entende mais nada: para ele, <code>1..2</code> é um número escrito errado, não "1, junta, 2". É um <strong>erro de sintaxe</strong>: o programa nem começa a rodar. Basta um espaço <strong>depois do número</strong> para resolver. No modo interativo:</p>
+
+<pre class="term">$ lua
+Lua 5.5.0  Copyright (C) 1994-2025 Lua.org, PUC-Rio
+&gt; 1 .. 2
+12
+&gt; 1..2
+stdin:1: malformed number near '1..2'
+&gt; os.exit()</pre>
+
+<p>E se só um dos lados tiver espaço? <code>1 ..2</code> funciona (o espaço depois do 1 já separa), mas <code>1.. 2</code> não:</p>
+
+<pre class="term">$ lua -e 'print(1 ..2)'
+12
+$ lua -e 'print(1.. 2)'
+lua: (command line):1: malformed number near '1..'</pre>
+
+<p>Com <strong>variáveis</strong> não há esse problema (<code>x..2</code> funciona, porque <code>x</code> não é um número escrito), mas o costume de pôr um espaço de cada lado evita a dúvida.</p>
+
+<hr>
+
+<h2>4. O <code>..</code> cria um texto novo</h2>
+<p>Lembra das etiquetas que continuam na cartela? No Lua, um texto <strong>nunca muda</strong> depois de criado (os programadores dizem que strings são <strong>imutáveis</strong>; a aula <a href="strings.html">Strings</a> volta a esse assunto). O <code>..</code> não altera nenhum dos lados: ele fabrica um texto <strong>novo</strong>. Se você não guardar esse texto novo em algum lugar, ele se perde.</p>
+
+<p>Tanto que, sozinha numa linha, uma concatenação nem é aceita:</p>
+
+<pre class="file" data-file="imutavel.lua">local recado = "Comprar pão"
+recado .. " e leite"
+</pre>
+
+<pre class="term">$ lua imutavel.lua
+lua: imutavel.lua:2: syntax error near '..'</pre>
+
+<p>"Erro de sintaxe perto de <code>..</code>". O Lua não deixa você escrever uma linha que calcula um valor e o joga fora. Para o recado mudar, é preciso <strong>guardar</strong> o resultado de volta na variável, com o <code>=</code>:</p>
+
+<pre class="file" data-file="imutavel2.lua">local recado = "Comprar pão"
+local _ = recado .. " e leite"
+print(recado)
+recado = recado .. " e leite"
+print(recado)
+recado = recado .. ", café"
+print(recado)
+</pre>
+
+<pre class="term">$ lua imutavel2.lua
+Comprar pão
+Comprar pão e leite
+Comprar pão e leite, café</pre>
+
+<dl class="anatomy">
+  <dt>local _ = recado .. " e leite"</dt><dd>Faz a concatenação e guarda numa variável chamada <code>_</code> (um sublinhado: o nome que os programadores de Lua usam para "não vou usar isto"). O <code>recado</code> não foi tocado, e o primeiro <code>print</code> prova: ainda é <code>Comprar pão</code>.</dd>
+  <dt>recado = recado .. " e leite"</dt><dd>Lê-se da direita para a esquerda: o Lua monta <code>"Comprar pão" .. " e leite"</code>, e só então guarda o texto novo em <code>recado</code>, no lugar do antigo.</dd>
+  <dt>recado = recado .. ", café"</dt><dd>O mesmo truque, de novo: cada vez, o recado fica mais comprido. É assim que se vai "acrescentando" texto no Lua.</dd>
+</dl>
+
+<div class="tip">
+<strong>Muitos pedaços? Use <code>table.concat</code></strong>
+<p>Para juntar <strong>muitos</strong> pedaços (centenas de linhas de um relatório, por exemplo), repetir <code>texto = texto .. pedaco</code> é lento, porque cada vez o Lua fabrica um texto novo, cada vez maior. O jeito recomendado é guardar os pedaços numa lista e juntar tudo de uma vez com <code>table.concat</code>, que aparece no fim desta aula e tem aula própria: <a href="table-concat.html">table.concat</a>.</p>
+</div>
+
+<hr>
+
+<h2>5. <code>..</code> junto com contas</h2>
+<p>Quando uma linha mistura <code>..</code> com <code>+</code>, <code>-</code>, <code>*</code> ou <code>/</code>, o Lua faz <strong>as contas primeiro</strong> e concatena depois. Olhe com atenção a segunda linha:</p>
+
+<pre class="file" data-file="soma_texto.lua">print("Total: " .. 2 + 3)
+print("2" .. "3" + 1)
+print("A" .. "B" .. "C")
+</pre>
+
+<pre class="term">$ lua soma_texto.lua
+Total: 5
+24
+ABC</pre>
+
+<ul>
+  <li><code>"Total: " .. 2 + 3</code>: primeiro <code>2 + 3</code> = 5, depois <code>"Total: " .. 5</code>. Ótimo, era o que queríamos.</li>
+  <li><code>"2" .. "3" + 1</code>: o <code>+</code> vem primeiro, então o Lua faz <code>"3" + 1</code>. O texto <code>"3"</code> parece um número, e o Lua o converte para somar: dá 4. Só depois vem <code>"2" .. 4</code> = <code>24</code>. Quem esperava <code>"23" + 1</code> = 24 acertou por sorte; quem esperava <code>231</code> errou.</li>
+  <li><code>"A" .. "B" .. "C"</code>: sem contas, tudo é colado em ordem.</li>
+</ul>
+
+<p>Na dúvida, use <strong>parênteses</strong>: <code>"Total: " .. (2 + 3)</code> deixa claro o que vem primeiro. A ordem completa de todos os operadores está em <a href="precedencia.html">Precedência dos Operadores</a>.</p>
+
+<hr>
+
+<h2>6. <code>..</code> não é <code>+</code></h2>
+<p>Quem já viu outra linguagem de programação (JavaScript, Python, Java) costuma juntar textos com <code>+</code>. No Lua, o <code>+</code> é <strong>só para somar</strong>, e o <code>..</code> é <strong>só para juntar</strong>. Olhe o que cada um faz com <code>"10"</code> e <code>5</code>:</p>
+
+<pre class="file" data-file="mais2.lua">print("10" + 5)
+print("10" .. 5)
+</pre>
+
+<pre class="term">$ lua mais2.lua
+15
+105</pre>
+
+<p>Com <code>+</code>, o Lua tentou <strong>somar</strong>: converteu o texto <code>"10"</code> em número e deu 15. Com <code>..</code>, ele <strong>juntou</strong>: <code>10</code> encostado em <code>5</code> = <code>105</code>. E se o texto não for um número, o <code>+</code> dá erro (veja <a href="#errado">Quando dá errado</a>).</p>
+
+<hr>
+
+<h2 id="formas">Formas diferentes de fazer a mesma coisa</h2>
+<p>O <code>..</code> não é o único jeito de mostrar vários valores juntos. Este programa escreve a mesma informação de cinco formas:</p>
+
+<pre class="file" data-file="formas.lua">local nome, idade = "Ana", 30
+print("Nome: " .. nome .. ", idade: " .. idade)
+print(string.format("Nome: %s, idade: %d", nome, idade))
+print("Nome:", nome, "idade:", idade)
+io.write("Nome: ", nome, ", idade: ", idade, "\n")
+print(table.concat({"pão", "leite", "café"}, ", "))
+</pre>
+
+<pre class="term">$ lua formas.lua
+Nome: Ana, idade: 30
+Nome: Ana, idade: 30
+Nome:	Ana	idade:	30
+Nome: Ana, idade: 30
+pão, leite, café</pre>
+
+<dl class="anatomy">
+  <dt>print("Nome: " .. nome .. …)</dt><dd>A concatenação: você controla cada espaço e cada vírgula.</dd>
+  <dt>string.format("Nome: %s, idade: %d", …)</dt><dd>Um <strong>molde</strong>: o <code>%s</code> e o <code>%d</code> são lacunas preenchidas, em ordem, pelos valores depois da vírgula. É o melhor jeito quando há números para formatar (duas casas decimais, por exemplo). Aula própria: <a href="string-format.html">string.format</a>.</dd>
+  <dt>print("Nome:", nome, …)</dt><dd>Com <strong>vírgulas</strong>, o <code>print</code> recebe vários valores e os separa com uma <strong>tabulação</strong> (TAB), aquele espaço largo. Bom para olhar valores rapidamente, ruim para uma frase bonita.</dd>
+  <dt>io.write("Nome: ", nome, …, "\n")</dt><dd>O <code>io.write</code> também aceita vários valores, mas não põe <strong>nada</strong> entre eles e não pula linha sozinho (por isso o <code>"\n"</code> no fim; veja <a href="io-write.html">io.write()</a> e <a href="strings-escape.html">Caracteres de Escape</a>). Na prática, ele "concatena" na hora de escrever.</dd>
+  <dt>table.concat({…}, ", ")</dt><dd>Junta todos os itens de uma lista, com o separador que você escolher no meio (<code>", "</code>). Aula própria: <a href="table-concat.html">table.concat</a>.</dd>
+</dl>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Situação</th><th>Qual usar</th></tr>
+<tr><td>Uma frase com poucos pedaços: <code>"Olá, " .. nome</code></td><td><code>..</code></td></tr>
+<tr><td>Frase com números que precisam de formato (R$ 4,50 com duas casas, alinhamento)</td><td><code>string.format</code></td></tr>
+<tr><td>Olhar o valor de algumas variáveis rapidinho, para conferir</td><td><code>print(a, b, c)</code> com vírgulas</td></tr>
+<tr><td>Escrever pedaços na mesma linha, sem guardar o texto</td><td><code>io.write(a, b, c)</code></td></tr>
+<tr><td>Juntar os itens de uma lista, ou muitos pedaços</td><td><code>table.concat</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+<p>O <code>..</code> só aceita <strong>textos e números</strong>. Qualquer outra coisa de um dos lados (<code>nil</code>, <code>true</code>/<code>false</code>, uma tabela) faz o programa parar com um erro. Os erros abaixo acontecem com o programa <strong>rodando</strong>, na linha do <code>..</code>.</p>
+
+<div class="cenario">
+<strong>Concatenou uma variável que não existe (<code>nil</code>)</strong>
+<p>Este é, de longe, o erro mais comum com <code>..</code>. A Ana esqueceu de criar a variável <code>sobrenome</code>:</p>
+<pre class="file" data-file="nil1.lua">local nome = "Ana"
+print("Olá, " .. nome .. " " .. sobrenome)
+</pre>
+<pre class="term">$ lua nil1.lua
+lua: nil1.lua:2: attempt to concatenate a nil value (global 'sobrenome')
+stack traceback:
+	nil1.lua:2: in main chunk
+	[C]: in ?
+$ echo $?
+1</pre>
+<p>Linha por linha:</p>
+<dl class="anatomy">
+  <dt>lua: nil1.lua:2:</dt><dd>Quem reclama é o <code>lua</code>; o problema está no arquivo <code>nil1.lua</code>, na <strong>linha 2</strong>.</dd>
+  <dt>attempt to concatenate a nil value</dt><dd>"Tentativa de concatenar um valor <code>nil</code>". Um dos pedaços do <code>..</code> era <code>nil</code>, o "nada" do Lua (veja <a href="nil.html">O Valor nil</a>). Variável que nunca recebeu valor vale <code>nil</code>.</dd>
+  <dt>(global 'sobrenome')</dt><dd>O Lua diz <strong>qual</strong> pedaço era <code>nil</code>: a variável <code>sobrenome</code>. Ele a chama de <strong>global</strong> porque ela não foi declarada com <code>local</code> (um nome que nunca foi criado é procurado entre as globais; veja <a href="local.html">local × Global</a>).</dd>
+  <dt>stack traceback: …</dt><dd>O "rastro" de onde o programa estava: na linha 2 do programa principal (<code>main chunk</code>), que foi chamado pelo próprio <code>lua</code> (<code>[C]: in ?</code>). Em programas pequenos, a primeira linha do erro já basta. A aula <a href="erros.html">Lendo uma Mensagem de Erro</a> detalha.</dd>
+  <dt>echo $? → 1</dt><dd>O código de saída: 1 quer dizer "terminou com erro".</dd>
+</dl>
+<p>O Lua muda o fim da mensagem conforme o tipo de variável. Com uma variável <code>local</code> criada sem valor, sai <code>(local 'sobrenome')</code>; com um campo de tabela que não existe, sai <code>(field 'sobrenome')</code>:</p>
+<pre class="file" data-file="nil3.lua">local sobrenome
+print("Ana " .. sobrenome)
+</pre>
+<pre class="term">$ lua nil3.lua
+lua: nil3.lua:2: attempt to concatenate a nil value (local 'sobrenome')
+stack traceback:
+	nil3.lua:2: in main chunk
+	[C]: in ?</pre>
+<pre class="file" data-file="nil2.lua">local cliente = {nome = "Ana"}
+print(cliente.nome .. " " .. cliente.sobrenome)
+</pre>
+<pre class="term">$ lua nil2.lua
+lua: nil2.lua:2: attempt to concatenate a nil value (field 'sobrenome')
+stack traceback:
+	nil2.lua:2: in main chunk
+	[C]: in ?</pre>
+<p><strong>Como consertar:</strong> confira o nome da variável (um erro de digitação, como <code>sobrenme</code>, também dá <code>nil</code>) e se ela recebeu valor antes daquela linha. Se ela <strong>pode</strong> mesmo ficar sem valor, troque o <code>nil</code> por um texto com <code>or</code>: <code>(sobrenome or "")</code>. Os parênteses são obrigatórios; o porquê está em <a href="operadores-logicos.html">and, or e not</a>.</p>
+</div>
+
+<div class="cenario">
+<strong>Concatenou <code>true</code> ou <code>false</code></strong>
+<pre class="file" data-file="bool.lua">local pago = true
+print("Pago: " .. pago)
+</pre>
+<pre class="term">$ lua bool.lua
+lua: bool.lua:2: attempt to concatenate a boolean value (local 'pago')
+stack traceback:
+	bool.lua:2: in main chunk
+	[C]: in ?</pre>
+<p>"Tentativa de concatenar um valor booleano". O <code>..</code> transforma números em texto sozinho, mas <strong>não</strong> transforma <code>true</code>/<code>false</code> (veja <a href="booleanos.html">Booleanos</a>). <strong>Como consertar:</strong> converta com <code>tostring</code>. O mesmo vale para o <code>nil</code>, se você quiser ver a palavra <code>nil</code> escrita:</p>
+<pre class="file" data-file="bool2.lua">local pago = true
+print("Pago: " .. tostring(pago))
+local sobrenome = nil
+print("Sobrenome: " .. (sobrenome or "(não informado)"))
+print("Sobrenome: " .. tostring(sobrenome))
+</pre>
+<pre class="term">$ lua bool2.lua
+Pago: true
+Sobrenome: (não informado)
+Sobrenome: nil</pre>
+</div>
+
+<div class="cenario">
+<strong>Concatenou uma tabela</strong>
+<pre class="file" data-file="tabela.lua">local compras = {"pão", "leite"}
+print("Lista: " .. compras)
+</pre>
+<pre class="term">$ lua tabela.lua
+lua: tabela.lua:2: attempt to concatenate a table value (local 'compras')
+stack traceback:
+	tabela.lua:2: in main chunk
+	[C]: in ?</pre>
+<p>Uma tabela (veja <a href="tabelas.html">Tabelas</a>) é uma caixa com vários valores dentro; o Lua não sabe como "colar" uma caixa inteira num texto. <strong>Como consertar:</strong> junte os itens com <code>table.concat(compras, ", ")</code> e concatene o resultado, que é um texto: <code>"Lista: " .. table.concat(compras, ", ")</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Usou <code>+</code> para juntar textos</strong>
+<pre class="file" data-file="mais.lua">local nome = "Ana"
+print("Olá, " + nome)
+</pre>
+<pre class="term">$ lua mais.lua
+lua: mais.lua:2: attempt to add a 'string' with a 'string'
+stack traceback:
+	[C]: in metamethod 'add'
+	mais.lua:2: in main chunk
+	[C]: in ?</pre>
+<p>"Tentativa de somar uma <code>string</code> com uma <code>string</code>". O <code>+</code> tentou fazer uma <strong>conta</strong> e não conseguiu transformar <code>"Olá, "</code> nem <code>"Ana"</code> em números. A linha <code>[C]: in metamethod 'add'</code> no rastro é o mecanismo interno do Lua que tentou a soma com textos (o nome "metamétodo" vai aparecer bem mais adiante, em <a href="metatabelas.html">Metatabelas</a>; por enquanto, pode ignorar). <strong>Como consertar:</strong> troque o <code>+</code> por <code>..</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Escreveu <code>1..2</code> sem espaço</strong>
+<pre class="term">$ lua colado.lua
+lua: colado.lua:1: malformed number near '1..2'</pre>
+<p>Como você viu na seção 3: com número escrito direto no código, o ponto do <code>..</code> se confunde com o ponto decimal. Repare que esse erro não tem <code>stack traceback</code>: é um erro de <strong>sintaxe</strong>, encontrado antes de o programa começar. <strong>Como consertar:</strong> <code>1 .. 2</code>.</p>
+</div>
+
+<div class="trylua" data-goal="out:Cliente: Ana;;semerro">
+<p class="try-task"><strong>Missão:</strong> este programa para com <code>attempt to concatenate a nil value (local 'sobrenome')</code>, porque a cliente não informou o sobrenome. Rode para ver o erro e conserte a linha do <code>print</code> para o programa mostrar o nome mesmo sem sobrenome (dica: <code>(sobrenome or "")</code>).</p>
+<pre class="script" data-file="main.lua">local nome = "Ana"
+local sobrenome
+print("Cliente: " .. nome .. " " .. sobrenome)
+</pre>
+<pre class="solucao" data-file="main.lua">local nome = "Ana"
+local sobrenome
+print("Cliente: " .. nome .. " " .. (sobrenome or ""))
+</pre>
+</div>
+
+<hr>
+
+<h2>Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>Resultado</th><th>Observação</th></tr>
+<tr><td><code>"Olá, " .. "Ana"</code></td><td><code>Olá, Ana</code></td><td>Junta, encostado</td></tr>
+<tr><td><code>nome .. " " .. sobrenome</code></td><td><code>Ana Lima</code></td><td>O espaço é um pedaço</td></tr>
+<tr><td><code>"Pães: " .. 3</code></td><td><code>Pães: 3</code></td><td>Número vira texto sozinho</td></tr>
+<tr><td><code>"Metade: " .. 10 / 2</code></td><td><code>Metade: 5.0</code></td><td>A conta vem antes; <code>/</code> dá float</td></tr>
+<tr><td><code>1 .. 2</code></td><td><code>12</code> (texto)</td><td>Com espaço depois do número</td></tr>
+<tr><td><code>1..2</code></td><td>erro: <code>malformed number</code></td><td>Erro de sintaxe</td></tr>
+<tr><td><code>x = x .. "mais"</code></td><td><code>x</code> fica maior</td><td>O <code>..</code> cria um texto novo; guarde-o</td></tr>
+<tr><td><code>"P: " .. tostring(true)</code></td><td><code>P: true</code></td><td>Booleano precisa de <code>tostring</code></td></tr>
+<tr><td><code>"S: " .. (s or "")</code></td><td><code>S: </code></td><td>Proteção contra <code>nil</code></td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Mensagem</th><th>Causa provável</th></tr>
+<tr><td><code>attempt to concatenate a nil value (global '…')</code></td><td>Variável que não existe ou com o nome digitado errado</td></tr>
+<tr><td><code>attempt to concatenate a nil value (local '…')</code></td><td>Variável <code>local</code> criada sem valor</td></tr>
+<tr><td><code>attempt to concatenate a nil value (field '…')</code></td><td>Campo de tabela que não existe</td></tr>
+<tr><td><code>attempt to concatenate a boolean value</code></td><td><code>true</code>/<code>false</code> no <code>..</code>: use <code>tostring</code></td></tr>
+<tr><td><code>attempt to concatenate a table value</code></td><td>Tabela no <code>..</code>: use <code>table.concat</code></td></tr>
+<tr><td><code>attempt to add a 'string' with a 'string'</code></td><td>Usou <code>+</code> no lugar de <code>..</code></td></tr>
+<tr><td><code>malformed number near '1..2'</code></td><td>Número colado no <code>..</code>: ponha espaços</td></tr>
+<tr><td><code>syntax error near '..'</code></td><td>Uma concatenação sozinha na linha: guarde o resultado (<code>x = x .. …</code>)</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. Complete a concatenação</h3>
+<p>Complete para o programa mostrar <code>Bom dia, Ana!</code>:</p>
+<div class="ex-code">local nome = "Ana"<br>print("Bom dia, " <input data-answer=".." aria-label="operador"> nome .. <input data-answer="&quot;!&quot;|'!'" aria-label="último pedaço">)</div>
+</div>
+
+<div class="exercise">
+<h3>2. O que aparece?</h3>
+<p>O que este programa mostra?</p>
+<pre class="file" data-file="ex2.lua">local a = 4
+print(a .. 2)
+</pre>
+<div class="ex-code">Mostra <input data-answer="42" aria-label="saída"></div>
+</div>
+
+<div class="mc" data-answer="3">
+<p class="mc-q">3. O que <code>print("Total: " .. 2 + 3)</code> mostra?</p>
+<label><input type="radio" name="q3"> <code>Total: 23</code></label>
+<label><input type="radio" name="q3"> Um erro, porque não dá para somar texto</label>
+<label><input type="radio" name="q3"> <code>Total: 5</code></label>
+<label><input type="radio" name="q3"> <code>Total: 2 + 3</code></label>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">4. Depois de <code>local r = "pão"</code> e <code>local s = r .. " e leite"</code>, quanto vale <code>r</code>?</p>
+<label><input type="radio" name="q4"> <code>pão e leite</code></label>
+<label><input type="radio" name="q4"> <code>pão</code></label>
+<label><input type="radio" name="q4"> <code>nil</code></label>
+<label><input type="radio" name="q4"> <code> e leite</code></label>
+</div>
+
+<div class="mc" data-answer="1">
+<p class="mc-q">5. Um programa parou com <code>attempt to concatenate a nil value (global 'cidade')</code>. O que provavelmente aconteceu?</p>
+<label><input type="radio" name="q5"> A variável <code>cidade</code> não foi criada, ou o nome foi digitado diferente</label>
+<label><input type="radio" name="q5"> Faltaram os espaços em volta do <code>..</code></label>
+<label><input type="radio" name="q5"> A cidade tinha acento</label>
+<label><input type="radio" name="q5"> O <code>..</code> não aceita números</label>
+</div>
+
+<div class="mc" data-answer="4">
+<p class="mc-q">6. Qual destas linhas dá <strong>erro de sintaxe</strong>?</p>
+<label><input type="radio" name="q6"> <code>print(1 .. 2)</code></label>
+<label><input type="radio" name="q6"> <code>print("a".."b")</code></label>
+<label><input type="radio" name="q6"> <code>print(1 ..2)</code></label>
+<label><input type="radio" name="q6"> <code>print(1..2)</code></label>
+</div>
+
+<h3>Missão final: a linha do recibo</h3>
+
+<div class="trylua" data-goal="out:6 x pão = R$ 4.5;;src:\.\.">
+<p class="try-task"><strong>Missão:</strong> na padaria, a Ana quer imprimir a linha do recibo no formato <code>6 x pão = R$ 4.5</code>. Use <code>..</code> para montar a linha com as variáveis <code>quantidade</code>, <code>item</code> e o total (<code>quantidade * preco</code>). Cuidado com os espaços!</p>
+<pre class="script" data-file="main.lua">local item = "pão"
+local quantidade = 6
+local preco = 0.75
+print("Recibo da padaria")
+-- monte a linha do recibo aqui
+</pre>
+<pre class="solucao" data-file="main.lua">local item = "pão"
+local quantidade = 6
+local preco = 0.75
+print("Recibo da padaria")
+print(quantidade .. " x " .. item .. " = R$ " .. quantidade * preco)
+</pre>
+</div>
+
+<p>O <code>4.5</code> do fim ainda não parece dinheiro (o certo seria <code>4.50</code>). Para isso existe o <code>string.format("%.2f", total)</code>, na aula <a href="string-format.html">string.format</a>.</p>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li><code>..</code> (dois pontos) junta textos, um encostado no outro. Isso se chama <strong>concatenação</strong>. O resultado é sempre uma <code>string</code>.</li>
+  <li>O <code>..</code> não põe espaço: o espaço tem de estar dentro das aspas (<code>"Olá, "</code>) ou ser um pedaço próprio (<code>" "</code>).</li>
+  <li>Números viram texto sozinhos (<code>"Total: " .. 30</code>). Com número escrito no código, ponha espaço: <code>1 .. 2</code> dá <code>12</code>, e <code>1..2</code> é <code>malformed number</code>.</li>
+  <li>O <code>..</code> cria um texto novo e não muda o original. Para "acrescentar", guarde de volta: <code>recado = recado .. " e leite"</code>.</li>
+  <li>As contas vêm antes do <code>..</code>: <code>"Total: " .. 2 + 3</code> dá <code>Total: 5</code>. Na dúvida, use parênteses.</li>
+  <li><code>nil</code>, <code>true</code>/<code>false</code> e tabelas no <code>..</code> param o programa com <code>attempt to concatenate a … value</code>. Use <code>tostring(v)</code>, <code>(v or "")</code> ou <code>table.concat</code>.</li>
+  <li>Para juntar textos, é <code>..</code>; o <code>+</code> é só para somar.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
