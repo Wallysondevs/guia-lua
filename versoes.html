@@ -1,0 +1,627 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua versões — 5.1, LuaJIT, 5.2, 5.3, 5.4, 5.5 e Luau: as diferenças | Guia Lua</title>
+<meta name="description" content="As diferenças entre as versões do Lua com saídas reais do lua5.1, luajit, lua5.4 e lua 5.5: inteiros e float (3/2, math.type), //, operadores de bits, goto, unpack × table.unpack, setfenv × _ENV, &lt;const&gt;, a variável do for, global, números com mais dígitos, identificador com acento, e o Luau do Roblox.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">5.1, LuaJIT, 5.4 e 5.5</span>: as Diferenças</h1>
+
+<p class="intro">Este guia ensina o <strong>Lua 5.5</strong>. Mas, como você viu em <a href="lua-no-mundo.html">Onde o Lua É Usado</a>, muita gente usa um Lua mais antigo: o 5.1 (Neovim, Redis, World of Warcraft), o LuaJIT (LÖVE, OpenResty), o 5.4 (Pandoc, o Debian), o Luau (Roblox). Cada versão nova acrescentou coisas e, às vezes, mudou o comportamento de coisas antigas. Esta aula põe as versões lado a lado, rodando <strong>o mesmo programa</strong> em cada uma, para você saber o que esperar quando o seu código for parar em outro lugar.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>A linha do tempo das versões e como descobrir qual você está usando (<code>lua -v</code>, <code>_VERSION</code>, <code>jit</code>).</li>
+  <li>Números: inteiro e float (<code>3 / 2</code>, <code>10 / 2</code>, <code>math.type</code>), o jeito de mostrar os números, os inteiros grandes.</li>
+  <li>Os operadores <code>//</code> e de bits (<code>&amp;</code>, <code>|</code>, <code>~</code>, <code>&lt;&lt;</code>, <code>&gt;&gt;</code>), e a biblioteca <code>bit</code> do LuaJIT.</li>
+  <li><code>goto</code>, <code>unpack</code> × <code>table.unpack</code>, <code>setfenv</code> × <code>_ENV</code>, <code>utf8</code>.</li>
+  <li><code>&lt;const&gt;</code>, a variável do <code>for</code> que não pode mudar, a declaração <code>global</code> e o identificador com acento.</li>
+  <li>O que é diferente no <strong>Luau</strong>, e como escrever código que roda em várias versões.</li>
+</ul>
+</div>
+
+<p>Todas as saídas desta aula saíram da máquina da Ana (usuária <code>ana</code>, computador <code>notebook</code>, Ubuntu), que tem quatro interpretadores instalados lado a lado: <code>lua</code> (o 5.5), <code>lua5.4</code>, <code>lua5.1</code> e <code>luajit</code>. O <strong>5.2</strong> e o <strong>5.3</strong> não estão lá: o que esta aula diz deles vem dos manuais oficiais (<a href="https://www.lua.org/manual/">lua.org/manual</a>). O <strong>Luau</strong> também não roda lá; o que está escrito sobre ele vem do site oficial (<a href="https://luau.org/">luau.org</a>) e não foi executado.</p>
+
+<hr>
+
+<h2>A ideia: o português do Brasil e o de Portugal</h2>
+<p>Uma pessoa de Lisboa e uma de Recife conversam sem problema: é a mesma língua. Mas a de Lisboa pede um "pequeno-almoço" e pega o "autocarro", e as duas escrevem algumas palavras diferente. Quem só conhece um lado leva um susto no começo, e depois se acostuma.</p>
+<p>As versões do Lua são assim. O "miolo" (variáveis, tabelas, <code>if</code>, <code>for</code>, funções, metatabelas) é igual em todas. As diferenças estão nas pontas: um operador que não existe, uma função que mudou de lugar, um número mostrado de outro jeito. Esta aula é o "dicionário" dessas pontas.</p>
+
+<hr>
+
+<h2>1. A linha do tempo</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Versão</th><th>Lançada</th><th>O que trouxe de mais marcante</th><th>Quem usa hoje (exemplos)</th></tr>
+<tr><td><strong>5.1</strong></td><td>fev. 2006</td><td>módulos (<code>require</code>, <code>package</code>)</td><td>Neovim, Redis, World of Warcraft</td></tr>
+<tr><td><strong>LuaJIT 2.x</strong></td><td>—</td><td>outra implementação do 5.1, muito rápida, com extras (<code>bit</code>, <code>ffi</code>, <code>goto</code>)</td><td>LÖVE, Defold, OpenResty, Neovim</td></tr>
+<tr><td><strong>Luau</strong></td><td>—</td><td>derivado do 5.1 pelo Roblox, com tipos opcionais</td><td>Roblox</td></tr>
+<tr><td><strong>5.2</strong></td><td>dez. 2011</td><td><code>_ENV</code> (no lugar do <code>setfenv</code>), <code>goto</code>, <code>table.unpack</code></td><td>Wireshark até a 4.2</td></tr>
+<tr><td><strong>5.3</strong></td><td>jan. 2015</td><td><strong>inteiros</strong>, <code>//</code>, operadores de bits, <code>utf8</code>, <code>string.pack</code></td><td>—</td></tr>
+<tr><td><strong>5.4</strong></td><td>jun. 2020</td><td><code>&lt;const&gt;</code>, <code>&lt;close&gt;</code>, coletor generacional</td><td>Pandoc, Wireshark novo, o Debian</td></tr>
+<tr><td><strong>5.5</strong></td><td>dez. 2025</td><td><code>global</code>, variável do <code>for</code> constante, varargs com nome, listas menores</td><td>este guia</td></tr>
+</table>
+</div>
+<p>As datas são as da página oficial de versões (<a href="https://www.lua.org/versions.html">lua.org/versions.html</a>), que também avisa que não haverá mais versões do 5.4 e que, em outubro de 2026, a mais recente do 5.5 é a 5.5.1 (o Ubuntu da Ana e o editor do guia usam a 5.5.0; as "5.5.x" só corrigem defeitos).</p>
+
+<h3>Qual Lua eu tenho?</h3>
+<pre class="term">$ lua -v; lua5.4 -v; lua5.1 -v; luajit -v
+Lua 5.5.0  Copyright (C) 1994-2025 Lua.org, PUC-Rio
+Lua 5.4.8  Copyright (C) 1994-2025 Lua.org, PUC-Rio
+Lua 5.1.5  Copyright (C) 1994-2012 Lua.org, PUC-Rio
+LuaJIT 2.1.1761786044 -- Copyright (C) 2005-2025 Mike Pall. https://luajit.org/</pre>
+
+<p>De dentro de um programa (por exemplo, num jogo, onde não há terminal), use a variável <code>_VERSION</code> e, para o LuaJIT, a variável <code>jit</code>, que só existe nele:</p>
+
+<pre class="file" data-file="qualversao.lua">if jit then
+  print("LuaJIT, compatível com o " .. _VERSION)
+elseif _VERSION == "Lua 5.5" then
+  print("Lua 5.5: tem global, inteiros, // e bits")
+else
+  print("Outro Lua: " .. _VERSION)
+end
+</pre>
+
+<pre class="term">$ for L in lua lua5.4 lua5.1 luajit; do $L qualversao.lua; done
+Lua 5.5: tem global, inteiros, // e bits
+Outro Lua: Lua 5.4
+Outro Lua: Lua 5.1
+LuaJIT, compatível com o Lua 5.1</pre>
+
+<p>O <code>for L in …</code> é um laço do terminal (bash) que roda o mesmo arquivo com os quatro interpretadores, um depois do outro. Repare que o <code>_VERSION</code> do LuaJIT diz <code>Lua 5.1</code>: é a versão da linguagem que ele segue.</p>
+
+<hr>
+
+<h2>2. Números: inteiro e float</h2>
+<p>A maior mudança da história do Lua aconteceu no <strong>5.3</strong>: os números passaram a ter dois "subtipos", <strong>inteiro</strong> (<code>integer</code>) e <strong>com vírgula</strong> (<code>float</code>). Antes, todo número era float. Veja a diferença (aula <a href="numeros.html">Números</a>):</p>
+
+<pre class="file" data-file="numeros.lua">print(_VERSION)
+print(3 / 2, 10 / 2, 7 * 2, 2^3)
+print(math.type and math.type(10) or "sem math.type", math.type and math.type(10 / 2) or "")
+print(0.1 + 0.2, 1 / 3)
+print(math.maxinteger, 9007199254740993)
+</pre>
+
+<pre class="term">$ lua numeros.lua
+Lua 5.5
+1.5	5.0	14	8.0
+integer	float
+0.30000000000000004	0.33333333333333331
+9223372036854775807	9007199254740993
+$ lua5.4 numeros.lua
+Lua 5.4
+1.5	5.0	14	8.0
+integer	float
+0.3	0.33333333333333
+9223372036854775807	9007199254740993
+$ lua5.1 numeros.lua
+Lua 5.1
+1.5	5	14	8
+sem math.type
+0.3	0.33333333333333
+nil	9.007199254741e+15
+$ luajit numeros.lua
+Lua 5.1
+1.5	5	14	8
+sem math.type
+0.3	0.33333333333333
+nil	9.007199254741e+15</pre>
+
+<dl class="anatomy">
+  <dt>3 / 2 → 1.5</dt><dd>Igual em todas: a divisão <code>/</code> sempre dá o resultado com vírgula.</dd>
+  <dt>10 / 2 → 5.0 (5.4, 5.5) ou 5 (5.1, LuaJIT)</dt><dd>No 5.3 em diante, o <code>/</code> sempre dá um <strong>float</strong>, e um float inteiro é mostrado com <code>.0</code>. No 5.1 só existe float, e ele é mostrado sem o <code>.0</code>.</dd>
+  <dt>2^3 → 8.0 ou 8</dt><dd>A potência também dá float no 5.3+.</dd>
+  <dt>math.type</dt><dd>Só existe do 5.3 em diante: diz <code>integer</code> ou <code>float</code>. No 5.1 e no LuaJIT, ela é <code>nil</code> (por isso o <code>math.type and … or …</code>, que evita o erro).</dd>
+  <dt>0.1 + 0.2 → 0.30000000000000004 (só no 5.5)</dt><dd>Novidade do <strong>5.5</strong>: os floats são mostrados com <strong>dígitos suficientes</strong> para, lidos de volta, darem exatamente o mesmo número. O valor sempre foi esse; o 5.4 e o 5.1 é que arredondavam na hora de mostrar (para 14 dígitos). Por isso <code>1 / 3</code> mostra mais casas no 5.5.</dd>
+  <dt>math.maxinteger, 9007199254740993</dt><dd>No 5.3+, o maior inteiro é <code>9223372036854775807</code> e números inteiros enormes são guardados exatos. No 5.1, um número desse tamanho vira float e perde os últimos dígitos (<code>9.007199254741e+15</code>).</dd>
+</dl>
+
+<div class="warning">
+<strong>Inteiro que passa do limite</strong>
+<p>No 5.3+, somar 1 ao maior inteiro "dá a volta" para o menor: <code>math.maxinteger + 1</code> deu <code>-9223372036854775808</code> no lab (no 5.4 e no 5.5). No 5.1 e no LuaJIT, que só têm float, a conta equivalente com <code>2^63</code> deu <code>9.2233720368548e+18</code>. Com números do dia a dia isso nunca aparece.</p>
+</div>
+
+<hr>
+
+<h2>3. Divisão inteira <code>//</code> e operadores de bits</h2>
+<p>O <code>//</code> (divisão "para baixo", aula <a href="divisao.html">Divisão</a>) e os operadores de bits (aula <a href="operadores-bits.html">Operadores de Bits</a>) chegaram no <strong>5.3</strong>:</p>
+
+<pre class="file" data-file="divint.lua">print(7 // 2, 7.0 // 2, -7 // 2)
+</pre>
+<pre class="file" data-file="bits.lua">print(6 &amp; 3, 6 | 3, 6 ~ 3, 1 &lt;&lt; 4, 256 &gt;&gt; 4, ~0)
+</pre>
+
+<pre class="term">$ lua divint.lua
+3	3.0	-4
+$ lua5.4 divint.lua
+3	3.0	-4
+$ lua5.1 divint.lua
+lua5.1: divint.lua:1: unexpected symbol near '/'
+$ luajit divint.lua
+luajit: divint.lua:1: unexpected symbol near '/'
+$ lua bits.lua
+2	7	5	16	16	-1
+$ lua5.4 bits.lua
+2	7	5	16	16	-1
+$ lua5.1 bits.lua
+lua5.1: bits.lua:1: ')' expected near '&amp;'
+$ luajit bits.lua
+luajit: bits.lua:1: ')' expected near '&amp;'</pre>
+
+<p>No 5.1 e no LuaJIT, esses programas nem começam: é erro de <strong>sintaxe</strong>, o Lua não conhece o símbolo. Para a divisão inteira, lá se usa <code>math.floor(7 / 2)</code>. Para os bits, o LuaJIT tem a biblioteca <code>bit</code>, que não existe no Lua comum:</p>
+
+<pre class="file" data-file="bitlib.lua">print(bit.band(6, 3), bit.bor(6, 3), bit.bxor(6, 3), bit.lshift(1, 4))
+</pre>
+
+<pre class="term">$ luajit bitlib.lua
+2	7	5	16
+$ lua bitlib.lua
+lua: bitlib.lua:1: attempt to index a nil value (global 'bit')
+stack traceback:
+	bitlib.lua:1: in main chunk
+	[C]: in ?</pre>
+
+<p>(O Lua 5.2 tinha uma biblioteca parecida, a <code>bit32</code>, que o 5.3 marcou como obsoleta quando ganhou os operadores; o Luau usa a <code>bit32</code>.)</p>
+
+<hr>
+
+<h2>4. <code>goto</code></h2>
+<p>O <code>goto</code> (aula <a href="goto.html">goto e Rótulos</a>) entrou no <strong>5.2</strong>. O LuaJIT também aceita, como um extra:</p>
+
+<pre class="file" data-file="gt.lua">for i = 1, 3 do
+  if i == 2 then goto continue end
+  print(i)
+  ::continue::
+end
+</pre>
+
+<pre class="term">$ lua gt.lua
+1
+3
+$ lua5.4 gt.lua
+1
+3
+$ lua5.1 gt.lua
+lua5.1: gt.lua:2: '=' expected near 'continue'
+$ luajit gt.lua
+1
+3</pre>
+
+<p>No 5.1, <code>goto</code> é um nome comum, então <code>goto continue</code> parece "duas variáveis seguidas", e ele reclama que esperava um <code>=</code>. Atenção: o Neovim, mesmo usando o LuaJIT, pede que os plugins <strong>não</strong> usem <code>goto</code>, e o Luau não tem <code>goto</code> (lá existe o <code>continue</code>).</p>
+
+<hr>
+
+<h2>5. <code>unpack</code> × <code>table.unpack</code></h2>
+<p>No 5.1, a função que "desembrulha" uma lista se chamava <code>unpack</code>. No <strong>5.2</strong> ela foi para dentro da tabela <code>table</code> (aula <a href="table-unpack.html">table.unpack e table.pack</a>):</p>
+
+<pre class="file" data-file="unp.lua">local t = { "Ana", "Bia", "Caio" }
+print(table.unpack and "table.unpack existe" or "sem table.unpack", unpack and "unpack existe" or "sem unpack")
+print((table.unpack or unpack)(t))
+</pre>
+
+<pre class="term">$ lua unp.lua
+table.unpack existe	sem unpack
+Ana	Bia	Caio
+$ lua5.4 unp.lua
+table.unpack existe	sem unpack
+Ana	Bia	Caio
+$ lua5.1 unp.lua
+sem table.unpack	unpack existe
+Ana	Bia	Caio
+$ luajit unp.lua
+table.unpack existe	unpack existe
+Ana	Bia	Caio</pre>
+
+<p>O LuaJIT tem os dois. O truque <code>table.unpack or unpack</code> pega o que existir: é o jeito mais comum de escrever código que roda em todas as versões.</p>
+
+<div class="trylua" data-goal="out:Caio;;semerro;;src:table\.unpack">
+<p class="try-task"><strong>Missão:</strong> este programa foi escrito para o Lua 5.1 e, no 5.5 do editor, dá <code>attempt to call a nil value (global 'unpack')</code>. Faça ele rodar no 5.5 <strong>e</strong> continuar rodando no 5.1, com o truque do <code>or</code>, numa linha antes do <code>print</code>.</p>
+<pre class="script" data-file="main.lua">local nomes = { "Ana", "Bia", "Caio" }
+print(unpack(nomes))
+</pre>
+<pre class="solucao" data-file="main.lua">local unpack = table.unpack or unpack
+local nomes = { "Ana", "Bia", "Caio" }
+print(unpack(nomes))
+</pre>
+</div>
+
+<hr>
+
+<h2>6. <code>setfenv</code> × <code>_ENV</code></h2>
+<p>O "ambiente" é a tabela onde moram as variáveis globais (aula <a href="env.html">_G e _ENV</a>). No 5.1, para trocar o ambiente de uma função, usava-se <code>setfenv</code>. No <strong>5.2</strong>, ele foi trocado pela variável <code>_ENV</code>:</p>
+
+<pre class="file" data-file="env.lua">print("setfenv:", setfenv, "_ENV:", _ENV ~= nil)
+</pre>
+<pre class="file" data-file="env2.lua">local function rodar()
+  local _ENV = { print = print, nome = "Bia" }
+  print("Olá, " .. nome)
+end
+rodar()
+</pre>
+
+<pre class="term">$ lua env.lua
+setfenv:	nil	_ENV:	true
+$ lua5.1 env.lua
+setfenv:	function: 0x55a6aa99a700	_ENV:	false
+$ luajit env.lua
+setfenv:	function: builtin#11	_ENV:	false
+$ lua env2.lua
+Olá, Bia
+$ lua5.4 env2.lua
+Olá, Bia
+$ lua5.1 env2.lua
+lua5.1: env2.lua:3: attempt to concatenate global 'nome' (a nil value)
+stack traceback:
+	env2.lua:3: in function 'rodar'
+	env2.lua:5: in main chunk
+	[C]: ?</pre>
+
+<p>No 5.4 e no 5.5, o <code>local _ENV = …</code> faz a função enxergar só a tabela nova, onde <code>nome</code> é <code>"Bia"</code>. No 5.1 (e no LuaJIT, que deu o mesmo erro), <code>_ENV</code> é uma variável qualquer, sem poder nenhum, e o <code>nome</code> continua sendo procurado nas globais de sempre, onde não existe. (O endereço depois de <code>function:</code> muda a cada execução.)</p>
+
+<hr>
+
+<h2>7. <code>&lt;const&gt;</code>, <code>&lt;close&gt;</code> e a variável do <code>for</code></h2>
+<p>O <strong>5.4</strong> trouxe os atributos de variável <code>&lt;const&gt;</code> (aula <a href="const.html">Constantes</a>) e <code>&lt;close&gt;</code> (aula <a href="close.html">Fechamento Automático</a>):</p>
+
+<pre class="file" data-file="const2.lua">local TAXA &lt;const&gt; = 5
+TAXA = 6
+</pre>
+
+<pre class="term">$ lua const2.lua
+lua: const2.lua:2: attempt to assign to const variable 'TAXA'
+$ lua5.4 const2.lua
+lua5.4: const2.lua:2: attempt to assign to const variable 'TAXA'
+$ lua5.1 const2.lua
+lua5.1: const2.lua:1: unexpected symbol near '&lt;'
+$ luajit const2.lua
+luajit: const2.lua:1: unexpected symbol near '&lt;'</pre>
+
+<p>No 5.4 e no 5.5, a tentativa de mudar a constante é pega <strong>antes</strong> de rodar (não há <code>stack traceback</code>: é um erro de compilação). No 5.1 e no LuaJIT, o <code>&lt;</code> nem é entendido.</p>
+
+<h3>A variável do <code>for</code> virou constante <span class="versao">5.5</span></h3>
+<pre class="file" data-file="forvar.lua">for i = 1, 3 do
+  i = i * 2
+  print(i)
+end
+</pre>
+
+<pre class="term">$ lua forvar.lua
+lua: forvar.lua:2: attempt to assign to const variable 'i'
+$ lua5.4 forvar.lua
+2
+4
+6
+$ lua5.1 forvar.lua
+2
+4
+6
+$ luajit forvar.lua
+2
+4
+6</pre>
+
+<p>Até o 5.4, dava para mudar a variável de controle dentro do laço (o que mudava só a cópia daquela volta: o laço continuava 1, 2, 3). No <strong>5.5</strong>, ela é <strong>somente leitura</strong>. O manual do 5.5 manda, se você precisar mudar, declarar uma variável local com o mesmo nome dentro do laço (é a missão final). Mais em <a href="for-numerico.html">for Numérico</a>.</p>
+
+<hr>
+
+<h2>8. A declaração <code>global</code> <span class="versao">5.5</span></h2>
+<p>O <strong>5.5</strong> trouxe a declaração <code>global</code> (aula <a href="global.html">A Declaração global</a>). Depois dela, todo nome livre precisa ser declarado, até o <code>print</code>:</p>
+
+<pre class="file" data-file="glob.lua">global x = 10
+print(x)
+</pre>
+<pre class="file" data-file="glob2.lua">global print, x
+x = 10
+print(x)
+</pre>
+
+<pre class="term">$ lua glob.lua
+lua: glob.lua:2: variable 'print' not declared
+$ lua glob2.lua
+10
+$ lua5.4 glob2.lua
+lua5.4: glob2.lua:1: syntax error near 'print'
+$ lua5.1 glob2.lua
+lua5.1: glob2.lua:1: '=' expected near 'print'
+$ luajit glob2.lua
+luajit: glob2.lua:1: '=' expected near 'print'</pre>
+
+<p>No <code>glob.lua</code>, a linha 1 declarou só o <code>x</code>; a linha 2 usa o <code>print</code>, que não foi declarado, e o 5.5 recusa o programa antes de rodar. No <code>glob2.lua</code>, os dois foram declarados. Nas versões anteriores, <code>global</code> é um nome comum, e a linha vira erro de sintaxe.</p>
+
+<div class="note">
+<strong><code>global</code> ainda pode ser usado como nome (no 5.5.0 padrão)</strong>
+<p>O manual do 5.5 diz que <code>global</code> é uma palavra reservada (§8.1) e que a opção de compilação <code>LUA_COMPAT_GLOBAL</code> a transforma de volta num nome comum. Acontece que o <code>luaconf.h</code> oficial do Lua 5.5.0 já vem com essa opção <strong>ligada</strong> (<code>#define LUA_COMPAT_GLOBAL</code>), e é assim que o pacote do Ubuntu e o editor do guia foram compilados. Na prática, nesses dois, um programa antigo que usava <code>global</code> como nome de variável continua funcionando:</p>
+<pre class="file" data-file="glob3.lua">local global = 1
+print(global)
+</pre>
+<pre class="term">$ lua glob3.lua
+1</pre>
+<p>O <code>global</code> só vira declaração quando vem seguido de um nome, de <code>*</code>, de <code>&lt;</code> ou de <code>function</code>. Mesmo assim, não use <code>global</code> como nome em código novo: o manual avisa que as opções de compatibilidade vão sumir no futuro.</p>
+</div>
+
+<hr>
+
+<h2>9. Identificador com acento</h2>
+<pre class="file" data-file="acento.lua">local ação = 1
+print(ação)
+</pre>
+
+<pre class="term">$ lua acento.lua
+lua: acento.lua:1: unexpected symbol near '&lt;\195&gt;'
+$ lua5.4 acento.lua
+lua5.4: acento.lua:1: unexpected symbol near '&lt;\195&gt;'
+$ lua5.1 acento.lua
+lua5.1: acento.lua:1: unexpected symbol near '�'
+$ luajit acento.lua
+1</pre>
+
+<p>Nenhum Lua oficial aceita acento em nome de variável (aula <a href="nomes-variaveis.html">Nomes de Variáveis</a>). O 5.4 e o 5.5 mostram o primeiro byte do <code>ç</code> como <code>&lt;\195&gt;</code>; o 5.1 escreve o byte cru, que o terminal desenha como <code>�</code>. O LuaJIT aceita, mas é um comportamento só dele: não conte com isso.</p>
+
+<hr>
+
+<h2>10. Bibliotecas que nasceram depois</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Recurso</th><th>Desde</th><th>5.1</th><th>LuaJIT</th><th>No lab</th></tr>
+<tr><td><code>utf8</code> (aula <a href="utf8.html">utf8</a>)</td><td>5.3</td><td>não</td><td>não</td><td><code>utf8.len("ação")</code> → <code>4</code> no 5.4/5.5; <code>utf8</code> é <code>nil</code> no 5.1 e no LuaJIT</td></tr>
+<tr><td><code>string.pack</code> (aula <a href="string-pack.html">string.pack</a>)</td><td>5.3</td><td>não</td><td>não</td><td><code>nil</code> no 5.1 e no LuaJIT</td></tr>
+<tr><td><code>math.type</code>, <code>math.maxinteger</code></td><td>5.3</td><td>não</td><td>não</td><td>seção 2</td></tr>
+<tr><td><code>table.create</code></td><td>5.5</td><td>não</td><td>não</td><td><code>nil</code> no 5.4, no 5.1 e no LuaJIT</td></tr>
+<tr><td><code>collectgarbage("param", …)</code> (aula <a href="coleta-lixo.html">Coleta de Lixo</a>)</td><td>5.5</td><td>não</td><td>não</td><td>no 5.4: <code>invalid option 'param'</code></td></tr>
+<tr><td><code>utf8.offset</code> devolve início <strong>e fim</strong> do caractere</td><td>5.5</td><td>—</td><td>—</td><td><code>utf8.offset("Olá, coração", 3)</code> → <code>3	4</code> no 5.5 e só <code>3</code> no 5.4</td></tr>
+</table>
+</div>
+
+<p>Aquela última linha esconde uma pegadinha: no 5.4, <code>s:sub(utf8.offset(s, 3))</code> dava o texto <strong>do 3º caractere até o fim</strong>; no 5.5, o segundo valor vira o <strong>fim</strong> do <code>sub</code>, e a mesma linha recorta <strong>uma letra só</strong>. Colhido no lab, com <code>local s = "Olá, coração"</code>:</p>
+
+<pre class="file" data-file="uoff.lua">local s = "Olá, coração"
+print(utf8.offset(s, 3))
+print(s:sub(utf8.offset(s, 3)))
+print(s:sub((utf8.offset(s, 3))))
+</pre>
+
+<pre class="term">$ lua uoff.lua
+3	4
+á
+á, coração
+$ lua5.4 uoff.lua
+3
+á, coração
+á, coração</pre>
+
+<p>Os parênteses extras em volta do <code>utf8.offset(…)</code> (a última linha) guardam só o primeiro valor, e o resultado volta a ser igual nas duas versões. A explicação completa está em <a href="utf8.html">Acentos e a Biblioteca utf8</a>.</p>
+
+<hr>
+
+<h2>11. O rastro dos erros também mudou</h2>
+<p>Até o texto do <code>stack traceback</code> muda um pouco de versão para versão. O mesmo erro:</p>
+
+<pre class="file" data-file="trace.lua">local function f() error("deu ruim") end
+f()
+</pre>
+
+<pre class="term">$ lua trace.lua
+lua: trace.lua:1: deu ruim
+stack traceback:
+	[C]: in global 'error'
+	trace.lua:1: in local 'f'
+	trace.lua:2: in main chunk
+	[C]: in ?
+$ lua5.4 trace.lua
+lua5.4: trace.lua:1: deu ruim
+stack traceback:
+	[C]: in function 'error'
+	trace.lua:1: in local 'f'
+	trace.lua:2: in main chunk
+	[C]: in ?
+$ lua5.1 trace.lua
+lua5.1: trace.lua:1: deu ruim
+stack traceback:
+	[C]: in function 'error'
+	trace.lua:1: in function 'f'
+	trace.lua:2: in main chunk
+	[C]: ?</pre>
+
+<p>O 5.5 escreve <code>in global 'error'</code>, o 5.4 <code>in function 'error'</code>, e o 5.1 nem distingue <code>local</code> (<code>in function 'f'</code>). O LuaJIT escreve como o 5.1, com um endereço no fim (<code>[C]: at 0x…</code>). A mensagem principal (<code>trace.lua:1: deu ruim</code>) é igual em todos. Quando procurar um erro na internet, procure pela mensagem principal, não pelo rastro.</p>
+
+<hr>
+
+<h2>12. E o Luau?</h2>
+<p>O Luau, do Roblox, não roda na máquina da Ana; esta seção é um resumo do que o site oficial diz (<a href="https://luau.org/syntax">luau.org/syntax</a> e <a href="https://luau.org/compatibility">luau.org/compatibility</a>), <strong>sem saídas</strong>. Ele parte do Lua 5.1 e foi por outro caminho:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>No Luau</th><th>No Lua 5.5 do guia</th></tr>
+<tr><td>Tipos opcionais: <code>local nome: string = "Ana"</code></td><td>Erro de sintaxe: <code>unexpected symbol near ':'</code> (colhido no lab)</td></tr>
+<tr><td><code>+=</code>, <code>-=</code>, <code>..=</code> e outros</td><td>Não existem: escreva <code>x = x + 1</code></td></tr>
+<tr><td><code>continue</code> nos laços</td><td>Não existe: use <code>goto continue</code> (aula <a href="goto.html">goto</a>)</td></tr>
+<tr><td>Textos com <code>`Olá, {nome}`</code> (crase)</td><td>Use <code>..</code> ou <a href="string-format.html">string.format</a></td></tr>
+<tr><td><code>//</code> existe</td><td>Existe</td></tr>
+<tr><td>Um só tipo de número (float); sem operadores de bits (usa a <code>bit32</code>)</td><td>Inteiro e float; <code>&amp;</code>, <code>|</code>, <code>~</code>…</td></tr>
+<tr><td>Sem <code>goto</code>, sem <code>&lt;close&gt;</code>; constantes com outra escrita</td><td><code>goto</code>, <code>&lt;close&gt;</code>, <code>&lt;const&gt;</code></td></tr>
+<tr><td>Tem a biblioteca <code>utf8</code></td><td>Tem</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2 id="formas">Escrevendo código que roda em várias versões</h2>
+<p>Se o seu código precisa rodar em mais de um Lua (um módulo que vai para o LuaRocks, um script que roda no Neovim e no terminal), as regras práticas:</p>
+
+<pre class="file" data-file="portavel.lua">local unpack = table.unpack or unpack
+local nomes = { "Ana", "Bia", "Caio" }
+print(unpack(nomes))
+</pre>
+
+<pre class="term">$ for L in lua lua5.4 lua5.1 luajit; do $L portavel.lua; done
+Ana	Bia	Caio
+Ana	Bia	Caio
+Ana	Bia	Caio
+Ana	Bia	Caio</pre>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Se você precisa de…</th><th>Que funcione no 5.1/LuaJIT e no 5.5</th></tr>
+<tr><td>Desembrulhar uma lista</td><td><code>local unpack = table.unpack or unpack</code></td></tr>
+<tr><td>Divisão inteira</td><td><code>math.floor(a / b)</code> no lugar de <code>a // b</code></td></tr>
+<tr><td>Saber se um número é inteiro</td><td><code>x == math.floor(x)</code> no lugar de <code>math.type(x) == "integer"</code></td></tr>
+<tr><td>Pular para a próxima volta</td><td>um <code>if</code> em volta do resto do corpo, no lugar de <code>goto continue</code> (o 5.1 não tem <code>goto</code>)</td></tr>
+<tr><td>Bits</td><td>conferir: <code>bit</code> (LuaJIT), <code>bit32</code> (5.2), operadores (5.3+)</td></tr>
+<tr><td>Saber onde está</td><td><code>_VERSION</code> e <code>jit</code></td></tr>
+<tr><td>Ambiente de uma função</td><td>evite: <code>setfenv</code> (5.1) e <code>_ENV</code> (5.2+) não se misturam</td></tr>
+<tr><td>Não depender de como o número é mostrado</td><td><code>string.format("%.2f", x)</code>, igual em todas</td></tr>
+</table>
+</div>
+
+<p>E a regra mais simples de todas: se você <strong>sabe</strong> onde o código vai rodar, escreva para aquela versão. Para o Neovim, Lua 5.1; para o Roblox, Luau; para os seus programas no terminal, o 5.5 deste guia.</p>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+
+<div class="cenario">
+<strong>Código antigo (5.1) no Lua novo</strong>
+<pre class="file" data-file="velho.lua">local nomes = { "Ana", "Bia", "Caio" }
+print(unpack(nomes))
+</pre>
+<pre class="term">$ lua velho.lua
+lua: velho.lua:2: attempt to call a nil value (global 'unpack')
+stack traceback:
+	velho.lua:2: in main chunk
+	[C]: in ?
+$ lua5.1 velho.lua
+Ana	Bia	Caio</pre>
+<p>"Tentativa de chamar um valor <code>nil</code> (a global <code>unpack</code>)": no 5.5 não existe uma global com esse nome. Sempre que um código da internet der <code>attempt to call a nil value (global '…')</code> com um nome que você não criou, desconfie de versão: <code>unpack</code>, <code>setfenv</code>, <code>getfenv</code>, <code>loadstring</code> (no 5.2+, use <code>load</code>) e <code>table.getn</code> (use o <code>#</code>) são os casos clássicos; no lab, os quatro são <code>nil</code> no 5.5 e existem no 5.1 e no LuaJIT.</p>
+</div>
+
+<div class="cenario">
+<strong>Código novo (5.3+) no Lua antigo</strong>
+<p>O caminho contrário dá erro de <strong>sintaxe</strong>, antes de rodar qualquer coisa: <code>unexpected symbol near '/'</code> (o <code>//</code>), <code>')' expected near '&amp;'</code> (bits), <code>unexpected symbol near '&lt;'</code> (<code>&lt;const&gt;</code>), <code>'=' expected near …</code> (<code>goto</code>, <code>global</code>). Todos saíram nas seções acima. O programa inteiro não roda, nem a parte que não usa o recurso novo.</p>
+</div>
+
+<div class="cenario">
+<strong>Mesmo programa, resultado mostrado diferente</strong>
+<p>Sem mensagem de erro: <code>print(10 / 2)</code> mostra <code>5.0</code> num lugar e <code>5</code> no outro; <code>print(0.1 + 0.2)</code> mostra <code>0.30000000000000004</code> no 5.5 e <code>0.3</code> no 5.4. Se um teste compara o texto da saída, ele quebra ao trocar de versão. Para mostrar números para pessoas, formate sempre (<code>string.format("%.2f", x)</code>).</p>
+</div>
+
+<hr>
+
+<h2>Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Recurso</th><th>5.1</th><th>LuaJIT</th><th>5.2</th><th>5.3</th><th>5.4</th><th>5.5</th><th>Luau</th></tr>
+<tr><td>inteiros (<code>math.type</code>)</td><td>✘</td><td>✘</td><td>✘</td><td>✔</td><td>✔</td><td>✔</td><td>✘</td></tr>
+<tr><td><code>//</code></td><td>✘</td><td>✘</td><td>✘</td><td>✔</td><td>✔</td><td>✔</td><td>✔</td></tr>
+<tr><td><code>&amp;</code> <code>|</code> <code>~</code> <code>&lt;&lt;</code> <code>&gt;&gt;</code></td><td>✘</td><td>✘ (<code>bit</code>)</td><td>✘ (<code>bit32</code>)</td><td>✔</td><td>✔</td><td>✔</td><td>✘ (<code>bit32</code>)</td></tr>
+<tr><td><code>goto</code></td><td>✘</td><td>✔</td><td>✔</td><td>✔</td><td>✔</td><td>✔</td><td>✘</td></tr>
+<tr><td><code>table.unpack</code> / <code>unpack</code></td><td><code>unpack</code></td><td>os dois</td><td><code>table.unpack</code></td><td><code>table.unpack</code></td><td><code>table.unpack</code></td><td><code>table.unpack</code></td><td>(não conferido)</td></tr>
+<tr><td><code>setfenv</code> / <code>_ENV</code></td><td><code>setfenv</code></td><td><code>setfenv</code></td><td><code>_ENV</code></td><td><code>_ENV</code></td><td><code>_ENV</code></td><td><code>_ENV</code></td><td>(não conferido)</td></tr>
+<tr><td><code>utf8</code>, <code>string.pack</code></td><td>✘</td><td>✘</td><td>✘</td><td>✔</td><td>✔</td><td>✔</td><td><code>utf8</code> ✔</td></tr>
+<tr><td><code>&lt;const&gt;</code>, <code>&lt;close&gt;</code></td><td>✘</td><td>✘</td><td>✘</td><td>✘</td><td>✔</td><td>✔</td><td>✘</td></tr>
+<tr><td>variável do <code>for</code> constante</td><td>✘</td><td>✘</td><td>✘</td><td>✘</td><td>✘</td><td>✔</td><td>—</td></tr>
+<tr><td><code>global</code></td><td>✘</td><td>✘</td><td>✘</td><td>✘</td><td>✘</td><td>✔</td><td>✘</td></tr>
+<tr><td>floats com todos os dígitos (<code>0.30000000000000004</code>)</td><td>✘</td><td>✘</td><td>—</td><td>—</td><td>✘</td><td>✔</td><td>—</td></tr>
+<tr><td>acento em nome de variável</td><td>✘</td><td>✔ (só ele)</td><td>✘</td><td>✘</td><td>✘</td><td>✘</td><td>—</td></tr>
+</table>
+</div>
+<p>As colunas 5.1, LuaJIT, 5.4 e 5.5 foram conferidas no lab. As do 5.2 e do 5.3 vêm dos manuais oficiais (o "—" quer dizer "não conferido"); a do Luau, de luau.org.</p>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. Quanto mostra?</h3>
+<p>No Lua 5.5, o que <code>print(10 / 2)</code> mostra?</p>
+<div class="ex-code"><input data-answer="5.0" aria-label="saída"></div>
+</div>
+
+<div class="exercise">
+<h3>2. O nome antigo</h3>
+<p>No Lua 5.1, como se chama a função que, no 5.5, é <code>table.unpack</code>?</p>
+<div class="ex-code"><input data-answer="unpack" aria-label="nome"></div>
+</div>
+
+<div class="exercise">
+<h3>3. A variável do LuaJIT</h3>
+<p>Que variável global só existe no LuaJIT e serve para descobrir se o código está rodando nele?</p>
+<div class="ex-code"><input data-answer="jit" aria-label="variável"></div>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">4. Em que versão o Lua ganhou inteiros, <code>//</code> e operadores de bits?</p>
+<label><input type="radio" name="q4"> 5.1</label>
+<label><input type="radio" name="q4"> 5.3</label>
+<label><input type="radio" name="q4"> 5.4</label>
+<label><input type="radio" name="q4"> 5.5</label>
+</div>
+
+<div class="mc" data-answer="4">
+<p class="mc-q">5. <code>for i = 1, 3 do i = i * 2 end</code> no Lua 5.5…</p>
+<label><input type="radio" name="q5"> roda e mostra 2, 4, 6</label>
+<label><input type="radio" name="q5"> entra num laço infinito</label>
+<label><input type="radio" name="q5"> dá <code>unexpected symbol</code></label>
+<label><input type="radio" name="q5"> dá <code>attempt to assign to const variable 'i'</code></label>
+</div>
+
+<div class="mc" data-answer="1">
+<p class="mc-q">6. Um código da internet dá <code>attempt to call a nil value (global 'setfenv')</code> no seu Lua 5.5. O mais provável é que…</p>
+<label><input type="radio" name="q6"> ele foi escrito para o Lua 5.1, e o <code>setfenv</code> não existe mais desde o 5.2</label>
+<label><input type="radio" name="q6"> faltou instalar o <code>setfenv</code> pelo LuaRocks</label>
+<label><input type="radio" name="q6"> o arquivo está com acento</label>
+<label><input type="radio" name="q6"> o Lua 5.5 está com defeito</label>
+</div>
+
+<h3>Missão final: o <code>for</code> que dobrava</h3>
+
+<div class="trylua" data-goal="outre:^2\n4\n6\n$;;semerro">
+<p class="try-task"><strong>Missão:</strong> este laço funcionava no Lua 5.4 (mostrava 2, 4 e 6), mas no 5.5 dá <code>attempt to assign to const variable 'i'</code>. Faça como o manual do 5.5 recomenda: dentro do laço, declare uma variável <code>local</code> com o mesmo nome, a partir do <code>i</code> do <code>for</code>, e mude essa.</p>
+<pre class="script" data-file="main.lua">for i = 1, 3 do
+  i = i * 2
+  print(i)
+end
+</pre>
+<pre class="solucao" data-file="main.lua">for i = 1, 3 do
+  local i = i * 2
+  print(i)
+end
+</pre>
+</div>
+
+<p>O <code>local i = i * 2</code> cria um <code>i</code> novo, só daquela volta, que "esconde" o do <code>for</code>. O <code>i</code> do lado direito ainda é o do <code>for</code> (o novo só passa a existir depois da linha). No lab, a solução mostrou <code>2</code>, <code>4</code> e <code>6</code>, como o programa antigo no 5.4.</p>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li>O miolo do Lua é igual em todas as versões; as diferenças estão nas pontas. <code>_VERSION</code> e <code>jit</code> dizem onde você está.</li>
+  <li><strong>5.1 / LuaJIT</strong>: só float, sem <code>//</code> nem operadores de bits (o LuaJIT tem <code>bit</code>), <code>unpack</code> e <code>setfenv</code>; o LuaJIT aceita <code>goto</code>.</li>
+  <li><strong>5.2</strong>: <code>_ENV</code>, <code>goto</code>, <code>table.unpack</code>. <strong>5.3</strong>: inteiros, <code>//</code>, bits, <code>utf8</code>, <code>string.pack</code>. <strong>5.4</strong>: <code>&lt;const&gt;</code>, <code>&lt;close&gt;</code>.</li>
+  <li><strong>5.5</strong>: <code>global</code>, variável do <code>for</code> constante, floats mostrados com todos os dígitos, <code>utf8.offset</code> com dois valores, <code>table.create</code>, <code>collectgarbage("param")</code> (lista completa em <a href="novidades.html">Novidades do Lua 5.5</a>).</li>
+  <li><strong>Luau</strong>: derivado do 5.1, com tipos, <code>+=</code>, <code>continue</code> e textos com <code>{}</code>; sem <code>goto</code> e sem inteiros.</li>
+  <li>Para rodar em várias versões: <code>table.unpack or unpack</code>, <code>math.floor(a / b)</code>, <code>string.format</code> para mostrar números.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
