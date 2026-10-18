@@ -1,0 +1,485 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua Comentários — -- e --[[ ]] | Guia Lua</title>
+<meta name="description" content="Comentários no Lua para quem nunca programou: o -- de uma linha, o --[[ ]] de várias linhas, o --[==[ ]==] para quando o texto tem ]], o truque ---[[ para ligar e desligar um trecho, comentários dentro de aspas, o que é um bom comentário e os erros reais do Lua 5.5 com # e // de outras linguagens, -- [[ com espaço e o unfinished long comment.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">Comentários (-- e --[[ ]])</span></h1>
+
+<p class="intro">Um <strong>comentário</strong> é um recado escrito dentro do programa, para pessoas, que o Lua <strong>ignora</strong>. Serve para explicar por que uma linha está ali, de onde veio um número, quem escreveu o arquivo, ou para "desligar" um pedaço do código sem apagá-lo. No Lua, o comentário começa com dois tracinhos, <code>--</code>. Nesta aula você vai ver os comentários de uma linha e de várias linhas, um truque para ligar e desligar trechos, o que torna um comentário útil, e os erros de quem traz o costume de outras linguagens.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>A escrever um comentário de uma linha com <code>--</code>, numa linha inteira ou no fim de uma linha de código.</li>
+  <li>A escrever um comentário de várias linhas com <code>--[[ … ]]</code>, e a variação <code>--[==[ … ]==]</code>.</li>
+  <li>A "desligar" código para testar, e o truque do <code>---[[</code> para ligar e desligar um trecho mudando um caractere.</li>
+  <li>Que <code>--</code> dentro de aspas é texto, e não comentário.</li>
+  <li>O que é um bom comentário (e um ruim).</li>
+  <li>Os erros reais com <code>#</code>, <code>//</code> e <code>/* */</code>, com o <code>-- [[</code> separado por espaço e com o comentário longo que não fecha.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>A ideia: o post-it na receita</h2>
+<p>Imagine a receita de bolo da avó, cheia de post-its colados: "usar a forma grande", "a vó põe uma pitada a mais de canela", "o forno daqui esquenta mais: tirar 5 minutos antes". Quem faz o bolo lê os post-its, mas eles <strong>não são passos da receita</strong>: ninguém vai "fazer" o post-it.</p>
+
+<p>Os comentários são os post-its do programa. Quem lê o código (você, daqui a um mês, ou outra pessoa) aproveita o recado; o Lua pula por cima, como se ele não estivesse lá.</p>
+
+<hr>
+
+<h2>1. O comentário de uma linha: <code>--</code></h2>
+<p>Do <code>--</code> até o fim da linha, tudo é comentário. Ele pode ocupar uma linha inteira ou vir no fim de uma linha de código:</p>
+
+<pre class="file" data-file="recibo.lua">-- Recibo da Padaria Pão Quente
+-- Feito pela Ana em outubro de 2026
+
+print("Padaria Pão Quente")
+print("10 pães: " .. 10 * 0.75)  -- o pão custa 75 centavos
+-- print("1 leite: " .. 6.50)    o leite acabou hoje
+print("Obrigado!")
+</pre>
+
+<pre class="term" data-cwd="~/programas">$ lua recibo.lua
+Padaria Pão Quente
+10 pães: 7.5
+Obrigado!
+</pre>
+
+<dl class="anatomy">
+  <dt>-- Recibo da Padaria Pão Quente</dt><dd>Uma linha inteira de comentário: o título do programa. O Lua pula a linha toda.</dd>
+  <dt>(linha em branco)</dt><dd>Linhas vazias também são ignoradas. Use à vontade para separar as partes do programa.</dd>
+  <dt>print("10 pães: " .. 10 * 0.75)  -- o pão…</dt><dd>Código <strong>e</strong> comentário na mesma linha. O Lua executa até o <code>--</code> e ignora o resto. Deixe um ou dois espaços antes do <code>--</code>, para o recado não grudar no código.</dd>
+  <dt>-- print("1 leite: " .. 6.50)</dt><dd>Uma linha de código com <code>--</code> na frente virou comentário: o leite <strong>não</strong> apareceu no recibo. É o jeito de "desligar" uma linha sem apagá-la (seção 3).</dd>
+</dl>
+
+<p>O espaço depois do <code>--</code> não é obrigatório (<code>--recado</code> também funciona), mas <code>-- recado</code>, com espaço, é bem mais fácil de ler. Acentos e cedilha dentro dos comentários funcionam normalmente.</p>
+
+<h3>No modo interativo também</h3>
+<pre class="term">$ lua
+Lua 5.5.0  Copyright (C) 1994-2025 Lua.org, PUC-Rio
+&gt; 2 + 3  -- uma soma
+5
+&gt; -- só um comentário                              « nada acontece
+&gt; os.exit()
+</pre>
+
+<div class="trylua" data-goal="src:^--\s*\S;;out:Pão de queijo: 8;;semerro">
+<p class="try-task"><strong>Missão:</strong> acrescente uma <strong>primeira linha</strong> de comentário ao programa dizendo o que ele faz (por exemplo, <code>-- Estoque da padaria</code>). Rode e confira que a saída não muda.</p>
+<pre class="script" data-file="main.lua">print("Pão de queijo: " .. 8)
+print("Sonhos: " .. 5)
+</pre>
+<pre class="solucao" data-file="main.lua">-- Estoque da padaria
+print("Pão de queijo: " .. 8)
+print("Sonhos: " .. 5)
+</pre>
+</div>
+
+<hr>
+
+<h2>2. Comentários de várias linhas: <code>--[[ … ]]</code></h2>
+<p>Para um recado comprido, você pode pôr <code>--</code> em cada linha. Ou usar o <strong>comentário longo</strong>: ele começa com <code>--[[</code> e vai até o primeiro <code>]]</code>, passando por quantas linhas forem:</p>
+
+<pre class="file" data-file="bloco.lua">--[[
+Programa: recibo da padaria
+Autora: Ana
+Versão: 2
+]]
+print("Padaria Pão Quente")
+--[[
+print("Promoção de bolo!")
+print("Leve 2, pague 1")
+]]
+print("Obrigado!")
+</pre>
+
+<pre class="term" data-cwd="~/programas">$ lua bloco.lua
+Padaria Pão Quente
+Obrigado!
+</pre>
+
+<dl class="anatomy">
+  <dt>--[[</dt><dd>Abre o comentário longo: os dois tracinhos do comentário, mais dois colchetes de abrir, <strong>colados</strong> (sem espaço entre eles: veja o erro em <a href="#errado">Quando dá errado</a>).</dd>
+  <dt>Programa: recibo… Versão: 2</dt><dd>Tudo isso é comentário, linha por linha, sem precisar de <code>--</code> em cada uma.</dd>
+  <dt>]]</dt><dd>Fecha o comentário. Daqui em diante, volta a ser código.</dd>
+  <dt>o segundo --[[ … ]]</dt><dd>Desligou duas linhas de código de uma vez: a promoção não apareceu.</dd>
+</dl>
+
+<p>Os colchetes duplos <code>[[ ]]</code> não são exclusivos dos comentários: sem o <code>--</code> na frente, eles escrevem <strong>textos</strong> de várias linhas (aula <a href="strings-longas.html">Textos Longos ([[ ]])</a>). O comentário longo usa os mesmos colchetes: é um <code>--</code> seguido de um "texto longo" que o Lua joga fora.</p>
+
+<p>Um comentário longo pode até ficar no meio de uma linha, entre dois pedaços de código. É raro, mas funciona:</p>
+
+<pre class="file" data-file="meio.lua">print("antes" --[[ um comentário no meio ]], "depois")
+</pre>
+
+<pre class="term" data-cwd="~/programas">$ lua meio.lua
+antes	depois
+</pre>
+
+<h3>Quando o texto tem <code>]]</code>: o <code>--[==[ … ]==]</code></h3>
+<p>O comentário longo termina no <strong>primeiro</strong> <code>]]</code> que aparecer. Se o trecho que você quer comentar tiver um <code>]]</code> (o que acontece com tabelas dentro de tabelas, como <code>precos[itens[1]]</code>), o comentário fecha antes da hora, e o resto vira código:</p>
+
+<pre class="file" data-file="igualerro.lua">--[[
+local preco = precos[itens[1]]
+]]
+print("fim")
+</pre>
+
+<pre class="term" data-cwd="~/programas">$ lua igualerro.lua
+lua: igualerro.lua:3: unexpected symbol near ']'
+</pre>
+
+<p>O comentário fechou no <code>]]</code> do fim da linha 2, e o <code>]]</code> da linha 3 sobrou como código: "símbolo inesperado perto de <code>]</code>". A solução é pôr <strong>sinais de igual</strong> entre os colchetes: um comentário aberto com <code>--[==[</code> só fecha com <code>]==]</code>, com o <strong>mesmo número</strong> de <code>=</code>. Os <code>]]</code> do meio deixam de contar:</p>
+
+<pre class="file" data-file="igual.lua">--[==[
+local preco = precos[itens[1]]
+]==]
+print("fim")
+</pre>
+
+<pre class="term" data-cwd="~/programas">$ lua igual.lua
+fim
+</pre>
+
+<p>Pode ser <code>--[=[ … ]=]</code>, <code>--[==[ … ]==]</code>, com quantos <code>=</code> você quiser, desde que o número seja o mesmo nos dois lados.</p>
+
+<hr>
+
+<h2>3. "Desligando" código para testar</h2>
+<p>Comentar uma linha de código para ela não rodar é uma das coisas que você mais vai fazer: para testar o programa sem uma parte, para procurar onde está um erro (desligando pedaços até ele sumir), ou para guardar uma versão antiga por um tempo.</p>
+
+<ul>
+  <li><strong>Uma linha:</strong> ponha <code>--</code> no começo. Para religar, apague o <code>--</code>.</li>
+  <li><strong>Várias linhas:</strong> ponha <code>--[[</code> antes e <code>]]</code> depois.</li>
+</ul>
+
+<h3>O truque do interruptor: <code>---[[</code></h3>
+<p>Programadores de Lua usam um truque esperto para ligar e desligar um trecho inteiro mudando <strong>um caractere só</strong>. Feche o comentário com <code>--]]</code> em vez de <code>]]</code>:</p>
+
+<pre class="file" data-file="interruptor2.lua">--[[
+print("Promoção de bolo!")
+--]]
+print("Obrigado!")
+</pre>
+
+<pre class="term" data-cwd="~/programas">$ lua interruptor2.lua
+Obrigado!                                          « desligado: a promoção não aparece
+</pre>
+
+<p>Agora acrescente um terceiro tracinho na primeira linha (<code>---[[</code>):</p>
+
+<pre class="file" data-file="interruptor.lua">---[[
+print("Promoção de bolo!")
+--]]
+print("Obrigado!")
+</pre>
+
+<pre class="term" data-cwd="~/programas">$ lua interruptor.lua
+Promoção de bolo!                                  « ligado
+Obrigado!
+</pre>
+
+<p>Por que funciona? Com <code>---[[</code>, os dois primeiros tracinhos já começam um comentário de <strong>uma linha</strong>, e o resto (<code>-[[</code>) é só o texto desse comentário: não abre comentário longo nenhum. A linha do <code>print</code> vira código normal, e a última linha, <code>--]]</code>, é outro comentário de uma linha. Tire o terceiro tracinho, e o <code>--[[</code> volta a abrir um comentário longo, que termina no <code>]]</code> do <code>--]]</code>.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Primeira linha</th><th>Última linha</th><th>O trecho do meio</th></tr>
+<tr><td><code>--[[</code></td><td><code>--]]</code></td><td>Desligado (é comentário)</td></tr>
+<tr><td><code>---[[</code></td><td><code>--]]</code></td><td>Ligado (é código)</td></tr>
+</table>
+</div>
+
+<div class="trylua" data-goal="out:Promoção: leve 2 sonhos, pague 1;;out:Obrigado!;;semerro">
+<p class="try-task"><strong>Missão:</strong> a promoção está desligada. Ligue-a acrescentando <strong>um único</strong> tracinho na primeira linha (<code>--[[</code> vira <code>---[[</code>), sem apagar nenhuma linha. Rode e veja a promoção aparecer.</p>
+<pre class="script" data-file="main.lua">--[[
+print("Promoção: leve 2 sonhos, pague 1")
+--]]
+print("Obrigado!")
+</pre>
+<pre class="solucao" data-file="main.lua">---[[
+print("Promoção: leve 2 sonhos, pague 1")
+--]]
+print("Obrigado!")
+</pre>
+</div>
+
+<hr>
+
+<h2>4. <code>--</code> dentro de aspas não é comentário</h2>
+<p>Dentro de um texto entre aspas, os tracinhos e os colchetes são só letras. O Lua só começa um comentário quando o <code>--</code> está <strong>fora</strong> das aspas:</p>
+
+<pre class="file" data-file="aspas.lua">print("Isto -- não é comentário")
+print("--[[ nem isto ]]")
+</pre>
+
+<pre class="term" data-cwd="~/programas">$ lua aspas.lua
+Isto -- não é comentário
+--[[ nem isto ]]
+</pre>
+
+<hr>
+
+<h2>5. O que é um bom comentário</h2>
+<p>Um comentário bom diz o que o código <strong>não consegue dizer sozinho</strong>: o <strong>porquê</strong> de uma escolha, de onde vem um número, um cuidado que quem mexer depois precisa ter. Um comentário ruim repete o que o código já diz.</p>
+
+<pre class="file" data-file="ruim.lua">print("Total: " .. 10 * 0.75)  -- mostra o total
+</pre>
+
+<p>Esse comentário é inútil: o próprio <code>print("Total: "…</code> já diz que mostra o total. Compare:</p>
+
+<pre class="file" data-file="bom.lua">print("Total: " .. 10 * 0.75)  -- 10 pães a R$ 0,75 (preço da tabela de outubro)
+</pre>
+
+<p>Agora o leitor sabe o que são o <code>10</code> e o <code>0.75</code>, e de onde veio o preço. Algumas dicas:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Faça</th><th>Evite</th></tr>
+<tr><td>Explique o <strong>porquê</strong>: <code>-- o forno novo esquenta mais: 35 min</code></td><td>Repetir o código: <code>-- soma 1</code> ao lado de <code>x = x + 1</code></td></tr>
+<tr><td>Diga de onde vêm os números: <code>-- preço de outubro</code></td><td>Comentários que ficaram velhos: o código mudou e o comentário não</td></tr>
+<tr><td>Avise dos cuidados: <code>-- não mudar a ordem: o total depende disso</code></td><td>Comentar cada linha "por obrigação"</td></tr>
+<tr><td>Marque o que falta fazer: <code>-- TODO: aceitar pagamento em cartão</code></td><td>Deixar montes de código comentado esquecido no arquivo</td></tr>
+</table>
+</div>
+
+<p>O <code>TODO</code> ("a fazer", em inglês) é um costume: muitos editores destacam os comentários que começam com ele, para você achar o que ficou pendente. E lembre: um nome bem escolhido (<code>preco_pao</code> em vez de <code>p</code>) muitas vezes dispensa o comentário. Você vai ver isso em <a href="nomes-variaveis.html">Nomes de Variáveis</a>.</p>
+
+<div class="note">
+<strong>Comentários com três tracinhos: <code>---</code></strong>
+<p>Em projetos maiores, você vai ver comentários que começam com <code>---</code> e trazem coisas como <code>---@param preco number</code>. Para o Lua, é só um comentário comum (dois tracinhos e um texto que começa com <code>-</code>). Mas alguns editores (como o VS Code com a extensão "Lua") leem esses comentários para mostrar dicas sobre as suas funções enquanto você digita. Por enquanto, não precisa se preocupar com eles.</p>
+</div>
+
+<div class="note">
+<strong>E a linha <code>#!</code>?</strong>
+<p>A linha <code>#!/usr/bin/env lua</code>, no começo de um arquivo (aula <a href="executar.html">Rodando um Programa</a>), <strong>não é</strong> um comentário do Lua. O Lua só a aceita porque tem uma regra especial: se a <strong>primeira</strong> linha do arquivo começa com <code>#</code>, ela é pulada. Em qualquer outra linha, o <code>#</code> no começo dá erro (veja abaixo).</p>
+</div>
+
+<hr>
+
+<h2>Formas diferentes de deixar um recado</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Forma</th><th>Exemplo</th><th>Quando usar</th></tr>
+<tr><td><code>--</code> numa linha inteira</td><td><code>-- Recibo da padaria</code></td><td>Explicar o trecho que vem embaixo</td></tr>
+<tr><td><code>--</code> no fim da linha</td><td><code>print(10 * 0.75)  -- preço de outubro</code></td><td>Um recado curto sobre aquela linha</td></tr>
+<tr><td>Vários <code>--</code> seguidos</td><td><code>-- linha 1</code> ⏎ <code>-- linha 2</code></td><td>Explicações de poucas linhas; é o mais comum</td></tr>
+<tr><td><code>--[[ … ]]</code></td><td>Cabeçalho do arquivo, trecho desligado</td><td>Textos longos e desligar várias linhas de código</td></tr>
+<tr><td><code>--[==[ … ]==]</code></td><td>Trecho que tem <code>]]</code> dentro</td><td>Quando o <code>--[[ ]]</code> fecharia antes da hora</td></tr>
+<tr><td><code>---[[</code> … <code>--]]</code></td><td>Interruptor</td><td>Ligar e desligar um trecho várias vezes enquanto testa</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+<p>Os erros com comentários são quase sempre de quem traz o costume de outra linguagem. Todos são de <strong>sintaxe</strong>: o programa inteiro não roda.</p>
+
+<div class="cenario">
+<strong><code>#</code> como comentário (o costume do Python e do terminal)</strong>
+<pre class="file" data-file="c1.lua"># Recibo da padaria
+# Feito pela Ana
+print("Padaria")
+</pre>
+<pre class="term" data-cwd="~/programas">$ lua c1.lua
+lua: c1.lua:2: unexpected symbol near '#'
+</pre>
+<p><strong>O que aconteceu:</strong> no Python e no terminal, o <code>#</code> começa um comentário; no Lua, não. Repare na pegadinha: o erro é na linha <strong>2</strong>, e não na 1. A primeira linha passou por causa da regra do <code>#!</code> (o Lua pula a primeira linha quando ela começa com <code>#</code>), e isso engana quem testa com um comentário só. Na linha 2, o <code>#</code> é o operador de tamanho (aula <a href="operador-tamanho.html">O Operador de Tamanho</a>), que não faz sentido ali: "símbolo inesperado perto de <code>#</code>". No fim de uma linha de código, como <code>print("Total:", 10) # total do dia</code>, a mensagem é a mesma: <code>unexpected symbol near '#'</code>.</p>
+<p><strong>Como resolver:</strong> troque cada <code>#</code> por <code>--</code>.</p>
+</div>
+
+<div class="cenario">
+<strong><code>//</code> e <code>/* */</code> (o costume do C e do JavaScript)</strong>
+<pre class="file" data-file="c2.lua">// Recibo da padaria
+print("Padaria")
+</pre>
+<pre class="term" data-cwd="~/programas">$ lua c2.lua
+lua: c2.lua:1: unexpected symbol near '//'
+</pre>
+<pre class="file" data-file="c6.lua">/* Recibo da padaria */
+print("Padaria")
+</pre>
+<pre class="term" data-cwd="~/programas">$ lua c6.lua
+lua: c6.lua:1: unexpected symbol near '/'
+</pre>
+<p><strong>O que aconteceu:</strong> no Lua, <code>//</code> é a divisão inteira e <code>/</code> é a divisão (aula <a href="divisao.html">Divisão: /, // e %</a>). Uma linha começando com um sinal de divisão não faz sentido. <strong>Como resolver:</strong> <code>-- Recibo da padaria</code> (e <code>--[[ … ]]</code> no lugar de <code>/* … */</code>).</p>
+</div>
+
+<div class="cenario">
+<strong>Um tracinho só</strong>
+<pre class="file" data-file="c4.lua">- Recibo da padaria
+print("Padaria")
+</pre>
+<pre class="term" data-cwd="~/programas">$ lua c4.lua
+lua: c4.lua:1: unexpected symbol near '-'
+</pre>
+<p><strong>O que aconteceu:</strong> um <code>-</code> só é o sinal de menos. São <strong>dois</strong> tracinhos colados que fazem o comentário. <strong>Como resolver:</strong> <code>-- Recibo da padaria</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>O comentário longo que não fecha</strong>
+<pre class="file" data-file="c3.lua">--[[ Recibo da padaria
+print("Padaria")
+</pre>
+<pre class="term" data-cwd="~/programas">$ lua c3.lua
+lua: c3.lua:3: unfinished long comment (starting at line 1) near &lt;eof&gt;
+</pre>
+<p><strong>O que aconteceu:</strong> "comentário longo não terminado (começando na linha 1) perto do fim do arquivo". O <code>--[[</code> abriu e nenhum <code>]]</code> fechou, então o arquivo inteiro virou comentário, até o fim. A mensagem diz onde ele começou. <strong>Como resolver:</strong> feche o comentário com <code>]]</code> onde o recado acaba.</p>
+</div>
+
+<div class="cenario">
+<strong><code>-- [[</code> com espaço: só a primeira linha vira comentário</strong>
+<pre class="file" data-file="c5.lua">-- [[
+print("Promoção de bolo!")
+]]
+print("Obrigado!")
+</pre>
+<pre class="term" data-cwd="~/programas">$ lua c5.lua
+lua: c5.lua:3: unexpected symbol near ']'
+</pre>
+<p><strong>O que aconteceu:</strong> com um espaço entre o <code>--</code> e o <code>[[</code>, o Lua vê um comentário de <strong>uma linha</strong> (o texto dele é <code> [[</code>). A promoção da linha 2 virou código, e o <code>]]</code> da linha 3 ficou sozinho, sem sentido: "símbolo inesperado perto de <code>]</code>". Se o trecho não tivesse o <code>]]</code> no fim, seria pior: o código que você queria desligar rodaria sem aviso. <strong>Como resolver:</strong> <code>--[[</code>, tudo colado.</p>
+</div>
+
+<div class="cenario">
+<strong>Um <code>]]</code> no meio do trecho comentado</strong>
+<pre class="term" data-cwd="~/programas">$ lua igualerro.lua
+lua: igualerro.lua:3: unexpected symbol near ']'
+</pre>
+<p><strong>O que aconteceu:</strong> o trecho comentado tinha um <code>]]</code> (de <code>precos[itens[1]]</code>), e o comentário fechou ali, antes da hora (seção 2). <strong>Como resolver:</strong> use <code>--[==[</code> e <code>]==]</code>.</p>
+</div>
+
+<h3>Missão final: comente o recibo</h3>
+
+<div class="trylua" data-goal="outre:^Padaria Pão Quente\n10 pães: 7\.5\nTotal: 7\.5\n$;;src:^--;;src:--\s*TODO;;semerro">
+<p class="try-task"><strong>Missão:</strong> este recibo foi escrito por alguém que veio do Python e usou <code>#</code> nos comentários. Ele não roda. Conserte os comentários (troque <code>#</code> por <code>--</code>), e <strong>desligue</strong> a linha do leite, que acabou, transformando-a num comentário. Deixe também o comentário <code>TODO</code> no fim. A saída deve ter só a padaria, os pães e o total.</p>
+<pre class="script" data-file="main.lua"># Recibo da padaria
+print("Padaria Pão Quente")
+print("10 pães: " .. 10 * 0.75)  # 75 centavos cada
+print("1 leite: " .. 6.50)
+print("Total: " .. 10 * 0.75)
+# TODO: somar o leite quando ele voltar
+</pre>
+<pre class="solucao" data-file="main.lua">-- Recibo da padaria
+print("Padaria Pão Quente")
+print("10 pães: " .. 10 * 0.75)  -- 75 centavos cada
+-- print("1 leite: " .. 6.50)
+print("Total: " .. 10 * 0.75)
+-- TODO: somar o leite quando ele voltar
+</pre>
+</div>
+
+<hr>
+
+<h2>Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>O que faz</th></tr>
+<tr><td><code>-- recado</code></td><td>Comentário até o fim da linha</td></tr>
+<tr><td><code>código  -- recado</code></td><td>Código que roda, seguido de um comentário</td></tr>
+<tr><td><code>--[[</code> … <code>]]</code></td><td>Comentário de várias linhas (até o primeiro <code>]]</code>)</td></tr>
+<tr><td><code>--[==[</code> … <code>]==]</code></td><td>Comentário de várias linhas que pode ter <code>]]</code> dentro (mesmo número de <code>=</code> nos dois lados)</td></tr>
+<tr><td><code>--[[</code> … <code>--]]</code></td><td>Trecho desligado; com <code>---[[</code> na primeira linha, ligado</td></tr>
+<tr><td><code>"-- texto"</code></td><td>Dentro de aspas não é comentário: é texto</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Mensagem</th><th>Causa provável</th></tr>
+<tr><td><code>unexpected symbol near '#'</code></td><td><code>#</code> usado como comentário (só a primeira linha do arquivo escapa)</td></tr>
+<tr><td><code>unexpected symbol near '//'</code> ou <code>near '/'</code></td><td>Comentário de C/JavaScript (<code>//</code>, <code>/* */</code>)</td></tr>
+<tr><td><code>unexpected symbol near '-'</code></td><td>Um tracinho só</td></tr>
+<tr><td><code>unfinished long comment (starting at line N) near &lt;eof&gt;</code></td><td><code>--[[</code> da linha N sem o <code>]]</code></td></tr>
+<tr><td><code>unexpected symbol near ']'</code></td><td><code>-- [[</code> com espaço, ou um <code>]]</code> no meio do trecho comentado</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. O sinal do comentário</h3>
+<p>Complete para transformar a linha num comentário:</p>
+<div class="ex-code"><input data-answer="--" aria-label="sinal"> Recibo da padaria</div>
+</div>
+
+<div class="exercise">
+<h3>2. Abrir o comentário longo</h3>
+<p>Complete a primeira linha de um comentário de várias linhas:</p>
+<div class="ex-code"><input data-answer="--[[" aria-label="abertura"><br>Programa: estoque<br>Autora: Ana<br>]]</div>
+</div>
+
+<div class="exercise">
+<h3>3. A saída</h3>
+<p>O que este programa mostra? <code>print("A") -- print("B")</code></p>
+<div class="ex-code">Saída: <input data-answer="A" aria-label="saída"></div>
+</div>
+
+<div class="mc" data-answer="3">
+<p class="mc-q">4. A Ana escreveu <code># total do dia</code> na linha 5 de um programa Lua. O que acontece?</p>
+<label><input type="radio" name="q4"> Nada: o <code>#</code> é comentário em todas as linguagens.</label>
+<label><input type="radio" name="q4"> O Lua mostra o texto "total do dia".</label>
+<label><input type="radio" name="q4"> Erro de sintaxe: <code>unexpected symbol near '#'</code>, e o programa não roda.</label>
+<label><input type="radio" name="q4"> O programa roda até a linha 4 e para.</label>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">5. Um trecho está entre <code>--[[</code> e <code>--]]</code>. O que muda se a primeira linha virar <code>---[[</code>?</p>
+<label><input type="radio" name="q5"> Nada.</label>
+<label><input type="radio" name="q5"> O trecho volta a ser código e roda: o <code>---[[</code> é só um comentário de uma linha.</label>
+<label><input type="radio" name="q5"> Dá erro, porque são três tracinhos.</label>
+<label><input type="radio" name="q5"> O trecho é apagado do arquivo.</label>
+</div>
+
+<div class="mc" data-answer="4">
+<p class="mc-q">6. O que mostra <code>print("10 -- 2")</code>?</p>
+<label><input type="radio" name="q6"> <code>10</code></label>
+<label><input type="radio" name="q6"> <code>8</code></label>
+<label><input type="radio" name="q6"> Nada, porque o <code>--</code> comenta o resto da linha.</label>
+<label><input type="radio" name="q6"> <code>10 -- 2</code>: dentro das aspas, o <code>--</code> é texto.</label>
+</div>
+
+<div class="mc" data-answer="1">
+<p class="mc-q">7. Qual destes é o melhor comentário para <code>local tempo = 35</code>?</p>
+<label><input type="radio" name="q7"> <code>-- o forno novo esquenta mais; com 40 min o bolo queimava</code></label>
+<label><input type="radio" name="q7"> <code>-- tempo é 35</code></label>
+<label><input type="radio" name="q7"> <code>-- variável</code></label>
+<label><input type="radio" name="q7"> <code>-- local tempo = 35</code></label>
+</div>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li>Comentários são recados para pessoas; o Lua os ignora. Linhas em branco também.</li>
+  <li><code>--</code> começa um comentário que vai até o fim da linha. Pode ocupar a linha inteira ou vir depois do código.</li>
+  <li><code>--[[ … ]]</code> é o comentário de várias linhas; ele termina no primeiro <code>]]</code>. Se o trecho tiver <code>]]</code>, use <code>--[==[ … ]==]</code>.</li>
+  <li>Para desligar código: <code>--</code> na frente de uma linha, ou <code>--[[</code> … <code>--]]</code> em volta de um trecho. Com <code>---[[</code>, o trecho liga de novo.</li>
+  <li>Dentro de aspas, <code>--</code> é texto.</li>
+  <li>Bons comentários explicam o <strong>porquê</strong>, de onde vêm os números e os cuidados; não repetem o código.</li>
+  <li>No Lua, <code>#</code>, <code>//</code> e <code>/* */</code> <strong>não</strong> são comentários: dão <code>unexpected symbol</code>. O <code>#!</code> só passa na primeira linha do arquivo.</li>
+  <li>Próximo passo: o Nível 1 continua com a saída na tela, em <a href="print.html">print()</a>.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
