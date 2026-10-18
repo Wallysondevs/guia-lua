@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua Biblioteca table — referência das 8 funções do Lua 5.5 | Guia Lua</title>
+<meta name="description" content="Referência rápida das 8 funções da biblioteca table do Lua 5.5 (insert, remove, concat, sort, unpack, pack, move e a nova table.create), com exemplo curto, resultado real, os erros mais comuns e o link para a aula de cada uma.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">Biblioteca table</span></h1>
+
+<p class="intro">Esta é a página de consulta rápida da biblioteca <code>table</code>: as 8 funções que o Lua 5.5 traz para trabalhar com <strong>listas</strong> (tabelas com as chaves 1, 2, 3…). Elas inserem, removem, ordenam, juntam e copiam itens. Todas ficam dentro da tabela <code>table</code> e são chamadas com ponto: <code>table.insert(lista, x)</code>. Uma é nova no 5.5: <code>table.create</code>.</p>
+
+<div class="note">
+<strong>Como ler as tabelas</strong>
+<ul>
+  <li><strong>Exemplo</strong> é o que você digitaria depois do <code>&gt;</code> do <a href="repl.html">modo interativo</a>. Vários comandos na mesma linha são separados por <code>;</code>.</li>
+  <li>O modo interativo mostra uma tabela só como um endereço (<code>table: 0x…</code>, que muda a cada vez). Por isso os exemplos terminam com <code>print(table.concat(t, ", "))</code>, que mostra os itens.</li>
+  <li><strong>Resultado</strong> é o que o Lua 5.5.0 respondeu no computador da Ana. Vários valores aparecem separados por vírgula; no terminal, o Lua separa com TAB.</li>
+  <li>Estas funções olham só a parte de <strong>lista</strong> da tabela (as chaves 1, 2, 3…) e usam o tamanho <code>#t</code>. Chaves de texto, como <code>t.nome</code>, são ignoradas.</li>
+</ul>
+</div>
+
+<p>Assim fica no terminal da Ana:</p>
+
+<pre class="term">$ lua
+Lua 5.5.0  Copyright (C) 1994-2025 Lua.org, PUC-Rio
+&gt; compras = {"pão", "leite"}
+&gt; table.insert(compras, "café")
+&gt; table.insert(compras, 1, "ovos")
+&gt; table.concat(compras, ", ")
+ovos, pão, leite, café
+&gt; table.remove(compras)
+café
+&gt; table.sort(compras)
+&gt; table.concat(compras, ", ")
+leite, ovos, pão
+&gt; compras
+table: 0x561ce37c5e60
+&gt; os.exit()
+</pre>
+
+<p>O <code>table.insert</code> e o <code>table.sort</code> não mostram nada: eles <strong>mudam a própria tabela</strong> e não devolvem valor. O <code>table.remove</code> devolve o item que tirou (<code>café</code>). E digitar só <code>compras</code> mostra o endereço da tabela na memória (<code>0x561ce37c5e60</code>), que muda a cada execução.</p>
+
+<p>Pule direto para o grupo que você procura:</p>
+<ul>
+  <li><a href="#inserir">Inserir e remover</a>: <code>insert</code>, <code>remove</code></li>
+  <li><a href="#juntar">Juntar em texto</a>: <code>concat</code></li>
+  <li><a href="#ordenar">Ordenar</a>: <code>sort</code></li>
+  <li><a href="#desempacotar">Desempacotar e empacotar</a>: <code>unpack</code>, <code>pack</code></li>
+  <li><a href="#copiar">Copiar e criar</a>: <code>move</code>, <code>create</code></li>
+  <li><a href="#az">Todas de A a Z</a></li>
+</ul>
+
+<hr>
+
+<h2 id="inserir">Inserir e remover</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Função</th><th>O que faz</th><th>Exemplo</th><th>Resultado</th><th>Aula</th></tr>
+<tr><td><code>table.insert(t, valor)</code></td><td>Põe o valor no <strong>fim</strong> da lista.</td><td><code>t = {"pão", "leite"}; table.insert(t, "café"); print(table.concat(t, ", "))</code></td><td><code>pão, leite, café</code></td><td><a href="table-insert-remove.html">table.insert e table.remove</a></td></tr>
+<tr><td><code>table.insert(t, pos, valor)</code></td><td>Põe o valor na posição <code>pos</code> e empurra os outros uma casa para a frente.</td><td><code>t = {"pão", "leite"}; table.insert(t, 1, "café"); print(table.concat(t, ", "))</code></td><td><code>café, pão, leite</code></td><td></td></tr>
+<tr><td></td><td>a posição pode ir de 1 até <code>#t + 1</code> (o fim)</td><td><code>t = {"pão", "leite"}; table.insert(t, 3, "café"); print(table.concat(t, ", "))</code></td><td><code>pão, leite, café</code></td><td></td></tr>
+<tr><td></td><td>posição longe demais</td><td><code>t = {"pão", "leite"}; table.insert(t, 5, "café")</code></td><td><code>stdin:1: bad argument #2 to 'insert' (position out of bounds)</code></td><td></td></tr>
+<tr><td></td><td>só um valor por vez</td><td><code>t = {"pão"}; table.insert(t, 1, "a", "b")</code></td><td><code>stdin:1: wrong number of arguments to 'insert'</code></td><td></td></tr>
+<tr><td></td><td>a lista tem de existir</td><td><code>table.insert(nil, 1)</code></td><td><code>stdin:1: bad argument #1 to 'insert' (table expected, got nil)</code></td><td><a href="ref-erros.html">Mensagens de Erro</a></td></tr>
+<tr><td><code>table.remove(t)</code></td><td>Tira o <strong>último</strong> item e devolve ele.</td><td><code>t = {"pão", "leite", "café"}; print(table.remove(t), table.concat(t, ", "))</code></td><td><code>café</code>, <code>pão, leite</code></td><td><a href="table-insert-remove.html">table.insert e table.remove</a></td></tr>
+<tr><td><code>table.remove(t, pos)</code></td><td>Tira o item da posição <code>pos</code> e puxa os outros uma casa para trás.</td><td><code>t = {"pão", "leite", "café"}; print(table.remove(t, 1), table.concat(t, ", "))</code></td><td><code>pão</code>, <code>leite, café</code></td><td></td></tr>
+<tr><td></td><td>lista vazia: devolve <code>nil</code>, sem erro</td><td><code>t = {}; print(table.remove(t))</code></td><td><code>nil</code></td><td></td></tr>
+<tr><td></td><td>posição longe demais</td><td><code>t = {"pão"}; print(table.remove(t, 3))</code></td><td><code>stdin:1: bad argument #2 to 'remove' (position out of bounds)</code></td><td></td></tr>
+</table>
+</div>
+
+<div class="warning">
+<strong>Não use <code>t[i] = nil</code> para tirar um item do meio</strong>
+<p>Isso deixa um <strong>buraco</strong> na lista, e aí o <code>#t</code>, o <code>ipairs</code> e as funções desta página se confundem. Para tirar do meio, use <code>table.remove(t, i)</code>, que puxa os outros e fecha o buraco. Veja <a href="sequencias.html">Sequências e Buracos</a>.</p>
+</div>
+
+<hr>
+
+<h2 id="juntar">Juntar em texto</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Função</th><th>O que faz</th><th>Exemplo</th><th>Resultado</th><th>Aula</th></tr>
+<tr><td><code>table.concat(t)</code></td><td>Junta os itens num texto só (<em>concatenate</em>), sem nada entre eles.</td><td><code>table.concat({"a", "b", "c"})</code></td><td><code>abc</code></td><td><a href="table-concat.html">table.concat</a></td></tr>
+<tr><td><code>table.concat(t, sep)</code></td><td>Com o separador <code>sep</code> entre os itens.</td><td><code>table.concat({"a", "b", "c"}, ", ")</code></td><td><code>a, b, c</code></td><td></td></tr>
+<tr><td></td><td>números também servem</td><td><code>table.concat({1, 2.5, "x"}, " | ")</code></td><td><code>1 | 2.5 | x</code></td><td></td></tr>
+<tr><td><code>table.concat(t, sep, i, j)</code></td><td>Só do item <code>i</code> ao <code>j</code>.</td><td><code>table.concat({"a", "b", "c", "d"}, "-", 2, 3)</code></td><td><code>b-c</code></td><td></td></tr>
+<tr><td></td><td>lista vazia: texto vazio</td><td><code>table.concat({})</code></td><td>(texto vazio)</td><td></td></tr>
+<tr><td></td><td>só textos e números: <code>true</code>, <code>nil</code> e tabelas dão erro</td><td><code>table.concat({"a", true})</code></td><td><code>stdin:1: invalid value (boolean) at index 2 in table for 'concat'</code></td><td></td></tr>
+<tr><td></td><td></td><td><code>table.concat({"a", {}})</code></td><td><code>stdin:1: invalid value (table) at index 2 in table for 'concat'</code></td><td></td></tr>
+</table>
+</div>
+
+<div class="tip">
+<strong>Montando um texto grande? Use uma lista e <code>table.concat</code></strong>
+<p>Num laço com milhares de voltas, <code>texto = texto .. pedaco</code> cria um texto novo a cada volta e fica lento. O jeito do Lua é guardar os pedaços numa lista (<code>partes[#partes + 1] = pedaco</code>) e juntar tudo no fim com <code>table.concat(partes)</code>. Veja <a href="concatenacao.html">Juntando Textos</a>.</p>
+</div>
+
+<hr>
+
+<h2 id="ordenar">Ordenar</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Função</th><th>O que faz</th><th>Exemplo</th><th>Resultado</th><th>Aula</th></tr>
+<tr><td><code>table.sort(t)</code></td><td>Ordena a própria lista, do menor para o maior (usa o <code>&lt;</code>). Não devolve nada.</td><td><code>t = {5, 2, 8, 1}; table.sort(t); print(table.concat(t, " "))</code></td><td><code>1 2 5 8</code></td><td><a href="table-sort.html">table.sort</a></td></tr>
+<tr><td></td><td>textos: pela tabela de códigos, então maiúsculas vêm antes das minúsculas…</td><td><code>t = {"bia", "Ana", "caio"}; table.sort(t); print(table.concat(t, " "))</code></td><td><code>Ana bia caio</code></td><td></td></tr>
+<tr><td></td><td>…e letras acentuadas vão para o fim</td><td><code>t = {"Ávila", "Bia", "Ana"}; table.sort(t); print(table.concat(t, " "))</code></td><td><code>Ana Bia Ávila</code></td><td><a href="utf8.html">Acentos e utf8</a></td></tr>
+<tr><td></td><td>números e textos misturados não dá para comparar</td><td><code>t = {3, "a", 1}; table.sort(t)</code></td><td><code>attempt to compare string with number</code></td><td><a href="ref-erros.html">Mensagens de Erro</a></td></tr>
+<tr><td><code>table.sort(t, comp)</code></td><td><code>comp(a, b)</code> é uma função que devolve <code>true</code> quando <code>a</code> deve vir <strong>antes</strong> de <code>b</code>. Aqui, do maior para o menor.</td><td><code>t = {5, 2, 8, 1}; table.sort(t, function(a, b) return a &gt; b end); print(table.concat(t, " "))</code></td><td><code>8 5 2 1</code></td><td><a href="table-sort.html">table.sort</a></td></tr>
+<tr><td></td><td>ignorando maiúsculas</td><td><code>t = {"bia", "Ana", "caio"}; table.sort(t, function(a, b) return a:lower() &lt; b:lower() end); print(table.concat(t, " "))</code></td><td><code>Ana bia caio</code></td><td></td></tr>
+<tr><td></td><td>uma lista de registros, pelo campo <code>nota</code></td><td><code>p = {{nome = "Bia", nota = 7}, {nome = "Ana", nota = 9}}; table.sort(p, function(a, b) return a.nota &gt; b.nota end); print(p[1].nome, p[2].nome)</code></td><td><code>Ana</code>, <code>Bia</code></td><td><a href="tabelas-aninhadas.html">Tabelas Aninhadas</a></td></tr>
+</table>
+</div>
+
+<div class="note">
+<strong>O <code>sort</code> não é "estável"</strong>
+<p>O manual avisa: itens que a sua função <code>comp</code> considera iguais (duas pessoas com a mesma nota) podem trocar de lugar entre si. Se a ordem do desempate importa, inclua o desempate na função: <code>if a.nota ~= b.nota then return a.nota &gt; b.nota end return a.nome &lt; b.nome</code>. E a função tem de ser coerente: usar <code>&lt;=</code> no lugar de <code>&lt;</code> pode dar erro: no lab, <code>table.sort(t, function(a, b) return a &lt;= b end)</code> numa lista com números repetidos parou com <code>stdin:1: invalid order function for sorting</code>.</p>
+</div>
+
+<hr>
+
+<h2 id="desempacotar">Desempacotar e empacotar</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Função</th><th>O que faz</th><th>Exemplo</th><th>Resultado</th><th>Aula</th></tr>
+<tr><td><code>table.unpack(t)</code></td><td>Devolve os itens da lista como valores separados (o contrário de pôr entre <code>{ }</code>).</td><td><code>table.unpack({"a", "b", "c"})</code></td><td><code>a</code>, <code>b</code>, <code>c</code></td><td><a href="table-unpack.html">table.unpack e table.pack</a></td></tr>
+<tr><td><code>table.unpack(t, i, j)</code></td><td>Só do item <code>i</code> ao <code>j</code>.</td><td><code>table.unpack({"a", "b", "c"}, 2)</code></td><td><code>b</code>, <code>c</code></td><td></td></tr>
+<tr><td></td><td>o uso clássico: passar uma lista para uma função que espera vários argumentos</td><td><code>math.max(table.unpack({4, 9, 2}))</code></td><td><code>9</code></td><td><a href="varargs.html">Funções Variádicas</a></td></tr>
+<tr><td><code>table.pack(…)</code></td><td>O contrário: junta os valores numa tabela nova e guarda <strong>quantos</strong> eram no campo <code>n</code> (contando os <code>nil</code>).</td><td><code>t = table.pack("a", nil, "c"); print(t.n, #t, t[3])</code></td><td><code>3</code>, <code>1</code>, <code>c</code></td><td><a href="table-unpack.html">table.unpack e table.pack</a></td></tr>
+<tr><td></td><td>sem nada</td><td><code>table.pack().n</code></td><td><code>0</code></td><td></td></tr>
+</table>
+</div>
+
+<p>Repare no <code>#t</code> do <code>table.pack("a", nil, "c")</code>: deu <code>1</code>, não <code>3</code>. Com um <code>nil</code> no meio, a tabela tem um buraco, e o <code>#</code> pode parar em qualquer "borda" (o manual permite tanto 1 quanto 3). Por isso o <code>pack</code> guarda o <code>n</code>: use <code>t.n</code>, nunca <code>#t</code>, para saber quantos valores vieram.</p>
+
+<div class="note">
+<strong><code>unpack</code> sem <code>table.</code> é do Lua 5.1</strong>
+<p>No Lua 5.1 e no LuaJIT (Neovim, LÖVE) a função se chama <code>unpack</code>, sem o <code>table.</code>. No 5.5 o <code>unpack</code> sozinho é <code>nil</code> (conferido no lab). Código que precisa rodar nos dois costuma começar com <code>local unpack = table.unpack or unpack</code>. Veja <a href="versoes.html">As Diferenças entre Versões</a>.</p>
+</div>
+
+<hr>
+
+<h2 id="copiar">Copiar e criar</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Função</th><th>O que faz</th><th>Exemplo</th><th>Resultado</th><th>Aula</th></tr>
+<tr><td><code>table.move(a, f, e, t, b)</code></td><td>Copia os itens <code>a[f]</code> até <code>a[e]</code> para a tabela <code>b</code>, a partir da posição <code>t</code>. Devolve <code>b</code>. Aqui, uma cópia da lista inteira numa tabela nova.</td><td><code>a = {1, 2, 3}; b = table.move(a, 1, 3, 1, {}); print(b ~= a, table.concat(b, " "))</code></td><td><code>true</code>, <code>1 2 3</code></td><td><a href="tabelas-referencia.html">Tabelas São Referências</a></td></tr>
+<tr><td></td><td>acrescentar uma lista no fim de outra</td><td><code>a = {1, 2, 3}; table.move({8, 9}, 1, 2, #a + 1, a); print(table.concat(a, " "))</code></td><td><code>1 2 3 8 9</code></td><td></td></tr>
+<tr><td><code>table.move(a, f, e, t)</code></td><td>Sem <code>b</code>, copia dentro da própria tabela (os itens antigos ficam onde estavam se não forem cobertos).</td><td><code>t = table.move({1, 2, 3}, 1, 3, 2); print(table.concat(t, " "))</code></td><td><code>1 1 2 3</code></td><td></td></tr>
+<tr><td><code>table.create(n)</code> <span class="versao">5.5</span></td><td>Cria uma tabela <strong>vazia</strong> já com espaço reservado para <code>n</code> itens de lista. Serve só para economizar tempo e memória quando você sabe quantos itens vêm: a tabela nasce vazia.</td><td><code>t = table.create(100); print(#t, next(t))</code></td><td><code>0</code>, <code>nil</code></td><td><a href="novidades.html">Novidades do Lua 5.5</a></td></tr>
+<tr><td><code>table.create(n, m)</code> <span class="versao">5.5</span></td><td>…e espaço para <code>m</code> outras chaves (de texto, por exemplo).</td><td><code>t = table.create(10, 5); t.nome = "Ana"; print(t.nome)</code></td><td><code>Ana</code></td><td></td></tr>
+<tr><td></td><td>tamanho negativo</td><td><code>table.create(-1)</code></td><td><code>stdin:1: bad argument #1 to 'create' (out of range)</code></td><td></td></tr>
+</table>
+</div>
+
+<div class="note">
+<strong><code>table.create</code> é só do 5.5</strong> <span class="versao">5.5</span>
+<p>No lab, <code>print(table.create)</code> no <code>lua5.4</code> deu <code>nil</code>. Se o seu programa precisa rodar num Lua mais antigo, simplesmente use <code>{}</code>: o resultado é o mesmo, só um pouco menos econômico.</p>
+</div>
+
+<hr>
+
+<h2 id="az">Todas de A a Z</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Função</th><th>Em uma frase</th><th>Devolve</th><th>Aula</th></tr>
+<tr><td><code>table.concat(t, sep, i, j)</code></td><td>junta os itens num texto</td><td>o texto</td><td><a href="table-concat.html">table.concat</a></td></tr>
+<tr><td><code>table.create(n, m)</code> <span class="versao">5.5</span></td><td>tabela vazia com espaço reservado</td><td>a tabela nova</td><td><a href="novidades.html">Novidades do Lua 5.5</a></td></tr>
+<tr><td><code>table.insert(t, pos, v)</code></td><td>põe um item (no fim ou em <code>pos</code>)</td><td>nada</td><td><a href="table-insert-remove.html">table.insert e table.remove</a></td></tr>
+<tr><td><code>table.move(a, f, e, t, b)</code></td><td>copia um trecho de uma lista para outra</td><td>a tabela de destino</td><td><a href="tabelas-referencia.html">Tabelas São Referências</a></td></tr>
+<tr><td><code>table.pack(…)</code></td><td>valores numa tabela, com o campo <code>n</code></td><td>a tabela nova</td><td><a href="table-unpack.html">table.unpack e table.pack</a></td></tr>
+<tr><td><code>table.remove(t, pos)</code></td><td>tira um item (o último ou o de <code>pos</code>)</td><td>o item tirado</td><td><a href="table-insert-remove.html">table.insert e table.remove</a></td></tr>
+<tr><td><code>table.sort(t, comp)</code></td><td>ordena a própria lista</td><td>nada</td><td><a href="table-sort.html">table.sort</a></td></tr>
+<tr><td><code>table.unpack(t, i, j)</code></td><td>os itens como valores separados</td><td>os itens</td><td><a href="table-unpack.html">table.unpack e table.pack</a></td></tr>
+</table>
+</div>
+
+<p>O que <strong>não</strong> está na biblioteca: copiar uma tabela inteira (com chaves de texto), procurar um valor, contar as chaves de um dicionário, mostrar uma tabela por dentro. Isso se faz com um <code>for … in pairs(t)</code>: veja <a href="pairs.html">pairs</a> e <a href="tabelas-referencia.html">Tabelas São Referências (cópias)</a>. O tamanho da lista é o operador <code>#</code> (<a href="operador-tamanho.html">O Operador de Tamanho</a>).</p>
+
+<hr>
+
+<h2>Experimente</h2>
+
+<div class="trylua" data-goal="out:Ana &gt; Caio &gt; Bia;;src:table\.sort">
+<p class="try-task"><strong>Missão:</strong> a Ana quer o ranking da turma, da maior nota para a menor: <code>Ana &gt; Caio &gt; Bia</code>. O programa já junta os nomes com <code>table.concat</code>, mas na ordem em que foram digitados. Antes do <code>for</code>, ordene a lista <code>alunos</code> com <code>table.sort</code> e uma função que compare as notas (<code>a.nota &gt; b.nota</code>).</p>
+<pre class="script" data-file="main.lua">local alunos = {
+  {nome = "Bia", nota = 7.0},
+  {nome = "Ana", nota = 9.5},
+  {nome = "Caio", nota = 8.0},
+}
+
+local nomes = {}
+for _, aluno in ipairs(alunos) do
+  table.insert(nomes, aluno.nome)
+end
+print(table.concat(nomes, " &gt; "))
+</pre>
+<pre class="solucao" data-file="main.lua">local alunos = {
+  {nome = "Bia", nota = 7.0},
+  {nome = "Ana", nota = 9.5},
+  {nome = "Caio", nota = 8.0},
+}
+
+table.sort(alunos, function(a, b) return a.nota &gt; b.nota end)
+
+local nomes = {}
+for _, aluno in ipairs(alunos) do
+  table.insert(nomes, aluno.nome)
+end
+print(table.concat(nomes, " &gt; "))
+</pre>
+</div>
+
+<div class="trylua">
+<p class="try-task"><strong>Livre:</strong> teste as funções desta página na lista de compras. Insira em outras posições, remova do meio, ordene ao contrário.</p>
+<pre class="script" data-file="main.lua">local compras = {"pão", "leite"}
+table.insert(compras, "café")
+table.insert(compras, 1, "ovos")
+print(#compras, table.concat(compras, ", "))
+
+local tirado = table.remove(compras, 2)
+print("tirei:", tirado, "ficou:", table.concat(compras, ", "))
+
+table.sort(compras)
+print(table.concat(compras, " | "))
+
+local t = table.pack("a", nil, "c")
+print(t.n, table.unpack(t, 1, t.n))
+</pre>
+</div>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li>São 8 funções na tabela <code>table</code>, e todas trabalham com a parte de lista (chaves 1, 2, 3…).</li>
+  <li><code>insert</code> e <code>remove</code> põem e tiram itens sem deixar buracos (no fim ou numa posição).</li>
+  <li><code>concat</code> junta em texto (só textos e números); <code>sort</code> ordena a própria lista, com uma função <code>comp</code> opcional.</li>
+  <li><code>unpack</code> espalha os itens; <code>pack</code> junta valores e guarda o total em <code>n</code>.</li>
+  <li><code>move</code> copia trechos entre listas.</li>
+  <li><span class="versao">5.5</span> <code>table.create(n)</code> cria uma tabela vazia com espaço reservado.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
