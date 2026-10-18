@@ -1,0 +1,457 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua math.random — números aleatórios e sorteios | Guia Lua</title>
+<meta name="description" content="Números aleatórios no Lua 5.5 para quem nunca programou: math.random() entre 0 e 1, math.random(6) para o dado, math.random(m, n), sortear um nome da lista, embaralhar, sortear sem repetir, uma chance de 30%, a semente (math.randomseed(42) para repetir os mesmos números) e a diferença do Lua 5.1, com os erros reais (interval is empty, number has no integer representation).">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">math.random</span></h1>
+
+<p class="intro">Jogar um dado, sortear quem lava a louça, embaralhar as cartas, fazer o inimigo do jogo aparecer num lugar diferente a cada partida: tudo isso precisa de números que o programa <strong>não sabe de antemão</strong>. No Lua, quem sorteia é a função <code>math.random</code> ("aleatório"), da <a href="math.html">biblioteca math</a>. Nesta aula você vai sortear de todos os jeitos e entender a <strong>semente</strong>, o truque para os sorteios se repetirem quando você quiser.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>As três formas do <code>math.random</code>: sem nada (entre 0 e 1), com um número (de 1 até ele) e com dois (de um até o outro).</li>
+  <li>Receitas prontas: jogar dados, sortear um item da lista, embaralhar, sortear sem repetir e "uma chance de 30%".</li>
+  <li>O que é a <strong>semente</strong> e como <code>math.randomseed(42)</code> faz os mesmos números saírem toda vez.</li>
+  <li>Que no Lua 5.5 a semente já é sorteada sozinha, e que no Lua 5.1 não era (por isso o velho <code>math.randomseed(os.time())</code>).</li>
+  <li>Os erros reais: <code>interval is empty</code>, <code>number has no integer representation</code> e <code>wrong number of arguments</code>.</li>
+</ul>
+</div>
+
+<p>As saídas são do <strong>Lua 5.5</strong> da máquina da Ana. Atenção: nos exemplos <strong>sem</strong> semente, os números que você vai ver ao rodar serão <strong>outros</strong>. É esse o ponto!</p>
+
+<hr>
+
+<h2>A ideia: o globo do bingo e o livro de números</h2>
+<p>No bingo da quermesse, o globo gira e uma bola sai: ninguém sabe qual. O computador não tem globo. Ele é uma máquina que faz sempre a mesma coisa com as mesmas entradas, então ele <strong>finge</strong>: usa uma conta esperta que, a partir de um número inicial, vai produzindo uma sequência que <strong>parece</strong> não ter padrão nenhum. Por isso se diz que os números são <strong>pseudoaleatórios</strong> ("falsamente aleatórios").</p>
+<p>Imagine um livro grosso cheio de números embaralhados. O número inicial, a <strong>semente</strong> (em inglês, <em>seed</em>), diz <strong>em que página</strong> você começa a ler. Cada <code>math.random</code> lê o próximo número do livro. Duas consequências:</p>
+<ul>
+  <li>Se cada execução do programa começar numa página diferente, os números mudam a cada vez. É o que o Lua 5.5 faz sozinho.</li>
+  <li>Se você mandar começar <strong>sempre na mesma página</strong> (a mesma semente), os números se repetem, na mesma ordem. Ótimo para testar um programa.</li>
+</ul>
+
+<hr>
+
+<h2>1. As três formas do <code>math.random</code></h2>
+
+<pre class="file" data-file="dado.lua">print(math.random(6), math.random(6), math.random(6))
+print(math.random(10, 20))
+print(math.random())
+</pre>
+
+<pre class="term">$ lua dado.lua
+2	2	3
+17
+0.5567239515761212
+$ lua dado.lua
+6	4	2
+12
+0.63035605516434146</pre>
+
+<dl class="anatomy">
+  <dt>math.random(6)</dt><dd>Com <strong>um</strong> número <code>n</code>: um inteiro de <strong>1 até n</strong>, incluindo os dois. É o dado: 1, 2, 3, 4, 5 ou 6. Repare que o mesmo número pode sair duas vezes seguidas (saiu <code>2 2</code>), como num dado de verdade.</dd>
+  <dt>math.random(10, 20)</dt><dd>Com <strong>dois</strong> números: um inteiro de 10 até 20, incluindo os dois.</dd>
+  <dt>math.random()</dt><dd>Sem nada: um <strong>float</strong> de 0 até 1 (pode dar 0, mas nunca chega a 1). Serve para chances e porcentagens (seção 3).</dd>
+</dl>
+
+<p>A Ana rodou o mesmo programa duas vezes e os números foram outros. No Lua 5.5 (e no 5.4), cada execução começa com uma semente diferente, escolhida pelo próprio Lua.</p>
+
+<h3>"Será que é justo?"</h3>
+<p>Um dado bom dá cada face mais ou menos o mesmo número de vezes. Este programa joga o dado 6000 vezes e conta:</p>
+
+<pre class="file" data-file="contar.lua">local contagem = {0, 0, 0, 0, 0, 0}
+for _ = 1, 6000 do
+  local face = math.random(6)
+  contagem[face] = contagem[face] + 1
+end
+for face = 1, 6 do
+  print(face, contagem[face])
+end
+</pre>
+
+<pre class="term">$ lua contar.lua
+1	1020
+2	1033
+3	985
+4	971
+5	977
+6	1014</pre>
+
+<p>Cerca de 1000 de cada (6000 ÷ 6), nunca exatamente. A face sorteada serve direto de posição na lista <code>contagem</code>, porque o <code>math.random(6)</code> dá um inteiro de 1 a 6. (O <code>_</code> é o nome costumeiro para uma variável que você não vai usar; veja <a href="for-numerico.html">for Numérico</a>.)</p>
+
+<div class="trylua" data-goal="outre:Soma: ([2-9]|1[0-2])\n;;src:math\.random">
+<p class="try-task"><strong>Missão:</strong> o jogo de tabuleiro da Ana usa <strong>dois</strong> dados. Mude o programa para jogar os dois (cada um com <code>math.random(6)</code>) e mostrar também uma linha <code>Soma: …</code> com o total. Rode várias vezes: cada Rodar dá outro resultado.</p>
+<pre class="script" data-file="main.lua">local d1 = math.random(6)
+print("Dado: " .. d1)
+</pre>
+<pre class="solucao" data-file="main.lua">local d1 = math.random(6)
+local d2 = math.random(6)
+print("Dados: " .. d1 .. " e " .. d2)
+print("Soma: " .. d1 + d2)
+</pre>
+</div>
+
+<hr>
+
+<h2>2. A semente: <code>math.randomseed</code></h2>
+<p>Agora, o contrário: a Ana está testando um jogo e quer que os sorteios sejam <strong>sempre os mesmos</strong>, para conseguir repetir um defeito. Ela escolhe a página do livro com <code>math.randomseed(42)</code> (qualquer número inteiro serve; 42 é só um costume):</p>
+
+<pre class="file" data-file="semente.lua">math.randomseed(42)
+print(math.random(1, 100), math.random(1, 100), math.random(1, 100))
+print(math.random(6), math.random())
+</pre>
+
+<pre class="term">$ lua semente.lua
+50	76	86
+6	0.0096006865506838013
+$ lua semente.lua
+50	76	86
+6	0.0096006865506838013</pre>
+
+<p>Igualzinho nas duas vezes. Com a mesma semente, o Lua 5.5 produz a mesma sequência, na mesma ordem. O editor do guia usa a mesma conta do Lua 5.5: com <code>math.randomseed(42)</code>, ele também mostra <code>50 76 86</code> (conferido). Já em outra versão do Lua a sequência é outra (veja a seção 5).</p>
+
+<dl class="anatomy">
+  <dt>math.randomseed(42)</dt><dd>"Comece na página 42." Chame <strong>uma vez</strong>, no começo do programa, antes dos sorteios.</dd>
+  <dt>math.randomseed()</dt><dd>Sem número: o Lua escolhe uma semente nova, imprevisível (o que ele já faz sozinho ao começar).</dd>
+</dl>
+
+<p>Curiosidade: o <code>math.randomseed</code> devolve os dois números que usou como semente:</p>
+
+<pre class="term">$ lua -e 'print(math.randomseed(42))'
+42	0
+$ lua -e 'print(math.randomseed())'
+973348601	-1608846346381695232
+$ lua -e 'print(math.randomseed())'
+3101133992	1420972818218884809</pre>
+
+<p>Para que serve? Se o seu jogo sorteou algo estranho, guarde a semente que saiu de <code>math.randomseed()</code>; depois, com <code>math.randomseed(973348601, -1608846346381695232)</code>, você repete <strong>exatamente</strong> aquela partida.</p>
+
+<div class="warning">
+<strong>Não chame <code>math.randomseed</code> a toda hora</strong>
+<p>A semente é para o <strong>começo</strong>. Se você a puser <strong>dentro</strong> de um laço, com o mesmo número, todo sorteio volta para a mesma página e sai o mesmo número:</p>
+<pre class="term">$ lua -e 'math.randomseed(42) print(math.random(6)) math.randomseed(42) print(math.random(6))'
+6
+6</pre>
+</div>
+
+<div class="trylua" data-goal="out:iguais: true;;src:randomseed">
+<p class="try-task"><strong>Missão:</strong> o programa sorteia três números duas vezes e compara. Sem semente, as duas sequências saem diferentes (<code>iguais: false</code>). Faça elas saírem iguais: chame <code>math.randomseed(7)</code> antes da <strong>primeira</strong> sequência e de novo antes da <strong>segunda</strong>.</p>
+<pre class="script" data-file="main.lua">local function tres()
+  return math.random(1000) .. " " .. math.random(1000) .. " " .. math.random(1000)
+end
+
+local a = tres()
+local b = tres()
+print(a)
+print(b)
+print("iguais: " .. tostring(a == b))
+</pre>
+<pre class="solucao" data-file="main.lua">local function tres()
+  return math.random(1000) .. " " .. math.random(1000) .. " " .. math.random(1000)
+end
+
+math.randomseed(7)
+local a = tres()
+math.randomseed(7)
+local b = tres()
+print(a)
+print(b)
+print("iguais: " .. tostring(a == b))
+</pre>
+</div>
+
+<hr>
+
+<h2>3. Receitas de sorteio</h2>
+<p>Nos exemplos abaixo, a Ana fixou uma semente, para que você veja no editor <strong>a mesma saída</strong> do lab. Tire a linha do <code>math.randomseed</code> para ter sorteios de verdade.</p>
+
+<h3>Sortear um item da lista</h3>
+<pre class="file" data-file="sorteio.lua">math.randomseed(2026)
+local nomes = {"Ana", "Bia", "Caio", "Duda", "Edu"}
+local i = math.random(#nomes)
+print("Posição sorteada:", i)
+print("Quem lava a louça hoje: " .. nomes[i])
+</pre>
+<pre class="term">$ lua sorteio.lua
+Posição sorteada:	2
+Quem lava a louça hoje: Bia</pre>
+<p>O segredo é <code>math.random(#nomes)</code>: sorteia uma <strong>posição</strong> de 1 até o tamanho da lista (o <code>#</code>; veja <a href="operador-tamanho.html">O Operador de Tamanho</a>). Se alguém entrar na lista, o sorteio já inclui a pessoa nova, sem mudar mais nada.</p>
+
+<h3>Embaralhar</h3>
+<pre class="file" data-file="embaralhar.lua">math.randomseed(7)
+local cartas = {"A", "2", "3", "4", "5", "6"}
+for i = #cartas, 2, -1 do
+  local j = math.random(i)
+  cartas[i], cartas[j] = cartas[j], cartas[i]
+end
+print(table.concat(cartas, " "))
+</pre>
+<pre class="term">$ lua embaralhar.lua
+A 6 4 5 2 3</pre>
+<p>Esta receita tem nome: <strong>embaralhamento de Fisher–Yates</strong>. Ela anda da última posição para a primeira e, em cada uma, troca a carta com uma posição sorteada entre as que ainda não foram fixadas (de 1 até <code>i</code>). A troca usa a <a href="atribuicao-multipla.html">atribuição múltipla</a>. Ela é justa: todas as ordens têm a mesma chance. (Nesse sorteio, o <code>A</code> acabou ficando no lugar dele, o que é perfeitamente possível.)</p>
+
+<h3>Sortear sem repetir: o bingo</h3>
+<pre class="file" data-file="bingo.lua">math.randomseed(10)
+local bolas = {}
+for n = 1, 10 do bolas[n] = n end
+for rodada = 1, 4 do
+  local i = math.random(#bolas)
+  local bola = table.remove(bolas, i)
+  print("Rodada " .. rodada .. ": bola " .. bola .. " (sobram " .. #bolas .. ")")
+end
+</pre>
+<pre class="term">$ lua bingo.lua
+Rodada 1: bola 6 (sobram 9)
+Rodada 2: bola 3 (sobram 8)
+Rodada 3: bola 2 (sobram 7)
+Rodada 4: bola 9 (sobram 6)</pre>
+<p>Como no globo: a bola sorteada <strong>sai</strong> do globo (<code>table.remove</code> tira e devolve o item; veja <a href="table-insert-remove.html">table.insert e table.remove</a>), então nunca sai de novo. Outro jeito: embaralhar a lista inteira e ir pegando na ordem.</p>
+
+<h3>Uma chance de 30%</h3>
+<pre class="file" data-file="chance.lua">math.randomseed(1)
+local chuva = 0
+for dia = 1, 1000 do
+  if math.random() &lt; 0.3 then
+    chuva = chuva + 1
+  end
+end
+print("Dias de chuva em 1000:", chuva)
+</pre>
+<pre class="term">$ lua chance.lua
+Dias de chuva em 1000:	290</pre>
+<p><code>math.random()</code> dá um número entre 0 e 1, espalhado por igual. Ele cai abaixo de 0,3 em cerca de 30% das vezes. Então <code>if math.random() &lt; 0.3 then</code> quer dizer "com 30% de chance". Em 1000 dias, choveu em 290: perto de 300, como esperado.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Quero…</th><th>Escreva</th></tr>
+<tr><td>Um dado de 6 faces</td><td><code>math.random(6)</code></td></tr>
+<tr><td>Um inteiro de <code>a</code> até <code>b</code></td><td><code>math.random(a, b)</code></td></tr>
+<tr><td>Um item da lista</td><td><code>lista[math.random(#lista)]</code></td></tr>
+<tr><td>Uma chance de <code>p</code> (0 a 1)</td><td><code>if math.random() &lt; p then</code></td></tr>
+<tr><td>Um float de <code>a</code> até <code>b</code></td><td><code>a + (b - a) * math.random()</code></td></tr>
+<tr><td>Cara ou coroa</td><td><code>math.random(2) == 1</code></td></tr>
+<tr><td>Embaralhar</td><td>Fisher–Yates (acima)</td></tr>
+<tr><td>Sortear sem repetir</td><td><code>table.remove(lista, math.random(#lista))</code></td></tr>
+<tr><td>Repetir os mesmos sorteios</td><td><code>math.randomseed(N)</code> uma vez, no começo</td></tr>
+</table>
+</div>
+
+<div class="warning">
+<strong>Não use para senhas nem para dinheiro</strong>
+<p>Os números do <code>math.random</code> são ótimos para jogos e sorteios entre amigos, mas quem sabe a semente sabe todos os números. Para senhas, chaves e qualquer coisa de segurança, é preciso um gerador próprio do sistema (no Linux, o arquivo <code>/dev/urandom</code>), assunto fora deste curso.</p>
+</div>
+
+<hr>
+
+<h2>4. No editor do guia</h2>
+<p>Na caixa "Experimente", cada clique em <strong>Rodar</strong> começa com uma semente nova, como no terminal: os sorteios mudam a cada vez. Com <code>math.randomseed(N)</code>, o editor dá <strong>os mesmos números</strong> que o Lua 5.5 do terminal (os exemplos desta aula foram conferidos nos dois).</p>
+
+<hr>
+
+<h2>5. E no Lua 5.1, no LuaJIT e no 5.4?</h2>
+<p>Aqui as versões são bem diferentes. No lab, o mesmo comando, rodado duas vezes em cada versão:</p>
+
+<pre class="term">$ lua5.1 -e 'print(math.random(1, 100), math.random(1, 100))'
+85	40
+$ lua5.1 -e 'print(math.random(1, 100), math.random(1, 100))'
+85	40
+$ luajit -e 'print(math.random(1, 100), math.random(1, 100))'
+80	70
+$ luajit -e 'print(math.random(1, 100), math.random(1, 100))'
+80	70
+$ lua5.4 -e 'print(math.random(1, 100), math.random(1, 100))'
+2	6
+$ lua5.4 -e 'print(math.random(1, 100), math.random(1, 100))'
+39	92</pre>
+
+<p>No <strong>Lua 5.1</strong> e no <strong>LuaJIT</strong>, o programa começa <strong>sempre na mesma página</strong>: sem semente, sai <code>85 40</code> (ou <code>80 70</code>) toda vez. Por isso, em código antigo (e em muitos tutoriais), você vai ver esta linha no começo:</p>
+
+<pre class="file" data-file="antigo.lua">math.randomseed(os.time())
+</pre>
+
+<p>Ela usa a hora atual, em segundos (veja <a href="os-date-time.html">os.time</a>), como semente. No Lua 5.5 ela não é necessária, e tem um defeito: dois programas abertos no <strong>mesmo segundo</strong> sorteiam os mesmos números. Se o seu código também tiver de rodar no 5.1 ou no LuaJIT (no Neovim, no LÖVE), mantenha a linha.</p>
+
+<p>E a mesma semente dá números diferentes em cada versão, porque a conta por dentro mudou no 5.4:</p>
+
+<pre class="term">$ lua5.4 -e 'math.randomseed(42) print(math.random(1, 100), math.random(1, 100))'
+50	76
+$ luajit -e 'math.randomseed(42) print(math.random(1, 100), math.random(1, 100))'
+96	1
+$ lua5.1 -e 'math.randomseed(42) print(math.random(1, 100), math.random(1, 100))'
+4	33</pre>
+
+<p>O 5.4 e o 5.5 concordam (<code>50 76</code>); o LuaJIT e o 5.1 dão outra coisa. Moral: a semente repete os números <strong>na mesma versão</strong>. Veja <a href="versoes.html">as diferenças entre versões</a>.</p>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+
+<div class="cenario">
+<strong>O intervalo ao contrário</strong>
+<pre class="term">$ lua -e 'print(math.random(10, 1))'
+lua: (command line):1: bad argument #1 to 'random' (interval is empty)
+stack traceback:
+	[C]: in field 'random'
+	(command line):1: in main chunk
+	[C]: in ?</pre>
+<p>"Argumento ruim nº 1 para <code>random</code> (o intervalo está vazio)". De 10 até 1 não há número nenhum: o menor vem <strong>primeiro</strong>. <strong>Como consertar:</strong> <code>math.random(1, 10)</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Número com vírgula</strong>
+<pre class="term">$ lua -e 'print(math.random(1.5))'
+lua: (command line):1: bad argument #1 to 'random' (number has no integer representation)
+stack traceback:
+	[C]: in field 'random'
+	(command line):1: in main chunk
+	[C]: in ?
+$ lua -e 'print(math.random(3.0))'
+2</pre>
+<p>"O número não tem representação inteira": com um ou dois números, o <code>math.random</code> sorteia <strong>inteiros</strong>, e 1,5 não é inteiro. Já <code>3.0</code> funciona, porque é um float "redondo". Isso costuma acontecer com uma conta como <code>math.random(#lista / 2)</code>: com 5 itens, <code>5 / 2</code> é 2,5. <strong>Como consertar:</strong> use <code>//</code> ou <code>math.floor</code> (<code>math.random(#lista // 2)</code>). Para um float entre <code>a</code> e <code>b</code>, use <code>a + (b - a) * math.random()</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Três números</strong>
+<pre class="term">$ lua -e 'print(math.random(1, 2, 3))'
+lua: (command line):1: wrong number of arguments
+stack traceback:
+	[C]: in field 'random'
+	(command line):1: in main chunk
+	[C]: in ?</pre>
+<p>"Número errado de argumentos": o <code>math.random</code> aceita nenhum, um ou dois. Para sortear entre três valores específicos, ponha-os numa lista e sorteie a posição.</p>
+</div>
+
+<div class="cenario">
+<strong>Uma curiosidade: <code>math.random(0)</code> não é erro</strong>
+<pre class="term">$ lua -e 'math.randomseed(42) print(math.random(0))'
+-1276290044721465627</pre>
+<p>Talvez você esperasse "intervalo vazio" (de 1 até 0). No 5.4 e no 5.5, o <code>0</code> é um caso especial: sorteia um inteiro qualquer, de <code>math.mininteger</code> até <code>math.maxinteger</code>, positivo ou negativo. Você dificilmente vai precisar dele de propósito, mas ele aparece <strong>sem querer</strong> quando a lista está vazia:</p>
+<pre class="term">$ lua -e 'local l = {} print(math.random(#l), l[math.random(#l)])'
+-5866118092075993803	nil</pre>
+<p>Com a lista vazia, <code>#l</code> é 0, o <code>math.random(0)</code> devolve um número gigante, e a posição gigante da lista não existe: <code>nil</code>, sem erro nenhum na hora. O erro só aparece depois, quando o programa tenta usar esse <code>nil</code>. <strong>Como evitar:</strong> antes de sortear, confira <code>if #lista &gt; 0 then</code>.</p>
+</div>
+
+<div class="trylua" data-goal="outre:^Número da sorte: ([1-9]|10)\n$">
+<p class="try-task"><strong>Missão:</strong> rode e leia o erro <code>interval is empty</code>. Conserte o sorteio para dar um número de <strong>1 até 10</strong>.</p>
+<pre class="script" data-file="main.lua">local sorte = math.random(10, 1)
+print("Número da sorte: " .. sorte)
+</pre>
+<pre class="solucao" data-file="main.lua">local sorte = math.random(1, 10)
+print("Número da sorte: " .. sorte)
+</pre>
+</div>
+
+<hr>
+
+<h2>Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>O que faz</th></tr>
+<tr><td><code>math.random()</code></td><td>Float de 0 até 1 (o 1 nunca sai)</td></tr>
+<tr><td><code>math.random(n)</code></td><td>Inteiro de 1 até <code>n</code></td></tr>
+<tr><td><code>math.random(m, n)</code></td><td>Inteiro de <code>m</code> até <code>n</code> (<code>m</code> ≤ <code>n</code>)</td></tr>
+<tr><td><code>math.random(0)</code></td><td>Um inteiro qualquer (todos os bits sorteados)</td></tr>
+<tr><td><code>math.randomseed(N)</code></td><td>Fixa a semente: os sorteios seguintes se repetem a cada execução (na mesma versão do Lua)</td></tr>
+<tr><td><code>math.randomseed()</code></td><td>Semente nova e imprevisível; devolve os dois números usados</td></tr>
+<tr><td><code>math.randomseed(os.time())</code></td><td>O costume do Lua 5.1/LuaJIT; desnecessário no 5.4 e no 5.5</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Mensagem</th><th>Causa provável</th></tr>
+<tr><td><code>bad argument #1 to 'random' (interval is empty)</code></td><td>O primeiro número é maior que o segundo</td></tr>
+<tr><td><code>bad argument #1 to 'random' (number has no integer representation)</code></td><td>Passou um número com parte quebrada (uma divisão com <code>/</code>?)</td></tr>
+<tr><td><code>wrong number of arguments</code></td><td>Passou três ou mais números</td></tr>
+<tr><td>O item sorteado é <code>nil</code></td><td>A lista estava vazia: <code>math.random(0)</code> deu um número gigante</td></tr>
+<tr><td>Sai sempre o mesmo número</td><td><code>math.randomseed</code> com número fixo dentro do laço; ou é o Lua 5.1 sem semente</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. Complete o dado</h3>
+<p>Complete para sortear um número de 1 a 20 (um dado de RPG):</p>
+<div class="ex-code">local d20 = math.<input data-answer="random" aria-label="função">(<input data-answer="20|1, 20|1,20" aria-label="argumentos">)</div>
+</div>
+
+<div class="exercise">
+<h3>2. Sorteie da lista</h3>
+<p>Complete para sortear uma fruta da lista <code>frutas</code>, qualquer que seja o tamanho dela:</p>
+<div class="ex-code">local fruta = frutas[math.random(<input data-answer="#frutas" aria-label="tamanho da lista">)]</div>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">3. Um programa do Lua 5.5 começa com <code>math.randomseed(42)</code>. Rodando duas vezes…</p>
+<label><input type="radio" name="q3"> Os sorteios mudam a cada vez</label>
+<label><input type="radio" name="q3"> Os sorteios saem iguais nas duas vezes</label>
+<label><input type="radio" name="q3"> Todo sorteio dá 42</label>
+<label><input type="radio" name="q3"> Dá erro: a semente precisa ser <code>os.time()</code></label>
+</div>
+
+<div class="mc" data-answer="4">
+<p class="mc-q">4. Quais valores <code>math.random(3, 5)</code> pode dar?</p>
+<label><input type="radio" name="q4"> 3 e 4</label>
+<label><input type="radio" name="q4"> 4 e 5</label>
+<label><input type="radio" name="q4"> Qualquer float entre 3 e 5</label>
+<label><input type="radio" name="q4"> 3, 4 e 5</label>
+</div>
+
+<div class="mc" data-answer="1">
+<p class="mc-q">5. Por que tantos tutoriais começam com <code>math.randomseed(os.time())</code>?</p>
+<label><input type="radio" name="q5"> Porque no Lua 5.1 e no LuaJIT, sem semente, os sorteios se repetem a cada execução</label>
+<label><input type="radio" name="q5"> Porque sem ela o <code>math.random</code> dá erro</label>
+<label><input type="radio" name="q5"> Porque ela deixa os números mais seguros para senhas</label>
+<label><input type="radio" name="q5"> Porque o <code>math.random</code> só sorteia horas</label>
+</div>
+
+<h3>Missão final: o vencedor da rifa</h3>
+
+<div class="trylua" data-goal="outre:^Vencedor: (Ana|Bia|Caio|Duda|Edu)\n$;;src:math\.random\(\s*#nomes\s*\)">
+<p class="try-task"><strong>Missão:</strong> a rifa da escola sempre dá a primeira pessoa da lista, o que não tem graça. Troque o <code>1</code> por um sorteio de uma posição de 1 até o <strong>tamanho da lista</strong> (use <code>#nomes</code>, para funcionar mesmo se mais gente entrar). Rode várias vezes e veja o vencedor mudar.</p>
+<pre class="script" data-file="main.lua">local nomes = {"Ana", "Bia", "Caio", "Duda", "Edu"}
+local i = 1
+print("Vencedor: " .. nomes[i])
+</pre>
+<pre class="solucao" data-file="main.lua">local nomes = {"Ana", "Bia", "Caio", "Duda", "Edu"}
+local i = math.random(#nomes)
+print("Vencedor: " .. nomes[i])
+</pre>
+</div>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li><code>math.random()</code> dá um float de 0 a 1; <code>math.random(n)</code>, um inteiro de 1 a <code>n</code>; <code>math.random(m, n)</code>, um inteiro de <code>m</code> a <code>n</code>.</li>
+  <li>Os números são pseudoaleatórios: saem de uma conta que começa na <strong>semente</strong>. No Lua 5.5 (e no 5.4), a semente já é sorteada a cada execução.</li>
+  <li><code>math.randomseed(42)</code>, uma vez no começo, faz os sorteios se repetirem (na mesma versão do Lua; o editor do guia dá os mesmos números do terminal).</li>
+  <li>Receitas: <code>lista[math.random(#lista)]</code>, <code>if math.random() &lt; 0.3 then</code>, Fisher–Yates para embaralhar, <code>table.remove</code> para não repetir.</li>
+  <li>No Lua 5.1 e no LuaJIT, sem semente, os números se repetem: daí o <code>math.randomseed(os.time())</code> dos códigos antigos.</li>
+  <li>Erros: <code>interval is empty</code> (intervalo ao contrário ou lista vazia), <code>number has no integer representation</code> (número quebrado).</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
