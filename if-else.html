@@ -1,0 +1,508 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua if e else — um caminho ou o outro | Guia Lua</title>
+<meta name="description" content="O else do Lua para quem nunca programou: if … then … else … end, par ou ímpar, o número digitado que não é número, a variável que some quando é criada dentro do bloco, if/else × dois ifs, e os erros reais do Lua 5.5 (else then, end antes do else, else com condição).">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">if e else</span></h1>
+
+<p class="intro">Na aula <a href="if.html">if … then</a>, o programa fazia uma coisa quando a condição era verdadeira e, quando era falsa, simplesmente não fazia nada. Muitas vezes, porém, você quer fazer <strong>outra coisa</strong> no caso falso: "Pode votar" <strong>ou</strong> "Ainda não pode votar"; "Compra aprovada" <strong>ou</strong> "Saldo insuficiente". Para isso o <code>if</code> ganha um segundo bloco, o <code>else</code>, que em inglês quer dizer "<strong>senão</strong>".</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>Como escrever <code>if … then … else … end</code> e o que cada parte faz.</li>
+  <li>Que, com <code>else</code>, <strong>sempre</strong> roda exatamente um dos dois blocos: nunca os dois, nunca nenhum.</li>
+  <li>Exemplos do dia a dia: par ou ímpar, quantas sacolas, o número digitado que não é número.</li>
+  <li>Uma armadilha importante: a variável <code>local</code> criada <strong>dentro</strong> do bloco some depois do <code>end</code>.</li>
+  <li>A diferença entre um <code>if/else</code> e dois <code>if</code>s separados.</li>
+  <li>Os erros reais: <code>else then</code>, o <code>end</code> antes do <code>else</code>, o <code>else</code> com condição e o <code>else</code> repetido.</li>
+</ul>
+</div>
+
+<p>Todos os programas desta aula rodaram no <strong>Lua 5.5</strong> da máquina da Ana (usuária <code>ana</code>, computador <code>notebook</code>), com <code>lua arquivo.lua</code>. Você pode rodar cada um no editor do guia.</p>
+
+<hr>
+
+<h2>A ideia: uma bifurcação na estrada</h2>
+<p>A Ana combinou com a amiga: <em>"Se fizer sol no sábado, então a gente vai à praia; senão, a gente vai ao cinema."</em> Agora a frase tem <strong>dois caminhos</strong>, como uma estrada que se divide em duas:</p>
+<ol class="passo">
+  <li>Primeiro vem a pergunta: vai fazer sol?</li>
+  <li>Se a resposta for <strong>sim</strong>, elas pegam o caminho da praia.</li>
+  <li>Se for <strong>não</strong>, pegam o caminho do cinema.</li>
+  <li>Os dois caminhos se juntam de novo depois: no domingo, a vida segue igual.</li>
+</ol>
+<p>Repare que não existe a opção "não sair" nem a opção "ir aos dois": é um caminho <strong>ou</strong> o outro, sempre um. O <code>else</code> do Lua funciona assim.</p>
+
+<pre class="file" data-file="sabado.lua">local sol = false
+if sol then
+  print("Praia!")
+else
+  print("Cinema!")
+end
+</pre>
+<p>Leia: "<strong>se</strong> <code>sol</code>, <strong>então</strong> praia, <strong>senão</strong> cinema, <strong>fim</strong>". Com <code>sol = false</code>, o programa mostra <code>Cinema!</code>.</p>
+
+<hr>
+
+<h2>1. O primeiro <code>else</code>: pode votar ou não?</h2>
+<p>O programa da aula anterior, agora com uma resposta para o caso falso:</p>
+
+<pre class="file" data-file="votar2.lua">local idade = 15
+if idade &gt;= 18 then
+  print("A Ana pode votar.")
+else
+  print("A Ana ainda não pode votar.")
+end
+print("Fim do programa.")
+</pre>
+
+<dl class="anatomy">
+  <dt>if idade &gt;= 18 then</dt><dd>Igual ao da aula anterior: a condição e o <code>then</code>.</dd>
+  <dt>print("A Ana pode votar.")</dt><dd>O <strong>primeiro bloco</strong>: roda se a condição for verdadeira.</dd>
+  <dt>else</dt><dd>"Senão". Separa os dois blocos. Ele vem <strong>sozinho</strong> na linha: sem condição e sem <code>then</code> (o "senão" já quer dizer "em todos os outros casos").</dd>
+  <dt>print("A Ana ainda não pode votar.")</dt><dd>O <strong>segundo bloco</strong>: roda se a condição for falsa.</dd>
+  <dt>end</dt><dd>Um <code>end</code> só, no fim de tudo, fecha o <code>if</code> inteiro (os dois blocos). <strong>Não</strong> há um <code>end</code> antes do <code>else</code>.</dd>
+  <dt>print("Fim do programa.")</dt><dd>Fora do <code>if</code>: roda sempre, depois de um dos dois blocos.</dd>
+</dl>
+
+<pre class="term">$ lua votar2.lua
+A Ana ainda não pode votar.
+Fim do programa.
+</pre>
+
+<p>Com <code>idade = 15</code>, a condição deu <code>false</code>: o Lua pulou o primeiro bloco e rodou o do <code>else</code>. Troque para <code>idade = 20</code>:</p>
+
+<pre class="term">$ lua votar2.lua
+A Ana pode votar.
+Fim do programa.
+</pre>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th><code>idade</code></th><th><code>idade &gt;= 18</code></th><th>Bloco que roda</th><th>Bloco pulado</th></tr>
+<tr><td>20</td><td><code>true</code></td><td>o de cima (<code>pode votar</code>)</td><td>o do <code>else</code></td></tr>
+<tr><td>15</td><td><code>false</code></td><td>o do <code>else</code> (<code>ainda não pode</code>)</td><td>o de cima</td></tr>
+</table>
+</div>
+
+<div class="tip">
+<strong>Sempre exatamente um</strong>
+<p>Com <code>if … else … end</code>, é impossível os dois blocos rodarem, e é impossível nenhum rodar. Ou a condição é verdadeira (bloco de cima), ou é falsa (bloco do <code>else</code>). É isso que torna o <code>else</code> tão útil: você tem a garantia de que o programa <strong>sempre</strong> responde alguma coisa.</p>
+</div>
+
+<hr>
+
+<h2>2. Par ou ímpar</h2>
+<p>Um número é <strong>par</strong> quando a divisão por 2 não deixa resto. O operador <code>%</code> dá o resto da divisão (veja <a href="divisao.html">Divisão: /, // e %</a>): <code>7 % 2</code> é <code>1</code>, <code>8 % 2</code> é <code>0</code>.</p>
+
+<pre class="file" data-file="par.lua">local numero = 7
+if numero % 2 == 0 then
+  print(numero .. " é par")
+else
+  print(numero .. " é ímpar")
+end
+</pre>
+
+<pre class="term">$ lua par.lua
+7 é ímpar
+</pre>
+
+<p>A condição <code>numero % 2 == 0</code> lê-se "o resto de <code>numero</code> dividido por 2 é igual a 0?". Para o 7, o resto é 1, a condição é falsa, e roda o <code>else</code>. Não precisa testar "é ímpar?" no <code>else</code>: se não é par, só pode ser ímpar.</p>
+
+<div class="trylua" data-goal="out:7 é ímpar;;src:\belse\b">
+<p class="try-task"><strong>Missão:</strong> este programa só sabe dizer quando o número é par; com o 7, ele não mostra nada. Acrescente um <code>else</code> para ele mostrar <code>7 é ímpar</code>. Depois teste com outros números (8, 0, -3).</p>
+<pre class="script" data-file="main.lua">local numero = 7
+if numero % 2 == 0 then
+  print(numero .. " é par")
+end
+</pre>
+<pre class="solucao" data-file="main.lua">local numero = 7
+if numero % 2 == 0 then
+  print(numero .. " é par")
+else
+  print(numero .. " é ímpar")
+end
+</pre>
+</div>
+
+<hr>
+
+<h2>3. Escolhendo um valor: quantas sacolas?</h2>
+<p>O <code>if/else</code> não serve só para mostrar mensagens. Muitas vezes ele serve para <strong>dar um valor</strong> a uma variável. No caixa da padaria, até 10 itens cabem numa sacola; mais que isso, vão duas:</p>
+
+<pre class="file" data-file="sacola.lua">local itens = 12
+local sacolas
+if itens &lt;= 10 then
+  sacolas = 1
+else
+  sacolas = 2
+end
+print("Itens: " .. itens .. ", sacolas: " .. sacolas)
+</pre>
+
+<pre class="term">$ lua sacola.lua
+Itens: 12, sacolas: 2
+</pre>
+
+<dl class="anatomy">
+  <dt>local sacolas</dt><dd>A variável é <strong>criada antes</strong> do <code>if</code>, ainda sem valor (vale <code>nil</code>). Isso é importante, e a próxima seção mostra por quê.</dd>
+  <dt>sacolas = 1 / sacolas = 2</dt><dd>Cada bloco dá um valor à <strong>mesma</strong> variável, sem <code>local</code> (ela já existe). Como sempre roda um dos dois, depois do <code>end</code> a variável com certeza tem valor.</dd>
+</dl>
+
+<h3>Cuidado: <code>local</code> dentro do bloco some no <code>end</code></h3>
+<p>Uma tentação comum é criar a variável dentro de cada bloco:</p>
+
+<pre class="file" data-file="localdentro.lua">local nota = 8
+if nota &gt;= 6 then
+  local situacao = "aprovada"
+else
+  local situacao = "reprovada"
+end
+print("Situação:", situacao)
+</pre>
+
+<pre class="term">$ lua localdentro.lua
+Situação:	nil
+</pre>
+
+<p>O programa não deu erro, mas mostrou <code>nil</code> no lugar de <code>aprovada</code>. O motivo: uma variável <code>local</code> só existe <strong>dentro do bloco onde foi criada</strong>, até o <code>end</code> (ou o <code>else</code>) que fecha esse bloco. O <code>situacao</code> de dentro do <code>if</code> nasceu e morreu ali. O <code>situacao</code> do <code>print</code>, lá embaixo, é outro nome, que nunca recebeu valor: por isso <code>nil</code>. (Esse assunto, o <strong>escopo</strong>, tem aula própria: <a href="escopo.html">Escopo e Blocos</a>.)</p>
+
+<div class="trylua" data-goal="out:aprovada;;src:^\s*situacao = &quot;aprovada&quot;">
+<p class="try-task"><strong>Missão:</strong> conserte o programa para ele mostrar <code>Situação: aprovada</code>. Dica: crie a variável <strong>antes</strong> do <code>if</code> (<code>local situacao</code>) e, dentro dos blocos, só dê o valor, sem <code>local</code>.</p>
+<pre class="script" data-file="main.lua">local nota = 8
+if nota &gt;= 6 then
+  local situacao = "aprovada"
+else
+  local situacao = "reprovada"
+end
+print("Situação:", situacao)
+</pre>
+<pre class="solucao" data-file="main.lua">local nota = 8
+local situacao
+if nota &gt;= 6 then
+  situacao = "aprovada"
+else
+  situacao = "reprovada"
+end
+print("Situação:", situacao)
+</pre>
+</div>
+
+<hr>
+
+<h2>4. Conferindo o que a pessoa digitou</h2>
+<p>O <code>io.read()</code> sempre devolve <strong>texto</strong> (veja <a href="io-read.html">io.read()</a>). O <code>tonumber</code> tenta transformar esse texto em número; quando não consegue, ele devolve <code>nil</code> (veja <a href="conversao.html">Conversão</a>). Juntando com o <code>else</code>, o programa sabe responder nos dois casos:</p>
+
+<pre class="file" data-file="numero.lua">io.write("Quantos pães você quer? ")
+local resposta = io.read()
+local quantidade = tonumber(resposta)
+if quantidade then
+  print("Saindo " .. quantidade .. " pães!")
+else
+  print("Isso não é um número: " .. resposta)
+end
+</pre>
+
+<dl class="anatomy">
+  <dt>tonumber(resposta)</dt><dd>Para o texto <code>"6"</code>, devolve o número <code>6</code>. Para <code>"seis"</code>, devolve <code>nil</code>.</dd>
+  <dt>if quantidade then</dt><dd>"Se deu para converter" (lembre: <code>nil</code> é falso, qualquer número é verdadeiro, até o 0).</dd>
+  <dt>else</dt><dd>Todos os outros casos: o texto não era um número.</dd>
+</dl>
+
+<p>A Ana rodou duas vezes; na primeira digitou <code>6</code>, na segunda, <code>seis</code>:</p>
+
+<pre class="term">$ lua numero.lua
+Quantos pães você quer? 6
+Saindo 6 pães!
+$ lua numero.lua
+Quantos pães você quer? seis
+Isso não é um número: seis
+</pre>
+
+<div class="trylua" data-digitar="6">
+<p class="try-task"><strong>Experimente:</strong> rode e digite uma quantidade no terminal da caixa. Rode de novo e digite uma palavra, ou <code>2.5</code>, ou <code>0x10</code>. Qual bloco roda em cada caso? (No lab, <code>2.5</code> deu <code>Saindo 2.5 pães!</code> e <code>0x10</code> deu <code>Saindo 16 pães!</code>: o <code>tonumber</code> entende números escritos em hexadecimal.)</p>
+<pre class="script" data-file="main.lua">io.write("Quantos pães você quer? ")
+local resposta = io.read()
+local quantidade = tonumber(resposta)
+if quantidade then
+  print("Saindo " .. quantidade .. " pães!")
+else
+  print("Isso não é um número: " .. resposta)
+end
+</pre>
+</div>
+
+<hr>
+
+<h2>5. <code>if/else</code> numa linha só</h2>
+<p>Como no <code>if</code> simples, um <code>if/else</code> curto cabe numa linha:</p>
+
+<pre class="term">$ lua -e 'local n = 4 if n % 2 == 0 then print("par") else print("ímpar") end'
+par
+</pre>
+
+<p>Dá para ler, mas já fica apertado. Com <code>else</code>, prefira quase sempre a forma em várias linhas.</p>
+
+<hr>
+
+<h2 id="formas">Formas diferentes de fazer a mesma coisa</h2>
+<p>Dá para trocar o <code>else</code> por um segundo <code>if</code>, com a condição <strong>oposta</strong>:</p>
+
+<pre class="file" data-file="doisifs.lua">local saldo = 50
+local preco = 80
+if saldo &gt;= preco then
+  print("Compra aprovada.")
+end
+if saldo &lt; preco then
+  print("Saldo insuficiente.")
+end
+</pre>
+
+<pre class="term">$ lua doisifs.lua
+Saldo insuficiente.
+</pre>
+
+<p>Funciona, mas tem dois problemas. Primeiro, a pergunta é feita <strong>duas vezes</strong>. Segundo, e mais grave: você tem de acertar a condição oposta na mão. Se alguém escrever <code>saldo &lt;= preco</code> no segundo, com <code>saldo</code> igual a <code>preco</code> os <strong>dois</strong> blocos rodam: "Compra aprovada." e "Saldo insuficiente." ao mesmo tempo. A Ana testou esse engano com saldo e preço iguais a 80:</p>
+
+<pre class="term">$ lua -e 'local saldo, preco = 80, 80 if saldo &gt;= preco then print("Compra aprovada.") end if saldo &lt;= preco then print("Saldo insuficiente.") end'
+Compra aprovada.
+Saldo insuficiente.
+</pre>
+
+<p>Com <code>else</code>, esse engano é impossível:</p>
+
+<pre class="file" data-file="ifelse.lua">local saldo = 50
+local preco = 80
+if saldo &gt;= preco then
+  print("Compra aprovada.")
+else
+  print("Saldo insuficiente.")
+end
+</pre>
+
+<p>Quando o <code>if/else</code> só escolhe um valor entre dois, existe ainda uma terceira forma, curta, com <code>and</code> e <code>or</code>: <code>local sacolas = itens &lt;= 10 and 1 or 2</code>. Ela tem uma armadilha, explicada na aula <a href="and-or-ternario.html">O Truque do and/or</a>.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Situação</th><th>Qual usar</th></tr>
+<tr><td>Fazer algo só se for verdade; senão, nada</td><td><code>if … then … end</code> (aula <a href="if.html">if … then</a>)</td></tr>
+<tr><td>Fazer uma coisa se for verdade e outra se não for</td><td><code>if … then … else … end</code></td></tr>
+<tr><td>Dois <code>if</code>s com condições opostas</td><td>Evite: troque por <code>if/else</code></td></tr>
+<tr><td>Escolher um entre dois valores, numa linha</td><td><code>cond and a or b</code> (cuidado: aula <a href="and-or-ternario.html">O Truque do and/or</a>)</td></tr>
+<tr><td>Três ou mais caminhos (nota A, B, C…)</td><td><code>elseif</code> (aula <a href="elseif.html">elseif</a>)</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+
+<div class="cenario">
+<strong>Escreveu <code>else then</code></strong>
+<pre class="file" data-file="elsethen.lua">local idade = 15
+if idade &gt;= 18 then
+  print("Pode votar.")
+else then
+  print("Ainda não pode votar.")
+end
+</pre>
+<pre class="term">$ lua elsethen.lua
+lua: elsethen.lua:4: unexpected symbol near 'then'
+</pre>
+<p>"Símbolo inesperado perto de <code>then</code>", na linha 4. O <code>then</code> só vem depois de uma condição, e o <code>else</code> não tem condição. Depois do <code>else</code>, o Lua esperava a primeira linha do bloco, e um <code>then</code> ali não faz sentido. <strong>Como consertar:</strong> o <code>else</code> fica sozinho: apague o <code>then</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Pôs um <code>end</code> antes do <code>else</code></strong>
+<pre class="file" data-file="endantes.lua">local idade = 15
+if idade &gt;= 18 then
+  print("Pode votar.")
+end
+else
+  print("Ainda não pode votar.")
+end
+</pre>
+<pre class="term">$ lua endantes.lua
+lua: endantes.lua:5: &lt;eof&gt; expected near 'else'
+</pre>
+<p>O <code>end</code> da linha 4 fechou o <code>if</code>. Quando o Lua chega ao <code>else</code> da linha 5, não há mais <code>if</code> aberto para ele pertencer. A mensagem "era esperado o fim do arquivo perto de <code>else</code>" quer dizer: "o programa já estava completo, e este <code>else</code> está sobrando". <strong>Como consertar:</strong> apague o <code>end</code> da linha 4. Lembre: <strong>um</strong> <code>end</code> por <code>if</code>, no fim de tudo.</p>
+</div>
+
+<div class="cenario">
+<strong>Pôs uma condição no <code>else</code></strong>
+<pre class="file" data-file="elsecond.lua">local idade = 15
+if idade &gt;= 18 then
+  print("Pode votar.")
+else idade &lt; 18
+  print("Ainda não pode votar.")
+end
+</pre>
+<pre class="term">$ lua elsecond.lua
+lua: elsecond.lua:4: syntax error near '&lt;'
+</pre>
+<p>"Erro de sintaxe perto de <code>&lt;</code>". Para o Lua, o bloco do <code>else</code> começa logo depois da palavra <code>else</code>: ele leu <code>idade</code> como o começo de um comando, e um comando não pode ser <code>idade &lt; 18</code> (é uma pergunta solta, que não faz nada). <strong>Como consertar:</strong> o <code>else</code> não leva condição; apague o <code>idade &lt; 18</code>. Se você precisa mesmo de uma segunda condição, a palavra é outra: <code>elseif</code> (aula <a href="elseif.html">elseif</a>).</p>
+</div>
+
+<div class="cenario">
+<strong>Dois <code>else</code> no mesmo <code>if</code></strong>
+<pre class="file" data-file="doiselse.lua">local idade = 15
+if idade &gt;= 18 then
+  print("Pode votar.")
+else
+  print("Ainda não pode votar.")
+else
+  print("???")
+end
+</pre>
+<pre class="term">$ lua doiselse.lua
+lua: doiselse.lua:6: 'end' expected (to close 'if' at line 2) near 'else'
+</pre>
+<p>"Era esperado um <code>end</code> (para fechar o <code>if</code> da linha 2) perto de <code>else</code>". Depois do primeiro <code>else</code>, a única coisa que pode fechar o <code>if</code> é o <code>end</code>. Faz sentido: o <code>else</code> já é "todos os outros casos", não sobra caso para um segundo. <strong>Como consertar:</strong> um <code>if</code> tem no máximo <strong>um</strong> <code>else</code>, sempre o último.</p>
+</div>
+
+<div class="cenario">
+<strong>Esqueceu o <code>end</code> do fim</strong>
+<pre class="file" data-file="semendelse.lua">local idade = 15
+if idade &gt;= 18 then
+  print("Pode votar.")
+else
+  print("Ainda não pode votar.")
+print("Fim do programa.")
+</pre>
+<pre class="term">$ lua semendelse.lua
+lua: semendelse.lua:7: 'end' expected (to close 'if' at line 2) near &lt;eof&gt;
+</pre>
+<p>A mesma mensagem da aula anterior: o <code>if</code> da linha 2 ficou aberto até o fim do arquivo. Repare que o <code>else</code> <strong>não</strong> fecha nada: ele só separa os blocos. O <code>end</code> vai depois do último bloco, antes de <code>print("Fim do programa.")</code>.</p>
+</div>
+
+<hr>
+
+<h2>Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>O que faz</th></tr>
+<tr><td><code>if cond then A else B end</code></td><td>Roda <code>A</code> se a condição for verdadeira; senão, roda <code>B</code>. Sempre exatamente um dos dois</td></tr>
+<tr><td><code>else</code></td><td>Sozinho na linha: sem condição, sem <code>then</code>, sem <code>end</code> antes</td></tr>
+<tr><td><code>local x</code> antes do <code>if</code>, <code>x = …</code> nos blocos</td><td>Dar um valor que continua existindo depois do <code>end</code></td></tr>
+<tr><td><code>n % 2 == 0</code></td><td>"<code>n</code> é par?"</td></tr>
+<tr><td><code>if tonumber(texto) then … else … end</code></td><td>Conferir se o que foi digitado é um número</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Mensagem</th><th>Causa provável</th></tr>
+<tr><td><code>unexpected symbol near 'then'</code> (na linha do <code>else</code>)</td><td>Escreveu <code>else then</code></td></tr>
+<tr><td><code>&lt;eof&gt; expected near 'else'</code></td><td>Um <code>end</code> antes do <code>else</code> fechou o <code>if</code> cedo demais</td></tr>
+<tr><td><code>syntax error near '&lt;'</code> (na linha do <code>else</code>)</td><td>Pôs uma condição no <code>else</code> (use <code>elseif</code>)</td></tr>
+<tr><td><code>'end' expected (to close 'if' at line N) near 'else'</code></td><td>Dois <code>else</code> no mesmo <code>if</code></td></tr>
+<tr><td><code>'end' expected (to close 'if' at line N) near &lt;eof&gt;</code></td><td>Faltou o <code>end</code> no fim</td></tr>
+<tr><td>A variável vale <code>nil</code> depois do <code>if</code></td><td>Ela foi criada com <code>local</code> dentro do bloco</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. Complete o <code>if/else</code></h3>
+<p>Complete para mostrar <code>Aberto</code> das 7 às 19 horas e <code>Fechado</code> nos outros horários:</p>
+<div class="ex-code">local hora = 21<br>if hora &gt;= 7 and hora &lt;= 19 then<br>&nbsp;&nbsp;print("Aberto")<br><input data-answer="else" aria-label="palavra-chave do segundo bloco"><br>&nbsp;&nbsp;print("Fechado")<br><input data-answer="end" aria-label="palavra-chave do fim"></div>
+</div>
+
+<div class="exercise">
+<h3>2. Qual bloco roda?</h3>
+<p>Com <code>local hora = 21</code>, o programa do exercício 1 mostra qual palavra?</p>
+<div class="ex-code">Mostra <input data-answer="Fechado|fechado" aria-label="palavra mostrada"></div>
+</div>
+
+<div class="mc" data-answer="3">
+<p class="mc-q">3. Num <code>if … then … else … end</code>, quantos blocos rodam?</p>
+<label><input type="radio" name="q3"> Os dois, um depois do outro</label>
+<label><input type="radio" name="q3"> Depende: pode ser zero, um ou dois</label>
+<label><input type="radio" name="q3"> Sempre exatamente um</label>
+<label><input type="radio" name="q3"> Nenhum, se a condição for falsa</label>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">4. Qual destas linhas está <strong>certa</strong>?</p>
+<label><input type="radio" name="q4"> <code>else then</code></label>
+<label><input type="radio" name="q4"> <code>else</code></label>
+<label><input type="radio" name="q4"> <code>else idade &lt; 18 then</code></label>
+<label><input type="radio" name="q4"> <code>end else</code></label>
+</div>
+
+<div class="mc" data-answer="1">
+<p class="mc-q">5. <code>local t = 0</code> / <code>if t then print("A") else print("B") end</code>. O que aparece?</p>
+<label><input type="radio" name="q5"> <code>A</code>, porque no Lua o 0 é verdadeiro</label>
+<label><input type="radio" name="q5"> <code>B</code>, porque o 0 é falso</label>
+<label><input type="radio" name="q5"> <code>A</code> e <code>B</code></label>
+<label><input type="radio" name="q5"> Dá erro</label>
+</div>
+
+<div class="mc" data-answer="4">
+<p class="mc-q">6. Por que este programa mostra <code>nil</code>? <code>if true then local cor = "azul" end print(cor)</code></p>
+<label><input type="radio" name="q6"> Porque faltou o <code>else</code></label>
+<label><input type="radio" name="q6"> Porque <code>true</code> é falso no Lua</label>
+<label><input type="radio" name="q6"> Porque o <code>print</code> não mostra texto</label>
+<label><input type="radio" name="q6"> Porque a <code>local cor</code> só existe dentro do bloco do <code>if</code></label>
+</div>
+
+<h3>Missão final: o caixa da lojinha</h3>
+
+<div class="trylua" data-goal="out:Saldo insuficiente: faltam R$ 30;;src:\belse\b">
+<p class="try-task"><strong>Missão:</strong> o caixa da lojinha da Ana usa dois <code>if</code>s com condições opostas. Troque por um único <code>if/else</code> e, no caso do saldo insuficiente, mostre <strong>quanto falta</strong>: <code>Saldo insuficiente: faltam R$ 30</code> (a diferença entre o preço e o saldo).</p>
+<pre class="script" data-file="main.lua">local saldo = 50
+local preco = 80
+if saldo &gt;= preco then
+  print("Compra aprovada.")
+end
+if saldo &lt; preco then
+  print("Saldo insuficiente.")
+end
+</pre>
+<pre class="solucao" data-file="main.lua">local saldo = 50
+local preco = 80
+if saldo &gt;= preco then
+  print("Compra aprovada.")
+else
+  print("Saldo insuficiente: faltam R$ " .. (preco - saldo))
+end
+</pre>
+</div>
+
+<p>Os parênteses em <code>(preco - saldo)</code> deixam claro que a conta é feita primeiro e o resultado é juntado ao texto. Teste depois com <code>saldo = 80</code>: tem de aparecer só <code>Compra aprovada.</code></p>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li><code>if cond then … else … end</code>: se a condição for verdadeira, roda o primeiro bloco; senão, o do <code>else</code>. Sempre exatamente um dos dois.</li>
+  <li>O <code>else</code> fica sozinho: sem condição, sem <code>then</code>. Um <code>end</code> só, no fim, fecha tudo.</li>
+  <li>Para usar depois do <code>if</code> um valor escolhido dentro dele, crie a variável <strong>antes</strong> (<code>local x</code>) e só dê o valor nos blocos. Uma <code>local</code> criada dentro do bloco some no <code>end</code>.</li>
+  <li>Prefira <code>if/else</code> a dois <code>if</code>s com condições opostas: a pergunta é feita uma vez e não há como os dois rodarem.</li>
+  <li>Para três ou mais caminhos, a próxima aula: <a href="elseif.html">elseif</a>.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
