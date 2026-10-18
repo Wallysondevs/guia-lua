@@ -1,0 +1,639 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua for Numérico — o laço que conta sozinho | Guia Lua</title>
+<meta name="description" content="O for numérico do Lua para quem nunca programou: for i = 1, 10 do, o passo (de 2 em 2, para trás com -1, com float), a tabuada e a soma de 1 a 100, a variável que só existe dentro do laço, o limite calculado uma vez, a variável de controle que no Lua 5.5 não pode ser alterada, e os erros reais (do esquecido, to, estilo C, passo zero).">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">for Numérico</span></h1>
+
+<p class="intro">Na aula <a href="while.html">while</a>, todo laço que contava precisava de três peças escritas à mão: o <strong>início</strong> (<code>local contador = 1</code>), a <strong>condição</strong> (<code>contador &lt;= 5</code>) e o <strong>passo</strong> (<code>contador = contador + 1</code>). Esquecer qualquer uma dava problema. O <code>for</code> ("para") junta as três numa linha só e cuida delas sozinho: <code>for i = 1, 5 do</code>. Quando você sabe <strong>de onde a onde</strong> quer contar, ele é o laço certo.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>Como se escreve <code>for i = início, fim do … end</code>, e o que o Lua faz em cada volta.</li>
+  <li>O <strong>passo</strong>: de 2 em 2 (<code>for i = 1, 10, 2</code>), para trás (<code>-1</code>) e com números quebrados (<code>0.25</code>).</li>
+  <li>Exemplos clássicos: a tabuada, a soma de 1 a 100, a contagem regressiva.</li>
+  <li>Que a variável do <code>for</code> só existe dentro do laço, e que o fim é calculado uma vez só.</li>
+  <li>Uma novidade do <span class="versao">5.5</span>: a variável de controle <strong>não pode ser alterada</strong> dentro do laço (no 5.4 podia).</li>
+  <li>Os erros reais: o <code>do</code> esquecido, o <code>to</code> e o <code>for</code> do C, o passo zero e o fim que vale <code>nil</code>.</li>
+</ul>
+</div>
+
+<p>Todos os programas desta aula rodaram no <strong>Lua 5.5</strong> da máquina da Ana (usuária <code>ana</code>, computador <code>notebook</code>), com <code>lua arquivo.lua</code>. Onde aparece <code>lua5.4</code>, é o Lua 5.4, instalado na mesma máquina para comparar. Você pode rodar cada um no editor do guia.</p>
+
+<hr>
+
+<h2>A ideia: "da página 1 até a 5"</h2>
+<p>A professora passa a lição de casa: <em>"Leiam da página 1 até a página 5."</em> Ninguém precisa explicar que é para começar na 1, virar a página depois de cada leitura e parar quando passar da 5: a frase "de 1 até 5" já diz tudo isso. O <code>for</code> numérico é essa frase:</p>
+<pre class="file" data-file="paginas.lua">for pagina = 1, 5 do
+  print("Lendo a página " .. pagina)
+end
+</pre>
+<p>Leia: "<strong>para</strong> <code>pagina</code> de 1 até 5, <strong>faça</strong> …, <strong>fim</strong>". O Lua cria a variável, põe 1 nela, roda o bloco, soma 1, roda de novo… até passar do 5.</p>
+
+<hr>
+
+<h2>1. O primeiro <code>for</code>: contar de 1 a 5</h2>
+
+<pre class="file" data-file="for1.lua">for i = 1, 5 do
+  print("Volta " .. i)
+end
+print("Fim!")
+</pre>
+
+<dl class="anatomy">
+  <dt>for</dt><dd>"Para". Começa o laço.</dd>
+  <dt>i</dt><dd>A <strong>variável de controle</strong>: o Lua a cria sozinho, e ela vai valer 1, depois 2, depois 3… O nome é você quem escolhe (<code>i</code> é o tradicional, de "índice"; <code>pagina</code>, <code>dia</code>, <code>mes</code> deixam o código mais claro). Não se escreve <code>local</code>: ela já nasce local ao laço.</dd>
+  <dt>= 1</dt><dd>O valor <strong>inicial</strong>.</dd>
+  <dt>, 5</dt><dd>O valor <strong>final</strong> (o "limite"), separado por <strong>vírgula</strong>. O 5 <strong>entra</strong> na contagem: o laço continua enquanto <code>i</code> for menor <strong>ou igual</strong> a 5.</dd>
+  <dt>do … end</dt><dd>O bloco que se repete, como no <code>while</code>: <code>do</code> ("faça") abre, <code>end</code> fecha.</dd>
+</dl>
+
+<pre class="term">$ lua for1.lua
+Volta 1
+Volta 2
+Volta 3
+Volta 4
+Volta 5
+Fim!
+</pre>
+
+<p>O mesmo resultado do contador da aula <a href="while.html">while</a>, em 3 linhas em vez de 5, e sem chance de esquecer o passo. Compare:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Peça</th><th>Com <code>while</code></th><th>Com <code>for</code></th></tr>
+<tr><td>Início</td><td><code>local contador = 1</code> (antes do laço)</td><td><code>for i = 1, …</code></td></tr>
+<tr><td>Condição</td><td><code>while contador &lt;= 5 do</code></td><td><code>…, 5 do</code> (o Lua testa <code>i &lt;= 5</code> sozinho)</td></tr>
+<tr><td>Passo</td><td><code>contador = contador + 1</code> (dentro do bloco)</td><td>automático (soma 1 a cada volta)</td></tr>
+</table>
+</div>
+
+<h3>A tabuada e a soma</h3>
+<p>Dois usos de todo dia. A tabuada do 7:</p>
+
+<pre class="file" data-file="tabuada.lua">local numero = 7
+for i = 1, 10 do
+  print(numero .. " x " .. i .. " = " .. numero * i)
+end
+</pre>
+
+<pre class="term">$ lua tabuada.lua
+7 x 1 = 7
+7 x 2 = 14
+7 x 3 = 21
+7 x 4 = 28
+7 x 5 = 35
+7 x 6 = 42
+7 x 7 = 49
+7 x 8 = 56
+7 x 9 = 63
+7 x 10 = 70
+</pre>
+
+<p>E a soma de todos os números de 1 a 100, com um <strong>acumulador</strong> (a variável que junta um pouco a cada volta, como o <code>saldo</code> da aula <a href="while.html">while</a>):</p>
+
+<pre class="file" data-file="soma.lua">local soma = 0
+for i = 1, 100 do
+  soma = soma + i
+end
+print("A soma de 1 a 100 é " .. soma)
+</pre>
+
+<pre class="term">$ lua soma.lua
+A soma de 1 a 100 é 5050
+</pre>
+
+<div class="trylua" data-goal="out:9 x 10 = 90;;src:\bfor\b">
+<p class="try-task"><strong>Missão:</strong> mude o programa para mostrar a tabuada do <strong>9</strong>. Depois, faça ela ir até o 12 em vez do 10.</p>
+<pre class="script" data-file="main.lua">local numero = 7
+for i = 1, 10 do
+  print(numero .. " x " .. i .. " = " .. numero * i)
+end
+</pre>
+<pre class="solucao" data-file="main.lua">local numero = 9
+for i = 1, 10 do
+  print(numero .. " x " .. i .. " = " .. numero * i)
+end
+</pre>
+</div>
+
+<hr>
+
+<h2>2. O passo: o terceiro número</h2>
+<p>O <code>for</code> aceita um <strong>terceiro</strong> número, depois de mais uma vírgula: o <strong>passo</strong>, quanto somar a cada volta. Sem ele, o passo é 1.</p>
+
+<pre class="file" data-file="passo2.lua">for i = 1, 10, 2 do
+  print(i)
+end
+</pre>
+
+<pre class="term">$ lua passo2.lua
+1
+3
+5
+7
+9
+</pre>
+
+<p>De 2 em 2, começando no 1: 1, 3, 5, 7, 9. O próximo seria 11, que passa do 10, então o laço para. Repare que o 10 <strong>não</strong> apareceu: o limite é um teto ("até no máximo 10"), e não um número que precisa ser atingido.</p>
+
+<h3>Para trás: passo negativo</h3>
+<p>Com um passo negativo, o <code>for</code> conta para baixo. Aí o início tem de ser o número <strong>maior</strong>:</p>
+
+<pre class="file" data-file="regressiva.lua">for segundos = 5, 1, -1 do
+  print(segundos .. "...")
+end
+print("Já!")
+</pre>
+
+<pre class="term">$ lua regressiva.lua
+5...
+4...
+3...
+2...
+1...
+Já!
+</pre>
+
+<p>Com passo negativo, o laço continua enquanto a variável for <strong>maior ou igual</strong> ao limite. Mais alguns exemplos, numa linha só (o <code>io.write</code> escreve sem pular linha; veja <a href="io-write.html">io.write()</a>):</p>
+
+<pre class="term">$ lua -e 'for i = 10, 0, -3 do io.write(i, " ") end print()'
+10 7 4 1
+$ lua -e 'for i = 0, 20, 5 do io.write(i, " ") end print()'
+0 5 10 15 20
+$ lua -e 'for i = 1, 1 do print("uma volta", i) end'
+uma volta	1
+</pre>
+
+<h3>Zero voltas</h3>
+<p>Se o início já passou do limite, o laço não dá nenhuma volta. Isso pega quem quer contar para trás e esquece o <code>-1</code>:</p>
+
+<pre class="file" data-file="zero.lua">for i = 5, 1 do
+  print("nunca aparece", i)
+end
+print("O laço não deu nenhuma volta.")
+</pre>
+
+<pre class="term">$ lua zero.lua
+O laço não deu nenhuma volta.
+</pre>
+
+<p>Sem o terceiro número, o passo é <strong>+1</strong>: começando em 5, o 5 já é maior que o limite 1, e o Lua pula o laço. Não é erro; é "de 5 até 1, subindo", que não tem nenhum número.</p>
+
+<div class="trylua" data-goal="outre:^2\n4\n6\n8\n10\n12\n14\n16\n18\n20\n$;;src:\bfor\b">
+<p class="try-task"><strong>Missão:</strong> este programa mostra todos os números de 1 a 20. Mude o <code>for</code> (só a primeira linha!) para ele mostrar só os <strong>pares</strong>: 2, 4, 6… até 20.</p>
+<pre class="script" data-file="main.lua">for i = 1, 20 do
+  print(i)
+end
+</pre>
+<pre class="solucao" data-file="main.lua">for i = 2, 20, 2 do
+  print(i)
+end
+</pre>
+</div>
+
+<h3>Passo com número quebrado (float)</h3>
+<p>O passo também pode ter casas decimais:</p>
+
+<pre class="file" data-file="float.lua">for x = 0, 1, 0.25 do
+  print(x)
+end
+</pre>
+
+<pre class="term">$ lua float.lua
+0.0
+0.25
+0.5
+0.75
+1.0
+</pre>
+
+<p>Repare no <code>0.0</code> e no <code>1.0</code>: o Lua tem dois tipos de número, o <strong>inteiro</strong> (<code>1</code>) e o <strong>float</strong> (<code>1.0</code>; veja <a href="numeros.html">Números</a>). A regra do <code>for</code> é: se o início <strong>e</strong> o passo forem inteiros, a contagem é feita com inteiros; se um deles for float, tudo vira float. Por isso <code>for i = 1.0, 3 do print(i) end</code> mostra <code>1.0</code>, <code>2.0</code>, <code>3.0</code>, e <code>for i = 1, 3.7 do</code> mostra <code>1</code>, <code>2</code>, <code>3</code> (o limite pode ser quebrado sem mudar nada).</p>
+
+<p>Cuidado com passos como <code>0.1</code>. O computador guarda os floats em binário, e 0.1 não tem representação exata; somado várias vezes, o erro aparece:</p>
+
+<pre class="file" data-file="float01.lua">for x = 0, 1, 0.1 do
+  print(x)
+end
+</pre>
+
+<pre class="term">$ lua float01.lua
+0.0
+0.1
+0.2
+0.30000000000000004
+0.4
+0.5
+0.6
+0.7
+0.79999999999999993
+0.89999999999999991
+0.99999999999999989
+</pre>
+
+<p>Além dos números "tortos", a última volta foi <code>0.99999999999999989</code>, e o <code>1.0</code> não apareceu: a soma passou um tiquinho do limite antes de chegar nele. Se você precisa de exatamente 11 valores (0.0, 0.1, …, 1.0), conte com inteiros e divida: <code>for i = 0, 10 do print(i / 10) end</code>. Cada valor sai de uma conta só (e não de dez somas), e o erro não se acumula:</p>
+
+<pre class="term">$ lua -e "for i = 0, 10 do io.write(i / 10, \" \") end print()"
+0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0
+</pre>
+
+<div class="trylua">
+<p class="try-task"><strong>Experimente:</strong> rode e compare com a saída acima. Depois troque o laço por <code>for i = 0, 10 do print(i / 10) end</code> e veja a diferença.</p>
+<pre class="script" data-file="main.lua">for x = 0, 1, 0.1 do
+  print(x)
+end
+</pre>
+</div>
+
+<hr>
+
+<h2>3. A variável do <code>for</code> só existe dentro dele</h2>
+<p>A variável de controle é <strong>local ao laço</strong>: ela nasce no <code>for</code> e some no <code>end</code>.</p>
+
+<pre class="file" data-file="depois.lua">for i = 1, 3 do
+  print("dentro:", i)
+end
+print("depois:", i)
+</pre>
+
+<pre class="term">$ lua depois.lua
+dentro:	1
+dentro:	2
+dentro:	3
+depois:	nil
+</pre>
+
+<p>Depois do laço, <code>i</code> não existe mais (é um nome qualquer, que vale <code>nil</code>). É diferente do <code>while</code>, em que o contador criado antes do laço continuava lá, valendo 6. Se você precisa saber, depois do laço, até onde ele foi, guarde o valor numa variável criada <strong>antes</strong> do <code>for</code>.</p>
+
+<h3>O limite é calculado uma vez só</h3>
+<p>O início, o limite e o passo são calculados <strong>uma vez</strong>, antes da primeira volta. Mudar a variável do limite dentro do laço não muda quantas voltas ele dá:</p>
+
+<pre class="file" data-file="limiteuma.lua">local n = 3
+for i = 1, n do
+  print("volta", i, "n =", n)
+  n = 10
+end
+</pre>
+
+<pre class="term">$ lua limiteuma.lua
+volta	1	n =	3
+volta	2	n =	10
+volta	3	n =	10
+</pre>
+
+<p>O <code>n</code> virou 10 na primeira volta, mas o <code>for</code> já tinha guardado o limite 3. Se o fim pode mudar no meio do caminho, use um <code>while</code>.</p>
+
+<hr>
+
+<h2>4. A variável de controle não pode ser alterada <span class="versao">5.5</span></h2>
+<p>No Lua 5.5, a variável do <code>for</code> é uma <strong>constante</strong> (o manual a chama de "variável somente leitura", <code>const</code>; veja <a href="const.html">Constantes</a>). Você pode <strong>ler</strong> o valor dela à vontade, mas não pode <strong>dar outro valor</strong> a ela:</p>
+
+<pre class="file" data-file="altera.lua">for i = 1, 3 do
+  i = i * 2
+  print(i)
+end
+</pre>
+
+<pre class="term">$ lua altera.lua
+lua: altera.lua:2: attempt to assign to const variable 'i'
+</pre>
+
+<dl class="anatomy">
+  <dt>altera.lua:2:</dt><dd>A linha 2, a do <code>i = i * 2</code>.</dd>
+  <dt>attempt to assign to const variable 'i'</dt><dd>"Tentativa de atribuir (dar um valor) à variável constante <code>i</code>".</dd>
+</dl>
+
+<p>Repare que não há <code>stack traceback</code> e que nenhum <code>print</code> rodou: o Lua recusa o programa <strong>antes</strong> de começar, como num erro de sintaxe. No modo interativo, a mesma coisa:</p>
+
+<pre class="term">$ lua
+Lua 5.5.0  Copyright (C) 1994-2025 Lua.org, PUC-Rio
+&gt; for i = 1, 3 do i = 0 end
+stdin:1: attempt to assign to const variable 'i'
+&gt; os.exit()
+</pre>
+
+<h3>No Lua 5.4 (e no 5.1 e no LuaJIT) era permitido</h3>
+<p>O mesmo arquivo, no Lua 5.4:</p>
+
+<pre class="term">$ lua5.4 altera.lua
+2
+4
+6
+</pre>
+
+<p>Rodou, e o <code>luajit</code> e o <code>lua5.1</code> do lab deram a mesma saída. Mas repare: mudar o <code>i</code> <strong>não mudava a contagem</strong>. O <code>for</code> continuava em 2, 3 (o <code>i</code> só valia o dobro até o fim daquela volta). Muita gente tentava "pular" voltas assim e se confundia:</p>
+
+<pre class="file" data-file="pular.lua">for i = 1, 10 do
+  print(i)
+  if i == 2 then
+    i = 8
+  end
+end
+</pre>
+
+<pre class="term">$ lua5.4 pular.lua
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+$ lua pular.lua
+lua: pular.lua:4: attempt to assign to const variable 'i'
+</pre>
+
+<p>No 5.4, o <code>i = 8</code> não pulou nada: o laço seguiu do 3 até o 10. Como mudar a variável nunca fazia o que as pessoas esperavam, o 5.5 passou a proibir. Programas antigos que fazem isso precisam de um ajuste para rodar no 5.5 (mais diferenças em <a href="versoes.html">Lua 5.1, LuaJIT, 5.4 e 5.5</a> e <a href="novidades.html">Novidades do Lua 5.5</a>).</p>
+
+<h3>Como fazer, então</h3>
+<p>Se você precisa de um valor calculado a partir do <code>i</code>, crie <strong>outra</strong> variável:</p>
+
+<pre class="file" data-file="altera2.lua">for i = 1, 3 do
+  local dobro = i * 2
+  print(dobro)
+end
+</pre>
+
+<pre class="term">$ lua altera2.lua
+2
+4
+6
+</pre>
+
+<p>E se você quer pular voltas ou sair antes do fim, existem ferramentas próprias: o passo do <code>for</code>, o <code>break</code> (aula <a href="break.html">break</a>), o <code>goto continue</code> (aula <a href="goto.html">goto e Rótulos</a>) ou um <code>while</code>, em que você controla o contador.</p>
+
+<div class="trylua" data-goal="out:50;;semerro">
+<p class="try-task"><strong>Missão:</strong> este programa veio de um Lua antigo e, no 5.5, não roda (é o editor do guia: Lua 5.5 de verdade). Conserte sem mexer no <code>for</code>: guarde a conta numa variável nova (<code>local vezes10 = i * 10</code>) e mostre ela. Tem de aparecer de 10 a 50.</p>
+<pre class="script" data-file="main.lua">for i = 1, 5 do
+  i = i * 10
+  print(i)
+end
+</pre>
+<pre class="solucao" data-file="main.lua">for i = 1, 5 do
+  local vezes10 = i * 10
+  print(vezes10)
+end
+</pre>
+</div>
+
+<hr>
+
+<h2 id="formas">Formas diferentes de fazer a mesma coisa</h2>
+<p>Contar de 1 a 5 com os três laços que você já conhece:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th><code>for</code></th><th><code>while</code></th><th><code>repeat</code></th></tr>
+<tr><td><pre class="file" data-file="a.lua">for i = 1, 5 do
+  print(i)
+end
+</pre></td><td><pre class="file" data-file="b.lua">local i = 1
+while i &lt;= 5 do
+  print(i)
+  i = i + 1
+end
+</pre></td><td><pre class="file" data-file="c.lua">local i = 1
+repeat
+  print(i)
+  i = i + 1
+until i &gt; 5
+</pre></td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Situação</th><th>Qual usar</th></tr>
+<tr><td>Sabe de onde a onde contar (de 1 a 10, de 10 a 0, de 2 em 2)</td><td><code>for i = início, fim, passo do</code></td></tr>
+<tr><td>Não sabe quantas voltas (até a meta, até digitar 0)</td><td><code>while</code> (aula <a href="while.html">while</a>)</td></tr>
+<tr><td>Precisa rodar pelo menos uma vez</td><td><code>repeat … until</code> (aula <a href="repeat.html">repeat … until</a>)</td></tr>
+<tr><td>Precisa mudar o contador no meio, ou o fim muda durante o laço</td><td><code>while</code></td></tr>
+<tr><td>Valores com casas decimais exatas (0.0, 0.1 … 1.0)</td><td><code>for</code> com inteiros e divisão: <code>for i = 0, 10 do … i / 10 … end</code></td></tr>
+<tr><td>Passar por cada item de uma lista</td><td><code>for i = 1, #lista do</code> ou o <code>ipairs</code> (aula <a href="ipairs.html">ipairs</a>)</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+
+<div class="cenario">
+<strong>Esqueceu o <code>do</code></strong>
+<pre class="file" data-file="semdo.lua">for i = 1, 5
+  print(i)
+end
+</pre>
+<pre class="term">$ lua semdo.lua
+lua: semdo.lua:2: 'do' expected near 'print'
+</pre>
+<p>A mesma mensagem do <code>while</code>: faltou o <code>do</code> no fim da linha 1, e o Lua só percebeu na linha 2. <strong>Como consertar:</strong> <code>for i = 1, 5 do</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Escreveu <code>to</code> (de outras linguagens)</strong>
+<pre class="file" data-file="to.lua">for i = 1 to 5 do
+  print(i)
+end
+</pre>
+<pre class="term">$ lua to.lua
+lua: to.lua:1: ',' expected near 'to'
+</pre>
+<p>"Era esperada uma vírgula perto de <code>to</code>". Em Pascal e no BASIC se escreve <code>for i = 1 to 5</code>; no Lua, o início e o fim são separados por <strong>vírgula</strong>. Esquecendo a vírgula (<code>for i = 1 5 do</code>), sai a mesma ideia: <code>',' expected near '5'</code>. <strong>Como consertar:</strong> <code>for i = 1, 5 do</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Escreveu o <code>for</code> do C/JavaScript</strong>
+<pre class="file" data-file="c.lua">for (i = 1; i &lt;= 5; i++) do
+  print(i)
+end
+</pre>
+<pre class="term">$ lua c.lua
+lua: c.lua:1: &lt;name&gt; expected near '('
+</pre>
+<p>"Era esperado um nome perto de <code>(</code>": depois do <code>for</code>, o Lua quer o nome da variável, e veio um parêntese. Sem os parênteses (<code>for i = 1; i &lt;= 5; i = i + 1 do</code>), ele reclama do ponto e vírgula: <code>',' expected near ';'</code>. O <code>for</code> do Lua não tem as três partes com <code>;</code>: o teste e o passo são automáticos. <strong>Como consertar:</strong> <code>for i = 1, 5 do</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Esqueceu o <code>end</code></strong>
+<pre class="file" data-file="semend.lua">for i = 1, 5 do
+  print(i)
+print("Fim!")
+</pre>
+<pre class="term">$ lua semend.lua
+lua: semend.lua:4: 'end' expected (to close 'for' at line 1) near &lt;eof&gt;
+</pre>
+<p>"Era esperado um <code>end</code> para fechar o <code>for</code> da linha 1". <strong>Como consertar:</strong> ponha o <code>end</code> depois da última linha que deve se repetir.</p>
+</div>
+
+<div class="cenario">
+<strong>Passo zero</strong>
+<pre class="file" data-file="passozero.lua">for i = 1, 10, 0 do
+  print(i)
+end
+</pre>
+<pre class="term">$ lua passozero.lua
+lua: passozero.lua:1: 'for' step is zero
+stack traceback:
+	passozero.lua:1: in main chunk
+	[C]: in ?
+</pre>
+<p>"O passo do <code>for</code> é zero". Com passo 0, o <code>i</code> ficaria em 1 para sempre, e o Lua prefere dar erro a entrar num laço infinito. Esse erro aparece com o programa rodando (por isso o <code>stack traceback</code>): costuma acontecer quando o passo vem de uma variável que, sem querer, valia 0. <strong>Como consertar:</strong> use um passo diferente de zero.</p>
+</div>
+
+<div class="cenario">
+<strong>O limite vale <code>nil</code> (nome errado)</strong>
+<pre class="file" data-file="limitenil.lua">local quantidade = 5
+for i = 1, quantidae do
+  print(i)
+end
+</pre>
+<pre class="term">$ lua limitenil.lua
+lua: limitenil.lua:2: bad 'for' limit (number expected, got nil)
+stack traceback:
+	limitenil.lua:2: in main chunk
+	[C]: in ?
+</pre>
+<p>"Limite do <code>for</code> inválido (era esperado um número, veio <code>nil</code>)". O nome <code>quantidae</code> (faltou o "d") não existe, então vale <code>nil</code>. O mesmo acontece com um <code>tonumber</code> que não conseguiu converter. <strong>Como consertar:</strong> confira o nome da variável: <code>for i = 1, quantidade do</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Tentou alterar a variável de controle <span class="versao">5.5</span></strong>
+<p>É o erro da seção 4: <code>attempt to assign to const variable 'i'</code>, sem traceback, antes de o programa rodar. <strong>Como consertar:</strong> crie outra variável (<code>local dobro = i * 2</code>) ou, se a ideia era mudar a contagem, use o passo, o <code>break</code> ou um <code>while</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Contou para trás e não apareceu nada</strong>
+<p>Sem erro e sem saída: é o <code>for i = 5, 1 do</code> da seção 2, sem o <code>-1</code>. <strong>Como consertar:</strong> <code>for i = 5, 1, -1 do</code>.</p>
+</div>
+
+<hr>
+
+<h2>Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>Valores de <code>i</code></th></tr>
+<tr><td><code>for i = 1, 5 do</code></td><td>1, 2, 3, 4, 5</td></tr>
+<tr><td><code>for i = 1, 10, 2 do</code></td><td>1, 3, 5, 7, 9</td></tr>
+<tr><td><code>for i = 5, 1, -1 do</code></td><td>5, 4, 3, 2, 1</td></tr>
+<tr><td><code>for i = 5, 1 do</code></td><td>nenhum (passo +1, já começa acima do limite)</td></tr>
+<tr><td><code>for x = 0, 1, 0.25 do</code></td><td>0.0, 0.25, 0.5, 0.75, 1.0 (float)</td></tr>
+<tr><td><code>for i = 1.0, 3 do</code></td><td>1.0, 2.0, 3.0 (início float → tudo float)</td></tr>
+<tr><td><code>for i = 1, 3.7 do</code></td><td>1, 2, 3 (o limite pode ser quebrado)</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Regra</th><th>Detalhe</th></tr>
+<tr><td>A variável de controle</td><td>Local ao laço: não existe depois do <code>end</code></td></tr>
+<tr><td>Início, limite e passo</td><td>Calculados uma vez, antes da primeira volta</td></tr>
+<tr><td>Alterar a variável <span class="versao">5.5</span></td><td>Proibido: <code>attempt to assign to const variable 'i'</code> (no 5.4 rodava, sem mudar a contagem)</td></tr>
+<tr><td>Passo zero</td><td>Erro: <code>'for' step is zero</code></td></tr>
+<tr><td>Limite <code>nil</code></td><td>Erro: <code>bad 'for' limit (number expected, got nil)</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. Complete o <code>for</code></h3>
+<p>Complete para mostrar os números de 1 a 10:</p>
+<div class="ex-code"><input data-answer="for" aria-label="palavra-chave do laço"> i = 1<input data-answer="," aria-label="separador"> 10 <input data-answer="do" aria-label="palavra-chave do bloco"><br>&nbsp;&nbsp;print(i)<br>end</div>
+</div>
+
+<div class="exercise">
+<h3>2. Contagem regressiva</h3>
+<p>Complete o passo para contar de 10 até 0:</p>
+<div class="ex-code">for i = 10, 0, <input data-answer="-1" aria-label="passo"> do print(i) end</div>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">3. Quais números <code>for i = 0, 10, 3 do print(i) end</code> mostra?</p>
+<label><input type="radio" name="q3"> 0, 3, 6, 9, 12</label>
+<label><input type="radio" name="q3"> 0, 3, 6, 9</label>
+<label><input type="radio" name="q3"> 3, 6, 9</label>
+<label><input type="radio" name="q3"> 0, 3, 6, 9, 10</label>
+</div>
+
+<div class="mc" data-answer="4">
+<p class="mc-q">4. O que <code>for i = 1, 3 do end print(i)</code> mostra?</p>
+<label><input type="radio" name="q4"> 3</label>
+<label><input type="radio" name="q4"> 4</label>
+<label><input type="radio" name="q4"> Dá erro</label>
+<label><input type="radio" name="q4"> <code>nil</code></label>
+</div>
+
+<div class="mc" data-answer="1">
+<p class="mc-q">5. No Lua 5.5, o que acontece com <code>for i = 1, 3 do i = i + 1 end</code>?</p>
+<label><input type="radio" name="q5"> O Lua recusa o programa: <code>attempt to assign to const variable 'i'</code></label>
+<label><input type="radio" name="q5"> O laço dá só 2 voltas</label>
+<label><input type="radio" name="q5"> O laço vira infinito</label>
+<label><input type="radio" name="q5"> Roda normalmente, como no 5.4</label>
+</div>
+
+<div class="mc" data-answer="3">
+<p class="mc-q">6. Quantas voltas dá <code>for i = 5, 1 do print(i) end</code>?</p>
+<label><input type="radio" name="q6"> 5</label>
+<label><input type="radio" name="q6"> 4</label>
+<label><input type="radio" name="q6"> Nenhuma</label>
+<label><input type="radio" name="q6"> Infinitas</label>
+</div>
+
+<h3>Missão final: a soma dos pares</h3>
+
+<div class="trylua" data-goal="out:2550;;src:\bfor\s+\w+\s*=\s*2\s*,\s*100\s*,\s*2\s+do\b">
+<p class="try-task"><strong>Missão:</strong> some todos os números <strong>pares</strong> de 2 a 100 (2 + 4 + 6 + … + 100) usando um <code>for</code> com <strong>passo 2</strong>: <code>for i = 2, 100, 2 do</code>. No fim, mostre a soma. (A resposta certa é 2550.)</p>
+<pre class="script" data-file="main.lua">local soma = 0
+-- escreva o for aqui
+
+print("Soma dos pares de 2 a 100: " .. soma)
+</pre>
+<pre class="solucao" data-file="main.lua">local soma = 0
+for i = 2, 100, 2 do
+  soma = soma + i
+end
+print("Soma dos pares de 2 a 100: " .. soma)
+</pre>
+</div>
+
+<p>Desafio: some os <strong>ímpares</strong> de 1 a 99 (é só trocar o início). E os múltiplos de 5 até 100?</p>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li><code>for i = início, fim do … end</code> ("para i de início até fim, faça") conta sozinho: cria a variável, testa e soma 1 a cada volta. O fim <strong>entra</strong> na contagem.</li>
+  <li>O terceiro número é o <strong>passo</strong>: <code>for i = 1, 10, 2</code> (de 2 em 2), <code>for i = 5, 1, -1</code> (para trás). Sem o <code>-1</code>, contar para trás dá zero voltas. Passo 0 é erro.</li>
+  <li>Se o início ou o passo for float, a contagem é com floats; cuidado com <code>0.1</code>, que acumula erro. Para valores exatos, conte com inteiros e divida.</li>
+  <li>A variável de controle é local ao laço (vale <code>nil</code> depois do <code>end</code>), e o início, o fim e o passo são calculados uma vez só.</li>
+  <li><span class="versao">5.5</span> A variável de controle é constante: alterá-la dá <code>attempt to assign to const variable 'i'</code>. No 5.4 era permitido, mas não mudava a contagem. Use outra variável.</li>
+  <li>Para sair do laço antes do fim, a próxima aula: <a href="break.html">break</a>.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
