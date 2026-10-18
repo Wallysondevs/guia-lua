@@ -1,0 +1,306 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua Padrões — referência de %d, %a, %s, [ ], *, +, -, ?, capturas e %b | Guia Lua</title>
+<meta name="description" content="Referência rápida dos padrões (patterns) do Lua 5.5: as classes %a, %d, %s, %w, %p, %x…, conjuntos [ ], repetições * + - ?, âncoras ^ e $, capturas ( ), %1, %b e %f, com exemplo curto e resultado real, receitas prontas e as mensagens de erro de padrão.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">Padrões (%d, %a, %s…)</span></h1>
+
+<p class="intro">Esta é a página de consulta rápida dos <strong>padrões</strong> (em inglês, <em>patterns</em>): os textos especiais que descrevem "o que procurar" nas funções <code>string.find</code>, <code>string.match</code>, <code>string.gmatch</code> e <code>string.gsub</code>. Por exemplo, <code>"%d+"</code> quer dizer "um ou mais dígitos". Os padrões do Lua parecem as "expressões regulares" de outras linguagens, mas são mais simples e <strong>não são iguais</strong>: o escape é <code>%</code> (não <code>\</code>), e não existe <code>|</code> ("ou"). A explicação passo a passo está na aula <a href="padroes.html">Padrões (Patterns)</a>.</p>
+
+<div class="note">
+<strong>Como ler as tabelas</strong>
+<ul>
+  <li><strong>Exemplo</strong> é o que você digitaria depois do <code>&gt;</code> do <a href="repl.html">modo interativo</a>.</li>
+  <li><strong>Resultado</strong> é o que o Lua 5.5.0 respondeu no computador da Ana. O <code>string.match</code> devolve o pedaço achado (ou <code>nil</code>); o <code>string.gsub</code> devolve o texto novo e quantas trocas fez; o <code>string.find</code> devolve as posições.</li>
+  <li>Vários valores aparecem separados por vírgula; no terminal, o Lua separa com TAB.</li>
+</ul>
+</div>
+
+<p>Assim fica no terminal da Ana:</p>
+
+<pre class="term">$ lua
+Lua 5.5.0  Copyright (C) 1994-2025 Lua.org, PUC-Rio
+&gt; string.match("Pedido 42", "%d+")
+42
+&gt; string.match("data: 18/10/2026", "(%d+)/(%d+)/(%d+)")
+18	10	2026
+&gt; string.gsub("Ana Lima", "%w+", "&lt;%0&gt;")
+&lt;Ana&gt; &lt;Lima&gt;	2
+&gt; string.match("pão", "%a+")
+p
+&gt; string.match("x", "[a")
+stdin:1: malformed pattern (missing ']')
+stack traceback:
+        [C]: in field 'match'
+        stdin:1: in main chunk
+        [C]: in ?
+&gt; os.exit()
+</pre>
+
+<p>Repare no <code>"pão"</code>: o <code>%a</code> ("uma letra") só achou o <code>p</code>. O <code>ã</code> ocupa 2 bytes em UTF-8, e nenhum deles é uma "letra" para os padrões do Lua (que olham byte por byte). E o último exemplo mostra o erro de um padrão mal escrito: <em>malformed pattern (missing ']')</em> = "padrão malformado (falta o <code>]</code>)".</p>
+
+<p>Pule direto para o grupo que você procura:</p>
+<ul>
+  <li><a href="#classes">Classes de caracteres</a>: <code>.</code>, <code>%a</code>, <code>%d</code>, <code>%s</code>, <code>%w</code>, <code>%l</code>, <code>%u</code>, <code>%p</code>, <code>%x</code>, <code>%c</code>, <code>%g</code> e as maiúsculas</li>
+  <li><a href="#magicos">Caracteres mágicos e o escape <code>%</code></a></li>
+  <li><a href="#conjuntos">Conjuntos</a>: <code>[abc]</code>, <code>[0-9]</code>, <code>[^…]</code></li>
+  <li><a href="#repeticoes">Repetições</a>: <code>*</code>, <code>+</code>, <code>-</code>, <code>?</code></li>
+  <li><a href="#ancoras">Âncoras</a>: <code>^</code> e <code>$</code></li>
+  <li><a href="#capturas">Capturas</a>: <code>( )</code>, <code>()</code>, <code>%1</code>, <code>%0</code></li>
+  <li><a href="#especiais">Especiais</a>: <code>%b()</code> e <code>%f[…]</code></li>
+  <li><a href="#receitas">Receitas prontas</a></li>
+  <li><a href="#erros">Erros de padrão</a></li>
+</ul>
+
+<hr>
+
+<h2 id="classes">Classes de caracteres</h2>
+
+<p>Uma <strong>classe</strong> representa <strong>um</strong> caractere de um certo tipo. A letra maiúscula é o contrário: <code>%d</code> é "um dígito", <code>%D</code> é "qualquer coisa que não seja dígito".</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Classe</th><th>Representa</th><th>Exemplo</th><th>Resultado</th></tr>
+<tr><td><code>.</code></td><td><strong>qualquer</strong> caractere</td><td><code>string.match("Pedido 42", ".")</code></td><td><code>P</code></td></tr>
+<tr><td><code>%a</code></td><td>uma letra (<em>alphabetic</em>), só de A a Z sem acento</td><td><code>string.match("Pedido 42", "%a+")</code></td><td><code>Pedido</code></td></tr>
+<tr><td><code>%d</code></td><td>um dígito, de 0 a 9 (<em>digit</em>)</td><td><code>string.match("Pedido 42", "%d+")</code></td><td><code>42</code></td></tr>
+<tr><td><code>%s</code></td><td>um espaço em branco: espaço, TAB, quebra de linha (<em>space</em>)</td><td><code>string.find("Pedido 42", "%s")</code></td><td><code>7</code>, <code>7</code></td></tr>
+<tr><td><code>%w</code></td><td>uma letra ou dígito (<em>word</em>, alfanumérico). O <code>_</code> <strong>não</strong> entra</td><td><code>string.match("Pedido 42", "%w+")</code></td><td><code>Pedido</code></td></tr>
+<tr><td><code>%l</code></td><td>uma letra minúscula (<em>lower</em>)</td><td><code>string.match("Pedido 42", "%l+")</code></td><td><code>edido</code></td></tr>
+<tr><td><code>%u</code></td><td>uma letra maiúscula (<em>upper</em>)</td><td><code>string.match("Pedido 42", "%u")</code></td><td><code>P</code></td></tr>
+<tr><td><code>%p</code></td><td>um sinal de pontuação (<em>punctuation</em>): <code>. , ! ? _ - ( ) #</code>…</td><td><code>string.match("Pedido_42!", "%p")</code></td><td><code>_</code></td></tr>
+<tr><td><code>%x</code></td><td>um dígito hexadecimal: <code>0-9</code>, <code>a-f</code>, <code>A-F</code></td><td><code>string.match("cor: #FF8800", "#(%x+)")</code></td><td><code>FF8800</code></td></tr>
+<tr><td></td><td>cuidado: o <code>c</code> de "cor" também é hexadecimal!</td><td><code>string.match("cor: #FF8800", "%x+")</code></td><td><code>c</code></td></tr>
+<tr><td><code>%c</code></td><td>um caractere de controle (TAB, quebra de linha…)</td><td><code>string.gsub("a\tb\nc", "%c", "|")</code></td><td><code>a|b|c</code>, <code>2</code></td></tr>
+<tr><td><code>%g</code></td><td>um caractere visível (qualquer um, menos espaço)</td><td><code>string.match("  oi  ", "%g+")</code></td><td><code>oi</code></td></tr>
+<tr><td><code>%A</code>, <code>%D</code>, <code>%S</code>, <code>%W</code>…</td><td>o <strong>contrário</strong> da classe minúscula</td><td><code>string.gsub("Ana, 30 anos!", "%A", "")</code></td><td><code>Anaanos</code>, <code>6</code> (tirou o que não é letra)</td></tr>
+<tr><td></td><td>tirar tudo o que não é dígito</td><td><code>string.gsub("Ana, 30 anos!", "%D", "")</code></td><td><code>30</code>, <code>11</code></td></tr>
+<tr><td></td><td>tudo o que não é espaço</td><td><code>string.gsub("Ana  Lima", "%S", "x")</code></td><td><code>xxx  xxxx</code>, <code>7</code></td></tr>
+</table>
+</div>
+
+<div class="warning">
+<strong>Letras com acento não são <code>%a</code></strong>
+<p>Os padrões olham <strong>bytes</strong>, e cada letra acentuada (<code>ã</code>, <code>ç</code>, <code>é</code>) são 2 bytes que não contam como letra. Resultados reais: <code>string.match("pão", "%a+")</code> dá só <code>p</code>. Saídas: use <code>%S+</code> ("tudo que não é espaço"), que deu <code>pão</code>; ou acrescente as letras num conjunto: <code>string.match("ação", "[%aãç]+")</code> deu <code>ação</code>. Para um caractere UTF-8 inteiro, existe o padrão pronto <code>utf8.charpattern</code> (veja <a href="utf8.html">Acentos e a Biblioteca utf8</a>).</p>
+</div>
+
+<hr>
+
+<h2 id="magicos">Caracteres mágicos e o escape <code>%</code></h2>
+
+<p>Doze caracteres têm significado especial ("mágicos") nos padrões: <code>^ $ ( ) % . [ ] * + - ?</code>. Para procurar um deles <strong>de verdade</strong>, ponha um <code>%</code> na frente. O <code>%</code> antes de qualquer caractere que não é letra nem número quer dizer "este caractere mesmo".</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Padrão</th><th>Quer dizer</th><th>Exemplo</th><th>Resultado</th></tr>
+<tr><td><code>%.</code></td><td>um ponto de verdade (sem o <code>%</code>, o ponto é "qualquer caractere")</td><td><code>string.match("R$ 10x50", "%d+%.%d+")</code></td><td><code>nil</code></td></tr>
+<tr><td><code>.</code></td><td>qualquer caractere: aceitou até o <code>x</code></td><td><code>string.match("R$ 10x50", "%d+.%d+")</code></td><td><code>10x50</code></td></tr>
+<tr><td><code>%+</code></td><td>um <code>+</code> de verdade</td><td><code>string.gsub("1+1=2", "%+", " mais ")</code></td><td><code>1 mais 1=2</code>, <code>1</code></td></tr>
+<tr><td><code>%%</code></td><td>um <code>%</code> de verdade</td><td><code>string.gsub("50%", "%%", " por cento")</code></td><td><code>50 por cento</code>, <code>1</code></td></tr>
+<tr><td><code>%-</code>, <code>%(</code>, <code>%[</code>, <code>%$</code>…</td><td>o próprio caractere</td><td><code>string.match("a-b", "[%-]")</code></td><td><code>-</code></td></tr>
+</table>
+</div>
+
+<div class="tip">
+<strong>Quer procurar um texto "puro", sem padrão?</strong>
+<p>Passe <code>true</code> no 4º argumento do <code>string.find</code>: <code>string.find("R$ 10.50", ".", 1, true)</code> procura o ponto mesmo, e deu <code>6</code>, <code>6</code>. Útil quando o texto procurado vem do usuário. Veja <a href="ref-string.html">A Biblioteca string</a>.</p>
+</div>
+
+<hr>
+
+<h2 id="conjuntos">Conjuntos <code>[ ]</code></h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Padrão</th><th>Representa</th><th>Exemplo</th><th>Resultado</th></tr>
+<tr><td><code>[ABC]</code></td><td>um caractere entre os da lista</td><td><code>string.match("nota: B", "[ABC]")</code></td><td><code>B</code></td></tr>
+<tr><td><code>[0-9]</code></td><td>um caractere do intervalo (aqui, o mesmo que <code>%d</code>)</td><td><code>string.match("Ana123", "[0-9]+")</code></td><td><code>123</code></td></tr>
+<tr><td><code>[aeiou]</code></td><td>uma vogal minúscula sem acento</td><td><code>string.gsub("Olá, mundo!", "[aeiou]", "*")</code></td><td><code>Olá, m*nd*!</code>, <code>2</code> (o <code>á</code> não entrou)</td></tr>
+<tr><td><code>[%w_]</code></td><td>classes também entram: letra, dígito ou <code>_</code> (um nome de variável)</td><td><code>string.match("total_geral = 5", "[%w_]+")</code></td><td><code>total_geral</code></td></tr>
+<tr><td><code>[^…]</code></td><td>um caractere que <strong>não</strong> está na lista</td><td><code>string.gsub("2026-10-18", "[^%d]", "/")</code></td><td><code>2026/10/18</code>, <code>2</code></td></tr>
+<tr><td><code>[%-]</code> ou <code>[-…]</code></td><td>o <code>-</code> dentro do conjunto: com <code>%</code>, ou no começo ou no fim</td><td><code>string.match("a-b", "[%-]")</code></td><td><code>-</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2 id="repeticoes">Repetições</h2>
+
+<p>Uma repetição vem logo <strong>depois</strong> de uma classe (ou de um conjunto) e diz quantas vezes ela pode aparecer.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Símbolo</th><th>Quantas vezes</th><th>Exemplo</th><th>Resultado</th></tr>
+<tr><td><code>+</code></td><td><strong>uma ou mais</strong>, o máximo possível</td><td><code>string.match("aaab", "a+")</code></td><td><code>aaa</code></td></tr>
+<tr><td></td><td>nenhuma: não casa</td><td><code>string.match("bbb", "a+")</code></td><td><code>nil</code></td></tr>
+<tr><td><code>*</code></td><td><strong>zero ou mais</strong>, o máximo possível</td><td><code>string.match("aaab", "a*")</code></td><td><code>aaa</code></td></tr>
+<tr><td></td><td>zero também vale: casa com um texto vazio</td><td><code>string.match("bbb", "a*")</code></td><td>(texto vazio, não <code>nil</code>)</td></tr>
+<tr><td><code>-</code></td><td><strong>zero ou mais</strong>, o <strong>mínimo</strong> possível</td><td><code>string.match("&lt;b&gt;oi&lt;/b&gt;", "&lt;.-&gt;")</code></td><td><code>&lt;b&gt;</code></td></tr>
+<tr><td></td><td>compare com <code>*</code>, que vai até o último <code>&gt;</code></td><td><code>string.match("&lt;b&gt;oi&lt;/b&gt;", "&lt;.*&gt;")</code></td><td><code>&lt;b&gt;oi&lt;/b&gt;</code></td></tr>
+<tr><td><code>?</code></td><td><strong>zero ou uma</strong> (opcional)</td><td><code>string.match("cor ou color", "colou?r")</code></td><td><code>color</code></td></tr>
+<tr><td></td><td>sinal opcional na frente de um número</td><td><code>string.match("-42", "^[+-]?%d+$")</code></td><td><code>-42</code></td></tr>
+</table>
+</div>
+
+<div class="note">
+<strong>Não existe <code>{2,4}</code> nem <code>|</code></strong>
+<p>Os padrões do Lua não têm "de 2 a 4 vezes" nem "isto ou aquilo", e a repetição vale só para <strong>um</strong> caractere: <code>(ab)+</code> não repete o <code>ab</code>. Para "exatamente 3 dígitos", repita a classe: <code>"%d%d%d"</code>. Para "isto ou aquilo", teste os dois padrões, um depois do outro. Quem precisa de mais usa a biblioteca LPeg (veja <a href="luarocks.html">LuaRocks</a>).</p>
+</div>
+
+<hr>
+
+<h2 id="ancoras">Âncoras</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Símbolo</th><th>Quer dizer</th><th>Exemplo</th><th>Resultado</th></tr>
+<tr><td><code>^</code> no começo do padrão</td><td>tem de casar no <strong>começo</strong> do texto</td><td><code>string.match("Ana Lima", "^%a+")</code></td><td><code>Ana</code></td></tr>
+<tr><td></td><td></td><td><code>string.find("Ana", "^n")</code></td><td><code>nil</code></td></tr>
+<tr><td><code>$</code> no fim do padrão</td><td>tem de casar no <strong>fim</strong> do texto</td><td><code>string.match("Ana Lima", "%a+$")</code></td><td><code>Lima</code></td></tr>
+<tr><td><code>^…$</code></td><td>o texto <strong>inteiro</strong> tem de casar (bom para validar)</td><td><code>string.match("4a2", "^[+-]?%d+$")</code></td><td><code>nil</code> (não é um número inteiro)</td></tr>
+<tr><td><code>^</code> no meio</td><td>em outra posição, <code>^</code> e <code>$</code> são caracteres comuns</td><td><code>string.match("a^b", "a^b")</code></td><td><code>a^b</code></td></tr>
+</table>
+</div>
+
+<p>No <code>gmatch</code>, o <code>^</code> do começo não funciona como âncora (o manual explica: isso impediria a repetição).</p>
+
+<hr>
+
+<h2 id="capturas">Capturas</h2>
+
+<p>Uma parte do padrão entre parênteses é uma <strong>captura</strong>: o Lua guarda o pedaço que casou com ela e devolve separado. As capturas são numeradas pela ordem do <code>(</code>.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Padrão</th><th>Faz</th><th>Exemplo</th><th>Resultado</th></tr>
+<tr><td><code>(…)</code></td><td>guarda o pedaço; o <code>match</code> devolve uma captura por par de parênteses</td><td><code>string.match("data: 18/10/2026", "(%d+)/(%d+)/(%d+)")</code></td><td><code>18</code>, <code>10</code>, <code>2026</code></td></tr>
+<tr><td></td><td>chave e valor</td><td><code>string.match("nome=Ana", "(%w+)=(%w+)")</code></td><td><code>nome</code>, <code>Ana</code></td></tr>
+<tr><td></td><td>capturas dentro de capturas: numeradas pelo <code>(</code></td><td><code>string.match("abc", "((a)(b))")</code></td><td><code>ab</code>, <code>a</code>, <code>b</code></td></tr>
+<tr><td></td><td>no <code>find</code>, as capturas vêm depois das posições</td><td><code>string.find("nome=Ana", "(%w+)=(%w+)")</code></td><td><code>1</code>, <code>8</code>, <code>nome</code>, <code>Ana</code></td></tr>
+<tr><td><code>()</code></td><td>captura vazia: guarda a <strong>posição</strong> (um número)</td><td><code>string.match("flaaap", "()aa()")</code></td><td><code>3</code>, <code>5</code></td></tr>
+<tr><td><code>%1</code> … <code>%9</code> no padrão</td><td>"o mesmo texto que a captura 1 pegou" (repetição exata)</td><td><code>string.match("abba", "(.)(.)%2%1")</code></td><td><code>a</code>, <code>b</code></td></tr>
+<tr><td></td><td>texto entre aspas iguais (duplas ou simples)</td><td><code>string.match('diz "oi" e "tchau"', '(["\'])(.-)%1')</code></td><td><code>"</code>, <code>oi</code></td></tr>
+<tr><td><code>%1</code> … <code>%9</code> no <code>gsub</code></td><td>na troca: o texto da captura</td><td><code>string.gsub("hello world", "(%w+) (%w+)", "%2 %1")</code></td><td><code>world hello</code>, <code>1</code></td></tr>
+<tr><td><code>%0</code> no <code>gsub</code></td><td>na troca: o pedaço inteiro que casou</td><td><code>string.gsub("Ana Lima", "%w+", "&lt;%0&gt;")</code></td><td><code>&lt;Ana&gt; &lt;Lima&gt;</code>, <code>2</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2 id="especiais">Especiais: <code>%b</code> e <code>%f</code></h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Padrão</th><th>Faz</th><th>Exemplo</th><th>Resultado</th></tr>
+<tr><td><code>%bxy</code></td><td>um trecho que começa com <code>x</code> e termina com o <code>y</code> que "fecha" (equilibrado): ótimo para parênteses</td><td><code>string.match("f(x, g(y)) + 1", "%b()")</code></td><td><code>(x, g(y))</code></td></tr>
+<tr><td></td><td>apagar tudo entre colchetes</td><td><code>string.gsub("um [dois] três [quatro]", "%b[]", "")</code></td><td><code>um  três </code>, <code>2</code></td></tr>
+<tr><td><code>%f[conjunto]</code></td><td>"fronteira" (<em>frontier</em>): casa com o lugar <strong>entre</strong> um caractere fora do conjunto e um dentro. Não consome nada.</td><td><code>string.gsub("THE (quick) fox", "%f[%a]%a+", "W")</code></td><td><code>W (W) W</code>, <code>3</code></td></tr>
+<tr><td></td><td>uma palavra inteira: só o <code>o</code> sozinho, não o de "gato"</td><td><code>string.gsub("o gato e o rato", "%f[%w]o%f[%W]", "um")</code></td><td><code>um gato e um rato</code>, <code>2</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2 id="receitas">Receitas prontas</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Para</th><th>Padrão e uso</th><th>Resultado no lab</th><th>Aula</th></tr>
+<tr><td>tirar espaços das pontas (<em>trim</em>)</td><td><code>string.match("  oi  ", "^%s*(.-)%s*$")</code></td><td><code>oi</code></td><td><a href="string-find.html">Procurando no Texto</a></td></tr>
+<tr><td>separar por vírgula</td><td><code>for item in ("pão,leite,café"):gmatch("[^,]+") do print(item) end</code></td><td><code>pão</code><br><code>leite</code><br><code>café</code></td><td><a href="gmatch.html">Percorrendo Achados</a></td></tr>
+<tr><td>cada palavra (sem acento)</td><td><code>for p in ("Lua é legal"):gmatch("%a+") do io.write(p, ";") end</code></td><td><code>Lua;legal;</code> (o <code>é</code> sumiu)</td><td><a href="gmatch.html">Percorrendo Achados</a></td></tr>
+<tr><td>cada palavra (com acento)</td><td><code>for p in ("Lua é legal"):gmatch("%S+") do io.write(p, ";") end</code></td><td><code>Lua;é;legal;</code></td><td></td></tr>
+<tr><td>é um número inteiro?</td><td><code>("-42"):match("^[+-]?%d+$") ~= nil</code></td><td><code>true</code></td><td><a href="padroes.html">Padrões</a></td></tr>
+<tr><td>pegar o primeiro número</td><td><code>tonumber(("Total: R$ 35.90"):match("%d+%.?%d*"))</code></td><td><code>35.9</code></td><td><a href="conversao.html">Conversão</a></td></tr>
+<tr><td>trocar vários espaços por um</td><td><code>("Ana    Lima"):gsub("%s+", " ")</code></td><td><code>Ana Lima</code>, <code>1</code></td><td><a href="gsub.html">Substituindo</a></td></tr>
+<tr><td>chave = valor</td><td><code>("cor = azul"):match("^(%w+)%s*=%s*(%w+)$")</code></td><td><code>cor</code>, <code>azul</code></td><td></td></tr>
+<tr><td>extensão do arquivo</td><td><code>("foto.ferias.jpg"):match("%.(%w+)$")</code></td><td><code>jpg</code></td><td></td></tr>
+<tr><td>primeira letra maiúscula</td><td><code>("ana lima"):gsub("^%l", string.upper)</code></td><td><code>Ana lima</code>, <code>1</code></td><td></td></tr>
+<tr><td>cada palavra com maiúscula</td><td><code>("ana lima"):gsub("%f[%a]%l", string.upper)</code></td><td><code>Ana Lima</code>, <code>2</code></td><td></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2 id="erros">Erros de padrão</h2>
+
+<p>Um padrão mal escrito para o programa com um erro. As mensagens reais (no terminal, depois de cada uma vem o <code>stack traceback:</code>):</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Código</th><th>Mensagem</th><th>Quer dizer</th><th>Conserto</th></tr>
+<tr><td><code>string.match("x", "[a")</code></td><td><code>stdin:1: malformed pattern (missing ']')</code></td><td>abriu um <code>[</code> e não fechou</td><td>feche o conjunto: <code>"[a]"</code>; para um <code>[</code> de verdade, <code>"%["</code></td></tr>
+<tr><td><code>string.match("x", "%")</code></td><td><code>stdin:1: malformed pattern (ends with '%')</code></td><td>o padrão termina num <code>%</code> sozinho</td><td>para um <code>%</code> de verdade, <code>"%%"</code></td></tr>
+<tr><td><code>string.match("x", "(")</code></td><td><code>stdin:1: unfinished capture</code></td><td>abriu um <code>(</code> e não fechou ("captura não terminada")</td><td>feche com <code>)</code>; para um <code>(</code> de verdade, <code>"%("</code></td></tr>
+<tr><td><code>string.match("x", "%1")</code></td><td><code>stdin:1: invalid capture index %1</code></td><td>usou <code>%1</code> sem existir a captura 1</td><td>ponha a captura antes: <code>"(.)%1"</code></td></tr>
+<tr><td><code>string.gsub("x", "x", "%2")</code></td><td><code>stdin:1: invalid capture index %2</code></td><td>na troca do <code>gsub</code>, pediu uma captura que o padrão não tem</td><td>use só <code>%0</code> ou as capturas que existem; para um <code>%</code> na troca, <code>"%%"</code></td></tr>
+<tr><td><code>string.match("x", "%b")</code></td><td><code>stdin:1: malformed pattern (missing arguments to '%b')</code></td><td>o <code>%b</code> precisa de dois caracteres</td><td><code>"%b()"</code></td></tr>
+<tr><td><code>string.match("x", "%f")</code></td><td><code>stdin:1: missing '[' after '%f' in pattern</code></td><td>o <code>%f</code> precisa de um conjunto</td><td><code>"%f[%a]"</code></td></tr>
+</table>
+</div>
+
+<p>Mais mensagens, de todos os tipos, em <a href="ref-erros.html">Mensagens de Erro Comuns</a>.</p>
+
+<hr>
+
+<h2>Experimente</h2>
+
+<div class="trylua" data-goal="out:ISO: 2026-10-18;;src:%d">
+<p class="try-task"><strong>Missão:</strong> o sistema da padaria só aceita datas no formato <code>ano-mês-dia</code>. Transforme <code>"18/10/2026"</code> em <code>2026-10-18</code> com <code>data:gsub(…)</code>: um padrão com três capturas de dígitos separadas por <code>/</code>, e na troca as capturas na ordem 3, 2, 1, separadas por <code>-</code>. O resultado certo é <code>ISO: 2026-10-18</code>.</p>
+<pre class="script" data-file="main.lua">local data = "18/10/2026"
+
+local nova = data
+print("ISO: " .. nova)
+</pre>
+<pre class="solucao" data-file="main.lua">local data = "18/10/2026"
+
+local nova = data:gsub("(%d+)/(%d+)/(%d+)", "%3-%2-%1")
+print("ISO: " .. nova)
+</pre>
+</div>
+
+<div class="trylua">
+<p class="try-task"><strong>Livre:</strong> teste padrões neste texto. Troque o padrão do <code>gmatch</code> por <code>"%a+"</code>, <code>"%S+"</code>, <code>"%u%l+"</code>, <code>"[%d%.]+"</code> e veja o que cada um acha.</p>
+<pre class="script" data-file="main.lua">local texto = "Ana comprou 3 pães por R$ 4.50 e Bia, 2 cafés."
+
+for achado in texto:gmatch("%d+") do
+  print("[" .. achado .. "]")
+end
+
+print(texto:match("R%$ ([%d%.]+)"))
+print((texto:gsub("%u%l+", string.upper)))
+</pre>
+</div>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li>Classes: <code>.</code> qualquer, <code>%a</code> letra, <code>%d</code> dígito, <code>%s</code> espaço, <code>%w</code> letra ou dígito, <code>%p</code> pontuação, <code>%l</code>/<code>%u</code> minúscula/maiúscula, <code>%x</code> hexadecimal. A maiúscula (<code>%D</code>, <code>%S</code>…) é o contrário.</li>
+  <li>Os padrões olham bytes: letras acentuadas não são <code>%a</code>. Use <code>%S+</code> ou um conjunto <code>[%aãçé]</code>.</li>
+  <li>Mágicos: <code>^ $ ( ) % . [ ] * + - ?</code>; o escape é <code>%</code> (<code>%.</code>, <code>%%</code>).</li>
+  <li>Repetições: <code>+</code> uma ou mais, <code>*</code> zero ou mais, <code>-</code> zero ou mais (o mínimo), <code>?</code> opcional.</li>
+  <li><code>^</code> e <code>$</code> prendem no começo e no fim; <code>( )</code> captura; <code>%1</code> repete uma captura; <code>%b()</code> acha parênteses equilibrados; <code>%f[…]</code> marca a fronteira de uma palavra.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
