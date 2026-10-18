@@ -57,7 +57,7 @@ print("Bem-vinda ao Lua.")
 </pre>
 </div>
 
-<p>Na primeira vez, o editor avisa <strong>"Carregando o Lua (…, só na primeira vez)…"</strong>, com uma barra de progresso: o navegador está baixando o Lua, uns 340 KB (menos que uma foto). Isso leva um instante e só acontece uma vez; depois, o navegador guarda o Lua, e cada Rodar leva uma fração de segundo. Em seguida aparece o <strong>terminal da caixa</strong>, com a resposta. Repare nas partes:</p>
+<p>Na primeira vez, o editor avisa <strong>"Carregando o Lua (…, só na primeira vez)…"</strong>, com uma barra de progresso: o navegador está baixando o Lua, uns 345 KB (menos que uma foto). Isso leva um instante e só acontece uma vez; depois, o navegador guarda o Lua, e cada Rodar leva uma fração de segundo. Em seguida aparece o <strong>terminal da caixa</strong>, com a resposta. Repare nas partes:</p>
 
 <div class="table-wrap">
 <table class="ref">
@@ -407,6 +407,7 @@ Prazer, Ana!
 <tr><td><code>math.random</code> sem <code>math.randomseed</code></td><td>Sorteia diferente a cada Rodar</td><td>Sorteia diferente a cada vez (e diferente do editor)</td></tr>
 <tr><td>Endereços como <code>table: 0x…</code></td><td>Curtos, e costumam se repetir</td><td>Longos, e mudam a cada vez</td></tr>
 <tr><td>Ordem do <code>pairs</code> em tabelas com chaves de texto</td><td>Pode mudar de um Rodar para outro</td><td>Pode mudar de uma vez para outra</td></tr>
+<tr><td>Memória medida (<code>collectgarbage("count")</code>) e o tamanho de <code>string.packsize("l")</code></td><td>Números menores e <code>4</code> (o WebAssembly do editor é de 32 bits)</td><td>Números maiores e <code>8</code> (num computador de 64 bits)</td></tr>
 <tr><td>Outros programas (<code>os.execute</code>), LuaRocks, bibliotecas em C</td><td>Não</td><td>Sim</td></tr>
 <tr><td>Velocidade</td><td>Um pouco mais lento (umas 1,6 vez; nada que se perceba nos exemplos)</td><td>A velocidade normal do computador</td></tr>
 </tbody>
@@ -476,7 +477,7 @@ Prazer, Ana!
 
 <h2>Resumo</h2>
 <ul>
-  <li>As caixas Experimente rodam o <strong>Lua 5.5.0 oficial</strong>, traduzido para WebAssembly, dentro do seu navegador. Ele é baixado (uns 340 KB) só no primeiro Rodar, e o seu código não sai do seu computador.</li>
+  <li>As caixas Experimente rodam o <strong>Lua 5.5.0 oficial</strong>, traduzido para WebAssembly, dentro do seu navegador. Ele é baixado (uns 345 KB) só no primeiro Rodar, e o seu código não sai do seu computador.</li>
   <li>Cada <strong>Rodar</strong> é um <code>lua main.lua</code> novo, numa pasta <code>/home/ana</code> nova, só com os arquivos das abas. O terminal da caixa mostra o comando, a saída, os erros em vermelho e o <strong>código de saída</strong>.</li>
   <li><strong>Restaurar</strong> volta ao código original; <strong>Ver solução</strong> (nas missões) pergunta antes de trocar o seu código. <kbd>Ctrl</kbd>+<kbd>Enter</kbd> roda; o <kbd>Enter</kbd> recua 2 espaços depois de <code>then</code>, <code>do</code>, <code>function(…)</code>.</li>
   <li>O <code>io.read()</code> espera você digitar no terminal da caixa (<kbd>Ctrl</kbd>+<kbd>D</kbd> = fim da entrada), ou lê do campo <strong>Entrada</strong>. O campo <strong>Argumentos</strong> vira o <code>arg[1]</code>…; as caixas com <strong>Abrir o lua</strong> são o modo interativo.</li>
