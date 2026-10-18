@@ -1,0 +1,516 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua string.gsub — substituindo trechos de texto | Guia Lua</title>
+<meta name="description" content="string.gsub do Lua para quem nunca programou: trocar um trecho por outro, o segundo valor com a quantidade de trocas, o limite de trocas, padrões no que se procura, %1 %2 %0 e %% na troca, troca por tabela e por função, tirar espaços das pontas, e os erros reais do Lua 5.5 (invalid use of '%' in replacement string, base out of range).">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">gsub</span></h1>
+
+<p class="intro">Todo editor de texto tem a ferramenta "Localizar e substituir": você diz o que procurar, pelo que trocar, e ele troca todas as vezes que aparecer. No Lua, essa ferramenta é o <code>string.gsub</code>. O nome vem de <em>global substitution</em>, "substituição global": global porque troca <strong>todas</strong> as ocorrências, e não só a primeira. E como o <code>gsub</code> entende <a href="padroes.html">padrões</a>, ele faz trocas que o "Localizar e substituir" comum não faz: juntar espaços repetidos, inverter dia e ano de uma data, pôr a inicial de cada nome em maiúscula.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>Como escrever <code>texto:gsub(procura, troca)</code> e por que ele devolve <strong>dois</strong> valores: o texto novo e quantas trocas fez.</li>
+  <li>Como limitar o número de trocas (o quarto argumento).</li>
+  <li>Por que trocar <code>"."</code> troca tudo, e como escapar um texto que vem de fora.</li>
+  <li>Os sinais da troca: <code>%1</code>, <code>%2</code> (as capturas), <code>%0</code> (o achado inteiro) e <code>%%</code>.</li>
+  <li>Como trocar usando uma <strong>tabela</strong> (um modelo com <code>{nome}</code>) e usando uma <strong>função</strong>.</li>
+  <li>Receitas prontas: juntar espaços, tirar espaços das pontas, contar quantas vezes algo aparece.</li>
+  <li>Os erros reais: <code>invalid use of '%' in replacement string</code>, <code>invalid capture index</code> e o <code>tonumber</code> que reclama de <code>base out of range</code>.</li>
+</ul>
+</div>
+
+<p>Todos os programas desta aula rodaram no <strong>Lua 5.5</strong> da máquina da Ana (usuária <code>ana</code>, computador <code>notebook</code>), salvos na pasta pessoal dela e executados com <code>lua arquivo.lua</code>. Você pode rodar cada um no editor do guia. Vale a pena ter lido <a href="padroes.html">Padrões</a> antes; aqui usamos <code>%d</code>, <code>%a</code>, <code>%s</code>, <code>+</code> e as capturas <code>( )</code>.</p>
+
+<hr>
+
+<h2>A ideia: a revisora com a caneta vermelha</h2>
+<p>A Ana escreveu o convite da festa com o nome errado da aniversariante. A revisora pega o texto, risca cada "Ana" e escreve "Bia" por cima, do começo ao fim. No final, ela entrega duas coisas: o <strong>texto corrigido</strong> (passado a limpo numa folha nova, porque o original continua guardado) e um bilhetinho: "<strong>troquei 2 vezes</strong>". É exatamente o que o <code>gsub</code> faz.</p>
+
+<hr>
+
+<h2>1. A primeira troca</h2>
+
+<pre class="file" data-file="trocar.lua">local frase = "Ana gosta de pão. Ana gosta de café."
+print(frase:gsub("Ana", "Bia"))
+</pre>
+
+<pre class="term">$ lua trocar.lua
+Bia gosta de pão. Bia gosta de café.	2</pre>
+
+<dl class="anatomy">
+  <dt>frase:gsub(…)</dt><dd>O atalho do dois-pontos (veja <a href="string-metodos.html">Funções de Texto</a>): o mesmo que <code>string.gsub(frase, …)</code>.</dd>
+  <dt>"Ana"</dt><dd>O que procurar. É um <strong>padrão</strong>, como no <code>find</code>: os sinais mágicos (<code>. % ( ) [ ] * + - ? ^ $</code>) valem como sinais (seção 4).</dd>
+  <dt>"Bia"</dt><dd>Pelo que trocar.</dd>
+  <dt>Bia gosta… café.</dt><dd>O primeiro valor devolvido: o texto novo, com <strong>todas</strong> as trocas.</dd>
+  <dt>2</dt><dd>O segundo valor: quantas trocas foram feitas. O <code>print</code> mostra os dois, separados por tabulação.</dd>
+</dl>
+
+<hr>
+
+<h2>2. Guardando o resultado (e o número de trocas)</h2>
+<p>Como todas as funções de texto, o <code>gsub</code> não mexe no original. Guarde o resultado numa variável:</p>
+
+<pre class="file" data-file="guardar.lua">local frase = "Ana gosta de pão. Ana gosta de café."
+local nova = frase:gsub("Ana", "Bia")
+print(nova)
+print(frase)
+
+local texto, trocas = frase:gsub("Ana", "Bia")
+print("Foram " .. trocas .. " trocas")
+print(frase:gsub("bolo", "torta"))
+</pre>
+
+<pre class="term">$ lua guardar.lua
+Bia gosta de pão. Bia gosta de café.
+Ana gosta de pão. Ana gosta de café.
+Foram 2 trocas
+Ana gosta de pão. Ana gosta de café.	0</pre>
+
+<dl class="anatomy">
+  <dt>local nova = frase:gsub(…)</dt><dd>A variável só tem lugar para um valor: fica o texto novo, e o número de trocas é descartado.</dd>
+  <dt>print(frase)</dt><dd>O original continua com "Ana".</dd>
+  <dt>local texto, trocas = …</dt><dd>Com duas variáveis, você guarda os dois valores (veja <a href="atribuicao-multipla.html">Atribuição Múltipla</a>).</dd>
+  <dt>gsub("bolo", "torta")</dt><dd>Se não achar nada, não é erro: devolve o texto igual e <code>0</code> trocas.</dd>
+</dl>
+
+<div class="warning">
+<strong>O segundo valor aparece onde você não espera</strong>
+<p>Em <code>print(frase:gsub(…))</code> o número de trocas vai junto para a tela. Se você quer só o texto, guarde numa variável antes, ou ponha a chamada entre <strong>parênteses extras</strong>: <code>print((frase:gsub("Ana", "Bia")))</code>. Os parênteses em volta cortam a resposta para um valor só. A seção <a href="#errado">Quando dá errado</a> mostra um caso em que esse segundo valor quebra o programa.</p>
+</div>
+
+<hr>
+
+<h2>3. Trocar só as primeiras: o quarto argumento</h2>
+
+<pre class="file" data-file="limite.lua">local frase = "Ana gosta de pão. Ana gosta de café."
+print(frase:gsub("Ana", "Bia", 1))
+</pre>
+
+<pre class="term">$ lua limite.lua
+Bia gosta de pão. Ana gosta de café.	1</pre>
+
+<p>O número no fim é o <strong>máximo</strong> de trocas. Com <code>1</code>, só a primeira "Ana" virou "Bia". Sem ele, o <code>gsub</code> troca todas.</p>
+
+<hr>
+
+<h2>4. O que se procura é um padrão</h2>
+<p>A Ana quer trocar o ponto do preço por vírgula, do jeito brasileiro:</p>
+
+<pre class="file" data-file="virgula.lua">print(("R$ 10.50"):gsub(".", ","))
+print(("R$ 10.50"):gsub("%.", ","))
+</pre>
+
+<pre class="term">$ lua virgula.lua
+,,,,,,,,	8
+R$ 10,50	1</pre>
+
+<p>Na primeira linha, <strong>todos os 8 caracteres</strong> viraram vírgula: no padrão, o <code>.</code> é "qualquer caractere". Com o escape <code>%.</code>, só o ponto de verdade foi trocado. Diferente do <code>find</code>, o <code>gsub</code> <strong>não tem</strong> a opção <code>plain</code> ("ao pé da letra"): você sempre escapa com <code>%</code>.</p>
+
+<h3>Quando o que se procura vem de fora</h3>
+<p>Se o texto procurado foi digitado pela pessoa ou veio de um arquivo, você não sabe se ele tem sinais mágicos. Escape <strong>todos</strong> os sinais de pontuação de uma vez, com o próprio <code>gsub</code>:</p>
+
+<pre class="file" data-file="escapar.lua">local busca = "R$ 1.50"
+local texto = "Preço: R$ 1.50 ou R$ 1x50"
+print(texto:gsub(busca, "barato"))
+local segura = busca:gsub("%p", "%%%0")
+print(segura)
+print(texto:gsub(segura, "barato"))
+</pre>
+
+<pre class="term">$ lua escapar.lua
+Preço: barato ou barato	2
+R%$ 1%.50
+Preço: barato ou R$ 1x50	1</pre>
+
+<p>Sem escapar, o <code>.</code> de <code>"R$ 1.50"</code> também casou com o <code>x</code> de <code>"1x50"</code>. A linha 4 é uma receita: "troque cada pontuação (<code>%p</code>) por um <code>%</code> (escrito <code>%%</code>) seguido dela mesma (<code>%0</code>)". O resultado <code>R%$ 1%.50</code> é um padrão que só acha o texto exato. Os sinais <code>%%</code> e <code>%0</code> da troca estão na seção 6.</p>
+
+<hr>
+
+<h2>5. Espaços: juntar e tirar</h2>
+
+<pre class="file" data-file="espacos.lua">print(("a b  c   d"):gsub("%s+", " "))
+print(("a b  c"):gsub(" ", ""))
+</pre>
+
+<pre class="term">$ lua espacos.lua
+a b c d	3
+abc	3</pre>
+
+<p><code>%s+</code> é "um ou mais espaços seguidos". Trocando cada grupo por um espaço só, os espaços duplicados somem (3 grupos trocados). Trocando cada espaço por <code>""</code> (o texto vazio), eles somem de vez.</p>
+
+<div class="trylua" data-goal="out:É palíndromo? true;;src:gsub">
+<p class="try-task"><strong>Missão:</strong> lembra do detector de palíndromos de <a href="string-metodos.html">Funções de Texto</a>? Com espaços, a frase não passa. Use <code>gsub</code> para <strong>tirar os espaços</strong> da variável <code>limpa</code> antes de comparar, e o programa deve mostrar <code>É palíndromo? true</code>.</p>
+<pre class="script" data-file="main.lua">local frase = "Socorram me subi no onibus em Marrocos"
+local limpa = frase:lower()
+print(limpa)
+print("É palíndromo? " .. tostring(limpa == limpa:reverse()))
+</pre>
+<pre class="solucao" data-file="main.lua">local frase = "Socorram me subi no onibus em Marrocos"
+local limpa = frase:lower():gsub(" ", "")
+print(limpa)
+print("É palíndromo? " .. tostring(limpa == limpa:reverse()))
+</pre>
+</div>
+
+<hr>
+
+<h2>6. Usando o que foi achado: <code>%1</code>, <code>%0</code> e <code>%%</code></h2>
+<p>No texto da troca, o <code>%</code> também é especial. <code>%1</code> quer dizer "o que a captura 1 pegou", <code>%2</code> a captura 2, e assim até <code>%9</code>. <code>%0</code> é o pedaço achado inteiro. E <code>%%</code> é um sinal de porcentagem de verdade.</p>
+
+<pre class="file" data-file="capturas.lua">print(("2026-10-18"):gsub("(%d+)-(%d+)-(%d+)", "%3/%2/%1"))
+print(("Ana"):gsub("%a", "%0%0"))
+print(("50"):gsub("%d+", "%0%%"))
+print(("ab"):gsub("(a)(b)", "%2%1"))
+</pre>
+
+<pre class="term">$ lua capturas.lua
+18/10/2026	1
+AAnnaa	3
+50%	1
+ba	1</pre>
+
+<dl class="anatomy">
+  <dt>"(%d+)-(%d+)-(%d+)" → "%3/%2/%1"</dt><dd>Três capturas: ano (1), mês (2), dia (3). A troca escreve na ordem 3, 2, 1, com barras: a data no formato brasileiro.</dd>
+  <dt>"%a" → "%0%0"</dt><dd>Cada letra achada é escrita duas vezes: <code>AAnnaa</code> (3 trocas, uma por letra).</dd>
+  <dt>"%d+" → "%0%%"</dt><dd>O número achado, seguido de um <code>%</code> de verdade: <code>50%</code>.</dd>
+  <dt>"(a)(b)" → "%2%1"</dt><dd>Inverte as duas letras.</dd>
+</dl>
+
+<hr>
+
+<h2>7. Troca por tabela: um modelo com lacunas</h2>
+<p>A troca não precisa ser um texto. Se for uma <strong>tabela</strong> (veja <a href="tabelas.html">Tabelas</a>), o <code>gsub</code> usa o que achou como <strong>chave</strong> e escreve o valor que estiver guardado nela. É assim que se preenche um modelo de mensagem:</p>
+
+<pre class="file" data-file="modelo.lua">local dados = { nome = "Ana", idade = 32 }
+local modelo = "Olá {nome}, você tem {idade} anos"
+print(modelo:gsub("{(%w+)}", dados))
+
+local precos = { pao = "0,80", cafe = "5,00" }
+print(("pao e cafe e bolo"):gsub("%a+", precos))
+</pre>
+
+<pre class="term">$ lua modelo.lua
+Olá Ana, você tem 32 anos	2
+0,80 e 5,00 e bolo	5</pre>
+
+<dl class="anatomy">
+  <dt>"{(%w+)}"</dt><dd>Um <code>{</code>, uma palavra (capturada) e um <code>}</code>. As chaves não são mágicas nos padrões do Lua, então valem por elas mesmas.</dd>
+  <dt>dados</dt><dd>Para <code>{nome}</code>, a captura é <code>"nome"</code>, e o <code>gsub</code> escreve <code>dados["nome"]</code>, que é <code>"Ana"</code>. Para <code>{idade}</code>, escreve o <code>32</code> (números viram texto sozinhos).</dd>
+  <dt>"bolo" → bolo</dt><dd>Não existe <code>precos["bolo"]</code> (é <code>nil</code>): quando a tabela não tem a chave, o pedaço achado <strong>fica como estava</strong>. Mesmo assim ele conta como troca: o 5 é o número de palavras achadas (pao, e, cafe, e, bolo), não o de palavras mudadas.</dd>
+</dl>
+
+<hr>
+
+<h2>8. Troca por função</h2>
+<p>A troca também pode ser uma <strong>função</strong> (veja <a href="funcoes.html">Funções</a>): para cada pedaço achado, o <code>gsub</code> chama a função com ele, e escreve o que ela devolver. É a forma mais poderosa, porque a função pode fazer qualquer conta.</p>
+
+<pre class="file" data-file="funcao.lua">local function capitalizar(palavra)
+  return palavra:sub(1, 1):upper() .. palavra:sub(2)
+end
+print(("ana lima souza"):gsub("%a+", capitalizar))
+
+print(("10 20 30"):gsub("%d+", function (n) return tonumber(n) * 2 end))
+print(("hello"):gsub("l+", string.upper))
+</pre>
+
+<pre class="term">$ lua funcao.lua
+Ana Lima Souza	3
+20 40 60	3
+heLLo	1</pre>
+
+<dl class="anatomy">
+  <dt>capitalizar</dt><dd>Recebe cada palavra achada e devolve a palavra com a primeira letra em maiúscula (a receita de <a href="string-sub.html">sub, byte e char</a>).</dd>
+  <dt>function (n) … end</dt><dd>Uma função escrita ali mesmo, sem nome (veja <a href="funcoes-valores.html">Funções São Valores</a>). Ela recebe o número como texto, converte, dobra e devolve. O número devolvido vira texto sozinho.</dd>
+  <dt>string.upper</dt><dd>Qualquer função serve, inclusive as da biblioteca: cada <code>l</code> achado vai para o <code>string.upper</code>.</dd>
+</dl>
+
+<p>Se a função devolver <code>nil</code> ou <code>false</code>, o pedaço fica como estava: <code>("a1b2"):gsub("%d", function (d) if d == "1" then return "um" end end)</code> dá <code>aumb2</code>, porque para o <code>2</code> a função não devolveu nada.</p>
+
+<div class="trylua">
+<p class="try-task"><strong>Experimente:</strong> mude a função para devolver o número com 10% de desconto (<code>tonumber(n) * 0.9</code>), ou troque o padrão por <code>"%a+"</code> e a função por <code>string.upper</code>.</p>
+<pre class="script" data-file="main.lua">local lista = "pão 8, leite 6, café 20"
+local nova, quantos = lista:gsub("%d+", function (n)
+  return tonumber(n) * 2
+end)
+print(nova)
+print(quantos .. " preços mudados")
+</pre>
+</div>
+
+<hr>
+
+<h2>9. Receitas do dia a dia</h2>
+
+<h3>Tirar os espaços das pontas</h3>
+<p>Quem digita costuma deixar espaços sobrando no começo e no fim. Não existe uma função <code>trim</code> ("aparar") pronta no Lua, mas o <code>gsub</code> faz:</p>
+
+<pre class="file" data-file="aparar.lua">local digitado = "  oi  "
+local sem_inicio = digitado:gsub("^%s+", "")
+local limpo = sem_inicio:gsub("%s+$", "")
+print("[" .. limpo .. "]")
+print("[" .. digitado:match("^%s*(.-)%s*$") .. "]")
+</pre>
+
+<pre class="term">$ lua aparar.lua
+[oi]
+[oi]</pre>
+
+<p><code>^%s+</code> são os espaços do começo; <code>%s+$</code>, os do fim. A última linha é a outra forma, com <code>match</code> (está em <a href="padroes.html">Padrões</a>, seção 7). Os colchetes mostram onde o texto começa e termina.</p>
+
+<h3>Contar quantas vezes aparece</h3>
+<p>Use só o segundo valor, trocando o achado por ele mesmo:</p>
+
+<pre class="file" data-file="contar.lua">local _, n = ("banana"):gsub("a", "a")
+print("a aparece", n, "vezes")
+</pre>
+
+<pre class="term">$ lua contar.lua
+a aparece	3	vezes</pre>
+
+<p>O <code>_</code> (sublinhado) é um nome de variável comum, que os programadores usam para dizer "este valor eu não vou usar". Outra forma de contar, com um laço, está na aula <a href="gmatch.html">gmatch</a>.</p>
+
+<hr>
+
+<h2 id="formas">Formas diferentes de fazer a mesma coisa</h2>
+<p>Pôr a inicial de cada palavra em maiúscula, de duas formas:</p>
+
+<pre class="file" data-file="iniciais.lua">-- 1. capturas e uma função curta
+print((("ana lima"):gsub("(%a)(%a*)", function (primeira, resto)
+  return primeira:upper() .. resto
+end)))
+-- 2. a fronteira %f e string.upper
+print((("ana lima"):gsub("%f[%a]%a", string.upper)))
+</pre>
+
+<pre class="term">$ lua iniciais.lua
+Ana Lima
+Ana Lima</pre>
+
+<p>Na primeira, com duas capturas, a função recebe <strong>dois</strong> valores (a primeira letra e o resto). Na segunda, o padrão <code>%f[%a]%a</code> acha só a letra que começa cada palavra, e o <code>string.upper</code> cuida dela. Os parênteses extras em volta do <code>gsub</code> deixam passar só o texto, sem o número de trocas.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>A troca é…</th><th>O <code>gsub</code> escreve…</th><th>Use quando…</th></tr>
+<tr><td>um texto (<code>"Bia"</code>, <code>"%2/%1"</code>)</td><td>o texto, com <code>%0</code>–<code>%9</code> trocados pelo achado e pelas capturas</td><td>a troca é sempre a mesma, ou só reorganiza pedaços</td></tr>
+<tr><td>uma tabela</td><td><code>tabela[achado]</code> (ou <code>tabela[captura 1]</code>); se for <code>nil</code>, mantém</td><td>há uma lista fixa de trocas (modelos, dicionários)</td></tr>
+<tr><td>uma função</td><td>o que a função devolver; se for <code>nil</code>/<code>false</code>, mantém</td><td>a troca depende de uma conta ou de uma decisão</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+
+<div class="cenario">
+<strong>Um <code>%</code> sozinho no texto da troca</strong>
+<pre class="file" data-file="porcento.lua">local desconto = "50"
+print(desconto:gsub("%d+", "%0% de desconto"))
+</pre>
+<pre class="term">$ lua porcento.lua
+lua: porcento.lua:2: invalid use of '%' in replacement string
+stack traceback:
+	[C]: in method 'gsub'
+	porcento.lua:2: in main chunk
+	[C]: in ?</pre>
+<p>Linha por linha:</p>
+<dl class="anatomy">
+  <dt>lua: porcento.lua:2:</dt><dd>O erro está na linha 2.</dd>
+  <dt>invalid use of '%' in replacement string</dt><dd>"Uso inválido do <code>%</code> no texto de troca". Na troca, o <code>%</code> só pode vir seguido de um algarismo (<code>%0</code> a <code>%9</code>) ou de outro <code>%</code>. Aqui veio seguido de um espaço.</dd>
+  <dt>[C]: in method 'gsub'</dt><dd>Quem descobriu o problema foi o próprio <code>gsub</code>, uma função escrita em C, chamada com o dois-pontos (<em>method</em>).</dd>
+  <dt>porcento.lua:2: in main chunk / [C]: in ?</dt><dd>Chamado pela linha 2 do programa principal, que foi rodado pelo <code>lua</code>.</dd>
+</dl>
+<p><strong>Como consertar:</strong> para um <code>%</code> de verdade, escreva <code>%%</code>: <code>"%0%% de desconto"</code>. O mesmo erro aparece com <code>"%x"</code> ou qualquer letra depois do <code>%</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Pediu uma captura que não existe</strong>
+<pre class="term">$ lua -e 'print(("ab"):gsub("(a)", "%2"))'
+lua: (command line):1: invalid capture index %2
+stack traceback:
+	[C]: in method 'gsub'
+	(command line):1: in main chunk
+	[C]: in ?</pre>
+<p>"Índice de captura inválido: <code>%2</code>". O padrão tem um par de parênteses só, então só existe o <code>%1</code>. (O <code>lua -e</code> roda o código direto do terminal; por isso o lugar é <code>(command line):1</code>.) <strong>Como consertar:</strong> confira quantos pares de <code>( )</code> o padrão tem. Sem nenhum par, só o <code>%0</code> (e o <code>%1</code>, que nesse caso também é o achado inteiro) estão disponíveis.</p>
+</div>
+
+<div class="cenario">
+<strong>Esqueceu a troca</strong>
+<pre class="term">$ lua -e 'print(("ab"):gsub("a"))'
+lua: (command line):1: bad argument #2 to 'gsub' (string/function/table expected, got no value)
+stack traceback:
+	[C]: in method 'gsub'
+	(command line):1: in main chunk
+	[C]: in ?</pre>
+<p>"Argumento ruim nº 2 para o <code>gsub</code> (esperava texto, função ou tabela; não recebeu nenhum valor)". Para <strong>apagar</strong> o que achou, a troca é o texto vazio: <code>gsub("a", "")</code>. A mesma mensagem com <code>got boolean</code> aparece se a troca for <code>true</code>, e com <code>got nil</code> se for uma variável vazia.</p>
+</div>
+
+<div class="cenario">
+<strong>A função devolveu algo que não é texto nem número</strong>
+<pre class="term">$ lua -e 'print(("ab"):gsub("a", function() return {} end))'
+lua: (command line):1: invalid replacement value (a table)
+stack traceback:
+	[C]: in method 'gsub'
+	(command line):1: in main chunk
+	[C]: in ?</pre>
+<p>"Valor de troca inválido (uma tabela)". A função (ou a tabela de trocas) pode devolver texto, número, <code>nil</code> ou <code>false</code>; qualquer outra coisa é erro. <strong>Como consertar:</strong> devolva um texto.</p>
+</div>
+
+<div class="cenario">
+<strong>O segundo valor caiu no lugar errado</strong>
+<p>A Ana quer transformar o preço <code>"1.234,50"</code> num número: tira o ponto, troca a vírgula por ponto e chama o <code>tonumber</code>:</p>
+<pre class="file" data-file="preco.lua">local preco = "1.234,50"
+print(tonumber(preco:gsub("%.", ""):gsub(",", ".")))
+</pre>
+<pre class="term">$ lua preco.lua
+lua: preco.lua:2: bad argument #2 to 'tonumber' (base out of range)
+stack traceback:
+	[C]: in global 'tonumber'
+	preco.lua:2: in main chunk
+	[C]: in ?</pre>
+<p>"Argumento ruim nº 2 para o <code>tonumber</code> (base fora da faixa)". Mas ela só passou um argumento! Não: o último <code>gsub</code> devolveu <strong>dois</strong> valores, <code>"1234.50"</code> e <code>1</code> (uma troca), e os dois foram para o <code>tonumber</code>. O segundo argumento do <code>tonumber</code> é a <strong>base</strong> do número (2 para binário, 16 para hexadecimal; veja <a href="conversao.html">Conversão</a>), e a base 1 não existe. <strong>Como consertar:</strong> parênteses extras em volta do <code>gsub</code>, para passar só o texto:</p>
+<pre class="file" data-file="preco2.lua">local preco = "1.234,50"
+print(tonumber((preco:gsub("%.", ""):gsub(",", "."))))
+</pre>
+<pre class="term">$ lua preco2.lua
+1234.5</pre>
+<p>(Encadear <code>:gsub(…):gsub(…)</code> funciona porque o segundo <code>gsub</code> é aplicado só no primeiro valor do primeiro.)</p>
+</div>
+
+<div class="cenario">
+<strong>Erros que não dão mensagem</strong>
+<ul>
+  <li><strong>Esqueceu de guardar</strong>: <code>frase:gsub("Ana", "Bia")</code> sozinho numa linha não muda a <code>frase</code>. Escreva <code>frase = frase:gsub("Ana", "Bia")</code>.</li>
+  <li><strong>O ponto que troca tudo</strong>: <code>gsub(".", ",")</code> troca cada caractere (seção 4). Escape: <code>%.</code>.</li>
+  <li><strong>Trocou dentro de palavras</strong>: <code>("o gato e os gatos"):gsub("gato", "cão")</code> dá <code>o cão e os cãos</code>. Para trocar só a palavra inteira, use a fronteira: <code>gsub("%f[%a]gato%f[%A]", "cão")</code> dá <code>o cão e os gatos</code> (aula <a href="padroes.html">Padrões</a>).</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>O que faz</th><th>Exemplo → resultado</th></tr>
+<tr><td><code>s:gsub(p, troca)</code></td><td>Troca todos os achados de <code>p</code>; devolve o texto novo e o número de trocas</td><td><code>("ana"):gsub("a", "o")</code> → <code>ono  2</code></td></tr>
+<tr><td><code>s:gsub(p, troca, n)</code></td><td>Troca no máximo <code>n</code> vezes</td><td><code>("ana"):gsub("a", "o", 1)</code> → <code>ona  1</code></td></tr>
+<tr><td><code>(s:gsub(…))</code></td><td>Só o texto, sem o número</td><td></td></tr>
+<tr><td><code>%0</code> na troca</td><td>O achado inteiro</td><td><code>("50"):gsub("%d+", "R$ %0")</code> → <code>R$ 50</code></td></tr>
+<tr><td><code>%1</code> … <code>%9</code> na troca</td><td>As capturas</td><td><code>"%3/%2/%1"</code></td></tr>
+<tr><td><code>%%</code> na troca</td><td>Um <code>%</code> de verdade</td><td><code>"%0%%"</code> → <code>50%</code></td></tr>
+<tr><td>troca = tabela</td><td>Escreve <code>tabela[achado]</code>; <code>nil</code> mantém</td><td><code>"{(%w+)}"</code> com <code>{nome = "Ana"}</code></td></tr>
+<tr><td>troca = função</td><td>Escreve o que a função devolver; <code>nil</code>/<code>false</code> mantém</td><td><code>gsub("%a+", string.upper)</code></td></tr>
+<tr><td><code>s:gsub("%s+", " ")</code></td><td>Junta espaços repetidos</td><td></td></tr>
+<tr><td><code>s:gsub("^%s+", "")</code> · <code>s:gsub("%s+$", "")</code></td><td>Tira os espaços do começo · do fim</td><td></td></tr>
+<tr><td><code>s:gsub("%p", "%%%0")</code></td><td>Escapa um texto para usar como padrão</td><td><code>"R$ 1.50"</code> → <code>R%$ 1%.50</code></td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Sintoma</th><th>Causa provável</th></tr>
+<tr><td><code>invalid use of '%' in replacement string</code></td><td><code>%</code> na troca sem algarismo nem outro <code>%</code> depois: use <code>%%</code></td></tr>
+<tr><td><code>invalid capture index %2</code></td><td><code>%2</code> na troca, mas o padrão tem menos capturas</td></tr>
+<tr><td><code>bad argument #2 to 'gsub' (string/function/table expected…)</code></td><td>Faltou a troca, ou ela é <code>true</code>/<code>nil</code></td></tr>
+<tr><td><code>invalid replacement value (a table)</code></td><td>A função ou tabela de troca devolveu uma tabela</td></tr>
+<tr><td><code>bad argument #2 to 'tonumber' (base out of range)</code></td><td>O número de trocas foi junto para o <code>tonumber</code>: <code>tonumber((s:gsub(…)))</code></td></tr>
+<tr><td>Um número a mais na tela</td><td><code>print(s:gsub(…))</code> mostra também o número de trocas</td></tr>
+<tr><td>Tudo virou o mesmo sinal</td><td>Procurou <code>"."</code> sem escapar</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. Quantas trocas?</h3>
+<p>Qual é o segundo valor de <code>("banana"):gsub("na", "NA")</code>?</p>
+<div class="ex-code">É <input data-answer="2" aria-label="número"></div>
+</div>
+
+<div class="exercise">
+<h3>2. Apagar</h3>
+<p>Complete para tirar todos os hífens de <code>"123-456-789"</code>:</p>
+<div class="ex-code">print(("123-456-789"):gsub("<input data-answer="%-|-" aria-label="padrão">", ""))</div>
+</div>
+
+<div class="exercise">
+<h3>3. Inverter</h3>
+<p>O que <code>print((("Lima, Ana"):gsub("(%a+), (%a+)", "%2 %1")))</code> mostra?</p>
+<div class="ex-code">Mostra <input data-answer="Ana Lima" aria-label="saída"></div>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">4. Depois de <code>local s = "oi"</code> e <code>s:gsub("o", "a")</code>, quanto vale <code>s</code>?</p>
+<label><input type="radio" name="q4"> <code>"ai"</code></label>
+<label><input type="radio" name="q4"> <code>"oi"</code>: o resultado não foi guardado</label>
+<label><input type="radio" name="q4"> <code>1</code></label>
+<label><input type="radio" name="q4"> <code>nil</code></label>
+</div>
+
+<div class="mc" data-answer="3">
+<p class="mc-q">5. Para escrever <code>10%</code> no lugar de cada número, qual troca está certa?</p>
+<label><input type="radio" name="q5"> <code>gsub("%d+", "%0%")</code></label>
+<label><input type="radio" name="q5"> <code>gsub("%d+", "%%0%")</code></label>
+<label><input type="radio" name="q5"> <code>gsub("%d+", "%0%%")</code></label>
+<label><input type="radio" name="q5"> <code>gsub("%d+", "\%")</code></label>
+</div>
+
+<div class="mc" data-answer="1">
+<p class="mc-q">6. Com <code>local t = { gato = "cão" }</code>, o que <code>(("gato e rato"):gsub("%a+", t))</code> dá?</p>
+<label><input type="radio" name="q6"> <code>"cão e rato"</code>: o que não está na tabela fica igual</label>
+<label><input type="radio" name="q6"> <code>"cão e nil"</code></label>
+<label><input type="radio" name="q6"> <code>"cão"</code></label>
+<label><input type="radio" name="q6"> Dá erro, porque <code>t.rato</code> não existe</label>
+</div>
+
+<h3>Missão final: o telefone formatado</h3>
+
+<div class="trylua" data-goal="out:(11) 98765-4321;;src:gsub">
+<p class="try-task"><strong>Missão:</strong> o cadastro guardou o celular só com algarismos: <code>"11987654321"</code>. O programa já separa o DDD, mas o resto sai todo junto. Mude o padrão para ter <strong>três capturas</strong> (2 algarismos, 5 algarismos e 4 algarismos) e a troca para <code>"(%1) %2-%3"</code>, para mostrar <code>(11) 98765-4321</code>.</p>
+<pre class="script" data-file="main.lua">local celular = "11987654321"
+local bonito = celular:gsub("(%d%d)(%d+)", "(%1) %2")
+print(bonito)
+</pre>
+<pre class="solucao" data-file="main.lua">local celular = "11987654321"
+local bonito = celular:gsub("(%d%d)(%d%d%d%d%d)(%d%d%d%d)", "(%1) %2-%3")
+print(bonito)
+</pre>
+</div>
+
+<p>Antes de mudar, sai <code>(11) 987654321</code>. Os parênteses da troca são parênteses comuns: só no <strong>padrão</strong> eles marcam capturas.</p>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li><code>s:gsub(procura, troca)</code> troca <strong>todos</strong> os achados e devolve dois valores: o texto novo e o número de trocas. O original não muda: guarde o resultado.</li>
+  <li>O quarto argumento limita as trocas: <code>s:gsub(p, t, 1)</code> troca só a primeira.</li>
+  <li>O que se procura é um padrão, e o <code>gsub</code> não tem <code>plain</code>: escape com <code>%</code> (<code>%.</code>), ou com a receita <code>busca:gsub("%p", "%%%0")</code>.</li>
+  <li>No texto da troca, <code>%1</code>…<code>%9</code> são as capturas, <code>%0</code> é o achado inteiro e <code>%%</code> é um <code>%</code>.</li>
+  <li>A troca pode ser uma tabela (chave = achado) ou uma função (recebe o achado, devolve o novo); <code>nil</code> mantém o original.</li>
+  <li>Cuidado com o segundo valor: <code>tonumber((s:gsub(…)))</code>, com parênteses extras.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
