@@ -1,0 +1,488 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua Variáveis — guardando valores com nome | Guia Lua</title>
+<meta name="description" content="Variáveis no Lua para quem nunca programou: criar com local nome = valor, usar em contas e textos, trocar o valor, atualizar com estoque = estoque - 3 (o Lua não tem -= nem ++), variável sem valor é nil, o = que não é igualdade, e os erros reais do Lua 5.5 explicados em português.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">Variáveis</span></h1>
+
+<p class="intro">Na aula do <a href="io-read.html"><code>io.read</code></a> você já guardou a resposta da pessoa em <code>local nome = io.read()</code>. Aquele <code>nome</code> é uma <strong>variável</strong>: um nome que guarda um valor para usar depois. Sem variáveis, um programa não lembra de nada; com elas, a Ana guarda o preço do pão, a quantidade vendida, o estoque da lojinha, e faz contas com tudo isso.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>A criar uma variável com <code>local nome = valor</code> e o que é cada parte.</li>
+  <li>A usar variáveis em contas e em textos.</li>
+  <li>A trocar o valor de uma variável, e a atualizá-la usando o próprio valor (<code>estoque = estoque - 3</code>).</li>
+  <li>Que o Lua <strong>não</strong> tem <code>-=</code>, <code>+=</code> nem <code>++</code>.</li>
+  <li>Que uma variável sem valor vale <code>nil</code>.</li>
+  <li>Que o <code>=</code> quer dizer "guarde", e não "é igual a".</li>
+  <li>Os erros reais: usar antes de criar, esquecer o valor, inverter os lados, o nome entre aspas.</li>
+</ul>
+</div>
+
+<p>Todos os programas desta aula foram rodados com o <strong>Lua 5.5</strong> na máquina fictícia da Ana (usuária <code>ana</code>, computador <code>notebook</code>), com o comando <code>lua arquivo.lua</code>. As caixas "Experimente" rodam o mesmo Lua de verdade, no seu navegador.</p>
+
+<hr>
+
+<h2>A ideia: uma caixa com etiqueta</h2>
+<p>Imagine o estoque da padaria: caixas de papelão, cada uma com uma <strong>etiqueta</strong> escrita à mão: "farinha", "açúcar", "ovos". Para saber quanto tem de farinha, ninguém precisa abrir todas as caixas: basta procurar a etiqueta. E, quando chega mais farinha, a etiqueta continua a mesma; só o conteúdo muda.</p>
+
+<p>Uma variável é isso: uma etiqueta (o <strong>nome</strong>) colada num conteúdo (o <strong>valor</strong>). O programa procura pelo nome e encontra o valor.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>No estoque</th><th>No Lua</th></tr>
+<tr><td>A etiqueta "farinha"</td><td>O nome da variável: <code>farinha</code></td></tr>
+<tr><td>O que está dentro da caixa</td><td>O valor: <code>12</code></td></tr>
+<tr><td>Colar a etiqueta e encher a caixa</td><td><code>local farinha = 12</code></td></tr>
+<tr><td>Trocar o conteúdo, mantendo a etiqueta</td><td><code>farinha = 15</code></td></tr>
+<tr><td>Procurar uma etiqueta que não existe</td><td>O valor <code>nil</code> ("nada")</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>1. Criando a primeira variável</h2>
+
+<pre class="file" data-file="primeira.lua">local preco = 5
+print(preco)
+print("O pão de queijo custa", preco, "reais")
+</pre>
+
+<dl class="anatomy">
+  <dt>local</dt><dd>"Local", "daqui". Avisa que você está <strong>criando</strong> uma variável nova, que vale só neste pedaço do programa. Existe o jeito sem <code>local</code>, mas ele é perigoso; a próxima aula, <a href="local.html">local × Global</a>, mostra o porquê. Neste guia, toda variável nova começa com <code>local</code>.</dd>
+  <dt>preco</dt><dd>O <strong>nome</strong> (a etiqueta). Sem acento e sem espaço: <code>preco</code>, não <code>preço</code>. As regras dos nomes estão em <a href="nomes-variaveis.html">Nomes de Variáveis</a>.</dd>
+  <dt>=</dt><dd>A <strong>atribuição</strong>: "guarde o que está à direita no nome que está à esquerda". Leia <code>local preco = 5</code> como "crie <code>preco</code> e guarde 5 nele".</dd>
+  <dt>5</dt><dd>O <strong>valor</strong> guardado. Pode ser um número, um texto, o resultado de uma conta, a resposta de um <code>io.read()</code>...</dd>
+  <dt>print(preco)</dt><dd>Sem aspas, <code>preco</code> é o nome da variável: o <code>print</code> mostra o <strong>valor</strong> que está nela.</dd>
+</dl>
+
+<pre class="term">$ lua primeira.lua
+5
+O pão de queijo custa	5	reais
+</pre>
+
+<p>Em todo lugar onde o programa escreve <code>preco</code>, o Lua usa o valor guardado, <code>5</code>. Se o preço mudar amanhã, você muda <strong>uma</strong> linha (a primeira), e o resto do programa acompanha.</p>
+
+<hr>
+
+<h2>2. Variáveis em contas</h2>
+<p>Uma variável pode entrar numa conta como se fosse o próprio número. E o resultado da conta pode ir para outra variável:</p>
+
+<pre class="file" data-file="contas.lua">local preco = 5
+local quantidade = 3
+local total = preco * quantidade
+print("Total:", total)
+print("Com desconto:", total - 2)
+</pre>
+
+<pre class="term">$ lua contas.lua
+Total:	15
+Com desconto:	13
+</pre>
+
+<p>Na linha 3, o Lua primeiro <strong>calcula</strong> o lado direito (<code>5 * 3</code>, que dá <code>15</code>) e só depois guarda o resultado em <code>total</code>. É sempre assim: <strong>primeiro a direita, depois a esquerda</strong>. Na última linha, a conta <code>total - 2</code> foi feita só para mostrar; o valor de <code>total</code> continua <code>15</code>, porque não houve nenhum <code>=</code> guardando o resultado.</p>
+
+<div class="trylua" data-goal="outre:Total:\s+20\n;;src:quantidade\s*=\s*4">
+<p class="try-task"><strong>Missão:</strong> a cliente levou <strong>4</strong> pães de queijo, não 3. Mude só o valor da variável <code>quantidade</code> e rode: o total tem de virar <code>20</code> sozinho.</p>
+<pre class="script" data-file="main.lua">local preco = 5
+local quantidade = 3
+local total = preco * quantidade
+print("Total:", total)
+</pre>
+<pre class="solucao" data-file="main.lua">local preco = 5
+local quantidade = 4
+local total = preco * quantidade
+print("Total:", total)
+</pre>
+</div>
+
+<hr>
+
+<h2>3. Variáveis com texto</h2>
+<p>Uma variável guarda qualquer valor, inclusive texto. E texto guardado se junta com <code>..</code> como qualquer outro:</p>
+
+<pre class="file" data-file="texto.lua">local nome = "Ana"
+local cidade = "Recife"
+print(nome .. " mora em " .. cidade .. ".")
+nome = "Bia"
+print(nome .. " mora em " .. cidade .. ".")
+</pre>
+
+<pre class="term">$ lua texto.lua
+Ana mora em Recife.
+Bia mora em Recife.
+</pre>
+
+<p>A linha 3 e a linha 5 são <strong>idênticas</strong>, e mostraram coisas diferentes: entre elas, o conteúdo de <code>nome</code> mudou. Repare que o texto <code>"Ana"</code> leva aspas (é um valor) e o nome <code>nome</code> não leva (é a etiqueta).</p>
+
+<hr>
+
+<h2>4. Trocando o valor</h2>
+<p>Para trocar o que está guardado, use o <code>=</code> de novo, agora <strong>sem</strong> o <code>local</code>: a variável já existe, você só está enchendo a caixa com outra coisa. O valor antigo é jogado fora.</p>
+
+<pre class="file" data-file="mudar.lua">local preco = 5
+print("Preço antes:", preco)
+preco = 6
+print("Preço depois:", preco)
+</pre>
+
+<pre class="term">$ lua mudar.lua
+Preço antes:	5
+Preço depois:	6
+</pre>
+
+<p>O programa roda de cima para baixo, e cada linha vê o valor que a variável tem <strong>naquele momento</strong>. Na linha 2, <code>preco</code> ainda era 5; da linha 3 em diante, é 6.</p>
+
+<h3>Atualizando com o próprio valor</h3>
+<p>O caso mais comum de troca é "o que tinha, mais (ou menos) alguma coisa". A Ana tem 20 pães no estoque, vende 3, depois chegam 10:</p>
+
+<pre class="file" data-file="estoque.lua">local estoque = 20
+print("Estoque:", estoque)
+estoque = estoque - 3
+print("Vendi 3, sobrou:", estoque)
+estoque = estoque + 10
+print("Chegaram 10:", estoque)
+</pre>
+
+<pre class="term">$ lua estoque.lua
+Estoque:	20
+Vendi 3, sobrou:	17
+Chegaram 10:	27
+</pre>
+
+<p>Na matemática da escola, <code>estoque = estoque - 3</code> seria um absurdo (nenhum número é igual a ele mesmo menos 3). Em programação, lembre a regra da seção 2: <strong>primeiro a direita</strong>. O Lua pega o valor atual (<code>20</code>), faz <code>20 - 3</code>, e <strong>depois</strong> guarda o <code>17</code> de volta na mesma variável.</p>
+
+<div class="warning">
+<strong>O Lua não tem <code>-=</code>, <code>+=</code> nem <code>++</code></strong>
+<p>Quem já viu outra linguagem (JavaScript, Python, C) procura um atalho como <code>estoque -= 3</code> ou <code>visitas++</code>. No Lua eles não existem e dão erro de sintaxe (veja <a href="#errado">Quando dá errado</a>). Escreva por extenso: <code>estoque = estoque - 3</code>, <code>visitas = visitas + 1</code>.</p>
+</div>
+
+<div class="trylua" data-goal="outre:Estoque:\s+12\n;;src:estoque\s*=\s*estoque\s*-\s*5">
+<p class="try-task"><strong>Missão:</strong> depois da primeira venda, a Ana vendeu mais 5 pães. Acrescente, antes do <code>print</code>, uma linha que tira 5 do <code>estoque</code> usando o próprio <code>estoque</code> (como na linha 2). O programa deve mostrar <code>12</code>.</p>
+<pre class="script" data-file="main.lua">local estoque = 20
+estoque = estoque - 3
+print("Estoque:", estoque)
+</pre>
+<pre class="solucao" data-file="main.lua">local estoque = 20
+estoque = estoque - 3
+estoque = estoque - 5
+print("Estoque:", estoque)
+</pre>
+</div>
+
+<hr>
+
+<h2>5. Variável sem valor: <code>nil</code></h2>
+<p>Dá para criar a variável agora e guardar o valor depois. Enquanto ninguém guardou nada, ela vale <code>nil</code>, o valor do Lua que quer dizer "nada, vazio" (aula <a href="nil.html">O Valor nil</a>):</p>
+
+<pre class="file" data-file="vazia.lua">local troco
+print(troco)
+troco = 2.5
+print(troco)
+</pre>
+
+<pre class="term">$ lua vazia.lua
+nil
+2.5
+</pre>
+
+<p>O mesmo <code>nil</code> aparece quando você usa um nome que <strong>nunca foi criado</strong>. Isso é importante: no Lua, usar um nome desconhecido <strong>não dá erro na hora</strong>; ele simplesmente vale <code>nil</code>. O erro só aparece mais adiante, quando alguém tenta fazer conta ou juntar texto com esse <code>nil</code> (os cenários abaixo mostram os dois casos).</p>
+
+<hr>
+
+<h2>6. A caixa aceita qualquer coisa</h2>
+<p>No Lua, a variável não tem "tipo fixo": a mesma etiqueta pode guardar um número agora e um texto depois. Quem tem tipo é o <strong>valor</strong> (aulas <a href="tipos-de-dados.html">Os Tipos de Dados</a> e <a href="type.html">type</a>):</p>
+
+<pre class="file" data-file="tipo.lua">local caixa = 10
+print(caixa, type(caixa))
+caixa = "dez"
+print(caixa, type(caixa))
+</pre>
+
+<pre class="term">$ lua tipo.lua
+10	number
+dez	string
+</pre>
+
+<p>Funciona, mas não abuse: uma variável chamada <code>preco</code> que às vezes guarda um número e às vezes um texto é um convite para erro. Cada variável com <strong>um</strong> assunto e <strong>um</strong> tipo de valor.</p>
+
+<p>E quando uma variável recebe o valor de outra, ela recebe uma <strong>cópia</strong> do número; mudar uma depois não mexe na outra:</p>
+
+<pre class="file" data-file="copia.lua">local a = 10
+local b = a
+a = 99
+print(a, b)
+</pre>
+
+<pre class="term">$ lua copia.lua
+99	10
+</pre>
+
+<p>O <code>b</code> guardou o <code>10</code> que <code>a</code> tinha <strong>naquele momento</strong>. (Com tabelas a história é outra: aula <a href="tabelas-referencia.html">Tabelas São Referências</a>.)</p>
+
+<hr>
+
+<h2>7. No modo interativo</h2>
+<p>No prompt <code>&gt;</code> do <a href="repl.html">modo interativo</a>, digitar só o nome mostra o valor. Mas cuidado com o <code>local</code> ali:</p>
+
+<pre class="term">$ lua
+Lua 5.5.0  Copyright (C) 1994-2025 Lua.org, PUC-Rio
+&gt; preco = 5
+&gt; preco
+5
+&gt; preco * 3
+15
+&gt; preco = preco + 1
+&gt; preco
+6
+&gt; local desconto = 2
+warning: locals do not survive across lines in interactive mode
+&gt; desconto
+nil
+&gt; os.exit()
+</pre>
+
+<p>O aviso diz: "variáveis locais não sobrevivem de uma linha para outra no modo interativo". Cada linha digitada no <code>&gt;</code> é como um programa separado, e o <code>local</code> some quando a linha acaba (por isso <code>desconto</code> deu <code>nil</code>). No prompt, para testar, crie sem <code>local</code>; <strong>nos arquivos <code>.lua</code>, sempre com <code>local</code></strong>.</p>
+
+<hr>
+
+<h2>Formas diferentes de criar e mudar</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Forma</th><th>O que faz</th><th>Quando usar</th></tr>
+<tr><td><code>local preco = 5</code></td><td>Cria a variável e já guarda o valor</td><td>O normal: quase sempre você sabe o valor inicial</td></tr>
+<tr><td><code>local troco</code></td><td>Cria sem valor (<code>nil</code>)</td><td>Quando o valor só vai ser decidido depois (num <code>if</code>, por exemplo)</td></tr>
+<tr><td><code>preco = 6</code></td><td>Troca o valor de uma variável que <strong>já existe</strong></td><td>Para atualizar. Cuidado: se o nome estiver errado, cria uma global sem avisar (aula <a href="local.html">local × Global</a>)</td></tr>
+<tr><td><code>estoque = estoque - 3</code></td><td>Atualiza usando o valor atual</td><td>Contadores, estoques, somas (o Lua não tem <code>-=</code>)</td></tr>
+<tr><td><code>local a, b = 1, 2</code></td><td>Cria duas de uma vez</td><td>Valores que andam juntos; aula <a href="atribuicao-multipla.html">Atribuição Múltipla</a></td></tr>
+<tr><td><code>local TAXA &lt;const&gt; = 5</code></td><td>Cria uma variável que não pode mudar</td><td>Valores fixos; aula <a href="const.html">Constantes</a></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+
+<div class="cenario">
+<strong>Usar antes de criar</strong>
+<pre class="file" data-file="antes2.lua">local total = preco * 2
+local preco = 5
+</pre>
+<pre class="term">$ lua antes2.lua
+lua: antes2.lua:1: attempt to perform arithmetic on a nil value (global 'preco')
+stack traceback:
+	antes2.lua:1: in main chunk
+	[C]: in ?
+</pre>
+<dl class="anatomy">
+  <dt>antes2.lua:1:</dt><dd>O problema está na linha 1.</dd>
+  <dt>attempt to perform arithmetic on a nil value</dt><dd>"Tentativa de fazer conta com um valor nil". O <code>preco * 2</code> virou <code>nil * 2</code>.</dd>
+  <dt>(global 'preco')</dt><dd>Na linha 1, o <code>local preco</code> da linha 2 <strong>ainda não existe</strong> (o programa roda de cima para baixo). Então o Lua procurou um <code>preco</code> <strong>global</strong> e achou <code>nil</code>.</dd>
+</dl>
+<p>Sem a conta, o erro nem aparece, e o <code>nil</code> passa despercebido:</p>
+<pre class="file" data-file="antes.lua">print("Total:", total)
+local total = 15
+print("Total:", total)
+</pre>
+<pre class="term">$ lua antes.lua
+Total:	nil
+Total:	15
+</pre>
+<p><strong>Como consertar:</strong> crie a variável <strong>antes</strong> de usar; troque a ordem das linhas.</p>
+</div>
+
+<div class="cenario">
+<strong><code>-=</code> e <code>++</code> não existem</strong>
+<pre class="file" data-file="maismenos.lua">local estoque = 20
+estoque -= 3
+print(estoque)
+</pre>
+<pre class="term">$ lua maismenos.lua
+lua: maismenos.lua:2: syntax error near '-'
+</pre>
+<pre class="file" data-file="maismais.lua">local visitas = 0
+visitas++
+print(visitas)
+</pre>
+<pre class="term">$ lua maismais.lua
+lua: maismais.lua:2: syntax error near '+'
+</pre>
+<p>"Erro de sintaxe perto de <code>-</code>" (e de <code>+</code>). O Lua leu o nome da variável e esperava um <code>=</code> (ou uma vírgula); encontrou um sinal de conta. Como é erro de sintaxe, nada roda, nem a linha 1. <strong>Como consertar:</strong> <code>estoque = estoque - 3</code> e <code>visitas = visitas + 1</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Esqueceu o valor depois do <code>=</code></strong>
+<pre class="file" data-file="semvalor.lua">local preco =
+print(preco)
+</pre>
+<pre class="term">$ lua semvalor.lua
+nil
+</pre>
+<p>Nenhuma mensagem de erro, e saiu um <code>nil</code> estranho. Para o Lua, o fim da linha <strong>não termina</strong> o comando: depois do <code>=</code> ele foi procurar o valor na linha de baixo e leu tudo como um comando só, <code>local preco = print(preco)</code>. O <code>print</code> rodou (mostrando o <code>preco</code> global, que é <code>nil</code>) e o <code>local preco</code> ficou sem valor. Se o <code>=</code> estiver na <strong>última</strong> linha do arquivo, aí sim vem um erro:</p>
+<pre class="term">$ lua fim.lua
+lua: fim.lua:2: unexpected symbol near &lt;eof&gt;
+</pre>
+<p>"Símbolo inesperado perto de <code>&lt;eof&gt;</code>" (<em>end of file</em>, "fim do arquivo"): o arquivo acabou e o valor não veio. <strong>Como consertar:</strong> escreva o valor na mesma linha do <code>=</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Lados trocados</strong>
+<pre class="file" data-file="invertido.lua">5 = preco
+</pre>
+<pre class="term">$ lua invertido.lua
+lua: invertido.lua:1: unexpected symbol near '5'
+</pre>
+<p>Na matemática, <code>5 = preco</code> e <code>preco = 5</code> dizem a mesma coisa. No Lua, o <code>=</code> tem direção: à esquerda vai sempre o <strong>nome</strong> que recebe; à direita, o valor. "Guarde <code>preco</code> dentro do 5" não faz sentido. <strong>Como consertar:</strong> <code>local preco = 5</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>O nome da variável entre aspas</strong>
+<pre class="file" data-file="aspas.lua">local nome = "Ana"
+print("nome")
+print(nome)
+</pre>
+<pre class="term">$ lua aspas.lua
+nome
+Ana
+</pre>
+<p>Com aspas, <code>"nome"</code> é o texto de quatro letras, não a variável. Sem aspas, é a etiqueta, e sai o conteúdo. <strong>Como consertar:</strong> para mostrar o valor guardado, escreva o nome <strong>sem</strong> aspas.</p>
+</div>
+
+<div class="cenario">
+<strong>Um nome escrito errado vira <code>nil</code></strong>
+<p>Se você criar <code>local quantidade = 3</code> e depois escrever <code>quantiade</code> (faltou o <code>d</code>), o Lua não reclama na hora: <code>quantiade</code> é só um nome que ninguém criou, e vale <code>nil</code>. É o erro mais traiçoeiro do Lua, e tem uma aula inteira sobre ele: <a href="local.html">local × Global</a>.</p>
+</div>
+
+<hr>
+
+<h2>Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>O que faz</th></tr>
+<tr><td><code>local preco = 5</code></td><td>Cria <code>preco</code> com o valor 5</td></tr>
+<tr><td><code>local nome = "Ana"</code></td><td>Cria <code>nome</code> com um texto</td></tr>
+<tr><td><code>local total = preco * quantidade</code></td><td>Calcula a direita e guarda o resultado</td></tr>
+<tr><td><code>preco = 6</code></td><td>Troca o valor (a variável já existe)</td></tr>
+<tr><td><code>estoque = estoque - 3</code></td><td>Atualiza usando o valor atual</td></tr>
+<tr><td><code>local troco</code></td><td>Cria sem valor: vale <code>nil</code></td></tr>
+<tr><td><code>print(preco)</code></td><td>Mostra o valor (sem aspas no nome)</td></tr>
+<tr><td><code>local b = a</code></td><td><code>b</code> recebe uma cópia do valor de <code>a</code> (números e textos)</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Mensagem</th><th>Causa provável</th></tr>
+<tr><td><code>attempt to perform arithmetic on a nil value (global 'preco')</code></td><td>Usou antes de criar, ou o nome está escrito errado</td></tr>
+<tr><td><code>syntax error near '-'</code> / <code>near '+'</code></td><td><code>-=</code>, <code>+=</code> ou <code>++</code>: escreva <code>x = x - 1</code></td></tr>
+<tr><td><code>unexpected symbol near &lt;eof&gt;</code></td><td>Faltou o valor depois do <code>=</code> no fim do arquivo</td></tr>
+<tr><td><code>unexpected symbol near '5'</code></td><td>Lados trocados: o nome vai à esquerda</td></tr>
+<tr><td>Saiu o nome em vez do valor</td><td>O nome da variável está entre aspas</td></tr>
+<tr><td>Saiu <code>nil</code>, sem erro</td><td>Variável sem valor, nome errado, ou valor esquecido depois do <code>=</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. Complete a criação</h3>
+<p>Complete para criar a variável <code>idade</code> com o valor 30, do jeito recomendado:</p>
+<div class="ex-code"><input data-answer="local" aria-label="palavra" size="6"> idade = 30</div>
+</div>
+
+<div class="exercise">
+<h3>2. Qual é a saída?</h3>
+<p><code>local x = 4</code>, depois <code>x = x * 3</code>, depois <code>print(x)</code>. O que aparece?</p>
+<div class="ex-code">Saída: <input data-answer="12" aria-label="saída"></div>
+</div>
+
+<div class="exercise">
+<h3>3. Por extenso</h3>
+<p>O Lua não tem <code>pontos += 10</code>. Complete o jeito certo:</p>
+<div class="ex-code">pontos = <input data-answer="pontos + 10|pontos+10" aria-label="expressão"></div>
+</div>
+
+<div class="mc" data-answer="3">
+<p class="mc-q">4. O que mostra este programa? <code>local a = 5</code> / <code>local b = a</code> / <code>a = 8</code> / <code>print(b)</code></p>
+<label><input type="radio" name="q4"> <code>8</code></label>
+<label><input type="radio" name="q4"> <code>a</code></label>
+<label><input type="radio" name="q4"> <code>5</code></label>
+<label><input type="radio" name="q4"> <code>nil</code></label>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">5. Num arquivo onde ninguém criou <code>desconto</code>, o que faz <code>print(desconto)</code>?</p>
+<label><input type="radio" name="q5"> Dá erro <code>attempt to call a nil value</code></label>
+<label><input type="radio" name="q5"> Mostra <code>nil</code></label>
+<label><input type="radio" name="q5"> Mostra <code>desconto</code></label>
+<label><input type="radio" name="q5"> Mostra <code>0</code></label>
+</div>
+
+<div class="mc" data-answer="1">
+<p class="mc-q">6. Como se lê <code>total = total + 5</code>?</p>
+<label><input type="radio" name="q6"> "Calcule o valor atual de <code>total</code> mais 5 e guarde o resultado em <code>total</code>"</label>
+<label><input type="radio" name="q6"> "<code>total</code> é igual a <code>total</code> mais 5" (o que é falso, então dá erro)</label>
+<label><input type="radio" name="q6"> "Crie uma variável nova chamada <code>total + 5</code>"</label>
+<label><input type="radio" name="q6"> "Compare <code>total</code> com <code>total + 5</code>"</label>
+</div>
+
+<h3>Missão final: a conta da feira</h3>
+
+<div class="trylua" data-goal="out:Total da compra: 27;;src:local\s+total\s*=">
+<p class="try-task"><strong>Missão:</strong> a Ana comprou 2 litros de leite a 6 reais e 1 pacote de café a 15. As variáveis já estão prontas. Crie uma variável <code>local total</code> com a conta (use as variáveis, não os números) e mostre <code>Total da compra: 27</code>.</p>
+<pre class="script" data-file="main.lua">local preco_leite = 6
+local qtd_leite = 2
+local preco_cafe = 15
+local qtd_cafe = 1
+-- crie o total aqui
+
+print("Total da compra: ")
+</pre>
+<pre class="solucao" data-file="main.lua">local preco_leite = 6
+local qtd_leite = 2
+local preco_cafe = 15
+local qtd_cafe = 1
+local total = preco_leite * qtd_leite + preco_cafe * qtd_cafe
+
+print("Total da compra: " .. total)
+</pre>
+</div>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li>Uma variável é um nome (etiqueta) que guarda um valor. Crie com <code>local nome = valor</code>.</li>
+  <li>O <code>=</code> quer dizer "guarde": primeiro o Lua calcula a direita, depois guarda no nome da esquerda.</li>
+  <li>Para trocar o valor, <code>nome = novo_valor</code>, sem o <code>local</code>. Para atualizar, <code>estoque = estoque - 3</code>; não existem <code>-=</code>, <code>+=</code> nem <code>++</code>.</li>
+  <li>O programa roda de cima para baixo: cada linha vê o valor daquele momento. Use só depois de criar.</li>
+  <li>Variável sem valor, ou nome que ninguém criou, vale <code>nil</code>, sem erro na hora; o erro vem depois, na conta ou no <code>..</code>.</li>
+  <li>A mesma variável pode guardar valores de tipos diferentes, mas o bom costume é um assunto e um tipo por variável.</li>
+  <li>No modo interativo, o <code>local</code> não sobrevive à linha; nos arquivos, use sempre <code>local</code>.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
