@@ -1,0 +1,413 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua type() — descobrindo o tipo de um valor | Guia Lua</title>
+<meta name="description" content="A função type() do Lua para quem nunca programou: descobrir o tipo de qualquer valor, por que ela devolve um texto (&quot;number&quot;, &quot;string&quot;...), comparar com type(x) == &quot;number&quot; (e o erro de esquecer as aspas), conferir a resposta do io.read, math.type para inteiro e float, io.type para arquivos, e os erros reais do Lua 5.5.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">type()</span></h1>
+
+<p class="intro">A aula <a href="tipos-de-dados.html">Os Tipos de Dados</a> usou o <code>type</code> para mostrar os oito tipos do Lua. Agora é a vez dele: o <code>type</code> (em inglês, "tipo") é a função que responde "<strong>que tipo de valor é este?</strong>". Ela é a lupa da Ana quando um programa faz uma coisa estranha (uma conta que não sai, um <code>nil</code> que aparece do nada), e é a forma de um programa <strong>conferir</strong> se recebeu o que esperava.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>A usar <code>type(valor)</code> com qualquer valor, variável ou conta.</li>
+  <li>Que o <code>type</code> devolve um <strong>texto</strong>: <code>"number"</code>, <code>"string"</code>, <code>"nil"</code>...</li>
+  <li>A perguntar "isto é um número?" com <code>type(x) == "number"</code>, e o erro silencioso de esquecer as aspas.</li>
+  <li>A conferir a resposta do <code>io.read</code> com <code>type</code> e <code>tonumber</code>.</li>
+  <li>Os primos do <code>type</code>: <code>math.type</code> (inteiro ou float) e <code>io.type</code> (arquivo aberto ou fechado).</li>
+  <li>Os erros reais: <code>type()</code> vazio, <code>Type</code> com maiúscula e o <code>type</code> de uma função que não devolve nada.</li>
+</ul>
+</div>
+
+<p>Todos os programas desta aula foram rodados com o <strong>Lua 5.5</strong> na máquina fictícia da Ana (usuária <code>ana</code>, computador <code>notebook</code>). As caixas "Experimente" rodam o mesmo Lua de verdade, no seu navegador.</p>
+
+<hr>
+
+<h2>A ideia: a etiqueta da balança</h2>
+<p>Na padaria, as encomendas chegam em pacotes fechados. Antes de abrir, a Ana olha a <strong>etiqueta do tipo</strong>: "frágil", "congelado", "seco". Ela não precisa saber o que tem dentro, só de que tipo é, para decidir onde guardar. O <code>type</code> lê essa etiqueta de qualquer valor do Lua e responde com uma palavra.</p>
+
+<hr>
+
+<h2>1. Usando o <code>type</code></h2>
+
+<pre class="file" data-file="tipo.lua">print(type(42))
+print(type("Ana"))
+print(type(true))
+print(type(nil))
+print(type({}))
+print(type(print))
+</pre>
+
+<pre class="term">$ lua tipo.lua
+number
+string
+boolean
+nil
+table
+function
+</pre>
+
+<dl class="anatomy">
+  <dt>type</dt><dd>O nome da função, em minúsculas. É uma função global, que já vem com o Lua.</dd>
+  <dt>( 42 )</dt><dd>O valor que você quer examinar. Pode ser qualquer coisa: um valor escrito direto, uma variável, uma conta, até outra função.</dd>
+  <dt>number, string...</dt><dd>A resposta: o nome do tipo, em inglês e em minúsculas. As palavras possíveis são só oito: <code>nil</code>, <code>boolean</code>, <code>number</code>, <code>string</code>, <code>table</code>, <code>function</code>, <code>userdata</code> e <code>thread</code>.</dd>
+</dl>
+
+<p>Com variáveis e contas é igual. O <code>type</code> olha o <strong>valor</strong> que está na variável (ou o resultado da conta) naquele momento:</p>
+
+<pre class="file" data-file="variaveis.lua">local preco = 5
+local nome = "Ana"
+local pago = false
+print(type(preco), type(nome), type(pago), type(desconto))
+print(type(preco * 2), type(nome .. "!"), type(preco &gt; 3))
+</pre>
+
+<pre class="term">$ lua variaveis.lua
+number	string	boolean	nil
+number	string	boolean
+</pre>
+
+<p>Repare no <code>type(desconto)</code>: ninguém criou <code>desconto</code>, e o <code>type</code> respondeu <code>nil</code>, sem erro (a aula <a href="local.html">local × Global</a> explica por quê). E na segunda linha: uma conta dá <code>number</code>, uma junção com <code>..</code> dá <code>string</code>, e uma comparação (<code>preco &gt; 3</code>) dá <code>boolean</code>.</p>
+
+<p>No <a href="repl.html">modo interativo</a>, o <code>type</code> é ótimo para tirar dúvidas rápidas:</p>
+
+<pre class="term">$ lua
+Lua 5.5.0  Copyright (C) 1994-2025 Lua.org, PUC-Rio
+&gt; type(42)
+number
+&gt; type("42")
+string
+&gt; type(type)
+function
+&gt; os.exit()
+</pre>
+
+<hr>
+
+<h2>2. A resposta do <code>type</code> é um texto</h2>
+<p>O <code>type</code> não devolve um "tipo" mágico: devolve uma <strong>string</strong> comum, com o nome do tipo dentro. Dá para guardar numa variável, juntar com <code>..</code>, contar as letras:</p>
+
+<pre class="file" data-file="texto.lua">local t = type(42)
+print(t, type(t))
+print(type(type(42)))
+print(#type(42))
+</pre>
+
+<pre class="term">$ lua texto.lua
+number	string
+string
+6
+</pre>
+
+<p><code>type(42)</code> é o texto <code>"number"</code>, de 6 letras; e o tipo desse texto é, claro, <code>string</code>. Isso importa para a próxima seção: para perguntar "é um número?", você compara com o <strong>texto</strong> <code>"number"</code>, entre aspas.</p>
+
+<hr>
+
+<h2>3. Perguntando "é deste tipo?"</h2>
+<p>O uso mais comum do <code>type</code> não é mostrar o tipo, e sim <strong>conferir</strong>. Compare a resposta com o nome do tipo usando <code>==</code> ("é igual a") ou <code>~=</code> ("é diferente de"; aula <a href="operadores-comparacao.html">Comparações</a>). O resultado é <code>true</code> ou <code>false</code>:</p>
+
+<pre class="file" data-file="comparar.lua">local preco = 5
+print(type(preco) == "number")
+print(type(preco) == "string")
+print(type(preco) ~= "nil")
+</pre>
+
+<pre class="term">$ lua comparar.lua
+true
+false
+true
+</pre>
+
+<p>Por enquanto, o <code>print</code> só mostra a resposta. Quando você conhecer o <a href="if.html"><code>if</code></a>, essa pergunta vai decidir o que o programa faz: "se não for número, avise a pessoa e peça de novo".</p>
+
+<div class="warning">
+<strong>Sem aspas, com maiúscula, com outro nome: sempre <code>false</code>, sem erro</strong>
+<pre class="file" data-file="sem-aspas.lua">local preco = 5
+print(type(preco) == number)
+print(type(preco) == "Number")
+print(type(preco) == "int")
+</pre>
+<pre class="term">$ lua sem-aspas.lua
+false
+false
+false
+</pre>
+<p>As três respostas deviam ser "sim", e o Lua disse <code>false</code> para todas, sem nenhuma mensagem. Na linha 2, <code>number</code> sem aspas é o nome de uma variável que ninguém criou (vale <code>nil</code>), e <code>"number" == nil</code> é falso. Na 3, o <code>type</code> sempre responde em minúsculas, e <code>"Number"</code> é outro texto. Na 4, <code>"int"</code> é o nome de outras linguagens; no Lua, os nomes são só os oito da lista. <strong>Regra:</strong> compare com o nome exato, em minúsculas e entre aspas.</p>
+</div>
+
+<div class="trylua" data-goal="outre:^true\n$">
+<p class="try-task"><strong>Missão:</strong> o programa pergunta se o preço é um número e responde <code>false</code>, mas o preço é 5. Conserte a comparação para que ele responda <code>true</code>.</p>
+<pre class="script" data-file="main.lua">local preco = 5
+print(type(preco) == number)
+</pre>
+<pre class="solucao" data-file="main.lua">local preco = 5
+print(type(preco) == "number")
+</pre>
+</div>
+
+<hr>
+
+<h2>4. Conferindo o que a pessoa digitou</h2>
+<p>A aula do <a href="io-read.html"><code>io.read</code></a> avisou: a resposta é sempre texto. O <code>type</code> confirma, e mostra o que o <code>tonumber</code> faz com ela:</p>
+
+<pre class="file" data-file="leitura.lua">io.write("Quantos pães? ")
+local resposta = io.read()
+print("io.read():", type(resposta))
+print("tonumber:", type(tonumber(resposta)))
+</pre>
+
+<p>Com <code>12</code> e depois com <code>doze</code> como entrada (mandadas pelo <code>printf</code>, por isso não aparecem depois da pergunta):</p>
+
+<pre class="term">$ printf '12\n' | lua leitura.lua
+Quantos pães? io.read():	string
+tonumber:	number
+$ printf 'doze\n' | lua leitura.lua
+Quantos pães? io.read():	string
+tonumber:	nil
+</pre>
+
+<p>O <code>io.read()</code> deu <code>string</code> nas duas vezes. O <code>tonumber</code> é que separa as respostas: com <code>"12"</code> virou <code>number</code>, com <code>"doze"</code> virou <code>nil</code>. É assim que um programa sabe se recebeu um número: converta com <code>tonumber</code> e veja se o resultado é <code>"number"</code> (ou, mais curto, se não é <code>nil</code>).</p>
+
+<div class="trylua" data-stdin="12" data-goal="out:number">
+<p class="try-task"><strong>Missão:</strong> a entrada já vem pronta: <code>12</code>. O programa mostra <code>string</code>. Converta a resposta com <code>tonumber(...)</code> na linha do <code>io.read</code>, para que o <code>type</code> mostre <code>number</code>.</p>
+<pre class="script" data-file="main.lua">io.write("Quantos pães? ")
+local qtd = io.read()
+print(type(qtd))
+</pre>
+<pre class="solucao" data-file="main.lua">io.write("Quantos pães? ")
+local qtd = tonumber(io.read())
+print(type(qtd))
+</pre>
+</div>
+
+<hr>
+
+<h2>5. Os primos: <code>math.type</code> e <code>io.type</code></h2>
+<p>O <code>type</code> responde com os oito tipos gerais. Para detalhes, há duas funções parecidas, cada uma na sua biblioteca.</p>
+
+<h3><code>math.type</code>: inteiro ou float?</h3>
+<p>Para o <code>type</code>, todo número é <code>number</code>. O <code>math.type</code> diz de qual dos dois jeitos ele está guardado (aula <a href="numeros.html">Números</a>):</p>
+
+<pre class="file" data-file="mathtype.lua">print(type(7), math.type(7))
+print(type(7.5), math.type(7.5))
+print(type("7"), math.type("7"))
+print(math.type(10 / 2), math.type(10 // 2))
+</pre>
+
+<pre class="term">$ lua mathtype.lua
+number	integer
+number	float
+string	nil
+float	integer
+</pre>
+
+<p>Para algo que não é número (o texto <code>"7"</code>), o <code>math.type</code> responde <code>nil</code>, e não <code>"string"</code>: ele só conhece números. E a última linha mostra de novo que <code>10 / 2</code> dá float e <code>10 // 2</code> dá inteiro.</p>
+
+<h3><code>io.type</code>: é um arquivo?</h3>
+<p>Arquivos abertos são do tipo <code>userdata</code>, que é genérico demais. O <code>io.type</code> diz se é um arquivo e se ele ainda está aberto (os arquivos chegam na aula <a href="io-open.html">io.open</a>):</p>
+
+<pre class="file" data-file="iotype.lua">local f = io.open("lista.txt", "w")
+print(type(f), io.type(f))
+f:close()
+print(type(f), io.type(f))
+print(io.type(42), io.type(io.stdout))
+</pre>
+
+<pre class="term">$ lua iotype.lua
+userdata	file
+userdata	closed file
+nil	file
+</pre>
+
+<p><code>"file"</code> é um arquivo aberto, <code>"closed file"</code> um arquivo já fechado, e <code>nil</code> quer dizer "isto não é arquivo". A própria tela (<code>io.stdout</code>) é um arquivo para o Lua, como você viu na aula do <a href="io-write.html"><code>io.write</code></a>.</p>
+
+<hr>
+
+<h2>Qual usar</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Pergunta</th><th>Função</th><th>Respostas</th></tr>
+<tr><td>De que tipo é este valor?</td><td><code>type(x)</code></td><td><code>"nil"</code>, <code>"boolean"</code>, <code>"number"</code>, <code>"string"</code>, <code>"table"</code>, <code>"function"</code>, <code>"userdata"</code>, <code>"thread"</code></td></tr>
+<tr><td>Este número é inteiro ou float?</td><td><code>math.type(x)</code></td><td><code>"integer"</code>, <code>"float"</code>, ou <code>nil</code> se não for número</td></tr>
+<tr><td>Isto é um arquivo? Está aberto?</td><td><code>io.type(x)</code></td><td><code>"file"</code>, <code>"closed file"</code>, ou <code>nil</code></td></tr>
+<tr><td>Este texto é um número?</td><td><code>tonumber(x)</code></td><td>O número, ou <code>nil</code> (aula <a href="conversao.html">Conversão</a>)</td></tr>
+</table>
+</div>
+
+<div class="tip">
+<strong>Não guarde o tipo numa variável chamada <code>type</code></strong>
+<p>Se precisar guardar a resposta, use um nome em português, como <code>local tipo = type("pão")</code> (que mostra <code>O tipo é</code> e <code>string</code> num <code>print</code>). Uma variável chamada <code>type</code> esconde a função, e o próximo <code>type(...)</code> do programa quebra (aula <a href="local.html">local × Global</a>).</p>
+</div>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+
+<div class="cenario">
+<strong><code>type()</code> sem nada dentro</strong>
+<pre class="file" data-file="vazio.lua">print(type())
+</pre>
+<pre class="term">$ lua vazio.lua
+lua: vazio.lua:1: bad argument #1 to 'type' (value expected)
+stack traceback:
+	[C]: in global 'type'
+	vazio.lua:1: in main chunk
+	[C]: in ?
+</pre>
+<dl class="anatomy">
+  <dt>bad argument #1 to 'type'</dt><dd>"Argumento ruim, o número 1, para o <code>type</code>".</dd>
+  <dt>(value expected)</dt><dd>"Esperava um valor". O <code>type</code> precisa de alguma coisa para examinar, nem que seja <code>nil</code>: <code>type(nil)</code> funciona e devolve <code>"nil"</code>; <code>type()</code>, vazio, não.</dd>
+  <dt>[C]: in global 'type'</dt><dd>O erro aconteceu dentro da função global <code>type</code>, que é escrita em C.</dd>
+</dl>
+</div>
+
+<div class="cenario">
+<strong>O <code>type</code> de uma função que não devolve nada</strong>
+<pre class="file" data-file="nada.lua">print(type(print("oi")))
+</pre>
+<pre class="term">$ lua nada.lua
+oi
+lua: nada.lua:1: bad argument #1 to 'type' (value expected)
+stack traceback:
+	[C]: in global 'type'
+	nada.lua:1: in main chunk
+	[C]: in ?
+</pre>
+<p>Uma surpresa: o <code>print("oi")</code> rodou (o <code>oi</code> apareceu), mas o <code>print</code> <strong>não devolve valor nenhum</strong>, nem <code>nil</code>. Então o <code>type</code> recebeu "nada" e reclamou como no caso anterior. Você vai ver a diferença entre "devolver <code>nil</code>" e "não devolver nada" em <a href="retornos-multiplos.html">Vários Retornos</a>.</p>
+</div>
+
+<div class="cenario">
+<strong><code>Type</code> com maiúscula</strong>
+<pre class="file" data-file="maiuscula.lua">print(Type(42))
+</pre>
+<pre class="term">$ lua maiuscula.lua
+lua: maiuscula.lua:1: attempt to call a nil value (global 'Type')
+stack traceback:
+	maiuscula.lua:1: in main chunk
+	[C]: in ?
+</pre>
+<p>O mesmo erro do <code>Print</code> da aula <a href="print.html">print()</a>: <code>Type</code> é outro nome, que não existe. <strong>Como consertar:</strong> <code>type</code>, minúsculo.</p>
+</div>
+
+<div class="cenario">
+<strong>A comparação que sempre dá <code>false</code></strong>
+<p>Sem erro nenhum: <code>type(x) == number</code> (sem aspas), <code>== "Number"</code> (maiúscula) ou <code>== "int"</code> (nome de outra linguagem). Seção 3: compare com o nome exato, minúsculo, entre aspas.</p>
+</div>
+
+<hr>
+
+<h2>Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>Resultado</th></tr>
+<tr><td><code>type(42)</code> / <code>type(3.5)</code></td><td><code>"number"</code></td></tr>
+<tr><td><code>type("Ana")</code> / <code>type("42")</code></td><td><code>"string"</code></td></tr>
+<tr><td><code>type(true)</code> / <code>type(5 &gt; 3)</code></td><td><code>"boolean"</code></td></tr>
+<tr><td><code>type(nil)</code> / <code>type(nome_que_ninguem_criou)</code></td><td><code>"nil"</code></td></tr>
+<tr><td><code>type({})</code></td><td><code>"table"</code></td></tr>
+<tr><td><code>type(print)</code></td><td><code>"function"</code></td></tr>
+<tr><td><code>type(io.stdout)</code></td><td><code>"userdata"</code></td></tr>
+<tr><td><code>type(type(42))</code></td><td><code>"string"</code> (a resposta é sempre texto)</td></tr>
+<tr><td><code>type(x) == "number"</code></td><td><code>true</code> ou <code>false</code></td></tr>
+<tr><td><code>math.type(7)</code> / <code>math.type(7.5)</code> / <code>math.type("7")</code></td><td><code>"integer"</code> / <code>"float"</code> / <code>nil</code></td></tr>
+<tr><td><code>io.type(arquivo)</code></td><td><code>"file"</code>, <code>"closed file"</code> ou <code>nil</code></td></tr>
+<tr><td><code>type()</code></td><td>Erro: <code>bad argument #1 to 'type' (value expected)</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. Qual é a saída?</h3>
+<p>O que mostra <code>print(type(10 &gt; 5))</code>?</p>
+<div class="ex-code">Saída: <input data-answer="boolean" aria-label="saída"></div>
+</div>
+
+<div class="exercise">
+<h3>2. Complete a pergunta</h3>
+<p>Complete para perguntar se <code>nome</code> é um texto:</p>
+<div class="ex-code">print(type(nome) == <input data-answer="&quot;string&quot;|'string'" aria-label="tipo">)</div>
+</div>
+
+<div class="exercise">
+<h3>3. O tipo do tipo</h3>
+<p>O que mostra <code>print(type(type(nil)))</code>?</p>
+<div class="ex-code">Saída: <input data-answer="string" aria-label="saída"></div>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">4. A pessoa digitou <code>25</code>. O que mostra <code>print(type(io.read()))</code>?</p>
+<label><input type="radio" name="q4"> <code>number</code></label>
+<label><input type="radio" name="q4"> <code>string</code></label>
+<label><input type="radio" name="q4"> <code>integer</code></label>
+<label><input type="radio" name="q4"> <code>25</code></label>
+</div>
+
+<div class="mc" data-answer="4">
+<p class="mc-q">5. <code>local x = 5</code>. Por que <code>print(type(x) == number)</code> mostra <code>false</code>?</p>
+<label><input type="radio" name="q5"> Porque <code>5</code> não é um número</label>
+<label><input type="radio" name="q5"> Porque o <code>type</code> responde em maiúsculas</label>
+<label><input type="radio" name="q5"> Porque o <code>==</code> não funciona com textos</label>
+<label><input type="radio" name="q5"> Porque <code>number</code> sem aspas é uma variável que vale <code>nil</code>, e <code>"number" == nil</code> é falso</label>
+</div>
+
+<div class="mc" data-answer="1">
+<p class="mc-q">6. Qual função diz se o número <code>8.0</code> é inteiro ou float?</p>
+<label><input type="radio" name="q6"> <code>math.type(8.0)</code></label>
+<label><input type="radio" name="q6"> <code>type(8.0)</code></label>
+<label><input type="radio" name="q6"> <code>io.type(8.0)</code></label>
+<label><input type="radio" name="q6"> <code>tonumber(8.0)</code></label>
+</div>
+
+<h3>Missão final: o inspetor de números</h3>
+
+<div class="trylua" data-goal="outre:^number\s+integer\nnumber\s+float\nstring\s+nil\n$;;src:math\.type">
+<p class="try-task"><strong>Missão:</strong> o inspetor mostra só o tipo geral de cada valor. Acrescente, em cada <code>print</code>, o <code>math.type</code> do mesmo valor, para sair <code>number integer</code>, <code>number float</code> e <code>string nil</code>.</p>
+<pre class="script" data-file="main.lua">local a, b, c = 7, 7.5, "7"
+print(type(a))
+print(type(b))
+print(type(c))
+</pre>
+<pre class="solucao" data-file="main.lua">local a, b, c = 7, 7.5, "7"
+print(type(a), math.type(a))
+print(type(b), math.type(b))
+print(type(c), math.type(c))
+</pre>
+</div>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li><code>type(valor)</code> diz o tipo de qualquer valor, variável ou conta, com uma das oito palavras: <code>nil</code>, <code>boolean</code>, <code>number</code>, <code>string</code>, <code>table</code>, <code>function</code>, <code>userdata</code>, <code>thread</code>.</li>
+  <li>A resposta é um <strong>texto</strong>: compare com <code>type(x) == "number"</code>, nome exato, minúsculo, entre aspas. Sem aspas ou com maiúscula, dá <code>false</code> sem erro.</li>
+  <li>O <code>io.read()</code> sempre dá <code>string</code>; o <code>tonumber</code> dá <code>number</code> ou <code>nil</code>.</li>
+  <li><code>math.type</code>: <code>"integer"</code>, <code>"float"</code> ou <code>nil</code>. <code>io.type</code>: <code>"file"</code>, <code>"closed file"</code> ou <code>nil</code>.</li>
+  <li><code>type()</code> vazio, ou o <code>type</code> de algo que não devolve valor, dá <code>bad argument #1 to 'type' (value expected)</code>.</li>
+  <li>Não use <code>type</code> como nome de variável: ele esconde a função.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
