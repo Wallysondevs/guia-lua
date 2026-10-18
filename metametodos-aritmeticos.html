@@ -1,0 +1,741 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua Metamétodos de Operadores — __add, __sub, __eq, __lt… | Guia Lua</title>
+<meta name="description" content="Metamétodos de operadores do Lua para quem nunca programou: ensinar +, -, *, - (negativo), ==, &lt;, &lt;= e .. a uma tabela de dinheiro da padaria, com __add, __sub, __mul, __unm, __eq, __lt, __le e __concat, o table.sort com __lt e os erros reais do Lua 5.5 (attempt to perform arithmetic on a table value, attempt to compare two table values).">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">Metamétodos de Operadores</span></h1>
+
+<p class="intro">Na aula <a href="metatabelas.html">Metatabelas</a>, você ensinou o <code>+</code> a somar duas cestas com o <code>__add</code>. Todos os outros operadores do Lua também podem ser ensinados: subtrair, multiplicar, comparar com <code>==</code> e <code>&lt;</code>, juntar com <code>..</code>. Nesta aula, a Ana cria um tipo novo para os preços da padaria, o <strong>Dinheiro</strong>, e ensina a ele um operador de cada vez.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>Os erros reais que o Lua dá quando você usa um operador numa tabela sem metamétodo.</li>
+  <li>As contas: <code>__add</code> (<code>+</code>), <code>__sub</code> (<code>-</code>), <code>__mul</code> (<code>*</code>) e <code>__unm</code> (o sinal de negativo).</li>
+  <li>O que fazer quando um dos lados da conta é um número comum (<code>pao * 6</code> e <code>6 * pao</code>).</li>
+  <li>As comparações: <code>__eq</code> (<code>==</code> e <code>~=</code>), <code>__lt</code> (<code>&lt;</code> e <code>&gt;</code>) e <code>__le</code> (<code>&lt;=</code> e <code>&gt;=</code>), e como o <code>__lt</code> faz o <code>table.sort</code> funcionar.</li>
+  <li>O <code>__concat</code>, para escrever <code>"Preço: " .. preco</code>.</li>
+  <li>A lista completa dos metamétodos de operadores.</li>
+</ul>
+</div>
+
+<p>Todos os programas rodaram no <strong>Lua 5.5</strong> da máquina da Ana (usuária <code>ana</code>, computador <code>notebook</code>) com <code>lua arquivo.lua</code>. Você precisa já conhecer <code>setmetatable</code> (aula <a href="metatabelas.html">Metatabelas</a>), <a href="operadores-aritmeticos.html">operadores aritméticos</a>, <a href="operadores-comparacao.html">comparações</a> e <a href="string-format.html">string.format</a>.</p>
+
+<hr>
+
+<h2>A ideia: ensinar as contas a um tipo novo</h2>
+<p>Pense numa calculadora de padaria que só conhece números. Um dia, o dono quer que ela entenda "dinheiro": que <em>R$ 10,50 + R$ 6,25</em> dê <em>R$ 16,75</em>, que um preço possa ser comparado com outro, que o total apareça bonito no papel. Ninguém muda a calculadora: o dono escreve um manual com uma página para cada tecla, dizendo "quando apertarem <strong>+</strong> com dinheiro, faça assim".</p>
+<p>No Lua, cada operador tem a sua "página" no manual (a <a href="metatabelas.html">metatabela</a>), com um nome fixo:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Operador</th><th>Metamétodo</th><th>Lê-se (inglês)</th></tr>
+<tr><td><code>a + b</code></td><td><code>__add</code></td><td><em>add</em>, somar</td></tr>
+<tr><td><code>a - b</code></td><td><code>__sub</code></td><td><em>subtract</em>, subtrair</td></tr>
+<tr><td><code>a * b</code></td><td><code>__mul</code></td><td><em>multiply</em>, multiplicar</td></tr>
+<tr><td><code>-a</code></td><td><code>__unm</code></td><td><em>unary minus</em>, menos de um operando só</td></tr>
+<tr><td><code>a == b</code></td><td><code>__eq</code></td><td><em>equal</em>, igual</td></tr>
+<tr><td><code>a &lt; b</code></td><td><code>__lt</code></td><td><em>less than</em>, menor que</td></tr>
+<tr><td><code>a &lt;= b</code></td><td><code>__le</code></td><td><em>less or equal</em>, menor ou igual</td></tr>
+<tr><td><code>a .. b</code></td><td><code>__concat</code></td><td><em>concatenate</em>, juntar</td></tr>
+</table>
+</div>
+<p>A lista completa (com <code>/</code>, <code>//</code>, <code>%</code>, <code>^</code> e os operadores de bits) está na <a href="#referencia">Referência rápida</a>.</p>
+
+<hr>
+
+<h2>1. Sem manual: os erros de cada operador</h2>
+<p>Primeiro, o que o Lua faz com duas tabelas comuns. O <a href="pcall.html">pcall</a> abaixo serve só para o programa continuar depois de cada erro e mostrar todas as mensagens de uma vez (ele devolve <code>false</code> e a mensagem):</p>
+
+<pre class="file" data-file="sem_regras.lua">local a = { centavos = 1050 }
+local b = { centavos = 1050 }
+print(pcall(function () return a - b end))
+print(pcall(function () return a * 2 end))
+print(pcall(function () return -a end))
+print(pcall(function () return a &lt; b end))
+print(pcall(function () return a .. "!" end))
+print(a == b)
+print(a == a)
+</pre>
+
+<pre class="term">$ lua sem_regras.lua
+false	sem_regras.lua:3: attempt to perform arithmetic on a table value (upvalue 'a')
+false	sem_regras.lua:4: attempt to perform arithmetic on a table value (upvalue 'a')
+false	sem_regras.lua:5: attempt to perform arithmetic on a table value (upvalue 'a')
+false	sem_regras.lua:6: attempt to compare two table values
+false	sem_regras.lua:7: attempt to concatenate a table value (upvalue 'a')
+false
+true</pre>
+
+<dl class="anatomy">
+  <dt>attempt to perform arithmetic on a table value</dt><dd>"Tentativa de fazer conta com um valor tabela": vale para <code>-</code>, <code>*</code>, o sinal de negativo, e também <code>+</code>, <code>/</code>, <code>%</code>… O <code>(upvalue 'a')</code> diz que a tabela era a variável <code>a</code> de fora da função (um <em>upvalue</em>, veja <a href="closures.html">Closures</a>); num programa sem a função em volta, aparece <code>(local 'a')</code>.</dd>
+  <dt>attempt to compare two table values</dt><dd>"Tentativa de comparar dois valores tabela": o <code>&lt;</code> não sabe qual tabela é "menor".</dd>
+  <dt>attempt to concatenate a table value</dt><dd>"Tentativa de juntar (concatenar) um valor tabela": o <code>..</code> só junta textos e números.</dd>
+  <dt>a == b → false</dt><dd>O <code>==</code> <strong>não dá erro</strong>: sem manual, duas tabelas só são iguais se forem <strong>a mesma</strong> tabela. <code>a</code> e <code>b</code> têm o mesmo conteúdo, mas são duas tabelas diferentes, então <code>false</code>. Já <code>a == a</code> é <code>true</code>. Veja <a href="tabelas-referencia.html">Tabelas São Referências</a>.</dd>
+</dl>
+
+<p>Fora do <code>pcall</code>, o programa para no primeiro erro, como sempre. A comparação, por exemplo:</p>
+
+<pre class="file" data-file="comparar.lua">local a = { centavos = 1050 }
+local b = { centavos = 990 }
+if a &lt; b then
+  print("a é mais barato")
+end
+</pre>
+
+<pre class="term">$ lua comparar.lua
+lua: comparar.lua:3: attempt to compare two table values
+stack traceback:
+	comparar.lua:3: in main chunk
+	[C]: in ?</pre>
+
+<hr>
+
+<h2>2. O tipo Dinheiro: <code>__add</code> e <code>__sub</code></h2>
+<p>A Ana guarda os preços em <strong>centavos</strong>, como número inteiro: R$ 10,50 vira <code>1050</code>. Assim as contas nunca dão "quebrados" estranhos de número com vírgula (veja <a href="numeros.html">Números</a>). A metatabela se chama <code>Dinheiro</code>, com letra maiúscula, porque ela representa um <strong>tipo</strong> de valor (é uma convenção, você vai vê-la de novo em <a href="classes.html">Classes</a>).</p>
+
+<pre class="file" data-file="dinheiro.lua">local Dinheiro = {}
+
+local function reais(centavos)
+  return setmetatable({ centavos = centavos }, Dinheiro)
+end
+
+local function mostrar(d)
+  return string.format("R$ %d,%02d", d.centavos // 100, d.centavos % 100)
+end
+
+Dinheiro.__add = function (a, b)
+  return reais(a.centavos + b.centavos)
+end
+
+Dinheiro.__sub = function (a, b)
+  return reais(a.centavos - b.centavos)
+end
+
+local pao = reais(1050)
+local leite = reais(625)
+local total = pao + leite
+print("Total: " .. mostrar(total))
+local troco = reais(2000) - total
+print("Troco: " .. mostrar(troco))
+</pre>
+
+<pre class="term">$ lua dinheiro.lua
+Total: R$ 16,75
+Troco: R$ 3,25</pre>
+
+<dl class="anatomy">
+  <dt>local function reais(centavos)</dt><dd>A função que cria um valor de Dinheiro: uma tabela com o campo <code>centavos</code>, já ligada ao manual. <code>reais(1050)</code> é "dez reais e cinquenta".</dd>
+  <dt>local function mostrar(d)</dt><dd>Transforma em texto para mostrar: <code>1675 // 100</code> é <code>16</code> (os reais) e <code>1675 % 100</code> é <code>75</code> (os centavos); o <code>%02d</code> põe um zero na frente quando precisa (<code>R$ 3,05</code>). Veja <a href="divisao.html">Divisão: /, // e %</a>.</dd>
+  <dt>Dinheiro.__add = function (a, b)</dt><dd>Ensina o <code>+</code>: soma os centavos e devolve <strong>um Dinheiro novo</strong> (criado com <code>reais</code>). Por devolver um Dinheiro, o resultado também sabe fazer contas: foi o que permitiu <code>reais(2000) - total</code> logo depois.</dd>
+  <dt>Dinheiro.__sub = function (a, b)</dt><dd>Ensina o <code>-</code> do mesmo jeito. Atenção à ordem: <code>a</code> é o lado esquerdo (<code>reais(2000)</code>) e <code>b</code> o direito (<code>total</code>). Na subtração, a ordem importa.</dd>
+</dl>
+
+<div class="trylua" data-goal="out:Troco: R$ 3,25;;semerro">
+<p class="try-task"><strong>Missão:</strong> este manual só tem o <code>__add</code>, e a linha do troco dá <code>attempt to perform arithmetic on a table value</code>. Escreva o <code>Dinheiro.__sub</code> (igual ao <code>__add</code>, mas com <code>-</code>) para o programa mostrar <code>Troco: R$ 3,25</code>.</p>
+<pre class="script" data-file="main.lua">local Dinheiro = {}
+
+local function reais(centavos)
+  return setmetatable({ centavos = centavos }, Dinheiro)
+end
+
+local function mostrar(d)
+  return string.format("R$ %d,%02d", d.centavos // 100, d.centavos % 100)
+end
+
+Dinheiro.__add = function (a, b)
+  return reais(a.centavos + b.centavos)
+end
+
+local total = reais(1050) + reais(625)
+print("Total: " .. mostrar(total))
+local troco = reais(2000) - total
+print("Troco: " .. mostrar(troco))
+</pre>
+<pre class="solucao" data-file="main.lua">local Dinheiro = {}
+
+local function reais(centavos)
+  return setmetatable({ centavos = centavos }, Dinheiro)
+end
+
+local function mostrar(d)
+  return string.format("R$ %d,%02d", d.centavos // 100, d.centavos % 100)
+end
+
+Dinheiro.__add = function (a, b)
+  return reais(a.centavos + b.centavos)
+end
+
+Dinheiro.__sub = function (a, b)
+  return reais(a.centavos - b.centavos)
+end
+
+local total = reais(1050) + reais(625)
+print("Total: " .. mostrar(total))
+local troco = reais(2000) - total
+print("Troco: " .. mostrar(troco))
+</pre>
+</div>
+
+<hr>
+
+<h2>3. Quando um lado é número: <code>__mul</code></h2>
+<p>Seis pães de R$ 1,50: a Ana quer escrever <code>pao * 6</code>. Aqui um lado é Dinheiro e o outro é um <strong>número comum</strong>. A primeira tentativa:</p>
+
+<pre class="file" data-file="mul.lua">local Dinheiro = {}
+
+local function reais(centavos)
+  return setmetatable({ centavos = centavos }, Dinheiro)
+end
+
+local function mostrar(d)
+  return string.format("R$ %d,%02d", d.centavos // 100, d.centavos % 100)
+end
+
+Dinheiro.__mul = function (a, b)
+  return reais(a.centavos * b)
+end
+
+local pao = reais(150)
+print(mostrar(pao * 6))
+print(mostrar(6 * pao))
+</pre>
+
+<pre class="term">$ lua mul.lua
+R$ 9,00
+lua: mul.lua:12: attempt to index a number value (local 'a')
+stack traceback:
+	mul.lua:12: in metamethod 'mul'
+	mul.lua:17: in main chunk
+	[C]: in ?</pre>
+
+<p><code>pao * 6</code> funcionou, mas <code>6 * pao</code> não. O motivo: o Lua <strong>sempre</strong> passa os dois lados <strong>na ordem em que estão escritos</strong>. Em <code>6 * pao</code>, o <code>a</code> é o número <code>6</code>, e <code>a.centavos</code> tenta pegar um campo de um número.</p>
+
+<dl class="anatomy">
+  <dt>mul.lua:12: attempt to index a number value (local 'a')</dt><dd>"Tentativa de indexar (pegar um campo de) um valor número, a variável local <code>a</code>": é o <code>a.centavos</code> da linha 12, com <code>a = 6</code>.</dd>
+  <dt>mul.lua:12: in metamethod 'mul'</dt><dd>A primeira linha do rastro: o erro aconteceu <strong>dentro do metamétodo</strong> <code>__mul</code> (o Lua escreve sem os sublinhados).</dd>
+  <dt>mul.lua:17: in main chunk</dt><dd>E quem disparou o metamétodo foi a linha 17, a do <code>6 * pao</code>. O rastro mostra as duas pontas: onde a conta foi escrita e onde a sua função quebrou.</dd>
+</dl>
+
+<p>Para ver com os próprios olhos o que o Lua passa, este programa só mostra os tipos de <code>a</code> e <code>b</code>:</p>
+
+<pre class="file" data-file="argumentos.lua">local mt = {}
+mt.__add = function (a, b)
+  print("a =", type(a), "b =", type(b))
+  return 0
+end
+mt.__unm = function (a, b)
+  print("unm:", type(a), type(b), a == b)
+  return 0
+end
+local t = setmetatable({}, mt)
+local _ = t + 1
+_ = 1 + t
+_ = t + t
+_ = -t
+</pre>
+
+<pre class="term">$ lua argumentos.lua
+a =	table	b =	number
+a =	number	b =	table
+a =	table	b =	table
+unm:	table	table	true</pre>
+
+<p>Em <code>1 + t</code>, a tabela chegou em <code>b</code>. E o sinal de negativo (<code>-t</code>, com um operando só) chama o <code>__unm</code> com a <strong>mesma</strong> tabela duas vezes (<code>a == b</code> deu <code>true</code>): use só o primeiro parâmetro. (O <code>_</code> é um nome de variável comum, usado quando o valor não interessa.)</p>
+
+<p>O conserto do <code>__mul</code>: se o número veio na esquerda, troque os dois de lugar antes da conta. E, de brinde, o <code>__unm</code>:</p>
+
+<pre class="file" data-file="mul2.lua">Dinheiro.__mul = function (a, b)
+  if type(a) == "number" then
+    a, b = b, a
+  end
+  return reais(a.centavos * b)
+end
+
+Dinheiro.__unm = function (a)
+  return reais(-a.centavos)
+end
+
+local pao = reais(150)
+print(mostrar(pao * 6))
+print(mostrar(6 * pao))
+print((-pao).centavos)
+</pre>
+
+<pre class="term">$ lua mul2.lua
+R$ 9,00
+R$ 9,00
+-150</pre>
+
+<p>(O começo do arquivo, com <code>Dinheiro</code>, <code>reais</code> e <code>mostrar</code>, é igual ao de <code>mul.lua</code>.) O <code>a, b = b, a</code> troca os valores das duas variáveis numa linha (veja <a href="atribuicao-multipla.html">Atribuição Múltipla</a>). Na multiplicação a ordem não muda o resultado, então trocar é seguro. Na subtração e na divisão, não: lá <code>a - b</code> e <code>b - a</code> são contas diferentes.</p>
+
+<hr>
+
+<h2>4. Igualdade: <code>__eq</code></h2>
+<p>Duas etiquetas de R$ 10,50 são o mesmo preço. Mas, como você viu na seção 1, duas tabelas diferentes nunca são <code>==</code> sem manual. O <code>__eq</code> ensina o que é "igual" para o Dinheiro:</p>
+
+<pre class="file" data-file="igual.lua">local Dinheiro = {}
+
+local function reais(centavos)
+  return setmetatable({ centavos = centavos }, Dinheiro)
+end
+
+local a = reais(1050)
+local b = reais(1050)
+print("antes do __eq:", a == b, a ~= b)
+
+Dinheiro.__eq = function (x, y)
+  return x.centavos == y.centavos
+end
+print("depois do __eq:", a == b, a ~= b)
+print(a == reais(999))
+print(a == 1050)
+</pre>
+
+<pre class="term">$ lua igual.lua
+antes do __eq:	false	true
+depois do __eq:	true	false
+false
+false</pre>
+
+<dl class="anatomy">
+  <dt>antes do __eq: false true</dt><dd>Sem o metamétodo, <code>a</code> e <code>b</code> são tabelas diferentes, então não são iguais (e são "diferentes", <code>~=</code>).</dd>
+  <dt>Dinheiro.__eq = function (x, y)</dt><dd>A regra: dois Dinheiros são iguais se têm os mesmos centavos. O resultado é sempre convertido para <code>true</code> ou <code>false</code>.</dd>
+  <dt>depois do __eq: true false</dt><dd>Agora <code>a == b</code> chama o <code>__eq</code>. E o <code>~=</code> ("diferente") usa o mesmo metamétodo, só que ao contrário: não existe um <code>__ne</code>.</dd>
+  <dt>a == 1050 → false</dt><dd>O <code>__eq</code> só é chamado quando os <strong>dois</strong> lados são tabelas (e não são a mesma tabela). Uma tabela comparada com um número é sempre diferente, sem nem perguntar ao manual.</dd>
+</dl>
+
+<div class="trylua" data-goal="out:Mesmo preço!;;semerro">
+<p class="try-task"><strong>Missão:</strong> a padaria e o mercado vendem o leite pelo mesmo preço, mas o programa diz que os preços são diferentes. Escreva um <code>Dinheiro.__eq</code> que compare os centavos, para aparecer <code>Mesmo preço!</code>.</p>
+<pre class="script" data-file="main.lua">local Dinheiro = {}
+
+local function reais(centavos)
+  return setmetatable({ centavos = centavos }, Dinheiro)
+end
+
+local leite_padaria = reais(625)
+local leite_mercado = reais(625)
+
+if leite_padaria == leite_mercado then
+  print("Mesmo preço!")
+else
+  print("Preços diferentes.")
+end
+</pre>
+<pre class="solucao" data-file="main.lua">local Dinheiro = {}
+
+local function reais(centavos)
+  return setmetatable({ centavos = centavos }, Dinheiro)
+end
+
+Dinheiro.__eq = function (a, b)
+  return a.centavos == b.centavos
+end
+
+local leite_padaria = reais(625)
+local leite_mercado = reais(625)
+
+if leite_padaria == leite_mercado then
+  print("Mesmo preço!")
+else
+  print("Preços diferentes.")
+end
+</pre>
+</div>
+
+<hr>
+
+<h2>5. Menor e maior: <code>__lt</code> e <code>__le</code></h2>
+<p>Para saber qual preço é mais barato, o Lua precisa de duas páginas no manual: <code>__lt</code> ("menor que", para <code>&lt;</code>) e <code>__le</code> ("menor ou igual", para <code>&lt;=</code>). Não existem páginas para <code>&gt;</code> e <code>&gt;=</code>: o Lua <strong>vira a conta ao contrário</strong>. <code>a &gt; b</code> vira <code>b &lt; a</code>, e <code>a &gt;= b</code> vira <code>b &lt;= a</code>.</p>
+
+<pre class="file" data-file="menor.lua">local Dinheiro = {}
+
+local function reais(centavos)
+  return setmetatable({ centavos = centavos }, Dinheiro)
+end
+
+Dinheiro.__lt = function (a, b)
+  return a.centavos &lt; b.centavos
+end
+
+local cafe = reais(800)
+local bolo = reais(2500)
+print(cafe &lt; bolo)
+print(cafe &gt; bolo)
+print(bolo &gt; cafe)
+print(pcall(function () return cafe &lt;= bolo end))
+
+Dinheiro.__le = function (a, b)
+  return a.centavos &lt;= b.centavos
+end
+print(cafe &lt;= bolo, cafe &gt;= bolo, cafe &lt;= reais(800))
+</pre>
+
+<pre class="term">$ lua menor.lua
+true
+false
+true
+false	menor.lua:16: attempt to compare two table values
+true	false	true</pre>
+
+<dl class="anatomy">
+  <dt>cafe &lt; bolo → true</dt><dd>R$ 8,00 é menor que R$ 25,00: o <code>__lt</code> foi chamado com <code>(cafe, bolo)</code>.</dd>
+  <dt>cafe &gt; bolo → false</dt><dd>O Lua transformou em <code>bolo &lt; cafe</code> e chamou o mesmo <code>__lt</code>, com os lados trocados.</dd>
+  <dt>cafe &lt;= bolo → erro</dt><dd>Com só o <code>__lt</code>, o <code>&lt;=</code> dá <code>attempt to compare two table values</code>. No Lua 5.5, <strong>cada um precisa da sua página</strong>: o <code>&lt;=</code> não é deduzido do <code>&lt;</code>.</dd>
+  <dt>Dinheiro.__le = …</dt><dd>Com o <code>__le</code>, as três comparações da última linha funcionaram: <code>&lt;=</code> e <code>&gt;=</code> (virado para <code>&lt;=</code>).</dd>
+</dl>
+
+<div class="note">
+<strong>O <code>&lt;=</code> sem <code>__le</code> nas outras versões</strong>
+<p>Nas versões antigas, quando faltava o <code>__le</code>, o Lua tentava <code>not (b &lt; a)</code> com o <code>__lt</code>. No lab, um programa com só o <code>__lt</code> deu <code>true</code> para <code>x &lt;= y</code> no <code>lua5.1</code>, no <code>luajit</code> e também no <code>lua5.4</code> do Ubuntu (que vem com essa compatibilidade ligada); no <code>lua</code> (5.5), deu o erro acima. Escreva sempre os dois metamétodos, e o seu programa funciona em todas. Veja <a href="versoes.html">as diferenças entre as versões</a>.</p>
+</div>
+
+<h3>O <code>__lt</code> e o <code>table.sort</code></h3>
+<p>O <a href="table-sort.html">table.sort</a> ordena uma lista comparando os itens com <code>&lt;</code>. Numa lista de tabelas comuns, ele não tem como comparar:</p>
+
+<pre class="file" data-file="ordenar_sem.lua">local precos = { { centavos = 2500 }, { centavos = 800 } }
+table.sort(precos)
+</pre>
+
+<pre class="term">$ lua ordenar_sem.lua
+lua: attempt to compare two table values
+stack traceback:
+	[C]: in field 'sort'
+	ordenar_sem.lua:2: in main chunk
+	[C]: in ?</pre>
+
+<p>Repare: desta vez a mensagem <strong>não tem número de linha</strong> logo depois de <code>lua:</code>. A comparação aconteceu dentro do <code>table.sort</code>, que é escrito em C (<code>[C]: in field 'sort'</code>), e não numa linha do seu arquivo. A linha do seu programa aparece no rastro: <code>ordenar_sem.lua:2</code>. Com o <code>__lt</code> no manual, o <code>table.sort</code> funciona sem você mudar nada nele; é a missão final desta aula.</p>
+
+<hr>
+
+<h2>6. Juntar com texto: <code>__concat</code></h2>
+<p>Até aqui, para mostrar um preço, a Ana chamou <code>mostrar(total)</code>. Seria mais natural escrever <code>"Preço: " .. preco</code>. Sem manual:</p>
+
+<pre class="file" data-file="juntar.lua">local preco = { centavos = 1050 }
+print("Preço: " .. preco)
+</pre>
+
+<pre class="term">$ lua juntar.lua
+lua: juntar.lua:2: attempt to concatenate a table value (local 'preco')
+stack traceback:
+	juntar.lua:2: in main chunk
+	[C]: in ?</pre>
+
+<p>O <code>__concat</code> recebe os dois lados do <code>..</code>. Um deles é Dinheiro; o outro, em geral, é um texto, e pode estar na esquerda ou na direita. A função abaixo transforma em texto o lado (ou os lados) que for Dinheiro e junta:</p>
+
+<pre class="file" data-file="concat.lua">local Dinheiro = {}
+
+local function reais(centavos)
+  return setmetatable({ centavos = centavos }, Dinheiro)
+end
+
+local function mostrar(d)
+  return string.format("R$ %d,%02d", d.centavos // 100, d.centavos % 100)
+end
+
+Dinheiro.__concat = function (a, b)
+  if getmetatable(a) == Dinheiro then a = mostrar(a) end
+  if getmetatable(b) == Dinheiro then b = mostrar(b) end
+  return a .. b
+end
+
+local preco = reais(1050)
+print("Preço: " .. preco)
+print(preco .. " por quilo")
+print("De " .. reais(1200) .. " por " .. preco)
+</pre>
+
+<pre class="term">$ lua concat.lua
+Preço: R$ 10,50
+R$ 10,50 por quilo
+De R$ 12,00 por R$ 10,50</pre>
+
+<dl class="anatomy">
+  <dt>getmetatable(a) == Dinheiro</dt><dd>O jeito de perguntar "este valor é um Dinheiro?": é Dinheiro se a metatabela dele for a tabela <code>Dinheiro</code>.</dd>
+  <dt>return a .. b</dt><dd>Aqui os dois lados já são textos, então este <code>..</code> é o normal do Lua, sem manual.</dd>
+  <dt>"De " .. reais(1200) .. " por " .. preco</dt><dd>Uma corrente de <code>..</code> com dois Dinheiros no meio: o <code>__concat</code> foi chamado o quanto precisou, e tudo virou um texto só.</dd>
+</dl>
+
+<div class="tip">
+<strong>E para o <code>print(preco)</code> sozinho?</strong>
+<p>O <code>__concat</code> só entra no <code>..</code>. Para o <code>print(preco)</code> e o <code>tostring(preco)</code> mostrarem <code>R$ 10,50</code>, o metamétodo é outro, o <code>__tostring</code>, na aula <a href="tostring-call-len.html">__tostring, __call e __len</a>. Com ele, o <code>mostrar</code> nem é mais necessário.</p>
+</div>
+
+<hr>
+
+<h2 id="formas">Formas diferentes de fazer a mesma coisa</h2>
+<p>Os metamétodos podem ser escritos um por um, como nesta aula, ou todos juntos, dentro das chaves da metatabela. Como as funções usam <code>reais</code>, e <code>reais</code> usa a metatabela, a forma "tudo junto" precisa que a metatabela já exista (por isso o <code>local Dinheiro</code> vem antes, numa linha separada):</p>
+
+<pre class="file" data-file="juntos.lua">local Dinheiro
+local function reais(centavos)
+  return setmetatable({ centavos = centavos }, Dinheiro)
+end
+
+Dinheiro = {
+  __add = function (a, b) return reais(a.centavos + b.centavos) end,
+  __sub = function (a, b) return reais(a.centavos - b.centavos) end,
+  __eq  = function (a, b) return a.centavos == b.centavos end,
+  __lt  = function (a, b) return a.centavos &lt; b.centavos end,
+  __le  = function (a, b) return a.centavos &lt;= b.centavos end,
+}
+</pre>
+
+<p>E, claro, nada obriga a usar operadores: uma função comum como <code>somar(a, b)</code> faz o mesmo trabalho. Quando escolher cada um:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Situação</th><th>Qual usar</th></tr>
+<tr><td>O operador tem um sentido óbvio para o seu tipo (somar dinheiro, comparar preços, somar vetores)</td><td>Metamétodo: <code>total = pao + leite</code> fica fácil de ler</td></tr>
+<tr><td>O sentido não é óbvio ("multiplicar" duas cestas?)</td><td>Uma função com nome claro: <code>juntar_cestas(a, b)</code></td></tr>
+<tr><td>Você precisa ordenar uma lista com <code>table.sort</code></td><td><code>__lt</code> no tipo, ou uma função de comparação no próprio <code>table.sort(lista, function (a, b) … end)</code> (veja <a href="table-sort.html">table.sort</a>)</td></tr>
+<tr><td>Comparar com <code>&lt;=</code> e <code>&gt;=</code></td><td>Escreva <code>__le</code> também (o 5.5 não o deduz do <code>__lt</code>)</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+
+<div class="cenario">
+<strong>Somou um Dinheiro com um número comum</strong>
+<pre class="file" data-file="misturou.lua">local Dinheiro = {}
+
+local function reais(centavos)
+  return setmetatable({ centavos = centavos }, Dinheiro)
+end
+
+Dinheiro.__add = function (a, b)
+  return reais(a.centavos + b.centavos)
+end
+
+local pao = reais(150)
+local mais = pao + 50
+</pre>
+<pre class="term">$ lua misturou.lua
+lua: misturou.lua:8: attempt to index a number value (local 'b')
+stack traceback:
+	misturou.lua:8: in metamethod 'add'
+	misturou.lua:12: in main chunk
+	[C]: in ?</pre>
+<p>O <code>__add</code> foi chamado (por causa do <code>pao</code>), mas o <code>b</code> era o número <code>50</code>, e <code>b.centavos</code> não existe num número. O rastro mostra o caminho: linha 12 (a conta) → <code>in metamethod 'add'</code> → linha 8 (o <code>b.centavos</code>). <strong>Como consertar:</strong> escreva <code>pao + reais(50)</code>, ou ensine o <code>__add</code> a aceitar número com um <code>if type(b) == "number"</code>, como o <code>__mul</code> da seção 3.</p>
+</div>
+
+<div class="cenario">
+<strong>O número veio na esquerda: <code>6 * pao</code></strong>
+<pre class="file" data-file="mul_errado.lua">local Dinheiro = {}
+
+local function reais(centavos)
+  return setmetatable({ centavos = centavos }, Dinheiro)
+end
+
+Dinheiro.__mul = function (a, b)
+  return reais(a.centavos * b)
+end
+
+local pao = reais(150)
+local seis = 6 * pao
+</pre>
+<pre class="term">$ lua mul_errado.lua
+lua: mul_errado.lua:8: attempt to index a number value (local 'a')
+stack traceback:
+	mul_errado.lua:8: in metamethod 'mul'
+	mul_errado.lua:12: in main chunk
+	[C]: in ?</pre>
+<p>O Lua passa os lados na ordem escrita: <code>a</code> = <code>6</code>, <code>b</code> = <code>pao</code>. <strong>Como consertar:</strong> no começo do metamétodo, <code>if type(a) == "number" then a, b = b, a end</code> (seção 3).</p>
+</div>
+
+<div class="cenario">
+<strong>Esqueceu o <code>return</code> no metamétodo</strong>
+<pre class="file" data-file="sem_retorno.lua">local Dinheiro = {}
+
+local function reais(centavos)
+  return setmetatable({ centavos = centavos }, Dinheiro)
+end
+
+Dinheiro.__add = function (a, b)
+  reais(a.centavos + b.centavos)
+end
+
+local total = reais(150) + reais(300)
+print(total)
+print(total.centavos)
+</pre>
+<pre class="term">$ lua sem_retorno.lua
+nil
+lua: sem_retorno.lua:13: attempt to index a nil value (local 'total')
+stack traceback:
+	sem_retorno.lua:13: in main chunk
+	[C]: in ?</pre>
+<p>O <code>__add</code> criou o Dinheiro novo, mas não o devolveu. Uma função sem <code>return</code> devolve nada, e o resultado do <code>+</code> virou <code>nil</code> (o <code>print(total)</code> mostrou isso). O erro só apareceu uma linha depois, no <code>total.centavos</code>: "tentativa de indexar um valor <code>nil</code>". <strong>Como consertar:</strong> <code>return reais(a.centavos + b.centavos)</code>. Veja <a href="return.html">return</a>.</p>
+</div>
+
+<div class="cenario">
+<strong>Usou <code>&lt;=</code> com só o <code>__lt</code></strong>
+<p>No Lua 5.5, <code>cafe &lt;= bolo</code> dá <code>attempt to compare two table values</code> se o manual tiver só o <code>__lt</code> (seção 5). <strong>Como consertar:</strong> escreva também o <code>__le</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Ordenou uma lista de tabelas sem <code>__lt</code></strong>
+<p><code>table.sort(precos)</code> com tabelas sem manual dá <code>lua: attempt to compare two table values</code>, sem número de linha na mensagem (a linha está no rastro, depois de <code>[C]: in field 'sort'</code>). <strong>Como consertar:</strong> um <code>__lt</code> no tipo, ou uma função de comparação no <code>table.sort</code>.</p>
+</div>
+
+<hr>
+
+<h2 id="referencia">Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Operador</th><th>Metamétodo</th><th>Observação</th></tr>
+<tr><td><code>a + b</code></td><td><code>__add</code></td><td>Recebe <code>(a, b)</code> na ordem escrita; um dos lados pode ser número</td></tr>
+<tr><td><code>a - b</code></td><td><code>__sub</code></td><td>A ordem importa</td></tr>
+<tr><td><code>a * b</code></td><td><code>__mul</code></td><td></td></tr>
+<tr><td><code>a / b</code></td><td><code>__div</code></td><td></td></tr>
+<tr><td><code>a // b</code></td><td><code>__idiv</code></td><td>Divisão inteira (veja <a href="divisao.html">Divisão</a>)</td></tr>
+<tr><td><code>a % b</code></td><td><code>__mod</code></td><td></td></tr>
+<tr><td><code>a ^ b</code></td><td><code>__pow</code></td><td>Potência</td></tr>
+<tr><td><code>-a</code></td><td><code>__unm</code></td><td>Recebe o operando duas vezes; use o primeiro</td></tr>
+<tr><td><code>a &amp; b</code>, <code>a | b</code>, <code>a ~ b</code></td><td><code>__band</code>, <code>__bor</code>, <code>__bxor</code></td><td>Bits (veja <a href="operadores-bits.html">Operadores de Bits</a>); sem manual: <code>attempt to perform bitwise operation on a table value</code></td></tr>
+<tr><td><code>a &lt;&lt; b</code>, <code>a &gt;&gt; b</code>, <code>~a</code></td><td><code>__shl</code>, <code>__shr</code>, <code>__bnot</code></td><td>Bits</td></tr>
+<tr><td><code>a .. b</code></td><td><code>__concat</code></td><td>Um lado costuma ser texto</td></tr>
+<tr><td><code>a == b</code>, <code>a ~= b</code></td><td><code>__eq</code></td><td>Só quando os dois lados são tabelas diferentes; resultado vira <code>true</code>/<code>false</code></td></tr>
+<tr><td><code>a &lt; b</code>, <code>a &gt; b</code></td><td><code>__lt</code></td><td><code>a &gt; b</code> vira <code>b &lt; a</code>; usado pelo <code>table.sort</code></td></tr>
+<tr><td><code>a &lt;= b</code>, <code>a &gt;= b</code></td><td><code>__le</code></td><td><code>a &gt;= b</code> vira <code>b &lt;= a</code>; no 5.5 não é deduzido do <code>__lt</code></td></tr>
+</table>
+</div>
+<p>(Todos os 15 nomes de contas, bits e <code>..</code> desta tabela foram conferidos no lab: um programa com uma função em cada um mostrou o nome certo para cada operador.) Os outros metamétodos (<code>__index</code>, <code>__newindex</code>, <code>__tostring</code>, <code>__call</code>, <code>__len</code>…) têm aulas próprias; todos estão em <a href="ref-metametodos.html">Referência: Metamétodos</a>.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Mensagem</th><th>Causa provável</th></tr>
+<tr><td><code>attempt to perform arithmetic on a table value</code></td><td>Conta com uma tabela sem o metamétodo daquele operador</td></tr>
+<tr><td><code>attempt to compare two table values</code></td><td><code>&lt;</code>, <code>&lt;=</code> ou <code>table.sort</code> sem <code>__lt</code>/<code>__le</code></td></tr>
+<tr><td><code>attempt to concatenate a table value</code></td><td><code>..</code> com uma tabela sem <code>__concat</code></td></tr>
+<tr><td><code>attempt to index a number value (local 'a')</code> com <code>in metamethod '…'</code></td><td>O metamétodo recebeu um número e tratou como tabela</td></tr>
+<tr><td>O resultado da conta é <code>nil</code></td><td>Faltou o <code>return</code> no metamétodo</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. Qual metamétodo?</h3>
+<p>Escreva o nome do metamétodo (com os sublinhados) de cada operador:</p>
+<div class="ex-code"><code>a - b</code> → <input data-answer="__sub" aria-label="metamétodo do menos"><br><code>a == b</code> → <input data-answer="__eq" aria-label="metamétodo do igual"><br><code>a .. b</code> → <input data-answer="__concat" aria-label="metamétodo do concatenar"></div>
+</div>
+
+<div class="exercise">
+<h3>2. A ordem dos lados</h3>
+<p>Em <code>10 * preco</code>, o que chega no primeiro parâmetro (<code>a</code>) do <code>__mul</code>? Responda com o valor.</p>
+<div class="ex-code">a = <input data-answer="10" aria-label="valor de a"></div>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">3. Sem nenhum metamétodo, <code>{ x = 1 } == { x = 1 }</code> dá…</p>
+<label><input type="radio" name="q3"> <code>true</code>, porque o conteúdo é igual</label>
+<label><input type="radio" name="q3"> <code>false</code>, porque são duas tabelas diferentes</label>
+<label><input type="radio" name="q3"> o erro <code>attempt to compare two table values</code></label>
+<label><input type="radio" name="q3"> <code>nil</code></label>
+</div>
+
+<div class="mc" data-answer="3">
+<p class="mc-q">4. A metatabela tem só o <code>__lt</code>. Qual comparação dá erro no Lua 5.5?</p>
+<label><input type="radio" name="q4"> <code>a &lt; b</code></label>
+<label><input type="radio" name="q4"> <code>a &gt; b</code></label>
+<label><input type="radio" name="q4"> <code>a &lt;= b</code></label>
+<label><input type="radio" name="q4"> Nenhuma</label>
+</div>
+
+<div class="mc" data-answer="1">
+<p class="mc-q">5. Qual metamétodo o <code>table.sort(lista)</code> usa para comparar tabelas?</p>
+<label><input type="radio" name="q5"> <code>__lt</code></label>
+<label><input type="radio" name="q5"> <code>__eq</code></label>
+<label><input type="radio" name="q5"> <code>__sort</code></label>
+<label><input type="radio" name="q5"> <code>__le</code></label>
+</div>
+
+<h3>Missão final: a vitrine em ordem de preço</h3>
+
+<div class="trylua" data-goal="out:1º: R$ 3,75;;out:4º: R$ 25,00;;semerro">
+<p class="try-task"><strong>Missão:</strong> a Ana quer mostrar os preços da vitrine do mais barato para o mais caro, mas o <code>table.sort</code> dá <code>attempt to compare two table values</code>. No lugar do comentário, escreva o <code>Dinheiro.__lt</code> que compara os centavos. O primeiro da lista deve ser <code>R$ 3,75</code>.</p>
+<pre class="script" data-file="main.lua">local Dinheiro = {}
+
+local function reais(centavos)
+  return setmetatable({ centavos = centavos }, Dinheiro)
+end
+
+local function mostrar(d)
+  return string.format("R$ %d,%02d", d.centavos // 100, d.centavos % 100)
+end
+
+-- escreva o Dinheiro.__lt aqui
+
+local precos = { reais(2500), reais(800), reais(1050), reais(375) }
+table.sort(precos)
+for i, p in ipairs(precos) do
+  print(i .. "º: " .. mostrar(p))
+end
+</pre>
+<pre class="solucao" data-file="main.lua">local Dinheiro = {}
+
+local function reais(centavos)
+  return setmetatable({ centavos = centavos }, Dinheiro)
+end
+
+local function mostrar(d)
+  return string.format("R$ %d,%02d", d.centavos // 100, d.centavos % 100)
+end
+
+Dinheiro.__lt = function (a, b)
+  return a.centavos &lt; b.centavos
+end
+
+local precos = { reais(2500), reais(800), reais(1050), reais(375) }
+table.sort(precos)
+for i, p in ipairs(precos) do
+  print(i .. "º: " .. mostrar(p))
+end
+</pre>
+</div>
+
+<p>No lab, a solução mostrou:</p>
+<pre class="term">$ lua vitrine.lua
+1º: R$ 3,75
+2º: R$ 8,00
+3º: R$ 10,50
+4º: R$ 25,00</pre>
+<p>Desafio extra: troque o <code>&lt;</code> por <code>&gt;</code> dentro do <code>__lt</code>. A vitrine passa a ir do mais caro para o mais barato, porque o <code>table.sort</code> confia no que o manual disser que é "menor".</p>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li>Cada operador tem um metamétodo com nome fixo: <code>__add</code>, <code>__sub</code>, <code>__mul</code>, <code>__unm</code>, <code>__eq</code>, <code>__lt</code>, <code>__le</code>, <code>__concat</code>, e outros na tabela de referência.</li>
+  <li>Sem o metamétodo, o Lua dá <code>attempt to perform arithmetic on a table value</code>, <code>attempt to compare two table values</code> ou <code>attempt to concatenate a table value</code>. O <code>==</code> não dá erro: compara se é a mesma tabela.</li>
+  <li>O metamétodo recebe os dois lados <strong>na ordem escrita</strong>; um deles pode ser um número ou um texto. Confira com <code>type</code> ou <code>getmetatable</code>.</li>
+  <li>Devolva um valor do mesmo tipo (<code>return reais(…)</code>) para o resultado continuar sabendo fazer contas; sem <code>return</code>, o resultado é <code>nil</code>.</li>
+  <li><code>&gt;</code> e <code>&gt;=</code> usam <code>__lt</code> e <code>__le</code> com os lados trocados. No 5.5, escreva os dois. O <code>__lt</code> faz o <code>table.sort</code> funcionar.</li>
+  <li>Próximo passo: valores padrão e tabelas só de leitura, com <a href="index-newindex.html">__index e __newindex</a>.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
