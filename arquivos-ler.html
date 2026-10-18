@@ -1,0 +1,584 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua f:read — lendo arquivos inteiros, linha por linha e números | Guia Lua</title>
+<meta name="description" content="Lendo arquivos no Lua 5.5 para quem nunca programou: f:read com &quot;a&quot;, &quot;l&quot;, &quot;L&quot;, &quot;n&quot; e um número de bytes, o nil do fim do arquivo, ler todas as linhas com while, somar notas, voltar ao começo com f:seek, o arquivo do Windows com \r e os erros reais do Lua.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">Lendo Arquivos</span></h1>
+
+<p class="intro">Na aula <a href="io-open.html">Abrindo Arquivos</a>, você abriu o <code>compras.txt</code> e leu tudo de uma vez com <code>f:read("a")</code>. Mas nem sempre se quer o arquivo inteiro num texto só: às vezes é uma linha por vez (para numerar os itens), às vezes são números (para somar as notas da turma), às vezes é preciso voltar ao começo e ler de novo. Tudo isso é o <code>f:read</code> ("ler"), com um <strong>formato</strong> diferente para cada caso.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>Os formatos do <code>f:read</code>: <code>"a"</code> (tudo), <code>"l"</code> (uma linha), <code>"L"</code> (uma linha com o Enter), <code>"n"</code> (um número) e um número de bytes.</li>
+  <li>Que o arquivo tem uma <strong>posição</strong>, como um marcador de página, e que cada leitura anda com ela.</li>
+  <li>O que o <code>f:read</code> devolve quando o arquivo acaba (<code>nil</code>) e como isso vira um laço que lê todas as linhas.</li>
+  <li>Como ler números de um arquivo e somar as notas.</li>
+  <li>Como saber o tamanho do arquivo e voltar ao começo com <code>f:seek</code>.</li>
+  <li>A pegadinha do arquivo que veio do Windows, e os erros reais.</li>
+</ul>
+</div>
+
+<p>Todos os programas desta aula rodaram no <strong>Lua 5.5</strong> da máquina da Ana (usuária <code>ana</code>, computador <code>notebook</code>), em <code>/home/ana</code>. O arquivo de sempre é o <code>compras.txt</code>, com três linhas:</p>
+
+<pre class="term">$ printf 'pão\nleite\ncafé\n' &gt; compras.txt
+$ ls -l compras.txt
+-rw-rw-r-- 1 ana ana 17 Oct 18 16:39 compras.txt</pre>
+
+<p>São <strong>17 bytes</strong>: "pão" tem 4 (o "ã" ocupa 2; veja <a href="utf8.html">Acentos e a Biblioteca utf8</a>), "leite" tem 5, "café" tem 5, e cada uma das três quebras de linha (<code>\n</code>) é mais 1. Esse número vai voltar mais adiante.</p>
+
+<hr>
+
+<h2>A ideia: o marcador de página</h2>
+<p>Quando a Ana lê um livro aos poucos, ela deixa um <strong>marcador</strong> na página onde parou. No dia seguinte, ela não começa do zero: continua do marcador. E quando chega à última página, não tem mais o que ler.</p>
+<p>Um arquivo aberto tem um marcador assim, chamado <strong>posição</strong>:</p>
+<ul>
+  <li>logo depois do <code>io.open</code>, a posição está no <strong>começo</strong> do arquivo (no byte 0);</li>
+  <li>cada <code>f:read</code> lê <strong>a partir da posição</strong> e deixa o marcador logo depois do que leu;</li>
+  <li>quando o marcador chega ao fim, as próximas leituras não acham mais nada e devolvem <code>nil</code>;</li>
+  <li>o <code>f:seek</code> (seção 6) move o marcador para onde você quiser, como pular para uma página.</li>
+</ul>
+
+<hr>
+
+<h2>1. <code>"a"</code>: o arquivo inteiro num texto</h2>
+
+<pre class="file" data-file="ler_tudo.lua">local f = assert(io.open("compras.txt", "r"))
+local texto = f:read("a")
+f:close()
+print(type(texto), #texto)
+print(texto)
+print("--- fim ---")
+</pre>
+
+<pre class="term">$ lua ler_tudo.lua
+string	17
+pão
+leite
+café
+
+--- fim ---</pre>
+
+<p>O <code>"a"</code> (de <em>all</em>, "tudo") devolve uma <code>string</code> com os 17 bytes, quebras de linha incluídas. A linha em branco antes do <code>--- fim ---</code> aparece porque o texto já termina com <code>\n</code> e o <code>print</code> pula mais uma linha. O <code>assert</code> em volta do <code>io.open</code> é o que você viu na aula anterior: se o arquivo não abrir, o programa para com a mensagem certa.</p>
+
+<p>Ler tudo de uma vez é o jeito mais simples quando o arquivo é pequeno (uma lista, uma configuração, um texto) e você quer o conteúdo inteiro, por exemplo para procurar uma palavra com <a href="string-find.html">string.find</a> ou contar as palavras com <a href="gmatch.html">gmatch</a>.</p>
+
+<hr>
+
+<h2>2. <code>"l"</code>: uma linha por vez</h2>
+<p>O <code>"l"</code> (de <em>line</em>, "linha") lê do marcador até o fim da linha. Cada chamada pega a <strong>próxima</strong> linha:</p>
+
+<pre class="file" data-file="ler_linhas.lua">local f = assert(io.open("compras.txt", "r"))
+print(f:read("l"))
+print(f:read("l"))
+print(f:read("l"))
+print(f:read("l"))
+f:close()
+</pre>
+
+<pre class="term">$ lua ler_linhas.lua
+pão
+leite
+café
+nil</pre>
+
+<p>Três linhas no arquivo, quatro leituras: na quarta, o marcador já estava no fim, e o <code>f:read</code> devolveu <strong><code>nil</code></strong>. É assim que o Lua avisa "o arquivo acabou". Esse <code>nil</code> é a peça mais importante desta aula: é ele que faz o laço da seção 3 saber a hora de parar.</p>
+
+<p>O <code>"l"</code> é o formato <strong>padrão</strong>: <code>f:read()</code>, sem nada, é o mesmo que <code>f:read("l")</code>.</p>
+
+<h3><code>"l"</code> × <code>"L"</code>: com ou sem o Enter</h3>
+<p>O <code>"l"</code> devolve a linha <strong>sem</strong> a quebra de linha do fim. O <code>"L"</code> (maiúsculo) devolve a linha <strong>com</strong> ela. Os colchetes abaixo mostram exatamente onde cada texto começa e termina:</p>
+
+<pre class="file" data-file="l_e_L.lua">local f = assert(io.open("compras.txt", "r"))
+local a = f:read("l")
+local b = f:read("L")
+local c = f:read()
+f:close()
+print("[" .. a .. "]")
+print("[" .. b .. "]")
+print("[" .. c .. "]")
+</pre>
+
+<pre class="term">$ lua l_e_L.lua
+[pão]
+[leite
+]
+[café]</pre>
+
+<p>O <code>leite</code> veio com o <code>\n</code> dentro, por isso o <code>]</code> foi para a linha de baixo. Quase sempre você quer o <code>"l"</code>: a linha limpa, pronta para comparar (<code>linha == "leite"</code>) ou juntar com outro texto. O <code>"L"</code> serve quando você vai copiar as linhas para outro arquivo do jeito que estavam.</p>
+
+<hr>
+
+<h2>3. Todas as linhas: o laço com <code>while</code></h2>
+<p>Você não sabe quantas linhas o arquivo tem. Mas sabe que, quando ele acabar, o <code>f:read</code> devolve <code>nil</code>. Então: <strong>enquanto</strong> a leitura trouxer uma linha, use a linha e leia a próxima (veja <a href="while.html">while</a>):</p>
+
+<pre class="file" data-file="laco.lua">local f = assert(io.open("compras.txt", "r"))
+local numero = 0
+local linha = f:read("l")
+while linha do
+  numero = numero + 1
+  print(numero .. ". " .. linha)
+  linha = f:read("l")
+end
+f:close()
+print("Itens na lista: " .. numero)
+</pre>
+
+<dl class="anatomy">
+  <dt>local linha = f:read("l")</dt><dd>A <strong>primeira</strong> leitura, antes do laço, para a condição ter o que testar.</dd>
+  <dt>while linha do</dt><dd>"Enquanto houver linha." Um texto (mesmo vazio, <code>""</code>) conta como verdadeiro; só o <code>nil</code> (e o <code>false</code>) contam como falso. Então o laço para exatamente quando o arquivo acaba.</dd>
+  <dt>numero = numero + 1</dt><dd>Um contador, para numerar os itens e saber quantos foram.</dd>
+  <dt>linha = f:read("l")</dt><dd>A <strong>próxima</strong> leitura, no fim do bloco. Sem ela o laço repetiria o <code>pão</code> para sempre: o marcador não andaria.</dd>
+</dl>
+
+<pre class="term">$ lua laco.lua
+1. pão
+2. leite
+3. café
+Itens na lista: 3</pre>
+
+<div class="tip">
+<strong>Existe um jeito mais curto</strong>
+<p>Ler todas as linhas é tão comum que o Lua tem um atalho que dispensa o <code>while</code> e as duas leituras: <code>for linha in f:lines() do … end</code>, ou até <code>for linha in io.lines("compras.txt") do … end</code>, que abre e fecha o arquivo sozinho. Ele é o assunto da próxima aula, <a href="io-lines.html">Linha por Linha (io.lines)</a>. Vale entender o <code>while</code> primeiro: o atalho faz exatamente isso por dentro.</p>
+</div>
+
+<div class="trylua" data-goal="out:4. pagar a luz;;src:\bwhile\b">
+<p class="try-task"><strong>Missão:</strong> a aba <code>tarefas.txt</code> tem as tarefas da semana da Ana. O programa só mostra a primeira. Use um <code>while</code> para mostrar <strong>todas</strong>, numeradas (<code>1. varrer a casa</code>, <code>2. …</code>), até a última, <code>4. pagar a luz</code>.</p>
+<pre class="script" data-file="main.lua">local f = assert(io.open("tarefas.txt", "r"))
+local numero = 0
+local linha = f:read("l")
+numero = numero + 1
+print(numero .. ". " .. linha)
+f:close()
+</pre>
+<pre class="script" data-file="tarefas.txt">varrer a casa
+lavar a louça
+regar as plantas
+pagar a luz
+</pre>
+<pre class="solucao" data-file="main.lua">local f = assert(io.open("tarefas.txt", "r"))
+local numero = 0
+local linha = f:read("l")
+while linha do
+  numero = numero + 1
+  print(numero .. ". " .. linha)
+  linha = f:read("l")
+end
+f:close()
+</pre>
+</div>
+
+<hr>
+
+<h2>4. <code>"n"</code>: lendo números</h2>
+<p>A professora da Ana guardou as notas de um aluno no <code>notas.txt</code>, uma por linha. O <code>"n"</code> (de <em>number</em>, "número") lê um número e já devolve o <strong>número</strong>, não o texto:</p>
+
+<pre class="term">$ printf '7.5\n8\n6.25\n10\n' &gt; notas.txt</pre>
+
+<pre class="file" data-file="notas.lua">local f = assert(io.open("notas.txt", "r"))
+local soma, quantas = 0, 0
+local nota = f:read("n")
+while nota do
+  print("nota:", nota, math.type(nota))
+  soma = soma + nota
+  quantas = quantas + 1
+  nota = f:read("n")
+end
+f:close()
+print(string.format("Média: %.2f", soma / quantas))
+</pre>
+
+<pre class="term">$ lua notas.lua
+nota:	7.5	float
+nota:	8	integer
+nota:	6.25	float
+nota:	10	integer
+Média: 7.94</pre>
+
+<p>O laço é o mesmo da seção 3, trocando <code>"l"</code> por <code>"n"</code>. O <code>math.type</code> mostra que o Lua escolheu o tipo certo para cada número: <code>8</code> e <code>10</code> viraram inteiros (<code>integer</code>), <code>7.5</code> e <code>6.25</code> viraram <code>float</code> (veja <a href="numeros.html">Números</a>). O <code>"n"</code> pula sozinho os espaços e as quebras de linha antes do número; por isso tanto faz se as notas estão uma por linha ou todas na mesma linha separadas por espaço. A média foi formatada com <a href="string-format.html">string.format</a>: <code>%.2f</code> = duas casas decimais.</p>
+
+<h3>Quando não é um número</h3>
+<p>Se o próximo pedaço do arquivo não for um número, o <code>"n"</code> devolve <code>nil</code> (e não para o programa). Num arquivo com <code>7.5 8 dez 6</code>:</p>
+
+<pre class="term">$ printf '7.5 8 dez 6\n' &gt; notas2.txt</pre>
+
+<pre class="file" data-file="numero_texto.lua">local f = assert(io.open("notas2.txt", "r"))
+print(f:read("n", "n", "n"))
+print(f:read("l"))
+f:close()
+</pre>
+
+<pre class="term">$ lua numero_texto.lua
+7.5	8	nil
+dez 6</pre>
+
+<p>Duas novidades nesse programa. Primeiro: um <code>f:read</code> pode receber <strong>vários formatos</strong> de uma vez e devolve um valor para cada um (aqui, três <code>"n"</code>). Segundo: o terceiro <code>"n"</code> encontrou <code>dez</code>, devolveu <code>nil</code> e <strong>não andou</strong> com o marcador além do espaço; o <code>"l"</code> seguinte leu o resto da linha, <code>dez 6</code>. Para o laço da seção 4, isso quer dizer que ele pararia no <code>dez</code>, sem erro, como se as notas tivessem acabado. Confira o arquivo quando a quantidade de notas lidas não bater.</p>
+
+<hr>
+
+<h2>5. Um número: quantos bytes ler</h2>
+<p>Em vez de um formato com letra, dá para pedir um <strong>número de bytes</strong>: <code>f:read(2)</code> lê os próximos 2 bytes. Este programa mistura tudo o que você viu, para seguir o marcador de perto:</p>
+
+<pre class="file" data-file="varios.lua">local f = assert(io.open("compras.txt", "r"))
+local primeira, segunda = f:read("l", "l")
+print(primeira, segunda)
+print(f:read(2))
+print(f:read(1))
+print(f:read("a"))
+print(f:read("a") == "", f:read("l"), f:read(1))
+f:close()
+</pre>
+
+<pre class="term">$ lua varios.lua
+pão	leite
+ca
+f
+é
+
+true	nil	nil</pre>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Linha</th><th>O que leu</th><th>Por quê</th></tr>
+<tr><td><code>f:read("l", "l")</code></td><td><code>pão</code> e <code>leite</code></td><td>Duas linhas numa chamada só, cada uma numa variável</td></tr>
+<tr><td><code>f:read(2)</code></td><td><code>ca</code></td><td>Os 2 bytes seguintes, do começo do <code>café</code></td></tr>
+<tr><td><code>f:read(1)</code></td><td><code>f</code></td><td>Mais 1 byte</td></tr>
+<tr><td><code>f:read("a")</code></td><td><code>é</code> e a quebra de linha</td><td>Tudo o que sobrou: o "é" (2 bytes) e o <code>\n</code>. Por isso apareceu uma linha em branco depois</td></tr>
+<tr><td>no fim do arquivo</td><td><code>true</code>, <code>nil</code>, <code>nil</code></td><td>No fim, o <code>"a"</code> devolve um texto <strong>vazio</strong> (<code>""</code>), nunca <code>nil</code>; o <code>"l"</code> e o número devolvem <code>nil</code></td></tr>
+</table>
+</div>
+
+<div class="warning">
+<strong>Byte não é letra</strong>
+<p>O <code>f:read(1)</code> lê 1 <strong>byte</strong>. Letras com acento ocupam 2 bytes em UTF-8: se o programa tivesse lido 1 byte no meio do "é", sairia um pedaço de letra, que aparece na tela como um símbolo estranho. Ler por bytes é para arquivos binários (imagens, formatos próprios) ou para quando você sabe o tamanho exato; para texto, prefira <code>"l"</code> e <code>"a"</code>.</p>
+</div>
+
+<div class="trylua">
+<p class="try-task"><strong>Experimente:</strong> troque os formatos e veja o marcador andar. Tente <code>f:read("L")</code> no lugar do primeiro <code>"l"</code>, <code>f:read(3)</code> no lugar do <code>"a"</code>, ou ponha mais um <code>print(f:read("l"))</code> antes do <code>close</code>.</p>
+<pre class="script" data-file="main.lua">local f = assert(io.open("compras.txt", "r"))
+print("[" .. f:read("l") .. "]")
+print("[" .. f:read(2) .. "]")
+print("[" .. f:read("a") .. "]")
+print(f:read("l"))
+f:close()
+</pre>
+<pre class="script" data-file="compras.txt">pão
+leite
+café
+</pre>
+</div>
+
+<hr>
+
+<h2>6. <code>f:seek</code>: o tamanho e a volta ao começo</h2>
+<p>O <code>f:seek</code> ("procurar uma posição") move o marcador e devolve a posição nova, contada em bytes a partir do começo. Ele recebe <strong>de onde</strong> contar e, se quiser, <strong>quantos bytes</strong> andar a partir dali:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>Vai para</th><th>Para que serve</th></tr>
+<tr><td><code>f:seek("set")</code></td><td>o começo (byte 0)</td><td>Ler o arquivo de novo</td></tr>
+<tr><td><code>f:seek("set", 5)</code></td><td>o byte 5, contando do começo</td><td>Pular direto para um ponto conhecido</td></tr>
+<tr><td><code>f:seek("cur")</code></td><td>fica onde está (<em>current</em>, "atual")</td><td>Só perguntar "onde estou?"</td></tr>
+<tr><td><code>f:seek("end")</code></td><td>o fim</td><td>Saber o <strong>tamanho</strong> do arquivo (a posição do fim é o tamanho)</td></tr>
+</table>
+</div>
+
+<pre class="file" data-file="seek.lua">local f = assert(io.open("compras.txt", "r"))
+print("tamanho:", f:seek("end"))
+print("voltei para:", f:seek("set"))
+print(f:read("l"))
+print("estou em:", f:seek("cur"))
+print(f:read("l"))
+f:seek("set", 0)
+print("de novo:", f:read("l"))
+f:seek("set", 5)
+print("a partir do byte 5:", f:read("l"))
+f:close()
+</pre>
+
+<pre class="term">$ lua seek.lua
+tamanho:	17
+voltei para:	0
+pão
+estou em:	5
+leite
+de novo:	pão
+a partir do byte 5:	leite</pre>
+
+<p>Os 17 bytes do <code>ls -l</code> lá do começo. Depois de ler <code>pão</code> (4 bytes) e a quebra de linha (1 byte), o marcador ficou no byte 5, que é exatamente onde começa o <code>leite</code>. O <code>f:seek("set", 5)</code> no fim pulou direto para lá.</p>
+
+<div class="note">
+<strong>Cuidado com o <code>seek("end")</code> antes de ler</strong>
+<p>Depois de <code>f:seek("end")</code>, o marcador está no fim, e um <code>f:read("a")</code> devolveria <code>""</code>. Por isso o programa voltou com <code>f:seek("set")</code> antes de ler. Um jeito comum de escrever "tamanho sem perder o lugar": <code>local atual = f:seek("cur")</code>, <code>local tamanho = f:seek("end")</code>, <code>f:seek("set", atual)</code>.</p>
+</div>
+
+<hr>
+
+<h2 id="formas">Formas diferentes de ler o mesmo arquivo</h2>
+<p>Para mostrar a lista de compras, linha por linha, há três caminhos. Os três dão a mesma saída (<code>pão</code>, <code>leite</code>, <code>café</code>):</p>
+
+<pre class="file" data-file="forma1.lua">-- 1) tudo de uma vez, e o texto inteiro na tela
+local f = assert(io.open("compras.txt", "r"))
+io.write(f:read("a"))
+f:close()
+</pre>
+
+<pre class="file" data-file="forma2.lua">-- 2) linha por linha com while
+local f = assert(io.open("compras.txt", "r"))
+local linha = f:read("l")
+while linha do
+  print(linha)
+  linha = f:read("l")
+end
+f:close()
+</pre>
+
+<pre class="file" data-file="forma3.lua">-- 3) linha por linha com o atalho (próxima aula)
+for linha in io.lines("compras.txt") do
+  print(linha)
+end
+</pre>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Situação</th><th>Qual usar</th></tr>
+<tr><td>Arquivo pequeno; você quer o texto inteiro (procurar, contar, mostrar)</td><td><code>f:read("a")</code></td></tr>
+<tr><td>Fazer algo com cada linha</td><td><code>for linha in io.lines(nome)</code> (<a href="io-lines.html">io.lines</a>) ou o <code>while</code> com <code>f:read("l")</code></td></tr>
+<tr><td>Ler só o cabeçalho (a primeira linha) e depois decidir</td><td><code>f:read("l")</code> uma vez</td></tr>
+<tr><td>Números separados por espaço ou por linha</td><td><code>f:read("n")</code> num <code>while</code></td></tr>
+<tr><td>Arquivo enorme (um registro de vários gigabytes)</td><td>Linha por linha: <code>"a"</code> poria tudo na memória de uma vez</td></tr>
+<tr><td>Bytes de um arquivo binário</td><td><code>f:read(n)</code>, com o arquivo aberto em <code>"rb"</code></td></tr>
+</table>
+</div>
+
+<div class="note">
+<strong>Lua 5.1 e LuaJIT: o asterisco</strong>
+<p>No Lua 5.1 (e no LuaJIT, do Neovim e do LÖVE), os formatos se escrevem com asterisco: <code>"*a"</code>, <code>"*l"</code>, <code>"*n"</code>. O Lua 5.5 ainda aceita o asterisco (ele é ignorado), então código antigo continua funcionando:</p>
+<pre class="term">$ lua estrela.lua
+pão
+leite
+café
+</pre>
+<p>(<code>estrela.lua</code> fez <code>print(f:read("*l"))</code> e <code>print(f:read("*a"))</code>.) O contrário não vale: o <code>"a"</code> sem asterisco não funciona no 5.1. Mais diferenças em <a href="versoes.html">Lua 5.1, LuaJIT, 5.4 e 5.5</a>.</p>
+</div>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+
+<div class="cenario">
+<strong>Leu uma linha a mais: <code>attempt to concatenate a nil value</code></strong>
+<p>O programador "sabia" que a lista tinha 4 itens e fez um <code>for</code> de 1 a 4. Mas o arquivo tem 3:</p>
+<pre class="file" data-file="nil_concat.lua">local f = assert(io.open("compras.txt", "r"))
+for i = 1, 4 do
+  local linha = f:read("l")
+  print("Item: " .. linha)
+end
+f:close()
+</pre>
+<pre class="term">$ lua nil_concat.lua
+Item: pão
+Item: leite
+Item: café
+lua: nil_concat.lua:4: attempt to concatenate a nil value (local 'linha')
+stack traceback:
+	nil_concat.lua:4: in main chunk
+	[C]: in ?</pre>
+<p>"Tentativa de concatenar (juntar com <code>..</code>) um valor nil (a variável local <code>linha</code>)". Na quarta volta, o arquivo tinha acabado, o <code>f:read</code> devolveu <code>nil</code>, e o <code>..</code> não junta texto com <code>nil</code> (veja <a href="concatenacao.html">Juntando Textos</a>). Repare que as três primeiras linhas saíram: o erro só veio quando faltou a quarta. <strong>Como consertar:</strong> não conte as linhas de antemão; leia até o <code>nil</code>, com o <code>while</code> da seção 3.</p>
+</div>
+
+<div class="cenario">
+<strong>Formato que não existe</strong>
+<pre class="file" data-file="formato_errado.lua">local f = assert(io.open("compras.txt", "r"))
+print(f:read("tudo"))
+</pre>
+<pre class="term">$ lua formato_errado.lua
+lua: formato_errado.lua:2: bad argument #1 to 'read' (invalid format)
+stack traceback:
+	[C]: in method 'read'
+	formato_errado.lua:2: in main chunk
+	[C]: in ?</pre>
+<p>"Argumento ruim nº 1 para o <code>read</code> (formato inválido)". Os formatos são só <code>"a"</code>, <code>"l"</code>, <code>"L"</code>, <code>"n"</code> ou um número. O Lua olha a primeira letra (por isso <code>"all"</code> funcionaria, e <code>"tudo"</code> não). <strong>Como consertar:</strong> <code>f:read("a")</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Ponto no lugar do dois-pontos</strong>
+<pre class="file" data-file="ponto.lua">local f = assert(io.open("compras.txt", "r"))
+print(f.read("l"))
+</pre>
+<pre class="term">$ lua ponto.lua
+lua: ponto.lua:2: bad argument #1 to 'read' (FILE* expected, got string)
+stack traceback:
+	[C]: in field 'read'
+	ponto.lua:2: in main chunk
+	[C]: in ?</pre>
+<p>"Argumento ruim nº 1 para o <code>read</code> (esperava um <code>FILE*</code>, veio uma string)". <code>FILE*</code> é o nome, na linguagem C, de um arquivo aberto. Com o ponto, o <code>f</code> não é entregue ao <code>read</code>: o primeiro argumento passa a ser o <code>"l"</code>, um texto, e não um arquivo. <strong>Como consertar:</strong> <code>f:read("l")</code>, com dois-pontos.</p>
+</div>
+
+<div class="cenario">
+<strong><code>io.read</code> no lugar de <code>f:read</code>: o programa fica parado</strong>
+<pre class="file" data-file="io_read.lua">local f = assert(io.open("compras.txt", "r"))
+local linha = io.read("l")
+print(linha)
+f:close()
+</pre>
+<p>O programa abre o arquivo, mas o <code>io.read</code> (com <code>io.</code>) lê do <strong>teclado</strong>, não do arquivo (veja <a href="io-read.html">io.read()</a>). No terminal, ele para e espera você digitar. A Ana digitou <code>banana</code>:</p>
+<pre class="term">$ lua io_read.lua
+banana
+banana</pre>
+<p>A primeira <code>banana</code> é o que ela digitou; a segunda, o <code>print</code>. O arquivo nem foi lido. <strong>Como consertar:</strong> para ler <strong>do arquivo</strong>, use a variável dele: <code>f:read("l")</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>O arquivo veio do Windows: a linha não é igual a ela mesma</strong>
+<p>No Windows, as linhas terminam com dois caracteres, <code>\r\n</code>, e não só <code>\n</code>. No Linux, o <code>"l"</code> tira o <code>\n</code>, mas o <code>\r</code> fica grudado no fim da linha, invisível:</p>
+<pre class="term">$ printf 'pão\r\nleite\r\n' &gt; windows.txt</pre>
+<pre class="file" data-file="windows.lua">local f = assert(io.open("windows.txt", "r"))
+local linha = f:read("l")
+f:close()
+print(#linha, string.format("%q", linha))
+print(linha == "pão")
+linha = linha:gsub("\r$", "")
+print(#linha, linha == "pão")
+</pre>
+<pre class="term">$ lua windows.lua
+5	"pão\13"
+false
+true
+4	true</pre>
+<p>A linha tem 5 bytes em vez de 4. O <code>%q</code> do <code>string.format</code> mostra o texto como ele é por dentro, e revela o intruso: <code>\13</code>, que é o <code>\r</code> (o caractere de número 13). Por isso <code>linha == "pão"</code> deu <code>false</code>, mesmo que na tela pareça igual. <strong>Como consertar:</strong> tire o <code>\r</code> do fim com <code>linha:gsub("\r$", "")</code> (veja <a href="gsub.html">gsub</a>). Depois disso, 4 bytes e <code>true</code>.</p>
+</div>
+
+<hr>
+
+<h2>Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>Lê</th><th>No fim do arquivo</th></tr>
+<tr><td><code>f:read("a")</code></td><td>Tudo, do marcador até o fim</td><td><code>""</code> (texto vazio)</td></tr>
+<tr><td><code>f:read("l")</code> ou <code>f:read()</code></td><td>A próxima linha, sem o <code>\n</code></td><td><code>nil</code></td></tr>
+<tr><td><code>f:read("L")</code></td><td>A próxima linha, com o <code>\n</code></td><td><code>nil</code></td></tr>
+<tr><td><code>f:read("n")</code></td><td>Um número (pula espaços antes); <code>nil</code> se não for número</td><td><code>nil</code></td></tr>
+<tr><td><code>f:read(5)</code></td><td>Até 5 bytes</td><td><code>nil</code></td></tr>
+<tr><td><code>f:read("l", "n", …)</code></td><td>Vários formatos, um valor para cada</td><td>—</td></tr>
+<tr><td><code>f:seek("set")</code> / <code>f:seek("set", n)</code></td><td>Marcador no começo / no byte n</td><td>—</td></tr>
+<tr><td><code>f:seek("cur")</code></td><td>Diz a posição atual</td><td>—</td></tr>
+<tr><td><code>f:seek("end")</code></td><td>Marcador no fim; devolve o tamanho</td><td>—</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Sintoma</th><th>Causa provável</th></tr>
+<tr><td><code>attempt to concatenate a nil value (local 'linha')</code></td><td>Leu depois do fim do arquivo; o <code>f:read</code> devolveu <code>nil</code></td></tr>
+<tr><td><code>bad argument #1 to 'read' (invalid format)</code></td><td>Formato que não existe (<code>"tudo"</code>, <code>"x"</code>)</td></tr>
+<tr><td><code>bad argument #1 to 'read' (FILE* expected, got string)</code></td><td><code>f.read</code> com ponto; o certo é <code>f:read</code></td></tr>
+<tr><td>O programa fica parado esperando</td><td><code>io.read</code> (teclado) no lugar de <code>f:read</code> (arquivo)</td></tr>
+<tr><td>A leitura de números para antes da hora</td><td>Há um texto no meio dos números; o <code>"n"</code> devolveu <code>nil</code></td></tr>
+<tr><td>A linha parece igual mas o <code>==</code> dá <code>false</code></td><td>Arquivo do Windows: um <code>\r</code> no fim (<code>%q</code> mostra <code>\13</code>)</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. Complete o laço</h3>
+<p>Complete para mostrar todas as linhas de <code>nomes.txt</code>:</p>
+<div class="ex-code">local f = assert(io.open("nomes.txt", "r"))<br>local linha = f:read("<input data-answer="l" aria-label="formato">")<br><input data-answer="while" aria-label="palavra-chave"> linha do<br>&nbsp;&nbsp;print(linha)<br>&nbsp;&nbsp;linha = f:<input data-answer="read" aria-label="método">("l")<br>end<br>f:close()</div>
+</div>
+
+<div class="exercise">
+<h3>2. O que sai?</h3>
+<p>O arquivo <code>um.txt</code> tem uma linha só: <code>oi</code>. Depois de <code>f:read("l")</code>, o que <code>f:read("l")</code> devolve?</p>
+<div class="ex-code">Devolve <input data-answer="nil" aria-label="valor">.</div>
+</div>
+
+<div class="exercise">
+<h3>3. O tamanho</h3>
+<p>Qual é a escrita que leva o marcador para o fim e devolve o tamanho do arquivo?</p>
+<div class="ex-code">f:seek("<input data-answer="end" aria-label="de onde">")</div>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">4. Qual a diferença entre <code>f:read("l")</code> e <code>f:read("L")</code>?</p>
+<label><input type="radio" name="q4"> <code>"L"</code> lê a linha em maiúsculas</label>
+<label><input type="radio" name="q4"> <code>"L"</code> devolve a linha com a quebra de linha do fim; <code>"l"</code>, sem</label>
+<label><input type="radio" name="q4"> <code>"L"</code> lê a última linha do arquivo</label>
+<label><input type="radio" name="q4"> Nenhuma</label>
+</div>
+
+<div class="mc" data-answer="3">
+<p class="mc-q">5. No fim do arquivo, o que <code>f:read("a")</code> devolve?</p>
+<label><input type="radio" name="q5"> <code>nil</code></label>
+<label><input type="radio" name="q5"> Um erro</label>
+<label><input type="radio" name="q5"> <code>""</code>, um texto vazio</label>
+<label><input type="radio" name="q5"> O arquivo inteiro de novo</label>
+</div>
+
+<h3>Missão final: a média da turma</h3>
+
+<div class="trylua" data-goal="out:Média: 8.00;;src:\bwhile\b;;semerro">
+<p class="try-task"><strong>Missão:</strong> a aba <code>notas.txt</code> tem as notas de quatro alunos. O programa só soma a primeira e mostra <code>Média: 7.00</code>. Escreva um <code>while</code> com <code>f:read("n")</code> para somar <strong>todas</strong> e contar quantas foram; a média certa é <code>8.00</code>.</p>
+<pre class="script" data-file="main.lua">local f = assert(io.open("notas.txt", "r"))
+local soma, quantas = 0, 0
+local nota = f:read("n")
+soma = soma + nota
+quantas = quantas + 1
+f:close()
+print(string.format("Média: %.2f", soma / quantas))
+</pre>
+<pre class="script" data-file="notas.txt">7
+9
+8.5
+7.5
+</pre>
+<pre class="solucao" data-file="main.lua">local f = assert(io.open("notas.txt", "r"))
+local soma, quantas = 0, 0
+local nota = f:read("n")
+while nota do
+  soma = soma + nota
+  quantas = quantas + 1
+  nota = f:read("n")
+end
+f:close()
+print(string.format("Média: %.2f", soma / quantas))
+</pre>
+</div>
+
+<p>Depois que funcionar, ponha mais uma nota no fim da aba <code>notas.txt</code> (um <code>10</code>, por exemplo) e rode de novo: o programa conta sozinho a nota nova. É a vantagem de ler até o <code>nil</code>.</p>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li>Um arquivo aberto tem um <strong>marcador</strong> (a posição). Cada <code>f:read</code> lê a partir dele e o deixa logo depois do que leu.</li>
+  <li>Formatos: <code>"a"</code> tudo, <code>"l"</code> uma linha sem o <code>\n</code> (o padrão), <code>"L"</code> com o <code>\n</code>, <code>"n"</code> um número, <code>5</code> cinco bytes. Vários de uma vez: <code>f:read("l", "l")</code>.</li>
+  <li>No fim do arquivo, <code>"l"</code>, <code>"L"</code>, <code>"n"</code> e os bytes devolvem <code>nil</code>; o <code>"a"</code> devolve <code>""</code>.</li>
+  <li>Para todas as linhas: leia antes do laço, <code>while linha do … linha = f:read("l") end</code>. O atalho é o <a href="io-lines.html">io.lines</a>.</li>
+  <li><code>f:seek("end")</code> dá o tamanho; <code>f:seek("set")</code> volta ao começo; <code>f:seek("cur")</code> diz onde você está.</li>
+  <li>Use sempre <code>f:read</code> (dois-pontos, a variável do arquivo); <code>io.read</code> é o teclado. Arquivo do Windows deixa um <code>\r</code> no fim das linhas.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
