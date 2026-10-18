@@ -1,0 +1,1326 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua Projeto Jogo da Velha — tabela aninhada, jogadas pela entrada, vencedor e computador passo a passo | Guia Lua</title>
+<meta name="description" content="Projeto passo a passo: o Jogo da Velha no terminal, em Lua 5.5. O tabuleiro numa tabela aninhada 3×3 (e a armadilha da mesma linha repetida três vezes), as jogadas lidas da entrada com match, a validação da casa, as 8 trincas que dão a vitória guardadas como dados, o empate e, no fim, um adversário de computador que ganha, bloqueia ou sorteia. Quatro versões com sessões reais e missões no editor.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Projeto <span class="hl">Jogo da Velha</span></h1>
+
+<p class="intro">O último projeto do guia é o jogo que todo mundo conhece: um tabuleiro de 3 por 3, X contra O, e vence quem completar uma linha, uma coluna ou uma diagonal. No terminal, o tabuleiro vira uma <strong>tabela de tabelas</strong>, as jogadas chegam pelo teclado como "linha coluna" (<code>2 3</code>), e na última versão a Ana joga contra o computador.</p>
+
+<div class="note">
+<strong>Você vai praticar</strong>
+<ul>
+  <li>Montar uma grade com <a href="tabelas-aninhadas.html">tabelas aninhadas</a> e <a href="lacos-aninhados.html">laços aninhados</a>.</li>
+  <li>Entender por que <a href="tabelas-referencia.html">tabelas são referências</a> (e o tabuleiro com três linhas iguais).</li>
+  <li>Ler e separar a jogada com <a href="io-read.html">io.read</a> e <a href="string-find.html">match</a> com capturas.</li>
+  <li>Guardar regras como dados: as 8 trincas da vitória numa lista.</li>
+  <li>Alternar jogadores com <a href="and-or-ternario.html">o truque do and/or</a>.</li>
+  <li>Escrever um adversário que "experimenta" jogadas e desfaz, com <a href="funcoes.html">funções</a> e <a href="math-random.html">math.random</a>.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>O que vamos construir</h2>
+<p>A versão final, com a Ana (X) contra o computador (O). <strong>O que vem depois de "Sua jogada, X (linha coluna):" foi digitado por ela</strong>; o resto é o programa. Esta partida ela perdeu:</p>
+
+<pre class="term" data-cwd="~/projetos/velha">$ lua velha.lua
+=== Jogo da Velha: você (X) contra o computador (O) ===
+
+    1   2   3
+1     |   |
+   ---+---+---
+2     |   |
+   ---+---+---
+3     |   |
+
+Sua jogada, X (linha coluna): 1 1
+O computador jogou em 2 2.
+
+    1   2   3
+1   X |   |
+   ---+---+---
+2     | O |
+   ---+---+---
+3     |   |
+
+Sua jogada, X (linha coluna): 3 3
+O computador jogou em 2 3.
+
+    1   2   3
+1   X |   |
+   ---+---+---
+2     | O | O
+   ---+---+---
+3     |   | X
+
+Sua jogada, X (linha coluna): 3 1                « devia ter bloqueado em 2 1
+O computador jogou em 2 1.
+
+    1   2   3
+1   X |   |
+   ---+---+---
+2   O | O | O
+   ---+---+---
+3   X |   | X
+
+O computador venceu!</pre>
+
+<p>(O computador sorteia algumas jogadas. As partidas desta página foram jogadas com a semente fixada em 13 pelo <code>LUA_INIT</code>, como no <a href="projeto-adivinhacao.html">Jogo de Adivinhação</a>, para dar para repetir.)</p>
+
+<ol class="passo">
+  <li><a href="#versao1">O tabuleiro</a> (tabela aninhada, <code>for</code> dentro de <code>for</code>).</li>
+  <li><a href="#versao2">As jogadas</a> (<code>match</code> com capturas, validação, alternar X e O).</li>
+  <li><a href="#versao3">Quem ganhou?</a> (as 8 trincas, empate).</li>
+  <li><a href="#versao4">Contra o computador</a> (ganhar, bloquear, sortear).</li>
+</ol>
+
+<h3>Antes de começar</h3>
+<p>O projeto junta muita coisa dos anteriores: o <code>while</code> com <code>break</code> e a validação da <a href="projeto-calculadora.html">Calculadora</a>, os conjuntos e os padrões da <a href="projeto-forca.html">Forca</a>. Crie a pasta; o programa vai se chamar <code>velha.lua</code>:</p>
+
+<pre class="term">$ mkdir -p projetos/velha
+$ cd projetos/velha</pre>
+
+<hr>
+
+<h2 id="versao1">Versão 1 · O tabuleiro</h2>
+<p>Um tabuleiro de 3 por 3 é uma <strong>grade</strong>: linhas e colunas. No Lua, uma grade é uma tabela de tabelas: <code>tabuleiro[2]</code> é a segunda linha (uma tabela com 3 casas), e <code>tabuleiro[2][3]</code> é a terceira casa dessa linha. Cada casa guarda <code>"X"</code>, <code>"O"</code> ou <code>" "</code> (um espaço, a casa vazia). A primeira versão só monta o tabuleiro, põe duas peças e desenha.</p>
+
+<pre class="file" data-file="velha.lua">-- Jogo da Velha da Ana, versão 1: o tabuleiro
+
+-- Uma tabela com 3 linhas; cada linha é uma tabela com 3 casas.
+local tabuleiro = {}
+for linha = 1, 3 do
+  tabuleiro[linha] = {}
+  for coluna = 1, 3 do
+    tabuleiro[linha][coluna] = " "
+  end
+end
+
+local function desenhar(t)
+  print()
+  print("    1   2   3")
+  for linha = 1, 3 do
+    print(string.format("%d   %s | %s | %s", linha, t[linha][1], t[linha][2], t[linha][3]))
+    if linha &lt; 3 then
+      print("   ---+---+---")
+    end
+  end
+  print()
+end
+
+tabuleiro[2][2] = "X"
+tabuleiro[1][3] = "O"
+desenhar(tabuleiro)
+</pre>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Peça</th><th>O que faz</th></tr>
+<tr><td><code>for linha = 1, 3 do tabuleiro[linha] = {}</code></td><td>Para cada linha, uma tabela <strong>nova</strong> e vazia.</td></tr>
+<tr><td><code>for coluna = 1, 3 do … = " " end</code></td><td>Um <code>for</code> dentro do outro (veja <a href="lacos-aninhados.html">Laços Aninhados</a>): para cada linha, as 3 colunas. No total, 3 × 3 = 9 casas vazias.</td></tr>
+<tr><td><code>tabuleiro[2][2] = "X"</code></td><td>Duas etapas: <code>tabuleiro[2]</code> pega a linha 2, e <code>[2]</code> a casa do meio dela.</td></tr>
+<tr><td><code>string.format("%d   %s | %s | %s", …)</code></td><td>Uma linha do desenho: o número da linha e as 3 casas, separadas por <code>|</code>.</td></tr>
+<tr><td><code>if linha &lt; 3 then print("   ---+---+---")</code></td><td>A linha divisória vai entre as linhas do tabuleiro, não depois da última.</td></tr>
+</table>
+</div>
+
+<pre class="term" data-cwd="~/projetos/velha">$ lua velha.lua
+
+    1   2   3
+1     |   | O
+   ---+---+---
+2     | X |
+   ---+---+---
+3     |   |
+</pre>
+
+<div class="cenario">
+<strong>A mesma linha três vezes: um X que aparece em todo lugar</strong>
+<p>Parece um atalho montar uma linha vazia e usá-la três vezes:</p>
+<pre class="file" data-file="compartilhada.lua">local vazia = { " ", " ", " " }
+local tabuleiro = { vazia, vazia, vazia }
+
+tabuleiro[2][2] = "X"
+
+for linha = 1, 3 do
+  print(table.concat(tabuleiro[linha], "|"))
+end
+print(tabuleiro[1] == tabuleiro[2])
+</pre>
+<pre class="term" data-cwd="~/projetos/velha">$ lua compartilhada.lua
+ |X|
+ |X|
+ |X|
+true</pre>
+<p>Um X só, colocado em <code>tabuleiro[2][2]</code>, apareceu nas três linhas. O motivo: <code>{ vazia, vazia, vazia }</code> não faz três cópias da linha. As três posições guardam a <strong>mesma</strong> tabela (o <code>true</code> do fim confirma: <code>tabuleiro[1] == tabuleiro[2]</code>, é a mesma). Mudar a casa 2 de "uma das linhas" muda a única linha que existe. No Lua, guardar uma tabela numa variável (ou noutra tabela) guarda uma <strong>referência</strong> a ela, nunca uma cópia (veja <a href="tabelas-referencia.html">Tabelas São Referências</a>). Cada linha precisa do seu próprio <code>{}</code>, criado dentro do laço, como na versão 1.</p>
+</div>
+
+<div class="cenario">
+<strong>Uma linha que não existe: <code>attempt to index a nil value (field 'integer index')</code></strong>
+<pre class="term">$ lua -e 'local t = {{}, {}, {}} print(t[4][1])'
+lua: (command line):1: attempt to index a nil value (field 'integer index')
+stack traceback:
+        (command line):1: in main chunk
+        [C]: in ?</pre>
+<p>Não há linha 4: <code>t[4]</code> é <code>nil</code>, e o <code>[1]</code> tenta olhar dentro de <code>nil</code>. O Lua 5.5 avisa que o <code>nil</code> veio de um campo com <strong>índice inteiro</strong> (<code>'integer index'</code>). É por isso que a versão 2 confere se a linha e a coluna estão entre 1 e 3 antes de usá-las.</p>
+</div>
+
+<div class="trylua" data-goal="out:1     |   | O">
+<p class="try-task"><strong>Missão (versão 1):</strong> este tabuleiro foi montado com o atalho do cenário, e o X do meio aparece nas três linhas. Troque as duas linhas marcadas por laços que criem uma tabela nova para cada linha (e as 3 casas vazias dentro dela). A primeira linha do desenho deve ficar <code>1     |   | O</code>, sem X.</p>
+<pre class="script" data-file="velha.lua">-- Jogo da Velha da Ana, versão 1: o tabuleiro
+
+-- Uma tabela com 3 linhas; cada linha é uma tabela com 3 casas.
+local vazia = { " ", " ", " " }
+local tabuleiro = { vazia, vazia, vazia }   -- conserte: uma tabela nova por linha
+
+local function desenhar(t)
+  print()
+  print("    1   2   3")
+  for linha = 1, 3 do
+    print(string.format("%d   %s | %s | %s", linha, t[linha][1], t[linha][2], t[linha][3]))
+    if linha &lt; 3 then
+      print("   ---+---+---")
+    end
+  end
+  print()
+end
+
+tabuleiro[2][2] = "X"
+tabuleiro[1][3] = "O"
+desenhar(tabuleiro)
+</pre>
+<pre class="solucao" data-file="velha.lua">-- Jogo da Velha da Ana, versão 1: o tabuleiro
+
+-- Uma tabela com 3 linhas; cada linha é uma tabela com 3 casas.
+local tabuleiro = {}
+for linha = 1, 3 do
+  tabuleiro[linha] = {}
+  for coluna = 1, 3 do
+    tabuleiro[linha][coluna] = " "
+  end
+end
+
+local function desenhar(t)
+  print()
+  print("    1   2   3")
+  for linha = 1, 3 do
+    print(string.format("%d   %s | %s | %s", linha, t[linha][1], t[linha][2], t[linha][3]))
+    if linha &lt; 3 then
+      print("   ---+---+---")
+    end
+  end
+  print()
+end
+
+tabuleiro[2][2] = "X"
+tabuleiro[1][3] = "O"
+desenhar(tabuleiro)
+</pre>
+</div>
+
+<hr>
+
+<h2 id="versao2">Versão 2 · As jogadas</h2>
+<p>Agora dois jogadores se revezam no mesmo teclado. Cada um digita a linha e a coluna separadas por espaço (<code>2 3</code>); o programa confere, marca a casa e passa a vez. Por enquanto ninguém ganha: o jogo vai até as 9 casas se encherem.</p>
+
+<pre class="file" data-file="velha.lua">-- (o tabuleiro e o desenhar da versão 1, e depois:)
+
+local jogador = "X"
+local jogadas = 0
+
+while jogadas &lt; 9 do
+  desenhar(tabuleiro)
+  io.write("Jogador " .. jogador .. ", sua jogada (linha coluna): ")
+  local entrada = io.read()
+  if entrada == nil then
+    print()
+    print("Partida interrompida.")
+    return
+  end
+
+  local l, c = entrada:match("^%s*(%d)%s+(%d)%s*$")
+  l, c = tonumber(l), tonumber(c)
+  if not l or l &lt; 1 or l &gt; 3 or c &lt; 1 or c &gt; 3 then
+    print("Digite a linha e a coluna, de 1 a 3, separadas por espaço. Ex.: 2 3")
+  elseif tabuleiro[l][c] ~= " " then
+    print("Essa casa já está ocupada.")
+  else
+    tabuleiro[l][c] = jogador
+    jogadas = jogadas + 1
+    jogador = (jogador == "X") and "O" or "X"
+  end
+end
+
+desenhar(tabuleiro)
+print("Fim: todas as casas estão preenchidas.")
+</pre>
+
+<dl class="anatomy">
+  <dt>entrada:match("^%s*(%d)%s+(%d)%s*$")</dt><dd>Um <a href="padroes.html">padrão</a> com duas <strong>capturas</strong> (os parênteses): <code>^</code> começo; <code>%s*</code> espaços que sobrarem; <code>(%d)</code> um algarismo, guardado; <code>%s+</code> um ou mais espaços; <code>(%d)</code> outro algarismo, guardado; <code>%s*$</code> espaços até o fim. O <code>match</code> devolve as duas capturas (<code>"2"</code> e <code>"3"</code>), ou <code>nil</code> se a entrada não tiver esse formato (<code>22</code>, <code>a b</code>, <code>2 3 4</code>).</dd>
+  <dt>l, c = tonumber(l), tonumber(c)</dt><dd>As capturas são textos; viram números. Se o <code>match</code> falhou, <code>tonumber(nil)</code> dá <code>nil</code>, sem erro.</dd>
+  <dt>not l or l &lt; 1 or l &gt; 3 or c &lt; 1 or c &gt; 3</dt><dd>Recusa a entrada fora do formato e os números fora de 1 a 3 (<code>4 1</code>, <code>0 2</code>). Com o <code>or</code>, se <code>l</code> for <code>nil</code>, o Lua para no <code>not l</code> e não chega a comparar <code>nil &lt; 1</code> (que daria erro).</dd>
+  <dt>tabuleiro[l][c] ~= " "</dt><dd>A casa já tem X ou O: a jogada é recusada e o mesmo jogador tenta de novo.</dd>
+  <dt>jogador = (jogador == "X") and "O" or "X"</dt><dd>Passa a vez: se era X, vira O; senão, vira X (o <a href="and-or-ternario.html">truque do and/or</a>). Só acontece depois de uma jogada válida.</dd>
+  <dt>return</dt><dd>No fim da entrada, um <code>return</code> no corpo principal do programa encerra o arquivo inteiro: o Lua trata o arquivo como uma função.</dd>
+</dl>
+
+<pre class="term" data-cwd="~/projetos/velha">$ lua velha.lua
+
+    1   2   3
+1     |   |
+   ---+---+---
+2     |   |
+   ---+---+---
+3     |   |
+
+Jogador X, sua jogada (linha coluna): 2 2
+
+    1   2   3
+1     |   |
+   ---+---+---
+2     | X |
+   ---+---+---
+3     |   |
+
+Jogador O, sua jogada (linha coluna): 2 2
+Essa casa já está ocupada.
+…
+Jogador O, sua jogada (linha coluna): 22
+Digite a linha e a coluna, de 1 a 3, separadas por espaço. Ex.: 2 3
+…
+Jogador O, sua jogada (linha coluna): 4 1
+Digite a linha e a coluna, de 1 a 3, separadas por espaço. Ex.: 2 3
+…
+Jogador O, sua jogada (linha coluna): 1 1
+
+    1   2   3
+1   O |   |
+   ---+---+---
+2     | X |
+   ---+---+---
+3     |   |
+
+Jogador X, sua jogada (linha coluna):
+Partida interrompida.</pre>
+
+<p>(Os <code>…</code> são o tabuleiro desenhado de novo, igual, depois de cada recusa. No fim, a Ana apertou <kbd>Ctrl</kbd>+<kbd>D</kbd>.) Repare que a vez só passou para o X depois que o O conseguiu jogar: as três recusas mantiveram o O.</p>
+
+<div class="trylua" data-stdin="2 2\n2 2\n1 1" data-goal="out:Essa casa já está ocupada.">
+<p class="try-task"><strong>Missão (versão 2):</strong> o programa não confere se a casa está livre, e o O "rouba" a casa do X. Entre o <code>if</code> da validação e o <code>else</code>, acrescente um <code>elseif tabuleiro[l][c] ~= " " then</code> que mostra <code>Essa casa já está ocupada.</code>. A entrada joga <code>2 2</code> duas vezes.</p>
+<pre class="script" data-file="velha.lua">-- Jogo da Velha da Ana, versão 2: as jogadas
+
+-- Uma tabela com 3 linhas; cada linha é uma tabela com 3 casas.
+local tabuleiro = {}
+for linha = 1, 3 do
+  tabuleiro[linha] = {}
+  for coluna = 1, 3 do
+    tabuleiro[linha][coluna] = " "
+  end
+end
+
+local function desenhar(t)
+  print()
+  print("    1   2   3")
+  for linha = 1, 3 do
+    print(string.format("%d   %s | %s | %s", linha, t[linha][1], t[linha][2], t[linha][3]))
+    if linha &lt; 3 then
+      print("   ---+---+---")
+    end
+  end
+  print()
+end
+
+local jogador = "X"
+local jogadas = 0
+
+while jogadas &lt; 9 do
+  desenhar(tabuleiro)
+  io.write("Jogador " .. jogador .. ", sua jogada (linha coluna): ")
+  local entrada = io.read()
+  if entrada == nil then
+    print()
+    print("Partida interrompida.")
+    return
+  end
+
+  local l, c = entrada:match("^%s*(%d)%s+(%d)%s*$")
+  l, c = tonumber(l), tonumber(c)
+  if not l or l &lt; 1 or l &gt; 3 or c &lt; 1 or c &gt; 3 then
+    print("Digite a linha e a coluna, de 1 a 3, separadas por espaço. Ex.: 2 3")
+  else
+    tabuleiro[l][c] = jogador
+    jogadas = jogadas + 1
+    jogador = (jogador == "X") and "O" or "X"
+  end
+end
+
+desenhar(tabuleiro)
+print("Fim: todas as casas estão preenchidas.")
+</pre>
+<pre class="solucao" data-file="velha.lua">-- Jogo da Velha da Ana, versão 2: as jogadas
+
+-- Uma tabela com 3 linhas; cada linha é uma tabela com 3 casas.
+local tabuleiro = {}
+for linha = 1, 3 do
+  tabuleiro[linha] = {}
+  for coluna = 1, 3 do
+    tabuleiro[linha][coluna] = " "
+  end
+end
+
+local function desenhar(t)
+  print()
+  print("    1   2   3")
+  for linha = 1, 3 do
+    print(string.format("%d   %s | %s | %s", linha, t[linha][1], t[linha][2], t[linha][3]))
+    if linha &lt; 3 then
+      print("   ---+---+---")
+    end
+  end
+  print()
+end
+
+local jogador = "X"
+local jogadas = 0
+
+while jogadas &lt; 9 do
+  desenhar(tabuleiro)
+  io.write("Jogador " .. jogador .. ", sua jogada (linha coluna): ")
+  local entrada = io.read()
+  if entrada == nil then
+    print()
+    print("Partida interrompida.")
+    return
+  end
+
+  local l, c = entrada:match("^%s*(%d)%s+(%d)%s*$")
+  l, c = tonumber(l), tonumber(c)
+  if not l or l &lt; 1 or l &gt; 3 or c &lt; 1 or c &gt; 3 then
+    print("Digite a linha e a coluna, de 1 a 3, separadas por espaço. Ex.: 2 3")
+  elseif tabuleiro[l][c] ~= " " then
+    print("Essa casa já está ocupada.")
+  else
+    tabuleiro[l][c] = jogador
+    jogadas = jogadas + 1
+    jogador = (jogador == "X") and "O" or "X"
+  end
+end
+
+desenhar(tabuleiro)
+print("Fim: todas as casas estão preenchidas.")
+</pre>
+</div>
+
+<hr>
+
+<h2 id="versao3">Versão 3 · Quem ganhou?</h2>
+<p>Há exatamente <strong>8</strong> jeitos de ganhar: 3 linhas, 3 colunas e 2 diagonais. Em vez de escrever 8 <code>if</code>s parecidos, o programa guarda as 8 "trincas" numa lista (cada trinca é uma lista de 3 casas, e cada casa é <code>{linha, coluna}</code>) e uma função só confere todas. É uma ideia que vale para muitos programas: <strong>quando a regra é uma lista de casos, guarde os casos como dados</strong>.</p>
+
+<pre class="file" data-file="velha.lua">-- (o tabuleiro e o desenhar da versão 1, e depois:)
+
+-- As 8 trincas que dão a vitória: 3 linhas, 3 colunas e 2 diagonais.
+local TRINCAS = {
+  { {1, 1}, {1, 2}, {1, 3} }, { {2, 1}, {2, 2}, {2, 3} }, { {3, 1}, {3, 2}, {3, 3} },
+  { {1, 1}, {2, 1}, {3, 1} }, { {1, 2}, {2, 2}, {3, 2} }, { {1, 3}, {2, 3}, {3, 3} },
+  { {1, 1}, {2, 2}, {3, 3} }, { {1, 3}, {2, 2}, {3, 1} },
+}
+
+-- Devolve "X" ou "O" se alguém completou uma trinca; senão, nil.
+local function vencedor(t)
+  for _, trinca in ipairs(TRINCAS) do
+    local a, b, c = trinca[1], trinca[2], trinca[3]
+    local simbolo = t[a[1]][a[2]]
+    if simbolo ~= " " and simbolo == t[b[1]][b[2]] and simbolo == t[c[1]][c[2]] then
+      return simbolo
+    end
+  end
+  return nil
+end
+
+local jogador = "X"
+local jogadas = 0
+
+while true do
+  desenhar(tabuleiro)
+  io.write("Jogador " .. jogador .. ", sua jogada (linha coluna): ")
+  local entrada = io.read()
+  if entrada == nil then
+    print()
+    print("Partida interrompida.")
+    return
+  end
+
+  local l, c = entrada:match("^%s*(%d)%s+(%d)%s*$")
+  l, c = tonumber(l), tonumber(c)
+  if not l or l &lt; 1 or l &gt; 3 or c &lt; 1 or c &gt; 3 then
+    print("Digite a linha e a coluna, de 1 a 3, separadas por espaço. Ex.: 2 3")
+  elseif tabuleiro[l][c] ~= " " then
+    print("Essa casa já está ocupada.")
+  else
+    tabuleiro[l][c] = jogador
+    jogadas = jogadas + 1
+
+    local v = vencedor(tabuleiro)
+    if v then
+      desenhar(tabuleiro)
+      print("Jogador " .. v .. " venceu!")
+      break
+    elseif jogadas == 9 then
+      desenhar(tabuleiro)
+      print("Deu velha: empate!")
+      break
+    end
+    jogador = (jogador == "X") and "O" or "X"
+  end
+end
+</pre>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Peça</th><th>O que faz</th></tr>
+<tr><td><code>TRINCAS</code></td><td>Uma lista de 8 itens; cada item, uma lista de 3 casas; cada casa, <code>{linha, coluna}</code>. Três níveis de tabela. <code>TRINCAS[7]</code> é a diagonal <code>{ {1, 1}, {2, 2}, {3, 3} }</code>.</td></tr>
+<tr><td><code>local a, b, c = trinca[1], trinca[2], trinca[3]</code></td><td>As 3 casas da trinca, com nomes curtos (veja <a href="atribuicao-multipla.html">Atribuição Múltipla</a>).</td></tr>
+<tr><td><code>t[a[1]][a[2]]</code></td><td>O que está na casa <code>a</code>: <code>a[1]</code> é a linha e <code>a[2]</code> a coluna.</td></tr>
+<tr><td><code>simbolo ~= " " and simbolo == … and simbolo == …</code></td><td>As 3 casas têm o mesmo símbolo, e não é o vazio (três casas vazias também são "iguais").</td></tr>
+<tr><td><code>return simbolo</code> / <code>return nil</code></td><td>Devolve quem ganhou, ou <code>nil</code> se ninguém ainda.</td></tr>
+<tr><td><code>elseif jogadas == 9 then</code></td><td>Ninguém ganhou e o tabuleiro encheu: "deu velha", o empate.</td></tr>
+<tr><td><code>while true do … break</code></td><td>Agora o jogo pode acabar antes das 9 jogadas, então o laço é o <code>while true</code> com <code>break</code> (na vitória ou no empate).</td></tr>
+</table>
+</div>
+
+<p>Duas partidas. Na primeira, o X ganha pela diagonal; na segunda, deu velha (o começo de cada uma foi cortado):</p>
+
+<pre class="term" data-cwd="~/projetos/velha">$ lua velha.lua
+…
+Jogador O, sua jogada (linha coluna): 1 3
+
+    1   2   3
+1   X | O | O
+   ---+---+---
+2     | X |
+   ---+---+---
+3     |   |
+
+Jogador X, sua jogada (linha coluna): 3 3
+
+    1   2   3
+1   X | O | O
+   ---+---+---
+2     | X |
+   ---+---+---
+3     |   | X
+
+Jogador X venceu!
+$ lua velha.lua
+…
+Jogador O, sua jogada (linha coluna): 3 2
+
+    1   2   3
+1   X | X | O
+   ---+---+---
+2   O | O | X
+   ---+---+---
+3   X | O |
+
+Jogador X, sua jogada (linha coluna): 3 3
+
+    1   2   3
+1   X | X | O
+   ---+---+---
+2   O | O | X
+   ---+---+---
+3   X | O | X
+
+Deu velha: empate!</pre>
+
+<div class="tip">
+<strong>Por que conferir a vitória antes do empate</strong>
+<p>Na 9ª jogada, o tabuleiro enche, mas essa última jogada pode ser a que completa uma trinca. Se o programa testasse o empate primeiro, diria "deu velha" para uma vitória. A ordem certa é a do código: primeiro <code>vencedor</code>, depois <code>jogadas == 9</code>.</p>
+</div>
+
+<div class="trylua" data-stdin="1 1\n1 2\n2 2\n1 3\n3 3" data-goal="out:Jogador X venceu!">
+<p class="try-task"><strong>Missão (versão 3):</strong> a lista <code>TRINCAS</code> está incompleta: faltam as duas diagonais, e a vitória do X na diagonal (1 1, 2 2, 3 3) passa despercebida. Acrescente as trincas <code>{ {1, 1}, {2, 2}, {3, 3} }</code> e <code>{ {1, 3}, {2, 2}, {3, 1} }</code>.</p>
+<pre class="script" data-file="velha.lua">-- Jogo da Velha da Ana, versão 3: quem ganhou?
+
+-- Uma tabela com 3 linhas; cada linha é uma tabela com 3 casas.
+local tabuleiro = {}
+for linha = 1, 3 do
+  tabuleiro[linha] = {}
+  for coluna = 1, 3 do
+    tabuleiro[linha][coluna] = " "
+  end
+end
+
+local function desenhar(t)
+  print()
+  print("    1   2   3")
+  for linha = 1, 3 do
+    print(string.format("%d   %s | %s | %s", linha, t[linha][1], t[linha][2], t[linha][3]))
+    if linha &lt; 3 then
+      print("   ---+---+---")
+    end
+  end
+  print()
+end
+
+-- As 8 trincas que dão a vitória: 3 linhas, 3 colunas e 2 diagonais.
+local TRINCAS = {
+  { {1, 1}, {1, 2}, {1, 3} }, { {2, 1}, {2, 2}, {2, 3} }, { {3, 1}, {3, 2}, {3, 3} },
+  { {1, 1}, {2, 1}, {3, 1} }, { {1, 2}, {2, 2}, {3, 2} }, { {1, 3}, {2, 3}, {3, 3} },
+  -- faltam as 2 diagonais
+}
+
+-- Devolve "X" ou "O" se alguém completou uma trinca; senão, nil.
+local function vencedor(t)
+  for _, trinca in ipairs(TRINCAS) do
+    local a, b, c = trinca[1], trinca[2], trinca[3]
+    local simbolo = t[a[1]][a[2]]
+    if simbolo ~= " " and simbolo == t[b[1]][b[2]] and simbolo == t[c[1]][c[2]] then
+      return simbolo
+    end
+  end
+  return nil
+end
+
+local jogador = "X"
+local jogadas = 0
+
+while true do
+  desenhar(tabuleiro)
+  io.write("Jogador " .. jogador .. ", sua jogada (linha coluna): ")
+  local entrada = io.read()
+  if entrada == nil then
+    print()
+    print("Partida interrompida.")
+    return
+  end
+
+  local l, c = entrada:match("^%s*(%d)%s+(%d)%s*$")
+  l, c = tonumber(l), tonumber(c)
+  if not l or l &lt; 1 or l &gt; 3 or c &lt; 1 or c &gt; 3 then
+    print("Digite a linha e a coluna, de 1 a 3, separadas por espaço. Ex.: 2 3")
+  elseif tabuleiro[l][c] ~= " " then
+    print("Essa casa já está ocupada.")
+  else
+    tabuleiro[l][c] = jogador
+    jogadas = jogadas + 1
+
+    local v = vencedor(tabuleiro)
+    if v then
+      desenhar(tabuleiro)
+      print("Jogador " .. v .. " venceu!")
+      break
+    elseif jogadas == 9 then
+      desenhar(tabuleiro)
+      print("Deu velha: empate!")
+      break
+    end
+    jogador = (jogador == "X") and "O" or "X"
+  end
+end
+</pre>
+<pre class="solucao" data-file="velha.lua">-- Jogo da Velha da Ana, versão 3: quem ganhou?
+
+-- Uma tabela com 3 linhas; cada linha é uma tabela com 3 casas.
+local tabuleiro = {}
+for linha = 1, 3 do
+  tabuleiro[linha] = {}
+  for coluna = 1, 3 do
+    tabuleiro[linha][coluna] = " "
+  end
+end
+
+local function desenhar(t)
+  print()
+  print("    1   2   3")
+  for linha = 1, 3 do
+    print(string.format("%d   %s | %s | %s", linha, t[linha][1], t[linha][2], t[linha][3]))
+    if linha &lt; 3 then
+      print("   ---+---+---")
+    end
+  end
+  print()
+end
+
+-- As 8 trincas que dão a vitória: 3 linhas, 3 colunas e 2 diagonais.
+local TRINCAS = {
+  { {1, 1}, {1, 2}, {1, 3} }, { {2, 1}, {2, 2}, {2, 3} }, { {3, 1}, {3, 2}, {3, 3} },
+  { {1, 1}, {2, 1}, {3, 1} }, { {1, 2}, {2, 2}, {3, 2} }, { {1, 3}, {2, 3}, {3, 3} },
+  { {1, 1}, {2, 2}, {3, 3} }, { {1, 3}, {2, 2}, {3, 1} },
+}
+
+-- Devolve "X" ou "O" se alguém completou uma trinca; senão, nil.
+local function vencedor(t)
+  for _, trinca in ipairs(TRINCAS) do
+    local a, b, c = trinca[1], trinca[2], trinca[3]
+    local simbolo = t[a[1]][a[2]]
+    if simbolo ~= " " and simbolo == t[b[1]][b[2]] and simbolo == t[c[1]][c[2]] then
+      return simbolo
+    end
+  end
+  return nil
+end
+
+local jogador = "X"
+local jogadas = 0
+
+while true do
+  desenhar(tabuleiro)
+  io.write("Jogador " .. jogador .. ", sua jogada (linha coluna): ")
+  local entrada = io.read()
+  if entrada == nil then
+    print()
+    print("Partida interrompida.")
+    return
+  end
+
+  local l, c = entrada:match("^%s*(%d)%s+(%d)%s*$")
+  l, c = tonumber(l), tonumber(c)
+  if not l or l &lt; 1 or l &gt; 3 or c &lt; 1 or c &gt; 3 then
+    print("Digite a linha e a coluna, de 1 a 3, separadas por espaço. Ex.: 2 3")
+  elseif tabuleiro[l][c] ~= " " then
+    print("Essa casa já está ocupada.")
+  else
+    tabuleiro[l][c] = jogador
+    jogadas = jogadas + 1
+
+    local v = vencedor(tabuleiro)
+    if v then
+      desenhar(tabuleiro)
+      print("Jogador " .. v .. " venceu!")
+      break
+    elseif jogadas == 9 then
+      desenhar(tabuleiro)
+      print("Deu velha: empate!")
+      break
+    end
+    jogador = (jogador == "X") and "O" or "X"
+  end
+end
+</pre>
+</div>
+
+<hr>
+
+<h2 id="versao4">Versão 4 · Contra o computador</h2>
+<p>A Ana quer jogar sozinha. O computador (O) segue uma estratégia simples, em quatro passos, na ordem:</p>
+<ol>
+  <li>se houver uma casa que o faça <strong>ganhar</strong>, joga nela;</li>
+  <li>senão, se houver uma casa em que o X ganharia na próxima, joga nela para <strong>bloquear</strong>;</li>
+  <li>senão, pega o <strong>meio</strong>, se estiver livre;</li>
+  <li>senão, sorteia uma casa livre.</li>
+</ol>
+<p>Para os passos 1 e 2, o programa <strong>experimenta</strong>: põe o símbolo numa casa livre, pergunta ao <code>vencedor</code> se alguém ganhou, e <strong>desfaz</strong>. O programa foi reorganizado em funções:</p>
+
+<pre class="file" data-file="velha.lua">-- Jogo da Velha da Ana, versão 4: contra o computador
+
+local TRINCAS = {
+  { {1, 1}, {1, 2}, {1, 3} }, { {2, 1}, {2, 2}, {2, 3} }, { {3, 1}, {3, 2}, {3, 3} },
+  { {1, 1}, {2, 1}, {3, 1} }, { {1, 2}, {2, 2}, {3, 2} }, { {1, 3}, {2, 3}, {3, 3} },
+  { {1, 1}, {2, 2}, {3, 3} }, { {1, 3}, {2, 2}, {3, 1} },
+}
+
+local function novo_tabuleiro()
+  local t = {}
+  for linha = 1, 3 do
+    t[linha] = { " ", " ", " " }   -- uma tabela NOVA para cada linha
+  end
+  return t
+end
+
+local function desenhar(t)
+  print()
+  print("    1   2   3")
+  for linha = 1, 3 do
+    print(string.format("%d   %s | %s | %s", linha, t[linha][1], t[linha][2], t[linha][3]))
+    if linha &lt; 3 then
+      print("   ---+---+---")
+    end
+  end
+  print()
+end
+
+local function vencedor(t)
+  for _, trinca in ipairs(TRINCAS) do
+    local a, b, c = trinca[1], trinca[2], trinca[3]
+    local simbolo = t[a[1]][a[2]]
+    if simbolo ~= " " and simbolo == t[b[1]][b[2]] and simbolo == t[c[1]][c[2]] then
+      return simbolo
+    end
+  end
+  return nil
+end
+
+-- Lista das casas vazias: { {1, 2}, {3, 1}, ... }
+local function casas_livres(t)
+  local livres = {}
+  for linha = 1, 3 do
+    for coluna = 1, 3 do
+      if t[linha][coluna] == " " then
+        livres[#livres + 1] = { linha, coluna }
+      end
+    end
+  end
+  return livres
+end
+
+-- Pergunta até vir uma casa válida e livre. Devolve linha e coluna (ou nil no fim da entrada).
+local function ler_jogada(t)
+  while true do
+    io.write("Sua jogada, X (linha coluna): ")
+    local entrada = io.read()
+    if entrada == nil then
+      return nil
+    end
+    local l, c = entrada:match("^%s*(%d)%s+(%d)%s*$")
+    l, c = tonumber(l), tonumber(c)
+    if not l or l &lt; 1 or l &gt; 3 or c &lt; 1 or c &gt; 3 then
+      print("Digite a linha e a coluna, de 1 a 3, separadas por espaço. Ex.: 2 3")
+    elseif t[l][c] ~= " " then
+      print("Essa casa já está ocupada.")
+    else
+      return l, c
+    end
+  end
+end
+
+-- O computador (O): ganha se puder; senão, bloqueia o X; senão, o meio; senão, ao acaso.
+local function jogada_do_computador(t)
+  for _, simbolo in ipairs({ "O", "X" }) do
+    for _, casa in ipairs(casas_livres(t)) do
+      local l, c = casa[1], casa[2]
+      t[l][c] = simbolo            -- experimenta…
+      local v = vencedor(t)
+      t[l][c] = " "                -- …e desfaz
+      if v then
+        return l, c
+      end
+    end
+  end
+  if t[2][2] == " " then
+    return 2, 2
+  end
+  local livres = casas_livres(t)
+  local casa = livres[math.random(#livres)]
+  return casa[1], casa[2]
+end
+
+local tabuleiro = novo_tabuleiro()
+print("=== Jogo da Velha: você (X) contra o computador (O) ===")
+
+while true do
+  desenhar(tabuleiro)
+  local l, c = ler_jogada(tabuleiro)
+  if l == nil then
+    print()
+    print("Partida interrompida.")
+    break
+  end
+  tabuleiro[l][c] = "X"
+
+  if vencedor(tabuleiro) then
+    desenhar(tabuleiro)
+    print("Você venceu!")
+    break
+  end
+  if #casas_livres(tabuleiro) == 0 then
+    desenhar(tabuleiro)
+    print("Deu velha: empate!")
+    break
+  end
+
+  l, c = jogada_do_computador(tabuleiro)
+  tabuleiro[l][c] = "O"
+  print(string.format("O computador jogou em %d %d.", l, c))
+
+  if vencedor(tabuleiro) then
+    desenhar(tabuleiro)
+    print("O computador venceu!")
+    break
+  end
+end
+</pre>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Peça</th><th>O que faz</th></tr>
+<tr><td><code>novo_tabuleiro()</code></td><td>Devolve um tabuleiro vazio; <code>{ " ", " ", " " }</code> <strong>dentro</strong> do laço cria uma tabela nova a cada volta (nada do cenário da versão 1).</td></tr>
+<tr><td><code>casas_livres(t)</code></td><td>A lista das casas vazias, cada uma <code>{linha, coluna}</code>. Serve para o computador e para saber se o tabuleiro encheu (<code>#casas_livres(t) == 0</code>).</td></tr>
+<tr><td><code>ler_jogada(t)</code></td><td>A validação da versão 2 numa função que insiste até vir uma casa válida e livre; devolve dois valores, a linha e a coluna (veja <a href="retornos-multiplos.html">Vários Retornos</a>).</td></tr>
+<tr><td><code>for _, simbolo in ipairs({ "O", "X" })</code></td><td>Os passos 1 e 2 com o mesmo código: primeiro procura uma vitória do O; depois, uma do X (para bloquear).</td></tr>
+<tr><td><code>t[l][c] = simbolo</code> … <code>t[l][c] = " "</code></td><td>Experimenta e desfaz. Como a função mexe no tabuleiro de verdade (é uma referência), desfazer é obrigatório: senão sobraria uma peça "fantasma".</td></tr>
+<tr><td><code>livres[math.random(#livres)]</code></td><td>Sorteia uma das casas livres (veja <a href="math-random.html">math.random</a>).</td></tr>
+<tr><td><code>l, c = jogada_do_computador(tabuleiro)</code></td><td>Sem <code>local</code>: reaproveita as variáveis <code>l</code> e <code>c</code> criadas na jogada da Ana, na mesma volta.</td></tr>
+</table>
+</div>
+
+<p>A derrota da Ana está no começo da página: depois de <code>3 3</code>, o computador sorteou <code>2 3</code> e ficou com duas peças na linha 2; a Ana não bloqueou, e ele ganhou. Outra partida, em que ela se defende bem (só as últimas jogadas):</p>
+
+<pre class="term" data-cwd="~/projetos/velha">$ lua velha.lua
+…
+Sua jogada, X (linha coluna): 1 2
+O computador jogou em 1 3.                      « bloqueou a linha 1
+
+    1   2   3
+1   X | X | O
+   ---+---+---
+2     | O |
+   ---+---+---
+3     |   |
+
+Sua jogada, X (linha coluna): 3 1
+O computador jogou em 2 1.                      « bloqueou a coluna 1
+
+    1   2   3
+1   X | X | O
+   ---+---+---
+2   O | O |
+   ---+---+---
+3   X |   |
+
+Sua jogada, X (linha coluna): 2 3
+O computador jogou em 3 3.
+
+    1   2   3
+1   X | X | O
+   ---+---+---
+2   O | O | X
+   ---+---+---
+3   X |   | O
+
+Sua jogada, X (linha coluna): 3 2
+
+    1   2   3
+1   X | X | O
+   ---+---+---
+2   O | O | X
+   ---+---+---
+3   X | X | O
+
+Deu velha: empate!</pre>
+
+<div class="cenario">
+<strong>Esquecer de desfazer a jogada experimentada</strong>
+<p>Sem a linha <code>t[l][c] = " "</code>, cada casa testada nos passos 1 e 2 ficaria marcada no tabuleiro de verdade: na primeira jogada do computador, todas as casas livres receberiam um <code>"O"</code> e depois um <code>"X"</code>, e o tabuleiro se encheria de peças que ninguém jogou. Funções que mexem numa tabela recebida mexem na tabela original. Quando uma função só quer <strong>testar</strong>, ela precisa desfazer o que fez (ou trabalhar numa cópia; veja <a href="tabelas-referencia.html">Tabelas São Referências</a>).</p>
+</div>
+
+<div class="trylua" data-stdin="1 1\n1 2\n3 1\n2 3\n3 2\n3 3\n2 1" data-goal="out:O computador jogou em 1 3.;;out:Deu velha: empate!">
+<p class="try-task"><strong>Missão (versão 4):</strong> o computador ainda pula os passos 1 e 2: ele só pega o meio ou sorteia, e não bloqueia a Ana. No lugar do comentário de <code>jogada_do_computador</code>, escreva os dois laços: para cada símbolo de <code>{ "O", "X" }</code> e cada casa de <code>casas_livres(t)</code>, ponha o símbolo, confira <code>vencedor(t)</code>, desfaça, e devolva a casa se alguém teria ganhado. A semente é fixa (42). Depois do <code>1 1</code> e do <code>1 2</code> da Ana, o computador deve bloquear em <code>1 3</code>, e a partida deve terminar empatada.</p>
+<pre class="script" data-file="velha.lua">-- Jogo da Velha da Ana, versão 4: contra o computador
+math.randomseed(42)  -- semente fixa para a missão
+
+local TRINCAS = {
+  { {1, 1}, {1, 2}, {1, 3} }, { {2, 1}, {2, 2}, {2, 3} }, { {3, 1}, {3, 2}, {3, 3} },
+  { {1, 1}, {2, 1}, {3, 1} }, { {1, 2}, {2, 2}, {3, 2} }, { {1, 3}, {2, 3}, {3, 3} },
+  { {1, 1}, {2, 2}, {3, 3} }, { {1, 3}, {2, 2}, {3, 1} },
+}
+
+local function novo_tabuleiro()
+  local t = {}
+  for linha = 1, 3 do
+    t[linha] = { " ", " ", " " }   -- uma tabela NOVA para cada linha
+  end
+  return t
+end
+
+local function desenhar(t)
+  print()
+  print("    1   2   3")
+  for linha = 1, 3 do
+    print(string.format("%d   %s | %s | %s", linha, t[linha][1], t[linha][2], t[linha][3]))
+    if linha &lt; 3 then
+      print("   ---+---+---")
+    end
+  end
+  print()
+end
+
+local function vencedor(t)
+  for _, trinca in ipairs(TRINCAS) do
+    local a, b, c = trinca[1], trinca[2], trinca[3]
+    local simbolo = t[a[1]][a[2]]
+    if simbolo ~= " " and simbolo == t[b[1]][b[2]] and simbolo == t[c[1]][c[2]] then
+      return simbolo
+    end
+  end
+  return nil
+end
+
+-- Lista das casas vazias: { {1, 2}, {3, 1}, ... }
+local function casas_livres(t)
+  local livres = {}
+  for linha = 1, 3 do
+    for coluna = 1, 3 do
+      if t[linha][coluna] == " " then
+        livres[#livres + 1] = { linha, coluna }
+      end
+    end
+  end
+  return livres
+end
+
+-- Pergunta até vir uma casa válida e livre. Devolve linha e coluna (ou nil no fim da entrada).
+local function ler_jogada(t)
+  while true do
+    io.write("Sua jogada, X (linha coluna): ")
+    local entrada = io.read()
+    if entrada == nil then
+      return nil
+    end
+    local l, c = entrada:match("^%s*(%d)%s+(%d)%s*$")
+    l, c = tonumber(l), tonumber(c)
+    if not l or l &lt; 1 or l &gt; 3 or c &lt; 1 or c &gt; 3 then
+      print("Digite a linha e a coluna, de 1 a 3, separadas por espaço. Ex.: 2 3")
+    elseif t[l][c] ~= " " then
+      print("Essa casa já está ocupada.")
+    else
+      return l, c
+    end
+  end
+end
+
+-- O computador (O): ganha se puder; senão, bloqueia o X; senão, o meio; senão, ao acaso.
+local function jogada_do_computador(t)
+  -- 1) e 2): experimente cada casa livre, primeiro com "O" (ganhar), depois com "X" (bloquear)
+  if t[2][2] == " " then
+    return 2, 2
+  end
+  local livres = casas_livres(t)
+  local casa = livres[math.random(#livres)]
+  return casa[1], casa[2]
+end
+
+local tabuleiro = novo_tabuleiro()
+print("=== Jogo da Velha: você (X) contra o computador (O) ===")
+
+while true do
+  desenhar(tabuleiro)
+  local l, c = ler_jogada(tabuleiro)
+  if l == nil then
+    print()
+    print("Partida interrompida.")
+    break
+  end
+  tabuleiro[l][c] = "X"
+
+  if vencedor(tabuleiro) then
+    desenhar(tabuleiro)
+    print("Você venceu!")
+    break
+  end
+  if #casas_livres(tabuleiro) == 0 then
+    desenhar(tabuleiro)
+    print("Deu velha: empate!")
+    break
+  end
+
+  l, c = jogada_do_computador(tabuleiro)
+  tabuleiro[l][c] = "O"
+  print(string.format("O computador jogou em %d %d.", l, c))
+
+  if vencedor(tabuleiro) then
+    desenhar(tabuleiro)
+    print("O computador venceu!")
+    break
+  end
+end
+</pre>
+<pre class="solucao" data-file="velha.lua">-- Jogo da Velha da Ana, versão 4: contra o computador
+math.randomseed(42)  -- semente fixa para a missão
+
+local TRINCAS = {
+  { {1, 1}, {1, 2}, {1, 3} }, { {2, 1}, {2, 2}, {2, 3} }, { {3, 1}, {3, 2}, {3, 3} },
+  { {1, 1}, {2, 1}, {3, 1} }, { {1, 2}, {2, 2}, {3, 2} }, { {1, 3}, {2, 3}, {3, 3} },
+  { {1, 1}, {2, 2}, {3, 3} }, { {1, 3}, {2, 2}, {3, 1} },
+}
+
+local function novo_tabuleiro()
+  local t = {}
+  for linha = 1, 3 do
+    t[linha] = { " ", " ", " " }   -- uma tabela NOVA para cada linha
+  end
+  return t
+end
+
+local function desenhar(t)
+  print()
+  print("    1   2   3")
+  for linha = 1, 3 do
+    print(string.format("%d   %s | %s | %s", linha, t[linha][1], t[linha][2], t[linha][3]))
+    if linha &lt; 3 then
+      print("   ---+---+---")
+    end
+  end
+  print()
+end
+
+local function vencedor(t)
+  for _, trinca in ipairs(TRINCAS) do
+    local a, b, c = trinca[1], trinca[2], trinca[3]
+    local simbolo = t[a[1]][a[2]]
+    if simbolo ~= " " and simbolo == t[b[1]][b[2]] and simbolo == t[c[1]][c[2]] then
+      return simbolo
+    end
+  end
+  return nil
+end
+
+-- Lista das casas vazias: { {1, 2}, {3, 1}, ... }
+local function casas_livres(t)
+  local livres = {}
+  for linha = 1, 3 do
+    for coluna = 1, 3 do
+      if t[linha][coluna] == " " then
+        livres[#livres + 1] = { linha, coluna }
+      end
+    end
+  end
+  return livres
+end
+
+-- Pergunta até vir uma casa válida e livre. Devolve linha e coluna (ou nil no fim da entrada).
+local function ler_jogada(t)
+  while true do
+    io.write("Sua jogada, X (linha coluna): ")
+    local entrada = io.read()
+    if entrada == nil then
+      return nil
+    end
+    local l, c = entrada:match("^%s*(%d)%s+(%d)%s*$")
+    l, c = tonumber(l), tonumber(c)
+    if not l or l &lt; 1 or l &gt; 3 or c &lt; 1 or c &gt; 3 then
+      print("Digite a linha e a coluna, de 1 a 3, separadas por espaço. Ex.: 2 3")
+    elseif t[l][c] ~= " " then
+      print("Essa casa já está ocupada.")
+    else
+      return l, c
+    end
+  end
+end
+
+-- O computador (O): ganha se puder; senão, bloqueia o X; senão, o meio; senão, ao acaso.
+local function jogada_do_computador(t)
+  for _, simbolo in ipairs({ "O", "X" }) do
+    for _, casa in ipairs(casas_livres(t)) do
+      local l, c = casa[1], casa[2]
+      t[l][c] = simbolo            -- experimenta…
+      local v = vencedor(t)
+      t[l][c] = " "                -- …e desfaz
+      if v then
+        return l, c
+      end
+    end
+  end
+  if t[2][2] == " " then
+    return 2, 2
+  end
+  local livres = casas_livres(t)
+  local casa = livres[math.random(#livres)]
+  return casa[1], casa[2]
+end
+
+local tabuleiro = novo_tabuleiro()
+print("=== Jogo da Velha: você (X) contra o computador (O) ===")
+
+while true do
+  desenhar(tabuleiro)
+  local l, c = ler_jogada(tabuleiro)
+  if l == nil then
+    print()
+    print("Partida interrompida.")
+    break
+  end
+  tabuleiro[l][c] = "X"
+
+  if vencedor(tabuleiro) then
+    desenhar(tabuleiro)
+    print("Você venceu!")
+    break
+  end
+  if #casas_livres(tabuleiro) == 0 then
+    desenhar(tabuleiro)
+    print("Deu velha: empate!")
+    break
+  end
+
+  l, c = jogada_do_computador(tabuleiro)
+  tabuleiro[l][c] = "O"
+  print(string.format("O computador jogou em %d %d.", l, c))
+
+  if vencedor(tabuleiro) then
+    desenhar(tabuleiro)
+    print("O computador venceu!")
+    break
+  end
+end
+</pre>
+</div>
+
+<hr>
+
+<h2>Formas diferentes de fazer</h2>
+
+<h3>O vencedor sem a lista de trincas</h3>
+<p>A mesma função <code>vencedor</code>, escrita com laços e <code>if</code>s, testada em três tabuleiros (uma diagonal do X, um empate e uma coluna do O):</p>
+
+<pre class="file" data-file="formas.lua">-- O vencedor com laços e ifs, sem a tabela de trincas.
+local function vencedor(t)
+  for i = 1, 3 do
+    if t[i][1] ~= " " and t[i][1] == t[i][2] and t[i][2] == t[i][3] then
+      return t[i][1]                                 -- linha i
+    end
+    if t[1][i] ~= " " and t[1][i] == t[2][i] and t[2][i] == t[3][i] then
+      return t[1][i]                                 -- coluna i
+    end
+  end
+  local meio = t[2][2]
+  if meio ~= " " and ((t[1][1] == meio and meio == t[3][3]) or
+                      (t[1][3] == meio and meio == t[3][1])) then
+    return meio                                      -- uma das diagonais
+  end
+  return nil
+end
+
+print(vencedor({ { "X", "O", "O" }, { " ", "X", " " }, { " ", " ", "X" } }))
+print(vencedor({ { "X", "X", "O" }, { "O", "O", "X" }, { "X", "O", "X" } }))
+print(vencedor({ { "O", "X", " " }, { "O", "X", " " }, { "O", " ", "X" } }))
+</pre>
+
+<pre class="term" data-cwd="~/projetos/velha">$ lua formas.lua
+X
+nil
+O</pre>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Forma</th><th>Quando usar</th></tr>
+<tr><td>Lista de trincas (versão 3)</td><td>Fácil de conferir (as 8 estão escritas uma por uma) e de mudar: um "jogo da velha 4×4" seria só outra lista. Também serve para o computador, que testa todas do mesmo jeito.</td></tr>
+<tr><td>Laços e <code>if</code>s</td><td>Mais curta para o 3×3 e sem dados extras; mais difícil de conferir a olho e de adaptar para outro tamanho.</td></tr>
+</table>
+</div>
+
+<h3>O tabuleiro como uma lista de 9 casas</h3>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Representação</th><th>Casa do meio</th><th>Quando usar</th></tr>
+<tr><td>Tabela aninhada 3×3 (este projeto)</td><td><code>t[2][2]</code></td><td>Quando se pensa em linhas e colunas: desenhar e ler "linha coluna" ficam diretos.</td></tr>
+<tr><td>Uma lista só, casas de 1 a 9</td><td><code>t[5]</code></td><td>Quando a jogada é um número de 1 a 9 (como no teclado numérico). A casa da linha <code>l</code>, coluna <code>c</code> é <code>t[(l - 1) * 3 + c]</code>.</td></tr>
+</table>
+</div>
+
+<h2 id="ideias">Ideias para continuar</h2>
+<ul>
+  <li>Um placar: várias partidas, revezando quem começa, com "Jogar de novo?" (como no <a href="projeto-adivinhacao.html">Jogo de Adivinhação</a>).</li>
+  <li>Um computador melhor: depois do meio, preferir os cantos (<code>{1, 1}, {1, 3}, {3, 1}, {3, 3}</code>) às bordas. Com mais algumas regras, ele nunca perde.</li>
+  <li>Aceitar a jogada como um número de 1 a 9 e convertê-la para linha e coluna: <code>l = (n - 1) // 3 + 1</code> e <code>c = (n - 1) % 3 + 1</code> (veja <a href="divisao.html">Divisão: /, // e %</a>).</li>
+</ul>
+
+<hr>
+
+<h2>Referência rápida do projeto</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>Para que serviu</th></tr>
+<tr><td><code>for l = 1, 3 do t[l] = {} for c = 1, 3 do t[l][c] = " " end end</code></td><td>Montar a grade 3×3, uma tabela nova por linha</td></tr>
+<tr><td><code>t[l][c]</code></td><td>A casa da linha <code>l</code>, coluna <code>c</code></td></tr>
+<tr><td><code>entrada:match("^%s*(%d)%s+(%d)%s*$")</code></td><td>Separar "linha coluna" em duas capturas</td></tr>
+<tr><td><code>jogador = (jogador == "X") and "O" or "X"</code></td><td>Passar a vez</td></tr>
+<tr><td><code>TRINCAS = { { {1, 1}, {1, 2}, {1, 3} }, … }</code></td><td>As regras da vitória como dados</td></tr>
+<tr><td><code>t[l][c] = s</code> … teste … <code>t[l][c] = " "</code></td><td>Experimentar uma jogada e desfazer</td></tr>
+<tr><td><code>livres[math.random(#livres)]</code></td><td>Sortear um item da lista</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Sintoma</th><th>Causa provável</th></tr>
+<tr><td>Uma peça aparece em todas as linhas</td><td>As linhas são a mesma tabela (<code>{ vazia, vazia, vazia }</code>)</td></tr>
+<tr><td><code>attempt to index a nil value (field 'integer index')</code></td><td>Linha fora de 1 a 3: confira antes de usar</td></tr>
+<tr><td><code>attempt to compare nil with number</code></td><td>Comparou <code>l &lt; 1</code> sem antes testar <code>not l</code> (a entrada não tinha o formato)</td></tr>
+<tr><td>A vitória numa diagonal não é percebida</td><td>Faltou uma trinca na lista</td></tr>
+<tr><td>"Deu velha" com uma trinca completa</td><td>Testou o empate antes da vitória</td></tr>
+<tr><td>Peças que ninguém jogou</td><td>A jogada experimentada não foi desfeita</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. A casa do meio</h3>
+<p>Complete para pôr um X na casa do meio do tabuleiro:</p>
+<div class="ex-code">tabuleiro[2]<input data-answer="[2]" aria-label="índice"> = "X"</div>
+</div>
+
+<div class="exercise">
+<h3>2. Passar a vez</h3>
+<p>Complete o truque que troca X por O e O por X:</p>
+<div class="ex-code">jogador = (jogador == "X") <input data-answer="and" aria-label="operador"> "O" or "X"</div>
+</div>
+
+<div class="exercise">
+<h3>3. Quantas trincas</h3>
+<p>Quantos jeitos diferentes de ganhar existem num tabuleiro 3×3?</p>
+<div class="ex-code"><input data-answer="8" aria-label="resposta"></div>
+</div>
+
+<div class="mc" data-answer="3">
+<p class="mc-q">4. Com <code>local vazia = { " ", " ", " " }</code> e <code>local t = { vazia, vazia, vazia }</code>, o que acontece depois de <code>t[1][1] = "X"</code>?</p>
+<label><input type="radio" name="q4"> Só a casa 1 da linha 1 recebe o X</label>
+<label><input type="radio" name="q4"> Dá erro: não dá para mudar a tabela <code>vazia</code></label>
+<label><input type="radio" name="q4"> As três linhas mostram X na coluna 1, porque são a mesma tabela</label>
+<label><input type="radio" name="q4"> A tabela <code>vazia</code> é copiada três vezes antes da mudança</label>
+</div>
+
+<div class="mc" data-answer="1">
+<p class="mc-q">5. O que <code>("2 3"):match("^%s*(%d)%s+(%d)%s*$")</code> devolve?</p>
+<label><input type="radio" name="q5"> Os textos <code>"2"</code> e <code>"3"</code></label>
+<label><input type="radio" name="q5"> Os números 2 e 3</label>
+<label><input type="radio" name="q5"> O texto <code>"2 3"</code> inteiro</label>
+<label><input type="radio" name="q5"> <code>nil</code>, por causa do espaço</label>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">6. Por que o computador desfaz (<code>t[l][c] = " "</code>) cada jogada que experimenta?</p>
+<label><input type="radio" name="q6"> Porque o <code>vencedor</code> só funciona com casas vazias</label>
+<label><input type="radio" name="q6"> Porque o tabuleiro recebido é o de verdade (uma referência): sem desfazer, ficariam peças que ninguém jogou</label>
+<label><input type="radio" name="q6"> Porque o <code>math.random</code> exige o tabuleiro vazio</label>
+<label><input type="radio" name="q6"> Para o programa ficar mais rápido</label>
+</div>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li>Uma grade é uma tabela de tabelas: <code>t[linha][coluna]</code>. Cada linha precisa do seu próprio <code>{}</code>; guardar a mesma tabela três vezes guarda três referências para uma tabela só.</li>
+  <li><code>match</code> com capturas separa a jogada; <code>tonumber</code> e a validação (formato, faixa, casa livre) vêm antes de mexer no tabuleiro.</li>
+  <li>Regras que são uma lista de casos (as 8 trincas) ficam melhores como dados, conferidos por uma função só.</li>
+  <li>Teste a vitória antes do empate.</li>
+  <li>Um adversário simples experimenta jogadas no próprio tabuleiro e desfaz: ganhar, bloquear, o meio, e por fim o acaso.</li>
+</ul>
+
+<p>Este é o último projeto do guia. Daqui, a seção de <a href="ref-funcoes-globais.html">Referência</a> reúne as funções e as mensagens de erro que apareceram pelo caminho, e a página <a href="lua-no-mundo.html">Onde o Lua É Usado</a> mostra onde continuar: jogos com LÖVE, Roblox, o Neovim…</p>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
