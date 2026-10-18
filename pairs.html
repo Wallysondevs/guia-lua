@@ -1,0 +1,531 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua pairs — percorrendo todas as chaves de uma tabela | Guia Lua</title>
+<meta name="description" content="pairs no Lua 5.5 para quem está começando: o for chave, valor in pairs(t), por que a ordem não é garantida (o mesmo programa rodado duas vezes no laboratório saiu em ordens diferentes), como ordenar as chaves com table.sort, contar e somar os pares, pairs × ipairs, next para saber se a tabela está vazia, apagar durante o laço, e os erros reais (pairs de nil, esquecer o pairs, comparar string com number), com missões no editor.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">pairs</span></h1>
+
+<p class="intro">Na aula <a href="dicionarios.html">Tabelas como Dicionários</a>, o <code>print(precos)</code> só mostrava <code>table: 0x…</code>, e o <code>#</code> dava 0. Para ver <strong>todos</strong> os pares de uma tabela, um por um, o Lua tem o <code>pairs</code> (em inglês, "pares"). Ele passa por todas as chaves, sejam nomes, números ou qualquer outra coisa. Só tem um detalhe muito importante: ele <strong>não promete ordem nenhuma</strong>.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>A escrever o laço <code>for chave, valor in pairs(t) do … end</code>.</li>
+  <li>Que a ordem do <code>pairs</code> <strong>não é garantida</strong>, e pode mudar de uma execução para outra.</li>
+  <li>A mostrar as chaves em ordem: guardar numa lista e usar <code>table.sort</code>.</li>
+  <li>A contar e somar os pares de um dicionário.</li>
+  <li>A diferença entre <code>pairs</code> e <code>ipairs</code>.</li>
+  <li>A saber se uma tabela está vazia com <code>next</code>, e o que pode e o que não pode mudar durante o laço.</li>
+  <li>Os erros reais do <code>pairs</code>.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>A ideia: abrir todas as gavetas</h2>
+<p>O dicionário é um armário de gavetas com etiquetas. O <code>pairs</code> abre <strong>todas</strong> as gavetas, uma de cada vez, e a cada uma diz a etiqueta (a chave) e o que tem dentro (o valor). Mas ele abre na ordem em que as gavetas estão arrumadas <strong>por dentro</strong> do armário, que você não controla: não é a ordem alfabética, nem a ordem em que você guardou as coisas.</p>
+
+<hr>
+
+<h2>1. O laço <code>for … in pairs(t)</code></h2>
+
+<pre class="file" data-file="estoque.lua">local estoque = {arroz = 5, feijao = 3, leite = 12, cafe = 2, pao = 40}
+for produto, quantidade in pairs(estoque) do
+  print(produto, quantidade)
+end
+</pre>
+
+<dl class="anatomy">
+  <dt>for</dt><dd>"Para": começa um laço, como o <a href="for-numerico.html">for numérico</a>, só que de outro tipo, o <code>for</code> <strong>genérico</strong>.</dd>
+  <dt>produto, quantidade</dt><dd>Duas variáveis novas, que só existem dentro do laço. A cada volta, a primeira recebe a <strong>chave</strong> e a segunda, o <strong>valor</strong>. Os nomes são escolha sua: use nomes que digam o que são (<code>produto, quantidade</code> é melhor que <code>k, v</code>).</dd>
+  <dt>in</dt><dd>"Em": "para cada par <strong>em</strong>…".</dd>
+  <dt>pairs(estoque)</dt><dd>A tabela que vai ser percorrida.</dd>
+  <dt>do … end</dt><dd>O corpo do laço, que roda uma vez para cada par.</dd>
+</dl>
+
+<p>A Ana rodou o programa duas vezes seguidas, sem mudar nada:</p>
+
+<pre class="term">$ lua estoque.lua
+leite	12
+pao	40
+arroz	5
+feijao	3
+cafe	2
+$ lua estoque.lua
+leite	12
+cafe	2
+feijao	3
+arroz	5
+pao	40
+</pre>
+
+<p>Os cinco pares apareceram nas duas vezes, cada produto com a sua quantidade certa. Mas <strong>a ordem mudou</strong>. Não é a ordem em que estão escritos no programa, nem a alfabética, e nem é sempre a mesma.</p>
+
+<div class="warning">
+<strong>A ordem do <code>pairs</code> não é garantida</strong>
+<p>O manual do Lua diz que a ordem em que o <code>pairs</code> passa pelas chaves <strong>não é especificada, mesmo para chaves numéricas</strong>. No Lua 5.5 do laboratório, com chaves de texto, ela muda de uma execução para outra (o Lua sorteia, a cada execução, um detalhe de como arruma as chaves por dentro). No seu computador, ou no editor do guia, vai sair outra ordem. Por isso:</p>
+<ul>
+  <li>nunca escreva um programa que dependa da ordem do <code>pairs</code>;</li>
+  <li>quando a ordem importa (uma lista para o usuário ler), <strong>ordene as chaves</strong> (seção 3).</li>
+</ul>
+</div>
+
+<div class="trylua">
+<p class="try-task"><strong>Experimente:</strong> rode esta caixa algumas vezes e compare a ordem das linhas. Depois acrescente um produto ao estoque e rode de novo.</p>
+<pre class="script" data-file="main.lua">local estoque = {arroz = 5, feijao = 3, leite = 12, cafe = 2, pao = 40}
+for produto, quantidade in pairs(estoque) do
+  print(produto .. ": " .. quantidade)
+end
+</pre>
+</div>
+
+<hr>
+
+<h2>2. Contar e somar: quando a ordem não importa</h2>
+<p>Muita coisa não depende da ordem: contar quantos pares há, somar os valores, achar o maior. Para essas, o <code>pairs</code> serve direto:</p>
+
+<pre class="file" data-file="contar.lua">local estoque = {arroz = 5, feijao = 3, leite = 12, cafe = 2, pao = 40}
+local produtos = 0
+local unidades = 0
+for _, quantidade in pairs(estoque) do
+  produtos = produtos + 1
+  unidades = unidades + quantidade
+end
+print(produtos .. " produtos, " .. unidades .. " unidades")
+print(#estoque)
+</pre>
+
+<pre class="term">$ lua contar.lua
+5 produtos, 62 unidades
+0
+</pre>
+
+<dl class="anatomy">
+  <dt>for _, quantidade in pairs(estoque)</dt><dd>Aqui a chave não é usada. O costume é chamar a variável que você vai ignorar de <code>_</code> (sublinhado): quem lê entende "isso não interessa".</dd>
+  <dt>produtos = produtos + 1</dt><dd>Uma volta por par: no fim, <code>produtos</code> é a quantidade de pares. É o jeito de "medir" um dicionário.</dd>
+  <dt>print(#estoque)</dt><dd>O <code>#</code> continua dando 0: ele só conta a parte de lista (aula <a href="dicionarios.html">Dicionários</a>).</dd>
+</dl>
+
+<p>A soma deu 62 e a contagem deu 5, e vai dar isso em toda execução, em qualquer ordem: somar não depende da ordem das parcelas.</p>
+
+<div class="tip">
+<strong>Só as chaves</strong>
+<p>Se você só precisa das chaves, escreva uma variável só: <code>for produto in pairs(estoque) do</code>. O valor é jogado fora, como na atribuição múltipla.</p>
+</div>
+
+<div class="trylua" data-goal="out:Total: 62 unidades;;src:\bpairs\b">
+<p class="try-task"><strong>Missão:</strong> complete o laço com <code>pairs</code> para somar todas as quantidades do estoque, e o programa mostrar <code>Total: 62 unidades</code>.</p>
+<pre class="script" data-file="main.lua">local estoque = {arroz = 5, feijao = 3, leite = 12, cafe = 2, pao = 40}
+local total = 0
+-- some aqui as quantidades
+print("Total: " .. total .. " unidades")
+</pre>
+<pre class="solucao" data-file="main.lua">local estoque = {arroz = 5, feijao = 3, leite = 12, cafe = 2, pao = 40}
+local total = 0
+for _, quantidade in pairs(estoque) do
+  total = total + quantidade
+end
+print("Total: " .. total .. " unidades")
+</pre>
+</div>
+
+<hr>
+
+<h2>3. Em ordem: ordenando as chaves</h2>
+<p>O <code>pairs</code> não tem ordem, mas uma <strong>lista</strong> tem, e uma lista se ordena com <code>table.sort</code> (aula <a href="table-sort.html">table.sort</a>). A receita tem três passos:</p>
+
+<ol class="passo">
+  <li>Passe pelo dicionário com <code>pairs</code> e guarde cada <strong>chave</strong> numa lista.</li>
+  <li>Ordene a lista com <code>table.sort</code>.</li>
+  <li>Percorra a lista com <code>ipairs</code> e, para cada chave, pegue o valor no dicionário.</li>
+</ol>
+
+<pre class="file" data-file="ordenado.lua">local estoque = {arroz = 5, feijao = 3, leite = 12, cafe = 2, pao = 40}
+local nomes = {}
+for produto in pairs(estoque) do
+  table.insert(nomes, produto)
+end
+table.sort(nomes)
+for _, produto in ipairs(nomes) do
+  print(produto, estoque[produto])
+end
+</pre>
+
+<pre class="term">$ lua ordenado.lua
+arroz	5
+cafe	2
+feijao	3
+leite	12
+pao	40
+$ lua ordenado.lua
+arroz	5
+cafe	2
+feijao	3
+leite	12
+pao	40
+</pre>
+
+<dl class="anatomy">
+  <dt>local nomes = {}</dt><dd>Uma lista vazia, para as chaves.</dd>
+  <dt>for produto in pairs(estoque)</dt><dd>Passo 1: cada chave vai para a lista (em ordem qualquer; não importa).</dd>
+  <dt>table.sort(nomes)</dt><dd>Passo 2: ordem alfabética.</dd>
+  <dt>estoque[produto]</dt><dd>Passo 3: com a chave na mão, o valor sai do dicionário. Colchetes, porque <code>produto</code> é uma variável (<code>estoque.produto</code> procuraria a chave <code>"produto"</code>).</dd>
+</dl>
+
+<p>Agora as duas execuções saíram iguais, em ordem alfabética. Repare que o dicionário não mudou: quem tem ordem é a lista <code>nomes</code>.</p>
+
+<h3>Ordenar pelo valor</h3>
+<p>Para mostrar do produto com mais unidades para o com menos, ordene as mesmas chaves, mas comparando os <strong>valores</strong>. O <code>table.sort</code> aceita uma função que diz quem vem antes:</p>
+
+<pre class="file" data-file="por_valor.lua">local estoque = {arroz = 5, feijao = 3, leite = 12, cafe = 2, pao = 40}
+local nomes = {}
+for produto in pairs(estoque) do
+  nomes[#nomes + 1] = produto
+end
+table.sort(nomes, function(a, b)
+  return estoque[a] &gt; estoque[b]
+end)
+for i, produto in ipairs(nomes) do
+  print(i, produto, estoque[produto])
+end
+</pre>
+
+<pre class="term">$ lua por_valor.lua
+1	pao	40
+2	leite	12
+3	arroz	5
+4	feijao	3
+5	cafe	2
+</pre>
+
+<dl class="anatomy">
+  <dt>nomes[#nomes + 1] = produto</dt><dd>Outra forma de pôr no fim da lista, igual a <code>table.insert(nomes, produto)</code>.</dd>
+  <dt>function(a, b) return estoque[a] &gt; estoque[b] end</dt><dd>"<code>a</code> vem antes de <code>b</code> se o estoque de <code>a</code> for maior". Com <code>&gt;</code>, do maior para o menor. (Se dois valores forem iguais, a ordem entre eles não é garantida; aula <a href="table-sort.html">table.sort</a>.)</dd>
+</dl>
+
+<hr>
+
+<h2>4. <code>pairs</code> × <code>ipairs</code></h2>
+<p>Os dois percorrem tabelas, mas de jeitos diferentes:</p>
+
+<pre class="file" data-file="lista_pairs.lua">local cores = {"vermelho", "verde", "azul"}
+for i, cor in ipairs(cores) do
+  print("ipairs", i, cor)
+end
+for chave, cor in pairs(cores) do
+  print("pairs", chave, cor)
+end
+local turma = {"Ana", "Bia", nome = "3º A"}
+for chave, valor in ipairs(turma) do
+  print("ipairs", chave, valor)
+end
+local quantos = 0
+for chave, valor in pairs(turma) do
+  quantos = quantos + 1
+end
+print("pairs viu", quantos)
+</pre>
+
+<pre class="term">$ lua lista_pairs.lua
+ipairs	1	vermelho
+ipairs	2	verde
+ipairs	3	azul
+pairs	1	vermelho
+pairs	2	verde
+pairs	3	azul
+ipairs	1	Ana
+ipairs	2	Bia
+pairs viu	3
+</pre>
+
+<p>Numa lista, o <code>pairs</code> também passa pelas posições 1, 2, 3, e aqui elas saíram em ordem. Mas isso <strong>não é garantido</strong> pelo manual: para percorrer uma lista em ordem, o certo é o <code>ipairs</code> (ou o <code>for i = 1, #t</code>). Na tabela misturada, o <code>ipairs</code> só viu a parte de lista (Ana e Bia); o <code>pairs</code> viu os 3 pares, incluindo o <code>nome</code>.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th></th><th><code>ipairs(t)</code></th><th><code>pairs(t)</code></th></tr>
+<tr><td>Passa por</td><td>Só as posições 1, 2, 3… (a parte de lista)</td><td><strong>Todas</strong> as chaves</td></tr>
+<tr><td>Ordem</td><td>Sempre 1, 2, 3…</td><td>Não garantida</td></tr>
+<tr><td>Para quando</td><td>Acha a primeira posição vazia (<a href="sequencias.html">buraco</a>)</td><td>Passou por todas as chaves</td></tr>
+<tr><td>Use para</td><td>Listas</td><td>Dicionários e tabelas misturadas</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>5. Tabela vazia, e mudar a tabela durante o laço</h2>
+
+<h3>Está vazia? <code>next(t) == nil</code></h3>
+<p>Num dicionário, o <code>#</code> não diz se a tabela está vazia. Quem diz é o <code>next</code>, a função que o <code>pairs</code> usa por dentro: <code>next(t)</code> devolve "algum" par da tabela, ou <code>nil</code> se não houver nenhum.</p>
+
+<pre class="file" data-file="vazia.lua">local carrinho = {}
+print(next(carrinho))
+print(next(carrinho) == nil)
+carrinho.pao = 2
+print(next(carrinho))
+print(next(carrinho) == nil)
+</pre>
+
+<pre class="term">$ lua vazia.lua
+nil
+true
+pao	2
+false
+</pre>
+
+<p>Com um par só, o <code>next</code> mostrou esse par. Com vários, ele mostra um qualquer (o primeiro da ordem interna); para a pergunta "está vazia?", só interessa se deu <code>nil</code> ou não.</p>
+
+<h3>Apagar durante o laço pode; acrescentar, não</h3>
+<p>O manual permite <strong>mudar</strong> ou <strong>apagar</strong> (guardar <code>nil</code>) as chaves que já existem durante o <code>pairs</code>. Assim, para tirar os produtos que acabaram:</p>
+
+<pre class="file" data-file="apagar.lua">local estoque = {arroz = 5, feijao = 0, leite = 12, cafe = 0, pao = 40}
+for produto, quantidade in pairs(estoque) do
+  if quantidade == 0 then
+    estoque[produto] = nil
+  end
+end
+print(estoque.feijao, estoque.cafe, estoque.arroz)
+</pre>
+
+<pre class="term">$ lua apagar.lua
+nil	nil	5
+</pre>
+
+<div class="warning">
+<strong>Não acrescente chaves novas dentro do <code>pairs</code></strong>
+<p>O manual diz que não se deve guardar valor numa chave que <strong>ainda não existe</strong> durante o laço. O resultado não é definido: o laço pode pular chaves, passar duas vezes pela mesma, ou parar com o erro <code>invalid key to 'next'</code> ("chave inválida para o <code>next</code>": foi o que saiu no laboratório num teste que apagava a chave atual e acrescentava 100 chaves novas a cada volta). Às vezes "funciona", o que é pior, porque o erro aparece outro dia. Se precisa criar chaves, guarde-as numa <strong>tabela nova</strong> e junte depois do laço.</p>
+</div>
+
+<hr>
+
+<h2>Formas de percorrer: qual usar</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Para…</th><th>Use</th></tr>
+<tr><td>Uma lista, em ordem</td><td><code>for i, v in ipairs(t)</code></td></tr>
+<tr><td>Todos os pares, ordem não importa (somar, contar, procurar)</td><td><code>for k, v in pairs(t)</code></td></tr>
+<tr><td>Todos os pares, em ordem alfabética das chaves</td><td>Chaves numa lista + <code>table.sort</code> + <code>ipairs</code></td></tr>
+<tr><td>Todos os pares, ordenados pelo valor</td><td>O mesmo, com <code>table.sort(lista, function(a, b) … end)</code></td></tr>
+<tr><td>Uma ordem que você escolhe (não alfabética)</td><td>Escreva a lista de chaves à mão: <code>for _, k in ipairs({"pao", "leite", "cafe"})</code></td></tr>
+<tr><td>Saber se está vazia</td><td><code>next(t) == nil</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+
+<div class="cenario">
+<strong>A tabela é <code>nil</code></strong>
+<pre class="file" data-file="erro_pairs_nil.lua">local estoque
+for produto, quantidade in pairs(estoque) do
+  print(produto, quantidade)
+end
+</pre>
+<pre class="term">$ lua erro_pairs_nil.lua
+lua: erro_pairs_nil.lua:2: bad argument #1 to 'for iterator' (table expected, got nil)
+stack traceback:
+	[C]: in for iterator 'for iterator'
+	erro_pairs_nil.lua:2: in main chunk
+	[C]: in ?
+</pre>
+<dl class="anatomy">
+  <dt>lua: erro_pairs_nil.lua:2:</dt><dd>Linha 2, a do <code>for</code>.</dd>
+  <dt>bad argument #1 to 'for iterator'</dt><dd>"Argumento ruim nº 1 para o iterador do <code>for</code>". O "iterador" é a função que entrega um par a cada volta; o <code>pairs</code> a prepara, e ela recebeu algo errado.</dd>
+  <dt>(table expected, got nil)</dt><dd>"Esperava uma tabela, recebeu <code>nil</code>": a variável <code>estoque</code> não tem tabela nenhuma.</dd>
+  <dt>[C]: in for iterator 'for iterator'</dt><dd>No rastro, o erro aconteceu dentro do iterador (escrito em C), chamado pela linha 2.</dd>
+</dl>
+<p><strong>Como consertar:</strong> confira se a variável recebeu mesmo uma tabela (nome trocado, função que devolveu <code>nil</code>). Para pular em silêncio: <code>pairs(estoque or {})</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Esqueceu o <code>pairs</code></strong>
+<pre class="file" data-file="erro_sem_pairs.lua">local estoque = {arroz = 5, leite = 12}
+for produto, quantidade in estoque do
+  print(produto, quantidade)
+end
+</pre>
+<pre class="term">$ lua erro_sem_pairs.lua
+lua: erro_sem_pairs.lua:2: attempt to call a table value (for iterator 'for iterator')
+stack traceback:
+	erro_sem_pairs.lua:2: in main chunk
+	[C]: in ?
+</pre>
+<p>"Tentativa de chamar um valor tabela". Depois do <code>in</code>, o <code>for</code> espera uma <strong>função</strong> que entregue os pares (é o que o <code>pairs</code> devolve), e recebeu a tabela. Quem vem do Python costuma esquecer, porque lá <code>for k in dicionario</code> funciona. <strong>Como consertar:</strong> <code>in pairs(estoque)</code>.</p>
+</div>
+
+<div class="cenario">
+<strong><code>ipairs</code> num dicionário: nada acontece</strong>
+<pre class="file" data-file="erro_ipairs.lua">local estoque = {arroz = 5, leite = 12}
+for produto, quantidade in ipairs(estoque) do
+  print(produto, quantidade)
+end
+print("fim")
+</pre>
+<pre class="term">$ lua erro_ipairs.lua
+fim
+</pre>
+<p>Nenhum erro e nenhum produto: o <code>ipairs</code> procurou a posição 1, que não existe, e parou na hora. <strong>Como consertar:</strong> dicionário se percorre com <code>pairs</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Ordenar chaves de tipos diferentes</strong>
+<pre class="file" data-file="erro_ordenar.lua">local t = {"Ana", "Bia", turma = "3º A"}
+local chaves = {}
+for k in pairs(t) do chaves[#chaves + 1] = k end
+table.sort(chaves)
+</pre>
+<pre class="term">$ lua erro_ordenar.lua
+lua: attempt to compare string with number
+stack traceback:
+	[C]: in field 'sort'
+	erro_ordenar.lua:4: in main chunk
+	[C]: in ?
+</pre>
+<p>As chaves são <code>1</code>, <code>2</code> (números) e <code>"turma"</code> (texto). O <code>table.sort</code> usa o <code>&lt;</code>, e o Lua não sabe dizer se um texto é "menor" que um número: "tentativa de comparar string com number". A primeira linha não tem o número da linha porque o erro aconteceu dentro do <code>sort</code> (em C); a linha 4 aparece no rastro. <strong>Como consertar:</strong> compare tudo como texto:</p>
+<pre class="file" data-file="ordenar_misto.lua">local t = {"Ana", "Bia", turma = "3º A"}
+local chaves = {}
+for k in pairs(t) do chaves[#chaves + 1] = k end
+table.sort(chaves, function(a, b) return tostring(a) &lt; tostring(b) end)
+for _, k in ipairs(chaves) do print(k, t[k]) end
+</pre>
+<pre class="term">$ lua ordenar_misto.lua
+1	Ana
+2	Bia
+turma	3º A
+</pre>
+</div>
+
+<div class="cenario">
+<strong>O programa "funcionava" e mudou de ordem</strong>
+<p>A Ana fez um programa que mostra o estoque com <code>pairs</code> e escreveu no relatório "o primeiro produto é o leite", porque foi o que saiu quando ela testou. No dia seguinte, o primeiro era o café. Não houve erro nenhum: o programa dependia da ordem do <code>pairs</code>, que não é garantida (seção 1). <strong>Como consertar:</strong> se a ordem aparece para alguém ou é usada numa conta, ordene as chaves (seção 3).</p>
+</div>
+
+<hr>
+
+<h2>Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>O que faz</th></tr>
+<tr><td><code>for k, v in pairs(t) do … end</code></td><td>Uma volta para cada par de <code>t</code>, em ordem não garantida</td></tr>
+<tr><td><code>for k in pairs(t) do … end</code></td><td>Só as chaves</td></tr>
+<tr><td><code>for _, v in pairs(t) do … end</code></td><td>Só os valores (o <code>_</code> marca o que não é usado)</td></tr>
+<tr><td><code>for i, v in ipairs(t) do … end</code></td><td>Só a parte de lista, em ordem, até o primeiro buraco</td></tr>
+<tr><td><code>next(t) == nil</code></td><td><code>true</code> se a tabela está vazia</td></tr>
+<tr><td><code>t[k] = nil</code> dentro do <code>pairs</code></td><td>Permitido: apaga o par atual</td></tr>
+<tr><td><code>t[nova] = v</code> dentro do <code>pairs</code></td><td>Não faça: resultado indefinido</td></tr>
+<tr><td>Chaves numa lista + <code>table.sort</code></td><td>O jeito de percorrer em ordem</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Mensagem</th><th>Causa provável</th></tr>
+<tr><td><code>bad argument #1 to 'for iterator' (table expected, got nil)</code></td><td><code>pairs</code> de uma variável que é <code>nil</code></td></tr>
+<tr><td><code>attempt to call a table value (for iterator 'for iterator')</code></td><td>Faltou o <code>pairs(…)</code> depois do <code>in</code></td></tr>
+<tr><td><code>attempt to compare string with number</code> (em <code>field 'sort'</code>)</td><td>Ordenou chaves de tipos diferentes: use <code>tostring</code> na comparação</td></tr>
+<tr><td><code>invalid key to 'next'</code></td><td>Chave nova acrescentada durante o <code>pairs</code></td></tr>
+<tr><td>Nada aparece, sem erro</td><td><code>ipairs</code> num dicionário</td></tr>
+<tr><td>A ordem mudou de um dia para o outro</td><td>O programa depende da ordem do <code>pairs</code>: ordene as chaves</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. Complete o laço</h3>
+<p>Complete para percorrer todos os pares do dicionário <code>agenda</code>:</p>
+<div class="ex-code">for nome, telefone in <input data-answer="pairs" aria-label="função">(agenda) do</div>
+</div>
+
+<div class="exercise">
+<h3>2. Ordenando</h3>
+<p>Depois de juntar as chaves na lista <code>nomes</code>, complete a função que põe a lista em ordem alfabética:</p>
+<div class="ex-code">table.<input data-answer="sort" aria-label="função">(nomes)</div>
+</div>
+
+<div class="exercise">
+<h3>3. Está vazia?</h3>
+<p>Complete a pergunta "a tabela <code>t</code> está vazia?":</p>
+<div class="ex-code">if <input data-answer="next" aria-label="função">(t) == nil then</div>
+</div>
+
+<div class="mc" data-answer="3">
+<p class="mc-q">4. Com <code>t = {b = 2, a = 1, c = 3}</code>, em que ordem o <code>for k, v in pairs(t)</code> mostra as chaves?</p>
+<label><input type="radio" name="q4"> <code>b</code>, <code>a</code>, <code>c</code>: a ordem em que foram escritas</label>
+<label><input type="radio" name="q4"> <code>a</code>, <code>b</code>, <code>c</code>: em ordem alfabética</label>
+<label><input type="radio" name="q4"> Numa ordem não garantida, que pode mudar de uma execução para outra</label>
+<label><input type="radio" name="q4"> Dá erro, porque o <code>pairs</code> só serve para listas</label>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">5. Na tabela <code>{"Ana", "Bia", turma = "3º A"}</code>, quantas voltas o <code>ipairs</code> dá?</p>
+<label><input type="radio" name="q5"> 3</label>
+<label><input type="radio" name="q5"> 2</label>
+<label><input type="radio" name="q5"> 1</label>
+<label><input type="radio" name="q5"> 0</label>
+</div>
+
+<div class="mc" data-answer="1">
+<p class="mc-q">6. Qual destas coisas <strong>não</strong> se deve fazer dentro de um <code>for k, v in pairs(t)</code>?</p>
+<label><input type="radio" name="q6"> Guardar um valor numa chave nova de <code>t</code></label>
+<label><input type="radio" name="q6"> Apagar o par atual com <code>t[k] = nil</code></label>
+<label><input type="radio" name="q6"> Trocar o valor do par atual: <code>t[k] = v * 2</code></label>
+<label><input type="radio" name="q6"> Somar <code>v</code> numa variável</label>
+</div>
+
+<h3>Missão final: o estoque em ordem</h3>
+
+<div class="trylua" data-goal="outre:^arroz: 5\ncafe: 2\nfeijao: 3\nleite: 12\npao: 40\n$;;src:table\.sort">
+<p class="try-task"><strong>Missão:</strong> o programa mostra o estoque com <code>pairs</code>, e a ordem sai bagunçada (e pode mudar a cada Rodar). Junte as chaves numa lista, ordene com <code>table.sort</code> e mostre em ordem alfabética, no mesmo formato: <code>arroz: 5</code>, <code>cafe: 2</code>, <code>feijao: 3</code>, <code>leite: 12</code>, <code>pao: 40</code>, um por linha.</p>
+<pre class="script" data-file="main.lua">local estoque = {arroz = 5, feijao = 3, leite = 12, cafe = 2, pao = 40}
+for produto, quantidade in pairs(estoque) do
+  print(produto .. ": " .. quantidade)
+end
+</pre>
+<pre class="solucao" data-file="main.lua">local estoque = {arroz = 5, feijao = 3, leite = 12, cafe = 2, pao = 40}
+local nomes = {}
+for produto in pairs(estoque) do
+  table.insert(nomes, produto)
+end
+table.sort(nomes)
+for _, produto in ipairs(nomes) do
+  print(produto .. ": " .. estoque[produto])
+end
+</pre>
+</div>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li><code>for chave, valor in pairs(t) do … end</code> passa por <strong>todos</strong> os pares da tabela.</li>
+  <li>A ordem do <code>pairs</code> <strong>não é garantida</strong>: no laboratório, o mesmo programa saiu em ordens diferentes em duas execuções. Não dependa dela.</li>
+  <li>Para mostrar em ordem: chaves numa lista, <code>table.sort</code>, e <code>ipairs</code> na lista, pegando o valor com <code>t[chave]</code>.</li>
+  <li>Contar e somar não dependem da ordem: o <code>pairs</code> serve direto (e é o jeito de contar os pares de um dicionário).</li>
+  <li><code>ipairs</code> é para listas (em ordem, até o primeiro buraco); <code>pairs</code> é para todas as chaves.</li>
+  <li><code>next(t) == nil</code> diz se a tabela está vazia. Durante o <code>pairs</code>, pode apagar ou mudar pares existentes, mas não criar chaves novas.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
