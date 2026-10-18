@@ -124,7 +124,7 @@ closed file
 nil</pre>
 
 <dl class="anatomy">
-  <dt>file (0x55f01caeb340)</dt><dd>O <code>print</code> de um arquivo aberto mostra <code>file</code> ("arquivo") e um <strong>endereço de memória</strong>, o lugar onde o Lua guardou as informações do arquivo. Rodando de novo, o número mudou (<code>0x55f1073f6340</code>): ele é diferente a cada execução e não quer dizer nada para você.</dd>
+  <dt>file (0x55f01caeb340)</dt><dd>O <code>print</code> de um arquivo aberto mostra <code>file</code> ("arquivo") e um <strong>endereço de memória</strong>, o lugar onde o Lua guardou as informações do arquivo. Rodando de novo, o número mudou (<code>0x55f1073f6340</code>): ele é diferente a cada execução e não quer dizer nada para você. (No editor do guia o endereço é mais curto, como <code>file (0x80dfb0)</code>, e costuma se repetir a cada Rodar.)</dd>
   <dt>io.type(f) → file</dt><dd>"É um arquivo aberto."</dd>
   <dt>f:close() → true</dt><dd>O <code>close</code> devolve <code>true</code> quando fechou direitinho.</dd>
   <dt>io.type(f) → closed file</dt><dd>Depois do <code>close</code>: "é um arquivo, mas fechado".</dd>
