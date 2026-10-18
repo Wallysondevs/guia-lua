@@ -1,0 +1,445 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua package.path — onde o require procura os módulos | Guia Lua</title>
+<meta name="description" content="Onde o require do Lua 5.5 procura os módulos: o package.path e os seus modelos com ?, o ; que separa, package.searchpath, como acrescentar a pasta lib, a variável LUA_PATH (e o ;; que quer dizer o padrão), o programa rodado de outra pasta, package.cpath, package.preload e os erros reais de um package.path mal escrito.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">package.path</span></h1>
+
+<p class="intro">Na aula <a href="modulos.html">Módulos e require</a>, o erro <code>module 'conta' not found</code> mostrou uma lista enorme de lugares onde o Lua procurou o arquivo. Essa lista não é mágica: ela sai de um texto guardado na variável <code>package.path</code> (em inglês, "caminho do pacote"). Nesta aula você vai ler esse texto, entender cada pedaço, e mudá-lo para o <code>require</code> achar os seus módulos onde você quiser guardá-los.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O que é o <code>package.path</code>: uma lista de <strong>modelos</strong> separados por <code>;</code>, com um <code>?</code> no lugar do nome do módulo.</li>
+  <li>A ordem da procura, e como perguntar "onde ele acharia?" com <code>package.searchpath</code>.</li>
+  <li>Como pôr uma pasta sua (<code>lib</code>) na lista, de dentro do programa.</li>
+  <li>Como fazer o mesmo de fora, com a variável de ambiente <code>LUA_PATH</code>, e o que quer dizer o <code>;;</code>.</li>
+  <li>Como achar os módulos mesmo quando o programa é rodado de outra pasta.</li>
+  <li>O <code>package.cpath</code> (módulos em C) e o <code>package.preload</code>.</li>
+  <li>Os erros reais de um <code>package.path</code> mal escrito.</li>
+</ul>
+</div>
+
+<p>Tudo rodou no <strong>Lua 5.5 do Ubuntu</strong> da máquina da Ana, numa pasta chamada <code>mercado</code>. Os caminhos do sistema (<code>/usr/local/share/lua/5.5/…</code>) são os do Ubuntu; em outro sistema, ou num Lua compilado à mão, eles podem ser outros.</p>
+
+<hr>
+
+<h2>A ideia: a lista de lugares onde a chave costuma estar</h2>
+<p>A Ana perdeu a chave de casa. Ela tem uma lista, na ordem: "1. no gancho da porta; 2. na bolsa; 3. no bolso do casaco; 4. na gaveta da cozinha". Ela olha o 1; não está. O 2; não está. O 3: achou! Ela para ali e <strong>não</strong> abre a gaveta. Se não estivesse em nenhum, ela diria: "não achei, e olhei no gancho, na bolsa, no casaco e na gaveta".</p>
+<p>O <code>require</code> faz igualzinho. O <code>package.path</code> é a lista; cada item é um lugar; ele para no <strong>primeiro</strong> que existe; e, se não achar, a mensagem de erro é a lista de lugares onde ele olhou.</p>
+
+<hr>
+
+<h2>1. Lendo o <code>package.path</code></h2>
+<p>O <code>package.path</code> é um texto comum. Mostrado de uma vez, é difícil de ler, porque os itens vêm grudados por <code>;</code>. Este programa quebra o texto em cada <code>;</code> e mostra um item por linha (o <code>gmatch</code> com <code>"[^;]+"</code> quer dizer "cada pedaço sem ponto e vírgula"; veja <a href="gmatch.html">gmatch</a>):</p>
+
+<pre class="file" data-file="caminhos.lua">for modelo in package.path:gmatch("[^;]+") do
+  print(modelo)
+end
+</pre>
+
+<pre class="term" data-cwd="~/mercado">$ lua caminhos.lua
+/usr/local/share/lua/5.5/?.lua
+/usr/local/share/lua/5.5/?/init.lua
+/usr/local/lib/lua/5.5/?.lua
+/usr/local/lib/lua/5.5/?/init.lua
+/usr/share/lua/5.5/?.lua
+/usr/share/lua/5.5/?/init.lua
+./?.lua
+./?/init.lua</pre>
+
+<p>Cada linha é um <strong>modelo</strong> (em inglês, <em>template</em>). Para procurar o módulo <code>contas</code>, o <code>require</code> troca o <code>?</code> de cada modelo por <code>contas</code> e vê se aquele arquivo existe:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Modelo</th><th>Com <code>require("contas")</code></th><th>Para que serve</th></tr>
+<tr><td><code>/usr/local/share/lua/5.5/?.lua</code></td><td><code>/usr/local/share/lua/5.5/contas.lua</code></td><td>Bibliotecas que você instalou à mão para todos os usuários</td></tr>
+<tr><td><code>/usr/local/lib/lua/5.5/?.lua</code></td><td><code>/usr/local/lib/lua/5.5/contas.lua</code></td><td>Idem (outra pasta tradicional)</td></tr>
+<tr><td><code>/usr/share/lua/5.5/?.lua</code></td><td><code>/usr/share/lua/5.5/contas.lua</code></td><td>Bibliotecas instaladas pelo <code>apt</code> do Ubuntu</td></tr>
+<tr><td><code>./?.lua</code></td><td><code>./contas.lua</code></td><td>A pasta onde você está agora</td></tr>
+<tr><td><code>…/?/init.lua</code></td><td><code>…/contas/init.lua</code></td><td>Um módulo que é uma pasta (veja <a href="modulos-proprios.html">Criando seu Módulo</a>)</td></tr>
+</table>
+</div>
+
+<p>Repare em duas coisas. Primeiro: as pastas do sistema vêm <strong>antes</strong> da pasta atual. Segundo: todas têm <code>5.5</code> no nome, e é por isso que as bibliotecas que o <code>apt</code> do Ubuntu instala para o Lua 5.4 (em <code>/usr/share/lua/5.4</code>) não aparecem para o 5.5 (a aula <a href="luarocks.html">LuaRocks</a> conta essa história).</p>
+
+<div class="note">
+<strong>E o ponto no nome?</strong>
+<p>Antes de trocar o <code>?</code>, o <code>require</code> transforma cada ponto do nome numa barra: <code>require("loja.estoque")</code> procura <code>./loja/estoque.lua</code>. Os símbolos usados (a barra, o <code>;</code>, o <code>?</code>) estão no <code>package.config</code>, se você tiver curiosidade: <code>lua -e 'print(package.config)'</code> mostra <code>/</code>, <code>;</code>, <code>?</code>, <code>!</code> e <code>-</code>, um por linha.</p>
+</div>
+
+<h3>"Onde você acharia?": <code>package.searchpath</code></h3>
+<p>Para fazer a mesma procura do <code>require</code> sem carregar nada, use <code>package.searchpath(nome, lista)</code>. Na pasta <code>mercado</code>, a Ana guardou o módulo das contas numa subpasta <code>lib</code> (o arquivo é <code>lib/contas.lua</code>):</p>
+
+<pre class="term" data-cwd="~/mercado">$ lua -e 'print(package.searchpath("lib.contas", package.path))'
+./lib/contas.lua
+$ lua -e 'print(package.searchpath("contas", package.path))'
+nil	no file '/usr/local/share/lua/5.5/contas.lua'
+	no file '/usr/local/share/lua/5.5/contas/init.lua'
+	no file '/usr/local/lib/lua/5.5/contas.lua'
+	no file '/usr/local/lib/lua/5.5/contas/init.lua'
+	no file '/usr/share/lua/5.5/contas.lua'
+	no file '/usr/share/lua/5.5/contas/init.lua'
+	no file './contas.lua'
+	no file './contas/init.lua'</pre>
+
+<p>Quando acha, ele devolve o caminho. Quando não acha, devolve <code>nil</code> e, como segundo valor, a lista de tentativas: é a mesma lista do erro do <code>require</code>. Com o nome <code>lib.contas</code> ele acha; só com <code>contas</code>, não, porque nenhum modelo olha dentro de <code>lib</code>.</p>
+
+<hr>
+
+<h2>2. Pondo a sua pasta na lista</h2>
+<p>A Ana não quer escrever <code>require("lib.contas")</code> em todo lugar. Ela quer <code>require("contas")</code> e que o Lua procure também dentro de <code>lib</code>. Como o <code>package.path</code> é só um texto, basta <strong>juntar</strong> um modelo novo na frente, antes do primeiro <code>require</code>:</p>
+
+<pre class="file" data-file="main.lua">package.path = "./lib/?.lua;" .. package.path
+local contas, onde = require("contas")
+print(contas.somar(2, 3), onde)
+</pre>
+
+<dl class="anatomy">
+  <dt>"./lib/?.lua;"</dt><dd>O modelo novo: "o arquivo <code>?.lua</code> dentro da pasta <code>lib</code> da pasta atual". O <code>;</code> no fim é o separador: sem ele, o modelo gruda no próximo (veja <a href="#errado">Quando dá errado</a>).</dd>
+  <dt>.. package.path</dt><dd>Junta (<a href="concatenacao.html">concatena</a>) a lista antiga depois. Assim nada se perde: o Lua continua procurando nos lugares de sempre.</dd>
+  <dt>package.path = …</dt><dd>Guarda a lista nova no lugar da antiga. Vale do ponto em diante, para todos os <code>require</code> do programa (inclusive os de dentro dos módulos).</dd>
+</dl>
+
+<pre class="term" data-cwd="~/mercado">$ lua main.lua
+5	./lib/contas.lua</pre>
+
+<p>Achou em <code>./lib/contas.lua</code>, o primeiro modelo da lista nova. Pôr o seu modelo <strong>na frente</strong> faz a sua pasta ganhar das pastas do sistema; pôr <strong>no fim</strong> (<code>package.path .. ";./lib/?.lua"</code>) faz ela ser a última opção.</p>
+
+<div class="trylua" data-goal="out:Total: 5;;semerro;;src:package\.path">
+<p class="try-task"><strong>Missão:</strong> o módulo está na aba <code>lib/contas.lua</code>, dentro da pasta <code>lib</code>. Rode e veja que o <code>require("contas")</code> não o acha. Sem mudar o nome do <code>require</code>, acrescente uma linha no começo do <code>main.lua</code> que ponha <code>./lib/?.lua</code> no <code>package.path</code>.</p>
+<pre class="script" data-file="main.lua">local contas = require("contas")
+print("Total: " .. contas.somar(2, 3))
+</pre>
+<pre class="script" data-file="lib/contas.lua">local M = {}
+function M.somar(a, b) return a + b end
+return M
+</pre>
+<pre class="solucao" data-file="main.lua">package.path = "./lib/?.lua;" .. package.path
+local contas = require("contas")
+print("Total: " .. contas.somar(2, 3))
+</pre>
+</div>
+
+<hr>
+
+<h2>3. De fora do programa: a variável <code>LUA_PATH</code></h2>
+<p>Às vezes você não quer (ou não pode) mexer no programa. Para isso existe a <strong>variável de ambiente</strong> <code>LUA_PATH</code>: um valor que o terminal entrega a todo programa que você roda (veja <a href="os-funcoes.html">os.getenv</a>). Quando o <code>lua</code> começa, ele monta o <code>package.path</code> a partir dela. Este <code>usa.lua</code> não mexe em nada:</p>
+
+<pre class="file" data-file="usa.lua">local contas, onde = require("contas")
+print(contas.somar(10, 20), onde)
+</pre>
+
+<pre class="term" data-cwd="~/mercado">$ lua usa.lua 2&gt;&amp;1 | head -2               « só as 2 primeiras linhas do erro
+lua: usa.lua:1: module 'contas' not found:
+	no field package.preload['contas']
+$ LUA_PATH="./lib/?.lua;;" lua usa.lua
+30	./lib/contas.lua</pre>
+
+<p>Escrever <code>NOME="valor"</code> antes do comando cria a variável <strong>só para aquele comando</strong>. E o <code>;;</code> no fim? Ele quer dizer "e aqui entra a lista padrão". Veja a diferença:</p>
+
+<pre class="term" data-cwd="~/mercado">$ LUA_PATH="./lib/?.lua;;" lua -e 'print(package.path)'
+./lib/?.lua;/usr/local/share/lua/5.5/?.lua;/usr/local/share/lua/5.5/?/init.lua;/usr/local/lib/lua/5.5/?.lua;/usr/local/lib/lua/5.5/?/init.lua;/usr/share/lua/5.5/?.lua;/usr/share/lua/5.5/?/init.lua;./?.lua;./?/init.lua
+$ LUA_PATH="./lib/?.lua" lua -e 'print(package.path)'
+./lib/?.lua</pre>
+
+<p>Com <code>;;</code>, a lista padrão inteira entrou depois do <code>./lib/?.lua</code>. Sem ele, o <code>package.path</code> ficou <strong>só</strong> com <code>./lib/?.lua</code>: o Lua deixaria de procurar na pasta atual e nas pastas do sistema. Quase sempre você quer o <code>;;</code>.</p>
+
+<h3>Para o terminal inteiro: <code>export</code></h3>
+<pre class="term" data-cwd="~/mercado">$ export LUA_PATH="./lib/?.lua;;"
+$ lua usa.lua
+30	./lib/contas.lua
+$ unset LUA_PATH</pre>
+<p>Com <code>export</code>, a variável vale para todos os comandos daquele terminal, até você fechá-lo (ou desfazer com <code>unset</code>). Para valer sempre, a linha do <code>export</code> vai no fim do arquivo <code>~/.bashrc</code> (o <a href="luarocks.html">LuaRocks</a> usa esse mesmo truque).</p>
+
+<h3><code>LUA_PATH_5_5</code>: só para o Lua 5.5</h3>
+<p>Quem tem várias versões do Lua no computador pode dar a cada uma a sua lista. O 5.5 procura primeiro a variável <code>LUA_PATH_5_5</code>; só se ela não existir, usa a <code>LUA_PATH</code>:</p>
+<pre class="term" data-cwd="~/mercado">$ LUA_PATH_5_5="./lib/?.lua;;" LUA_PATH="/nada/?.lua" lua -e 'print(package.path)'
+./lib/?.lua;/usr/local/share/lua/5.5/?.lua;/usr/local/share/lua/5.5/?/init.lua;/usr/local/lib/lua/5.5/?.lua;/usr/local/lib/lua/5.5/?/init.lua;/usr/share/lua/5.5/?.lua;/usr/share/lua/5.5/?/init.lua;./?.lua;./?/init.lua</pre>
+<p>O <code>/nada/?.lua</code> da <code>LUA_PATH</code> foi ignorado: ganhou a <code>LUA_PATH_5_5</code>.</p>
+
+<div class="note">
+<strong>No editor do guia</strong>
+<p>A caixa "Experimente" não tem um terminal onde você possa criar variáveis de ambiente: lá não dá para usar <code>LUA_PATH</code>. Mudar o <code>package.path</code> de dentro do programa (seção 2) funciona normalmente, e as abas podem ter pasta no nome (<code>lib/contas.lua</code>).</p>
+</div>
+
+<hr>
+
+<h2>4. O programa rodado de outra pasta</h2>
+<p>O <code>./</code> dos modelos é a pasta onde <strong>você</strong> está no terminal, não a pasta do programa. Por isso o <code>main.lua</code> da seção 2 só funciona se você estiver dentro de <code>mercado</code>. Para o programa achar os seus módulos de qualquer lugar, ele pode descobrir a própria pasta pelo <code>arg[0]</code>, que guarda o caminho do arquivo que o <code>lua</code> está rodando (veja <a href="arg.html">arg</a>):</p>
+
+<pre class="file" data-file="app.lua">local pasta = arg[0]:match("^(.*)/") or "."
+print("pasta do programa:", pasta)
+package.path = pasta .. "/lib/?.lua;" .. package.path
+local contas, onde = require("contas")
+print(contas.somar(1, 1), onde)
+</pre>
+
+<pre class="term">$ lua mercado/app.lua
+pasta do programa:	mercado
+2	mercado/lib/contas.lua
+$ cd mercado
+$ lua app.lua
+pasta do programa:	.
+2	./lib/contas.lua</pre>
+
+<p>O padrão <code>"^(.*)/"</code> pega tudo o que vem antes da última barra de <code>arg[0]</code> (veja <a href="string-find.html">find e match</a>): de <code>mercado/app.lua</code>, sobra <code>mercado</code>. Quando não há barra (<code>app.lua</code>), o <code>match</code> dá <code>nil</code> e o <code>or "."</code> usa a pasta atual. Nos dois casos o módulo foi achado.</p>
+
+<hr>
+
+<h2>5. Os outros "procuradores": <code>preload</code> e <code>cpath</code></h2>
+<p>O <code>package.path</code> não é o único lugar onde o <code>require</code> olha. Ele tem uma lista de <strong>procuradores</strong> (em inglês, <em>searchers</em>), que ele tenta em ordem: <code>lua -e 'print(#package.searchers)'</code> mostra <code>4</code>. É por isso que a mensagem de erro tem três blocos:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Ordem</th><th>Onde procura</th><th>Na mensagem de erro</th></tr>
+<tr><td>1º</td><td>A tabela <code>package.preload</code></td><td><code>no field package.preload['contas']</code></td></tr>
+<tr><td>2º</td><td>Os modelos do <code>package.path</code> (arquivos <code>.lua</code>)</td><td><code>no file '…/contas.lua'</code></td></tr>
+<tr><td>3º</td><td>Os modelos do <code>package.cpath</code> (módulos em C, <code>.so</code>)</td><td><code>no file '…/contas.so'</code></td></tr>
+<tr><td>4º</td><td>O <code>package.cpath</code> de novo, para nomes com ponto (<code>a.b</code> procura <code>a.so</code>)</td><td>As linhas extras que você viu com <code>require("contas.lua")</code></td></tr>
+</table>
+</div>
+
+<h3><code>package.cpath</code>: módulos em C</h3>
+<pre class="term">$ lua -e 'print(package.cpath)'
+/usr/local/lib/lua/5.5/?.so;/usr/lib/x86_64-linux-gnu/lua/5.5/?.so;/usr/lib/lua/5.5/?.so;/usr/local/lib/lua/5.5/loadall.so;./?.so</pre>
+<p>Funciona igual ao <code>package.path</code>, mas para arquivos <code>.so</code>: bibliotecas escritas em C e compiladas, como o <code>lfs</code> (pastas e arquivos) ou o <code>socket</code> (internet). A variável de ambiente dele é a <code>LUA_CPATH</code> (e <code>LUA_CPATH_5_5</code>). Você vai encontrá-los ao instalar bibliotecas com o <a href="luarocks.html">LuaRocks</a>. No editor do guia não há nenhum módulo em C instalado: lá, só os módulos <code>.lua</code> das abas.</p>
+
+<h3><code>package.preload</code>: um módulo sem arquivo</h3>
+<p>Um programa pode registrar, em <code>package.preload</code>, uma função que <strong>monta</strong> o módulo. Quando alguém pedir aquele nome, o <code>require</code> chama a função em vez de procurar arquivo:</p>
+<pre class="file" data-file="preload.lua">package.preload["config"] = function (nome)
+  print("montando", nome)
+  return { cor = "azul" }
+end
+local config = require("config")
+print(config.cor)
+print(require("config") == config)
+</pre>
+<pre class="term">$ lua preload.lua
+montando	config
+azul
+true</pre>
+<p>A função rodou uma vez só, e o resultado foi para o caderninho <code>package.loaded</code>, como qualquer módulo. Você quase não vai precisar disso; é coisa de programas que embutem o Lua (jogos, editores) ou que juntam vários módulos num arquivo só.</p>
+
+<hr>
+
+<h2>Formas diferentes de achar um módulo numa pasta</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Forma</th><th>Exemplo</th><th>Quando usar</th></tr>
+<tr><td>Nome com ponto</td><td><code>require("lib.contas")</code></td><td>Projeto pequeno; não muda nada no <code>package.path</code></td></tr>
+<tr><td>Mudar o <code>package.path</code> no programa</td><td><code>package.path = "./lib/?.lua;" .. package.path</code></td><td>O programa sempre usa a mesma pasta de módulos</td></tr>
+<tr><td>Pasta do programa pelo <code>arg[0]</code></td><td>seção 4</td><td>O programa precisa funcionar de qualquer pasta</td></tr>
+<tr><td><code>LUA_PATH</code> com <code>;;</code></td><td><code>LUA_PATH="./lib/?.lua;;" lua usa.lua</code></td><td>Você não quer mexer no programa; ou vale para vários programas (com <code>export</code> no <code>~/.bashrc</code>)</td></tr>
+<tr><td>Um gerenciador</td><td><code>luarocks path</code></td><td>Bibliotecas de outras pessoas (aula <a href="luarocks.html">LuaRocks</a>)</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+
+<div class="cenario">
+<strong>Esqueceu o <code>;</code> ao juntar</strong>
+<pre class="file" data-file="semponto.lua">package.path = "./lib/?.lua" .. package.path
+local contas = require("contas")
+</pre>
+<pre class="term" data-cwd="~/mercado">$ lua semponto.lua
+lua: semponto.lua:2: module 'contas' not found:
+	no field package.preload['contas']
+	no file './lib/contas.lua/usr/local/share/lua/5.5/contas.lua'
+	no file '/usr/local/share/lua/5.5/contas/init.lua'
+	no file '/usr/local/lib/lua/5.5/contas.lua'
+	no file '/usr/local/lib/lua/5.5/contas/init.lua'
+	no file '/usr/share/lua/5.5/contas.lua'
+	no file '/usr/share/lua/5.5/contas/init.lua'
+	no file './contas.lua'
+	no file './contas/init.lua'
+	no file '/usr/local/lib/lua/5.5/contas.so'
+	no file '/usr/lib/x86_64-linux-gnu/lua/5.5/contas.so'
+	no file '/usr/lib/lua/5.5/contas.so'
+	no file '/usr/local/lib/lua/5.5/loadall.so'
+	no file './contas.so'
+stack traceback:
+	[C]: in global 'require'
+	semponto.lua:2: in main chunk
+	[C]: in ?</pre>
+<p>Olhe a terceira linha: <code>./lib/contas.lua/usr/local/share/lua/5.5/contas.lua</code>. Sem o <code>;</code>, o seu modelo grudou no primeiro modelo da lista antiga e virou um caminho maluco (e, de quebra, o modelo <code>/usr/local/share/lua/5.5/?.lua</code> sumiu). <strong>Como consertar:</strong> termine o seu modelo com <code>;</code>: <code>"./lib/?.lua;" .. package.path</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Esqueceu o <code>?</code> do modelo</strong>
+<pre class="file" data-file="seminterrog.lua">package.path = "./lib/;" .. package.path
+local contas = require("contas")
+</pre>
+<pre class="term" data-cwd="~/mercado">$ lua seminterrog.lua
+lua: error loading module 'contas' from file './lib/':
+	cannot read ./lib/
+stack traceback:
+	[C]: in ?
+	[C]: in global 'require'
+	seminterrog.lua:2: in main chunk
+	[C]: in ?</pre>
+<p>Sem o <code>?</code>, o modelo <code>./lib/</code> não tem onde pôr o nome do módulo: vale <code>./lib/</code> para qualquer nome. Como a pasta <code>lib</code> existe, o <code>require</code> achou que era "o arquivo" do módulo e tentou lê-la: "erro ao carregar o módulo <code>contas</code> do arquivo <code>./lib/</code>: não consigo ler <code>./lib/</code>" (é uma pasta, não um arquivo). <strong>Como consertar:</strong> o modelo precisa do <code>?</code> e da extensão: <code>"./lib/?.lua;"</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Mudou o <code>package.path</code> depois do <code>require</code></strong>
+<pre class="file" data-file="ordem.lua">local contas = require("contas")
+package.path = "./lib/?.lua;" .. package.path
+</pre>
+<pre class="term" data-cwd="~/mercado">$ lua ordem.lua 2&gt;&amp;1 | head -4
+lua: ordem.lua:1: module 'contas' not found:
+	no field package.preload['contas']
+	no file '/usr/local/share/lua/5.5/contas.lua'
+	no file '/usr/local/share/lua/5.5/contas/init.lua'</pre>
+<p>O programa roda de cima para baixo: na linha 1, o <code>package.path</code> ainda é o antigo. A linha 2 nem chega a rodar. <strong>Como consertar:</strong> mude o <code>package.path</code> <strong>antes</strong> do primeiro <code>require</code>, no topo do arquivo.</p>
+</div>
+
+<div class="cenario">
+<strong>Esqueceu o <code>;;</code> na <code>LUA_PATH</code></strong>
+<p>A Ana pôs um módulo <code>vizinho.lua</code> na própria pasta <code>mercado</code>, mas antes tinha feito o <code>export</code> sem o <code>;;</code>:</p>
+<pre class="term" data-cwd="~/mercado">$ export LUA_PATH="./lib/?.lua"
+$ lua -e 'local v = require("vizinho")'
+lua: (command line):1: module 'vizinho' not found:
+	no field package.preload['vizinho']
+	no file './lib/vizinho.lua'
+	no file '/usr/local/lib/lua/5.5/vizinho.so'
+	no file '/usr/lib/x86_64-linux-gnu/lua/5.5/vizinho.so'
+	no file '/usr/lib/lua/5.5/vizinho.so'
+	no file '/usr/local/lib/lua/5.5/loadall.so'
+	no file './vizinho.so'
+stack traceback:
+	[C]: in global 'require'
+	(command line):1: in main chunk
+	[C]: in ?
+$ unset LUA_PATH</pre>
+<p>O arquivo <code>./vizinho.lua</code> está bem ali, mas o <code>require</code> nem olhou: entre os arquivos <code>.lua</code>, a lista só tem <strong>uma linha</strong>, <code>no file './lib/vizinho.lua'</code> (as outras são os <code>.so</code> do <code>cpath</code>, que não mudou). A lista de <code>.lua</code> curtinha é a pista. <strong>Como consertar:</strong> <code>export LUA_PATH="./lib/?.lua;;"</code>.</p>
+</div>
+
+<div class="trylua" data-goal="out:30;;semerro">
+<p class="try-task"><strong>Missão:</strong> rode e leia a terceira linha do erro: o modelo grudou na lista antiga. Conserte a primeira linha do <code>main.lua</code>.</p>
+<pre class="script" data-file="main.lua">package.path = "./lib/?.lua" .. package.path
+local contas = require("contas")
+print(contas.somar(10, 20))
+</pre>
+<pre class="script" data-file="lib/contas.lua">local M = {}
+function M.somar(a, b) return a + b end
+return M
+</pre>
+<pre class="solucao" data-file="main.lua">package.path = "./lib/?.lua;" .. package.path
+local contas = require("contas")
+print(contas.somar(10, 20))
+</pre>
+</div>
+
+<hr>
+
+<h2>Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>O que faz</th></tr>
+<tr><td><code>package.path</code></td><td>Os modelos onde o <code>require</code> procura arquivos <code>.lua</code>, separados por <code>;</code>; o <code>?</code> vira o nome do módulo</td></tr>
+<tr><td><code>package.cpath</code></td><td>O mesmo, para módulos em C (<code>.so</code>)</td></tr>
+<tr><td><code>package.path = "./lib/?.lua;" .. package.path</code></td><td>Procura também em <code>lib</code>, antes dos outros lugares</td></tr>
+<tr><td><code>package.searchpath(nome, package.path)</code></td><td>O caminho que o <code>require</code> acharia, ou <code>nil</code> + a lista de tentativas</td></tr>
+<tr><td><code>LUA_PATH="modelos;;"</code></td><td>Variável de ambiente que monta o <code>package.path</code>; <code>;;</code> = a lista padrão</td></tr>
+<tr><td><code>LUA_PATH_5_5</code>, <code>LUA_CPATH</code>, <code>LUA_CPATH_5_5</code></td><td>A lista só do 5.5; as listas dos módulos em C</td></tr>
+<tr><td><code>package.preload[nome] = função</code></td><td>Registra um módulo sem arquivo</td></tr>
+<tr><td><code>package.searchers</code></td><td>A lista dos 4 procuradores (preload, path, cpath, cpath "raiz")</td></tr>
+<tr><td><code>arg[0]:match("^(.*)/") or "."</code></td><td>A pasta do programa que está rodando</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. Complete o modelo</h3>
+<p>Complete para o <code>require</code> procurar também na pasta <code>modulos</code>, antes dos outros lugares:</p>
+<div class="ex-code">package.path = "./modulos/<input data-answer="?" aria-label="símbolo">.lua<input data-answer=";" aria-label="separador">" .. package.path</div>
+</div>
+
+<div class="exercise">
+<h3>2. Troque o <code>?</code></h3>
+<p>Com o modelo <code>/usr/share/lua/5.5/?/init.lua</code>, que arquivo o <code>require("jogo")</code> tenta?</p>
+<div class="ex-code"><input data-answer="/usr/share/lua/5.5/jogo/init.lua" aria-label="caminho"></div>
+</div>
+
+<div class="mc" data-answer="3">
+<p class="mc-q">3. O que o <code>;;</code> no fim de <code>LUA_PATH="./lib/?.lua;;"</code> faz?</p>
+<label><input type="radio" name="q3"> Nada: é um erro de digitação que o Lua ignora</label>
+<label><input type="radio" name="q3"> Termina a lista: depois dele, nenhum lugar é procurado</label>
+<label><input type="radio" name="q3"> Põe a lista padrão naquele lugar</label>
+<label><input type="radio" name="q3"> Faz o Lua procurar duas vezes</label>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">4. O <code>./</code> de <code>./?.lua</code> é…</p>
+<label><input type="radio" name="q4"> A pasta onde está o programa <code>.lua</code></label>
+<label><input type="radio" name="q4"> A pasta onde você está no terminal quando roda o <code>lua</code></label>
+<label><input type="radio" name="q4"> A pasta pessoal (<code>/home/ana</code>), sempre</label>
+<label><input type="radio" name="q4"> A pasta onde o Lua foi instalado</label>
+</div>
+
+<div class="mc" data-answer="1">
+<p class="mc-q">5. A mensagem de erro mostra <code>no file './lib/contas.lua/usr/local/share/lua/5.5/contas.lua'</code>. O que faltou?</p>
+<label><input type="radio" name="q5"> O <code>;</code> no fim do modelo que foi juntado</label>
+<label><input type="radio" name="q5"> O <code>?</code> no modelo</label>
+<label><input type="radio" name="q5"> O <code>local</code> antes do <code>require</code></label>
+<label><input type="radio" name="q5"> A pasta <code>lib</code></label>
+</div>
+
+<h3>Missão final: a pasta <code>modulos</code></h3>
+
+<div class="trylua" data-goal="out:Pão: R$ 0.75 (30 no estoque);;semerro;;src:package\.path">
+<p class="try-task"><strong>Missão:</strong> a Ana guardou os módulos da padaria na pasta <code>modulos</code>: um arquivo <code>modulos/precos.lua</code> e uma <strong>pasta</strong> <code>modulos/estoque</code> com um <code>init.lua</code> (veja as abas). Sem mudar os nomes nos <code>require</code>, ponha no começo do <code>main.lua</code> os <strong>dois</strong> modelos que faltam no <code>package.path</code>: um para <code>?.lua</code> e um para <code>?/init.lua</code>, os dois dentro de <code>./modulos</code>.</p>
+<pre class="script" data-file="main.lua">local precos = require("precos")
+local estoque = require("estoque")
+print(string.format("Pão: R$ %.2f (%d no estoque)", precos.pao, estoque.pao))
+</pre>
+<pre class="script" data-file="modulos/precos.lua">return { pao = 0.75, leite = 5.49 }
+</pre>
+<pre class="script" data-file="modulos/estoque/init.lua">return { pao = 30, leite = 12 }
+</pre>
+<pre class="solucao" data-file="main.lua">package.path = "./modulos/?.lua;./modulos/?/init.lua;" .. package.path
+local precos = require("precos")
+local estoque = require("estoque")
+print(string.format("Pão: R$ %.2f (%d no estoque)", precos.pao, estoque.pao))
+</pre>
+</div>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li>O <code>package.path</code> é um texto com <strong>modelos</strong> separados por <code>;</code>. O <code>require</code> troca o <code>?</code> pelo nome do módulo (com os pontos virando barras) e usa o <strong>primeiro</strong> arquivo que existir.</li>
+  <li>No Ubuntu, a lista padrão do 5.5 tem as pastas do sistema (<code>/usr/local/…/5.5</code>, <code>/usr/share/lua/5.5</code>) e, por último, a pasta atual (<code>./?.lua</code>, <code>./?/init.lua</code>).</li>
+  <li>Para usar a sua pasta: <code>package.path = "./lib/?.lua;" .. package.path</code>, no topo, antes do primeiro <code>require</code>. Não esqueça o <code>?</code> nem o <code>;</code>.</li>
+  <li>De fora: <code>LUA_PATH="./lib/?.lua;;"</code>, em que <code>;;</code> é a lista padrão. A <code>LUA_PATH_5_5</code> ganha da <code>LUA_PATH</code>.</li>
+  <li>O <code>./</code> é a pasta do terminal, não a do programa; o <code>arg[0]</code> resolve.</li>
+  <li><code>package.searchpath</code> mostra onde ele acharia; <code>package.cpath</code> é a lista dos módulos em C; <code>package.preload</code> registra módulos sem arquivo.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
