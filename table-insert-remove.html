@@ -1,0 +1,555 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua table.insert e table.remove — pondo e tirando itens de uma lista | Guia Lua</title>
+<meta name="description" content="table.insert e table.remove no Lua para quem nunca programou: acrescentar no fim, no começo e no meio, tirar o último ou um item do meio (e receber o que saiu), pilha e fila, remover vários itens sem pular nenhum, a diferença para t[i] = nil, e os erros reais do Lua 5.5 (position out of bounds, wrong number of arguments).">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">table.insert</span> e <span class="hl">table.remove</span></h1>
+
+<p class="intro">Uma lista de verdade muda o tempo todo: chega gente na fila, alguém é atendido, uma tarefa é feita e sai da lista. Na aula <a href="listas.html">Tabelas como Listas</a> você acrescentou itens no fim com <code>t[#t + 1] = valor</code>. Para pôr um item <strong>no meio</strong> ou tirar um item <strong>sem deixar buraco</strong>, o Lua tem duas funções prontas, na biblioteca <code>table</code>: <code>table.insert</code> ("inserir") e <code>table.remove</code> ("remover"). Elas empurram os outros itens para abrir espaço, ou puxam para fechar o espaço que ficou.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li><code>table.insert(t, valor)</code>: pôr no fim.</li>
+  <li><code>table.insert(t, pos, valor)</code>: pôr no começo ou no meio, empurrando os outros.</li>
+  <li><code>table.remove(t)</code> e <code>table.remove(t, pos)</code>: tirar o último ou um do meio, e receber o item que saiu.</li>
+  <li>Pilha (o último que entra é o primeiro que sai) e fila (o primeiro que entra é o primeiro que sai).</li>
+  <li>Por que remover dentro de um <code>ipairs</code> pula itens, e o jeito certo: de trás para frente.</li>
+  <li>A diferença entre <code>table.remove(t, 2)</code> e <code>t[2] = nil</code>.</li>
+  <li>Os erros reais: posição fora dos limites, argumentos trocados, o <code>insert</code> que não devolve nada.</li>
+</ul>
+</div>
+
+<p>Todos os programas desta aula rodaram no <strong>Lua 5.5</strong> da máquina da Ana (usuária <code>ana</code>, computador <code>notebook</code>), com <code>lua arquivo.lua</code>. Para mostrar a lista inteira numa linha, os exemplos usam <code>table.concat(lista, ", ")</code>, que junta os itens separados por vírgula. Ele tem aula própria: <a href="table-concat.html">table.concat</a>.</p>
+
+<hr>
+
+<h2>A ideia: a fila da padaria</h2>
+<p>De manhã, a fila da padaria tem Ana, Bia e Caio, nessa ordem.</p>
+<ul>
+  <li>Chega o Davi: ele vai para o <strong>fim</strong> da fila. Ninguém se mexe.</li>
+  <li>A Eva, grávida, tem prioridade e entra na <strong>2ª posição</strong>: a Bia, o Caio e o Davi dão <strong>um passo para trás</strong> cada um.</li>
+  <li>A Ana é atendida e sai da <strong>1ª posição</strong>: todo mundo dá <strong>um passo para a frente</strong>. Ninguém deixa um buraco na fila.</li>
+</ul>
+<p>É exatamente isso que <code>table.insert</code> e <code>table.remove</code> fazem com as posições de uma lista: entrar no meio empurra os de trás; sair do meio puxa os de trás. As posições continuam 1, 2, 3… sem buracos.</p>
+
+<hr>
+
+<h2>1. <code>table.insert(t, valor)</code>: no fim</h2>
+
+<pre class="file" data-file="insert_fim.lua">local fila = {"Ana", "Bia"}
+table.insert(fila, "Caio")
+table.insert(fila, "Davi")
+print(#fila, table.concat(fila, ", "))
+</pre>
+
+<pre class="term">$ lua insert_fim.lua
+4	Ana, Bia, Caio, Davi</pre>
+
+<dl class="anatomy">
+  <dt>table.insert</dt><dd>A função <code>insert</code> da biblioteca <code>table</code>. O ponto quer dizer "a função <code>insert</code> que está dentro da tabela <code>table</code>": as bibliotecas do Lua também são tabelas (veja <a href="ref-table.html">A Biblioteca table</a>).</dd>
+  <dt>(fila, "Caio")</dt><dd>Dois argumentos: <strong>a lista</strong> e <strong>o valor</strong>. Com dois argumentos, o valor vai para o fim, na posição <code>#fila + 1</code>.</dd>
+  <dt>(sem "=")</dt><dd>A função <strong>muda a própria lista</strong>; não precisa (e não deve) guardar o resultado numa variável. Ela não devolve nada (veja <a href="#errado">Quando dá errado</a>).</dd>
+</dl>
+
+<p><code>table.insert(fila, "Caio")</code> e <code>fila[#fila + 1] = "Caio"</code> fazem a mesma coisa. Use o que achar mais claro; o <code>table.insert</code> diz com uma palavra o que está acontecendo.</p>
+
+<hr>
+
+<h2>2. <code>table.insert(t, pos, valor)</code>: no começo ou no meio</h2>
+<p>Com <strong>três</strong> argumentos, o do meio é a <strong>posição</strong> onde o valor vai entrar. O item que estava lá, e todos os de depois, andam uma posição para trás:</p>
+
+<pre class="file" data-file="insert_meio.lua">local fila = {"Ana", "Bia", "Caio"}
+table.insert(fila, 2, "Eva")
+print(table.concat(fila, ", "))
+table.insert(fila, 1, "Gil")
+print(table.concat(fila, ", "))
+table.insert(fila, #fila + 1, "Hugo")
+print(table.concat(fila, ", "))
+</pre>
+
+<pre class="term">$ lua insert_meio.lua
+Ana, Eva, Bia, Caio
+Gil, Ana, Eva, Bia, Caio
+Gil, Ana, Eva, Bia, Caio, Hugo</pre>
+
+<p>A ordem dos argumentos é: <strong>lista, posição, valor</strong>. Posição <code>1</code> é o começo; <code>#fila + 1</code> é o fim (o mesmo que não dar posição). Veja as posições depois do primeiro <code>insert</code>:</p>
+
+<pre class="file" data-file="passo_insert.lua">local fila = {"Ana", "Bia", "Caio"}
+table.insert(fila, 2, "Eva")
+for i, nome in ipairs(fila) do
+  print(i, nome)
+end
+</pre>
+
+<pre class="term">$ lua passo_insert.lua
+1	Ana
+2	Eva
+3	Bia
+4	Caio</pre>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Posição</th><th>Antes</th><th>Depois de <code>table.insert(fila, 2, "Eva")</code></th></tr>
+<tr><td>1</td><td>Ana</td><td>Ana (não se mexe)</td></tr>
+<tr><td>2</td><td>Bia</td><td><strong>Eva</strong> (entrou)</td></tr>
+<tr><td>3</td><td>Caio</td><td>Bia (andou uma para trás)</td></tr>
+<tr><td>4</td><td>(vazia)</td><td>Caio (andou uma para trás)</td></tr>
+</table>
+</div>
+
+<div class="trylua" data-goal="out:Ana, Eva, Bia, Caio;;src:table\.insert">
+<p class="try-task"><strong>Missão:</strong> a Eva tem prioridade. No lugar do comentário, use <code>table.insert</code> para pô-la na <strong>2ª posição</strong> da fila. Deve sair <code>Ana, Eva, Bia, Caio</code>.</p>
+<pre class="script" data-file="main.lua">local fila = {"Ana", "Bia", "Caio"}
+-- ponha a Eva na posição 2
+
+print(table.concat(fila, ", "))
+</pre>
+<pre class="solucao" data-file="main.lua">local fila = {"Ana", "Bia", "Caio"}
+table.insert(fila, 2, "Eva")
+print(table.concat(fila, ", "))
+</pre>
+</div>
+
+<hr>
+
+<h2>3. <code>table.remove(t)</code>: tirar o último</h2>
+<p>Com só a lista, o <code>table.remove</code> tira o <strong>último</strong> item e <strong>devolve</strong> o que tirou, para você usar:</p>
+
+<pre class="file" data-file="remove_fim.lua">local pratos = {"prato azul", "prato verde", "prato branco"}
+local tirado = table.remove(pratos)
+print("tirei: " .. tirado)
+print("sobraram " .. #pratos .. ": " .. table.concat(pratos, ", "))
+</pre>
+
+<pre class="term">$ lua remove_fim.lua
+tirei: prato branco
+sobraram 2: prato azul, prato verde</pre>
+
+<p>Diferente do <code>insert</code>, aqui faz sentido guardar o resultado: <code>tirado</code> recebe o item que saiu. Se você não precisar dele, pode chamar só <code>table.remove(pratos)</code>, sem o <code>local tirado =</code>.</p>
+
+<h3>E se a lista estiver vazia?</h3>
+
+<pre class="file" data-file="vazia_rm.lua">local t = {}
+print(table.remove(t))
+print(table.remove(t))
+print(#t)
+</pre>
+
+<pre class="term">$ lua vazia_rm.lua
+nil
+nil
+0</pre>
+
+<p>Não é erro: não havia nada para tirar, e ele devolve <code>nil</code>. Por isso os laços que esvaziam uma lista conferem <code>#lista &gt; 0</code> antes, como na seção 5.</p>
+
+<hr>
+
+<h2>4. <code>table.remove(t, pos)</code>: tirar do meio ou do começo</h2>
+<p>Com a posição, ele tira o item daquela posição, devolve esse item, e os de trás andam uma posição para a <strong>frente</strong>:</p>
+
+<pre class="file" data-file="remove_meio.lua">local fila = {"Ana", "Bia", "Caio", "Davi"}
+local saiu = table.remove(fila, 2)
+print("saiu: " .. saiu)
+for i, nome in ipairs(fila) do
+  print(i, nome)
+end
+local atendido = table.remove(fila, 1)
+print("atendido: " .. atendido .. "; agora: " .. table.concat(fila, ", "))
+</pre>
+
+<pre class="term">$ lua remove_meio.lua
+saiu: Bia
+1	Ana
+2	Caio
+3	Davi
+atendido: Ana; agora: Caio, Davi</pre>
+
+<p>A Bia saiu da posição 2, e o Caio, que era o 3º, virou o 2º. Depois, <code>table.remove(fila, 1)</code> tirou a primeira da fila, a Ana: é assim que se "atende" alguém.</p>
+
+<hr>
+
+<h2>5. Pilha e fila</h2>
+<p>Com <code>insert</code> e <code>remove</code>, uma lista vira dois "jeitos de guardar" muito usados em programação:</p>
+
+<h3>Pilha: o último que entra é o primeiro que sai</h3>
+<p>Uma pilha de pratos na pia: você põe pratos <strong>em cima</strong> e lava o de <strong>cima</strong> primeiro. Entra no fim com <code>table.insert(t, v)</code>, sai do fim com <code>table.remove(t)</code>:</p>
+
+<pre class="file" data-file="pilha.lua">local pilha = {}
+table.insert(pilha, "prato 1")
+table.insert(pilha, "prato 2")
+table.insert(pilha, "prato 3")
+while #pilha &gt; 0 do
+  print("lavando " .. table.remove(pilha))
+end
+print("pia vazia")
+</pre>
+
+<pre class="term">$ lua pilha.lua
+lavando prato 3
+lavando prato 2
+lavando prato 1
+pia vazia</pre>
+
+<h3>Fila: o primeiro que entra é o primeiro que sai</h3>
+<p>A fila do caixa: entra no fim com <code>table.insert(t, v)</code>, sai do <strong>começo</strong> com <code>table.remove(t, 1)</code>:</p>
+
+<pre class="file" data-file="fila.lua">local fila = {}
+table.insert(fila, "Ana")
+table.insert(fila, "Bia")
+table.insert(fila, "Caio")
+while #fila &gt; 0 do
+  print("atendendo " .. table.remove(fila, 1))
+end
+print("ninguém na fila")
+</pre>
+
+<pre class="term">$ lua fila.lua
+atendendo Ana
+atendendo Bia
+atendendo Caio
+ninguém na fila</pre>
+
+<div class="trylua">
+<p class="try-task"><strong>Experimente:</strong> troque <code>table.remove(fila, 1)</code> por <code>table.remove(fila)</code> e veja a fila virar pilha (o Caio, que chegou por último, é atendido primeiro). Depois ponha mais gente na fila com <code>table.insert</code>.</p>
+<pre class="script" data-file="main.lua">local fila = {}
+table.insert(fila, "Ana")
+table.insert(fila, "Bia")
+table.insert(fila, "Caio")
+while #fila &gt; 0 do
+  print("atendendo " .. table.remove(fila, 1))
+end
+print("ninguém na fila")
+</pre>
+</div>
+
+<div class="note">
+<strong>Um custo escondido</strong>
+<p>Pôr ou tirar no <strong>fim</strong> é rápido. Pôr ou tirar no <strong>começo</strong> faz o Lua mover todos os outros itens uma posição. Com dezenas ou milhares de itens, você nem percebe. Com milhões, a fila feita com <code>table.remove(t, 1)</code> fica lenta; nesse caso existem outros jeitos de montar uma fila, que ficam para quando você precisar.</p>
+</div>
+
+<hr>
+
+<h2>6. Removendo vários itens: cuidado com o laço</h2>
+<p>A Ana quer tirar todos os <code>"leite"</code> da lista. O primeiro impulso é um <code>ipairs</code> com <code>table.remove</code> dentro:</p>
+
+<pre class="file" data-file="remover_meio.lua">local itens = {"pão", "leite", "leite", "café"}
+for i, item in ipairs(itens) do
+  if item == "leite" then
+    table.remove(itens, i)
+  end
+end
+print(table.concat(itens, ", "))
+</pre>
+
+<pre class="term">$ lua remover_meio.lua
+pão, leite, café</pre>
+
+<p>Sobrou um leite! O que aconteceu, volta por volta:</p>
+<ol class="passo">
+  <li><code>i = 1</code>: <code>"pão"</code>. Fica.</li>
+  <li><code>i = 2</code>: <code>"leite"</code>. Sai. O segundo leite, que estava na posição 3, <strong>anda para a posição 2</strong>.</li>
+  <li><code>i = 3</code>: o laço segue para a posição 3, que agora é o <code>"café"</code>. O leite que foi para a posição 2 <strong>nunca foi olhado</strong>.</li>
+</ol>
+<p>O jeito certo é percorrer <strong>de trás para frente</strong>, com um <code>for</code> numérico. Quando um item sai, quem anda são os de trás, que <strong>já foram olhados</strong>:</p>
+
+<pre class="file" data-file="remover_tras.lua">local itens = {"pão", "leite", "leite", "café"}
+for i = #itens, 1, -1 do
+  if itens[i] == "leite" then
+    table.remove(itens, i)
+  end
+end
+print(table.concat(itens, ", "))
+</pre>
+
+<pre class="term">$ lua remover_tras.lua
+pão, café</pre>
+
+<h3>Remover um item pelo valor</h3>
+<p>O <code>table.remove</code> pede a <strong>posição</strong>, não o item. Para tirar o <code>"café"</code> sem saber onde ele está, procure primeiro. Uma <a href="funcoes.html">função</a> pequena resolve, e o <code>return</code> logo depois do <code>remove</code> garante que o laço para antes de as posições mudarem:</p>
+
+<pre class="file" data-file="remover_valor.lua">local compras = {"pão", "leite", "café", "manteiga"}
+local function remover(lista, valor)
+  for i, item in ipairs(lista) do
+    if item == valor then
+      table.remove(lista, i)
+      return true
+    end
+  end
+  return false
+end
+print(remover(compras, "café"), table.concat(compras, ", "))
+print(remover(compras, "queijo"), table.concat(compras, ", "))
+</pre>
+
+<pre class="term">$ lua remover_valor.lua
+true	pão, leite, manteiga
+false	pão, leite, manteiga</pre>
+
+<hr>
+
+<h2 id="formas">Formas diferentes de fazer a mesma coisa</h2>
+
+<h3><code>table.remove(t, 2)</code> × <code>t[2] = nil</code></h3>
+
+<pre class="file" data-file="nil_buraco.lua">local a = {"pão", "leite", "café"}
+a[2] = nil
+print(#a, a[1], a[2], a[3])
+local b = {"pão", "leite", "café"}
+table.remove(b, 2)
+print(#b, b[1], b[2], b[3])
+</pre>
+
+<pre class="term">$ lua nil_buraco.lua
+1	pão	nil	café
+2	pão	café	nil</pre>
+
+<p>O <code>a[2] = nil</code> apaga o leite e deixa um <strong>buraco</strong>: o café continua na posição 3, e o <code>#a</code> deu 1 (o café sumiu da "lista", embora ainda esteja na tabela). O <code>table.remove</code> puxa o café para a posição 2 e a lista fica certinha, com 2 itens. Em listas, use sempre <code>table.remove</code>. Mais sobre buracos em <a href="sequencias.html">Sequências e Buracos</a>.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Para</th><th>Use</th><th>Também funciona</th></tr>
+<tr><td>Pôr no fim</td><td><code>table.insert(t, v)</code></td><td><code>t[#t + 1] = v</code></td></tr>
+<tr><td>Pôr no começo</td><td><code>table.insert(t, 1, v)</code></td><td>—</td></tr>
+<tr><td>Pôr na posição <code>p</code></td><td><code>table.insert(t, p, v)</code></td><td>—</td></tr>
+<tr><td>Tirar o último</td><td><code>table.remove(t)</code></td><td><code>t[#t] = nil</code> (não devolve o item)</td></tr>
+<tr><td>Tirar o primeiro</td><td><code>table.remove(t, 1)</code></td><td>—</td></tr>
+<tr><td>Tirar da posição <code>p</code></td><td><code>table.remove(t, p)</code></td><td>(nunca <code>t[p] = nil</code>: deixa buraco)</td></tr>
+<tr><td>Tirar vários</td><td>Laço de trás para frente com <code>table.remove</code></td><td>Montar uma lista nova só com os que ficam</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+
+<div class="cenario">
+<strong>Posição longe demais</strong>
+<pre class="file" data-file="fora_limite.lua">local fila = {"Ana", "Bia"}
+table.insert(fila, 10, "Caio")
+</pre>
+<pre class="term">$ lua fora_limite.lua
+lua: fora_limite.lua:2: bad argument #2 to 'insert' (position out of bounds)
+stack traceback:
+	[C]: in field 'insert'
+	fora_limite.lua:2: in main chunk
+	[C]: in ?</pre>
+<p>Linha por linha:</p>
+<dl class="anatomy">
+  <dt>fora_limite.lua:2:</dt><dd>O erro foi na linha 2.</dd>
+  <dt>bad argument #2 to 'insert'</dt><dd>"Argumento ruim, o 2º, para a função <code>insert</code>." O 2º argumento é a posição, <code>10</code>.</dd>
+  <dt>(position out of bounds)</dt><dd>"Posição fora dos limites." Numa lista de 2 itens, o <code>insert</code> aceita as posições de 1 a 3 (3 é o fim). A posição 10 deixaria buracos nas posições 3 a 9.</dd>
+  <dt>[C]: in field 'insert'</dt><dd>O erro aconteceu dentro do <code>insert</code> (escrito em C), um "campo" da tabela <code>table</code>, chamado pela linha 2 do seu programa.</dd>
+</dl>
+<p>O <code>table.remove</code> dá a mesma mensagem (<code>bad argument #2 to 'remove' (position out of bounds)</code>) com uma posição longe demais. Um detalhe: <code>table.remove(fila, 3)</code> numa lista de 2 itens não dá erro, só devolve <code>nil</code> (o manual permite a posição <code>#t + 1</code>); com <code>table.remove(fila, 5)</code>, deu o erro. <strong>Como consertar:</strong> use posições de 1 até <code>#t + 1</code> no <code>insert</code>, e de 1 até <code>#t</code> no <code>remove</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Trocou a ordem: valor antes da posição</strong>
+<pre class="file" data-file="ordem_args.lua">local fila = {"Ana", "Bia"}
+table.insert(fila, "Caio", 1)
+</pre>
+<pre class="term">$ lua ordem_args.lua
+lua: ordem_args.lua:2: bad argument #2 to 'insert' (number expected, got string)
+stack traceback:
+	[C]: in field 'insert'
+	ordem_args.lua:2: in main chunk
+	[C]: in ?</pre>
+<p>"O 2º argumento deveria ser um número, e veio um texto." Com três argumentos, o do meio é a posição. <strong>Como consertar:</strong> <code>table.insert(fila, 1, "Caio")</code> (lista, posição, valor).</p>
+</div>
+
+<div class="cenario">
+<strong>Tentou inserir dois de uma vez</strong>
+<pre class="file" data-file="muitos.lua">local fila = {"Ana", "Bia"}
+table.insert(fila, 1, "Caio", "Davi")
+</pre>
+<pre class="term">$ lua muitos.lua
+lua: muitos.lua:2: wrong number of arguments to 'insert'
+stack traceback:
+	[C]: in field 'insert'
+	muitos.lua:2: in main chunk
+	[C]: in ?</pre>
+<p>"Número errado de argumentos para o <code>insert</code>." Ele aceita 2 ou 3, nunca 4. <strong>Como consertar:</strong> um <code>table.insert</code> para cada item.</p>
+</div>
+
+<div class="cenario">
+<strong>Guardou o resultado do <code>insert</code></strong>
+<pre class="file" data-file="retorno.lua">local fila = {"Ana", "Bia"}
+fila = table.insert(fila, "Caio")
+print(fila)
+print(#fila)
+</pre>
+<pre class="term">$ lua retorno.lua
+nil
+lua: retorno.lua:4: attempt to get length of a nil value (local 'fila')
+stack traceback:
+	retorno.lua:4: in main chunk
+	[C]: in ?</pre>
+<p>O <code>table.insert</code> muda a lista e <strong>não devolve nada</strong>. Ao escrever <code>fila = table.insert(…)</code>, o "nada" (<code>nil</code>) foi guardado em <code>fila</code>, e a lista se perdeu. Na linha 4, "tentativa de pegar o tamanho de um valor nil (a variável local <code>fila</code>)". <strong>Como consertar:</strong> só <code>table.insert(fila, "Caio")</code>, sem <code>fila =</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>A lista era <code>nil</code></strong>
+<pre class="file" data-file="ins_nil.lua">local fila
+table.insert(fila, "Ana")
+</pre>
+<pre class="term">$ lua ins_nil.lua
+lua: ins_nil.lua:2: bad argument #1 to 'insert' (table expected, got nil)
+stack traceback:
+	[C]: in field 'insert'
+	ins_nil.lua:2: in main chunk
+	[C]: in ?</pre>
+<p>"O 1º argumento deveria ser uma tabela, e veio nil." A variável <code>fila</code> foi declarada sem valor. <strong>Como consertar:</strong> <code>local fila = {}</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Esqueceu o <code>table.</code></strong>
+<pre class="file" data-file="sem_table.lua">local fila = {"Ana", "Bia"}
+insert(fila, "Caio")
+</pre>
+<pre class="term">$ lua sem_table.lua
+lua: sem_table.lua:2: attempt to call a nil value (global 'insert')
+stack traceback:
+	sem_table.lua:2: in main chunk
+	[C]: in ?</pre>
+<p>Não existe uma função <code>insert</code> solta: ela mora dentro da tabela <code>table</code>. "Tentativa de chamar um valor nil (a global <code>insert</code>)." <strong>Como consertar:</strong> <code>table.insert(fila, "Caio")</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Inseriu um valor <code>nil</code></strong>
+<pre class="file" data-file="ins_valor_nil.lua">local fila = {"Ana", "Bia"}
+local novo
+table.insert(fila, novo)
+print(#fila)
+</pre>
+<pre class="term">$ lua ins_valor_nil.lua
+2</pre>
+<p>Nenhum erro, e nada mudou: guardar <code>nil</code> no fim é o mesmo que não guardar nada. Se a variável do valor veio vazia (um nome digitado errado, uma leitura que falhou), o item simplesmente não entra. <strong>Como consertar:</strong> confira a variável antes de inserir.</p>
+</div>
+
+<hr>
+
+<h2>Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>O que faz</th><th>Devolve</th></tr>
+<tr><td><code>table.insert(t, v)</code></td><td>Põe <code>v</code> no fim (posição <code>#t + 1</code>)</td><td>nada</td></tr>
+<tr><td><code>table.insert(t, pos, v)</code></td><td>Põe <code>v</code> na posição <code>pos</code> (1 a <code>#t + 1</code>), empurrando os de trás</td><td>nada</td></tr>
+<tr><td><code>table.remove(t)</code></td><td>Tira o último</td><td>o item tirado (ou <code>nil</code> se vazia)</td></tr>
+<tr><td><code>table.remove(t, pos)</code></td><td>Tira o da posição <code>pos</code>, puxando os de trás</td><td>o item tirado</td></tr>
+<tr><td><code>table.remove(t, 1)</code></td><td>Tira o primeiro (fila)</td><td>o item tirado</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Mensagem</th><th>Causa provável</th></tr>
+<tr><td><code>bad argument #2 to 'insert' (position out of bounds)</code></td><td>Posição maior que <code>#t + 1</code> (ou menor que 1)</td></tr>
+<tr><td><code>bad argument #2 to 'insert' (number expected, got string)</code></td><td>Valor e posição trocados de lugar</td></tr>
+<tr><td><code>wrong number of arguments to 'insert'</code></td><td>Mais de 3 argumentos</td></tr>
+<tr><td><code>bad argument #1 to 'insert' (table expected, got nil)</code></td><td>A lista é <code>nil</code></td></tr>
+<tr><td><code>attempt to call a nil value (global 'insert')</code></td><td>Faltou o <code>table.</code></td></tr>
+<tr><td>A lista virou <code>nil</code> depois do <code>insert</code></td><td>Escreveu <code>t = table.insert(…)</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. Complete</h3>
+<p>Complete para pôr <code>"Zeca"</code> no <strong>começo</strong> da lista <code>fila</code>:</p>
+<div class="ex-code">table.insert(fila, <input data-answer="1" aria-label="posição">, "Zeca")</div>
+</div>
+
+<div class="exercise">
+<h3>2. O que sobrou?</h3>
+<p>Depois destas linhas, qual é o item da posição 2?</p>
+<pre class="file" data-file="ex2.lua">local t = {"a", "b", "c", "d"}
+table.remove(t, 2)
+</pre>
+<div class="ex-code">t[2] é <input data-answer="c|&quot;c&quot;" aria-label="item"></div>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">3. O que <code>table.remove(t)</code> faz numa lista com 3 itens?</p>
+<label><input type="radio" name="q3"> Tira o primeiro item</label>
+<label><input type="radio" name="q3"> Tira o último item e devolve esse item</label>
+<label><input type="radio" name="q3"> Apaga a lista inteira</label>
+<label><input type="radio" name="q3"> Dá erro: falta a posição</label>
+</div>
+
+<div class="mc" data-answer="4">
+<p class="mc-q">4. Para remover vários itens de uma lista num laço, sem pular nenhum, como se percorre a lista?</p>
+<label><input type="radio" name="q4"> Com <code>ipairs</code>, do começo ao fim</label>
+<label><input type="radio" name="q4"> Com <code>for i = 1, #t do</code></label>
+<label><input type="radio" name="q4"> Não dá para remover dentro de um laço</label>
+<label><input type="radio" name="q4"> De trás para frente: <code>for i = #t, 1, -1 do</code></label>
+</div>
+
+<div class="mc" data-answer="1">
+<p class="mc-q">5. Numa <strong>fila</strong> (o primeiro que chega é o primeiro atendido), como se tira o próximo a ser atendido?</p>
+<label><input type="radio" name="q5"> <code>table.remove(fila, 1)</code></label>
+<label><input type="radio" name="q5"> <code>table.remove(fila)</code></label>
+<label><input type="radio" name="q5"> <code>fila[1] = nil</code></label>
+<label><input type="radio" name="q5"> <code>table.insert(fila, 1)</code></label>
+</div>
+
+<h3>Missão final: a lista de tarefas</h3>
+
+<div class="trylua" data-goal="outre:1\. pagar conta\n2\. regar plantas\n3\. comprar pão\n;;src:table\.remove;;src:table\.insert">
+<p class="try-task"><strong>Missão:</strong> a Ana já lavou a louça. No lugar dos comentários, (1) tire <code>"lavar louça"</code> da lista com <code>table.remove</code> (ela está na posição 2) e (2) acrescente <code>"comprar pão"</code> no fim com <code>table.insert</code>. A lista final deve ser: pagar conta, regar plantas, comprar pão.</p>
+<pre class="script" data-file="main.lua">local tarefas = {"pagar conta", "lavar louça", "regar plantas"}
+-- 1) tire "lavar louça"
+
+-- 2) acrescente "comprar pão" no fim
+
+for i, tarefa in ipairs(tarefas) do
+  print(i .. ". " .. tarefa)
+end
+</pre>
+<pre class="solucao" data-file="main.lua">local tarefas = {"pagar conta", "lavar louça", "regar plantas"}
+-- 1) tire "lavar louça"
+table.remove(tarefas, 2)
+-- 2) acrescente "comprar pão" no fim
+table.insert(tarefas, "comprar pão")
+for i, tarefa in ipairs(tarefas) do
+  print(i .. ". " .. tarefa)
+end
+</pre>
+</div>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li><code>table.insert(t, v)</code> põe no fim; <code>table.insert(t, pos, v)</code> põe na posição <code>pos</code> e empurra os de trás. A ordem é <strong>lista, posição, valor</strong>. Ele não devolve nada: nunca escreva <code>t = table.insert(…)</code>.</li>
+  <li><code>table.remove(t)</code> tira o último; <code>table.remove(t, pos)</code> tira o da posição <code>pos</code> e puxa os de trás. Os dois <strong>devolvem</strong> o item tirado (ou <code>nil</code>, se não havia).</li>
+  <li>Pilha: <code>insert(t, v)</code> + <code>remove(t)</code>. Fila: <code>insert(t, v)</code> + <code>remove(t, 1)</code>.</li>
+  <li>Para remover vários itens num laço, percorra <strong>de trás para frente</strong>; com <code>ipairs</code>, itens são pulados.</li>
+  <li>Em listas, use <code>table.remove</code>, não <code>t[i] = nil</code>, que deixa buraco.</li>
+  <li>Posição fora de 1…<code>#t + 1</code> dá <code>position out of bounds</code>.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
