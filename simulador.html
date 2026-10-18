@@ -1,0 +1,496 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua O Editor do Guia — as caixas Experimente | Guia Lua</title>
+<meta name="description" content="Como funcionam as caixas Experimente do Guia Lua: o Lua 5.5 oficial rodando no navegador, as partes da caixa (Rodar, Restaurar, Ver solução, o terminal e o código de saída), atalhos do teclado, cada Rodar começando do zero, io.read digitado ou pelo campo Entrada, abas com vários arquivos, Argumentos, o modo interativo, o que o editor não faz (os.execute, LuaRocks), as missões e as diferenças para o lua do terminal.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">O Editor do Guia</span></h1>
+
+<p class="intro">Em toda aula deste guia aparecem caixas <strong>Experimente</strong>: você escreve um programa em Lua, clica em <strong>Rodar</strong> e vê, logo embaixo, o que o programa escreveu. Quem roda o seu código não é uma imitação: é o <strong>Lua de verdade</strong>, o interpretador oficial de lua.org, o mesmo que você instala no computador, funcionando dentro do seu navegador. Não precisa instalar nada. Nesta página você conhece cada parte do editor, aprende a responder quando o programa pergunta alguma coisa, a parar um programa que não termina, e vê o que muda quando você roda o mesmo programa no terminal.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>As partes de uma caixa Experimente: o código, <strong>Rodar</strong>, o terminal da caixa, <strong>Restaurar</strong> e <strong>Ver solução</strong>, e os atalhos do teclado.</li>
+  <li>Por que cada Rodar começa do zero.</li>
+  <li>Como responder ao <code>io.read()</code>: digitando no terminal da caixa ou pelo campo <strong>Entrada</strong>.</li>
+  <li>Como funcionam as <strong>abas</strong> (vários arquivos), o campo <strong>Argumentos</strong> e as caixas de <strong>modo interativo</strong>.</li>
+  <li>Como aparecem os erros e como parar um programa que não termina.</li>
+  <li>O que o editor <strong>não</strong> faz, como funcionam as <strong>missões</strong>, e as diferenças para o <code>lua</code> do terminal.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>A ideia: uma cozinha de teste dentro da página</h2>
+<p>Pense numa escola de culinária. O professor explica a receita no quadro, mas a aula só vale a pena quando cada aluno vai para a sua bancada e faz o bolo com as próprias mãos. Se o bolo desanda, tudo bem: a bancada é de treino, e no dia seguinte ela está limpa de novo.</p>
+<p>O editor do guia é essa bancada. A receita é o seu programa, e quem "cozinha" é o Lua. Cada vez que você clica em <strong>Rodar</strong>, o editor:</p>
+<ol class="passo">
+  <li>prepara uma pasta nova, a <code>/home/ana</code> (a pasta pessoal da Ana, a usuária das aulas), só com os arquivos da caixa;</li>
+  <li>grava o seu código num arquivo, o <code>main.lua</code>;</li>
+  <li>roda o programa com o Lua, como quem digita <code>lua main.lua</code> no terminal;</li>
+  <li>mostra tudo o que o programa escreveu e, no fim, o <strong>código de saída</strong> (0 quer dizer "terminou bem").</li>
+</ol>
+<p>Por dentro, é o <strong>Lua 5.5.0</strong> oficial (o mesmo código-fonte do pacote <code>lua5.5</code> do Ubuntu) traduzido para <strong>WebAssembly</strong>, um formato que os navegadores sabem executar. Tudo acontece no seu computador, dentro do navegador: o seu código não é enviado para lugar nenhum. E o Lua roda separado da página, então, mesmo que o programa trave, a página continua funcionando.</p>
+
+<hr>
+
+<h2>As partes da caixa</h2>
+<p>Esta é uma caixa livre, sem missão. Clique em <strong>▶ Rodar</strong>:</p>
+
+<div class="trylua">
+<pre class="script" data-file="main.lua">local nome = "Ana"
+print("Olá, " .. nome .. "!")
+print("Bem-vinda ao Lua.")
+</pre>
+</div>
+
+<p>Na primeira vez, o editor avisa <strong>"Carregando o Lua (…, só na primeira vez)…"</strong>, com uma barra de progresso: o navegador está baixando o Lua, uns 340 KB (menos que uma foto). Isso leva um instante e só acontece uma vez; depois, o navegador guarda o Lua, e cada Rodar leva uma fração de segundo. Em seguida aparece o <strong>terminal da caixa</strong>, com a resposta. Repare nas partes:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<thead><tr><th>Parte</th><th>O que faz</th></tr></thead>
+<tbody>
+<tr><td><code>main.lua</code></td><td>A aba com o nome do arquivo. Os programas em Lua ficam em arquivos que terminam em <code>.lua</code>.</td></tr>
+<tr><td>O código</td><td>A área onde você digita, com o número de cada linha do lado. Pode apagar, mudar e escrever o que quiser.</td></tr>
+<tr><td><strong>▶ Rodar</strong></td><td>Roda o programa. Enquanto ele roda, o botão vira <strong>■ Parar</strong>.</td></tr>
+<tr><td><strong>Restaurar</strong></td><td>Volta ao código original da caixa (todas as abas). Use quando se perder.</td></tr>
+<tr><td><strong>Ver solução</strong></td><td>Só aparece nas missões. Pergunta antes ("Trocar o seu código pela solução?") e, se você clicar em <strong>Sim, mostrar</strong>, põe a resposta no editor.</td></tr>
+<tr><td><code>ana@notebook:~$ lua main.lua</code></td><td>A primeira linha do terminal: o comando que rodaria este programa num computador de verdade (a usuária <code>ana</code>, no computador <code>notebook</code>).</td></tr>
+<tr><td><code>Olá, Ana!</code></td><td>O que o programa escreveu com o <code>print</code>.</td></tr>
+<tr><td><code>[código de saída: 0]</code></td><td>Como o programa terminou: <strong>0</strong> = tudo certo; <strong>1</strong> = terminou com um erro (aula <a href="executar.html">Rodando um Programa</a>).</td></tr>
+</tbody>
+</table>
+</div>
+
+<h3>Atalhos do teclado</h3>
+<div class="table-wrap">
+<table class="ref">
+<thead><tr><th>Tecla</th><th>O que faz</th></tr></thead>
+<tbody>
+<tr><td><kbd>Ctrl</kbd>+<kbd>Enter</kbd></td><td>Roda o programa, igual ao botão Rodar (no Mac, <kbd>⌘</kbd>+<kbd>Enter</kbd>).</td></tr>
+<tr><td><kbd>Enter</kbd></td><td>Nova linha, já com o mesmo recuo da linha de cima. Depois de uma linha que abre um bloco (terminada em <code>then</code>, <code>do</code>, <code>else</code>, <code>repeat</code>, <code>function(…)</code>, <code>{</code> ou <code>(</code>), o editor recua mais 2 espaços sozinho (aula <a href="sintaxe.html">Sintaxe e Blocos</a>). O <code>end</code>, você escreve.</td></tr>
+<tr><td><kbd>Tab</kbd> / <kbd>Shift</kbd>+<kbd>Tab</kbd></td><td>Põe / tira 2 espaços de recuo (com várias linhas selecionadas, o <kbd>Tab</kbd> recua todas).</td></tr>
+<tr><td><kbd>Backspace</kbd> no recuo</td><td>Apaga os 2 espaços de uma vez.</td></tr>
+<tr><td><kbd>Esc</kbd></td><td>Sai do editor (o <kbd>Tab</kbd> volta a andar pela página).</td></tr>
+</tbody>
+</table>
+</div>
+
+<p>Experimente agora na caixa de cima: troque <code>"Ana"</code> pelo seu nome e aperte <kbd>Ctrl</kbd>+<kbd>Enter</kbd>. Depois clique em <strong>Restaurar</strong>.</p>
+
+<hr>
+
+<h2>Cada Rodar começa do zero</h2>
+<p>O programa abaixo tenta abrir o arquivo <code>diario.txt</code>. Se ele já existe, avisa; senão, diz que o diário é novo. Depois, acrescenta uma linha ao diário e mostra tudo o que tem nele. Rode duas ou três vezes:</p>
+
+<div class="trylua">
+<pre class="script" data-file="main.lua">local f = io.open("diario.txt", "r")
+if f then
+  print("O diário já existia!")
+  f:close()
+else
+  print("Diário novo.")
+end
+
+local d = assert(io.open("diario.txt", "a"))
+d:write("Hoje estudei Lua.\n")
+d:close()
+
+for linha in io.lines("diario.txt") do
+  print("No diário: " .. linha)
+end
+</pre>
+</div>
+
+<p>Todas as vezes ele responde <strong>Diário novo.</strong> e uma linha só no diário. No computador da Ana, a segunda vez é diferente, porque o arquivo fica gravado no disco (o mesmo programa, salvo como <code>diario.lua</code>):</p>
+
+<pre class="term" data-cwd="~/sim">$ lua diario.lua
+Diário novo.
+No diário: Hoje estudei Lua.
+$ lua diario.lua
+O diário já existia!                               « o arquivo ficou no disco
+No diário: Hoje estudei Lua.
+No diário: Hoje estudei Lua.
+</pre>
+
+<p>No editor, cada Rodar é um <code>lua main.lua</code> novinho: memória nova, variáveis zeradas e a pasta só com os arquivos das abas da caixa. O que o programa cria existe até o fim daquele Rodar, e some no próximo. Não se preocupe com o <code>io.open</code> e o <code>io.lines</code> agora; eles têm aula própria: <a href="io-open.html">Abrindo Arquivos</a>.</p>
+
+<div class="tip">
+<strong>Por que isso é bom</strong>
+<p>Você pode criar, mudar e apagar arquivos à vontade: nada "estraga" os exemplos das outras aulas, e o resultado é sempre o que o texto da aula descreve. A contrapartida é que nada fica guardado entre um Rodar e outro: o programa que grava e o que lê precisam estar <strong>no mesmo Rodar</strong>.</p>
+</div>
+
+<hr>
+
+<h2>Quando o programa pergunta: o <code>io.read()</code></h2>
+<p>A função <code>io.read()</code> ("ler da entrada") faz o programa <strong>parar e esperar</strong> você digitar uma resposta (aula <a href="io-read.html">io.read(): Lendo o Teclado</a>). Rode a caixa abaixo: o terminal mostra a pergunta e, do lado, um campo para você digitar. Escreva o seu nome e tecle <kbd>Enter</kbd>:</p>
+
+<div class="trylua" data-digitar="Ana">
+<pre class="script" data-file="main.lua">io.write("Qual é o seu nome? ")
+local nome = io.read()
+print("Prazer, " .. nome .. "!")
+</pre>
+</div>
+
+<p>O que você digitou aparece em branco, depois da pergunta, como num terminal de verdade. (O <code>io.write</code> escreve sem pular linha, por isso a resposta fica do lado da pergunta: aula <a href="io-write.html">io.write()</a>.) No campo de digitação valem estas teclas:</p>
+<div class="table-wrap">
+<table class="ref">
+<thead><tr><th>Tecla</th><th>O que faz</th></tr></thead>
+<tbody>
+<tr><td><kbd>Enter</kbd></td><td>Envia a linha para o programa.</td></tr>
+<tr><td><kbd>Ctrl</kbd>+<kbd>D</kbd></td><td>Avisa "acabou a entrada": o <code>io.read()</code> devolve <code>nil</code> (o "nada" do Lua). Serve para programas que leem até o fim.</td></tr>
+<tr><td><kbd>Ctrl</kbd>+<kbd>C</kbd></td><td>Para o programa, como o botão <strong>■ Parar</strong>.</td></tr>
+</tbody>
+</table>
+</div>
+
+<div class="note">
+<strong>Em alguns navegadores, o programa "recomeça" por baixo</strong>
+<p>No Chrome e no Edge, o programa fica de fato parado, esperando você. Em navegadores que ainda não têm esse recurso (o Safari e, conforme a versão, o Firefox), o editor usa outro truque: roda o programa até a pergunta, espera você digitar e roda <strong>de novo do começo</strong>, já com a resposta, mostrando só o que é novo. Para você parece igual. A diferença só se nota num programa lento, ou num que sorteia números: nesse modo, os sorteios e o relógio se repetem iguais a cada resposta.</p>
+</div>
+
+<h3>Caixas com o campo Entrada</h3>
+<p>Em algumas caixas a resposta já vem pronta, num campo <strong>Entrada</strong> ao lado do botão Rodar: uma linha para cada leitura. O programa lê dali sem parar, e o terminal mostra cada linha lida logo depois da pergunta. Mude as notas no campo Entrada e rode de novo:</p>
+
+<div class="trylua" data-stdin="Bia\n8\n9.5">
+<pre class="script" data-file="main.lua">io.write("Aluna: ")
+local nome = io.read()
+io.write("Nota 1: ")
+local nota1 = io.read("n")
+io.write("Nota 2: ")
+local nota2 = io.read("n")
+local media = (nota1 + nota2) / 2
+print("Média de " .. nome .. ": " .. media)
+</pre>
+</div>
+
+<p>(O <code>io.read("n")</code> lê um <strong>número</strong>, em vez de uma linha de texto.) As linhas da Entrada aparecem no terminal da caixa como se alguém as tivesse digitado, para a saída ficar fácil de ler. No terminal da Ana, quando as respostas chegam por um "cano" (<code>|</code>), elas não aparecem na tela, e tudo fica grudado:</p>
+
+<pre class="term" data-cwd="~/sim">$ printf 'Bia\n8\n9.5\n' | lua media.lua
+Aluna: Nota 1: Nota 2: Média de Bia: 8.75
+</pre>
+
+<div class="note">
+<strong>Por que algumas caixas usam o campo Entrada</strong>
+<p>Numa missão, o guia precisa rodar o seu programa e conferir a resposta sozinho. Com as respostas no campo Entrada, ele sabe exatamente o que o programa vai ler. Nas caixas sem esse campo, quem responde é você, digitando.</p>
+</div>
+
+<hr>
+
+<h2>Vários arquivos: as abas</h2>
+<p>Programas maiores se dividem em vários arquivos. Numa caixa com várias <strong>abas</strong>, clique no nome de cada uma para ver o arquivo. A primeira aba é a que roda (<code>lua main.lua</code>); as outras ficam <strong>na mesma pasta</strong>, prontas para o programa usar:</p>
+
+<div class="trylua">
+<pre class="script" data-file="main.lua">local saudacoes = require("saudacoes")
+
+for nome in io.lines("clientes.txt") do
+  print(saudacoes.bom_dia(nome))
+end
+</pre>
+<pre class="script" data-file="saudacoes.lua">local M = {}
+
+function M.bom_dia(nome)
+  return "Bom dia, " .. nome .. "! O pão saiu agora."
+end
+
+return M
+</pre>
+<pre class="script" data-file="clientes.txt">Ana
+Bia
+Caio
+</pre>
+</div>
+
+<p>O <code>main.lua</code> usa uma função escrita no <code>saudacoes.lua</code> (o <code>require("saudacoes")</code> carrega esse arquivo; aula <a href="modulos-proprios.html">Criando seu Módulo</a>) e lê os nomes do <code>clientes.txt</code>, um por linha. Acrescente um nome na aba <code>clientes.txt</code>, ou mude a frase em <code>saudacoes.lua</code>, e rode de novo. O botão <strong>Restaurar</strong> volta todas as abas ao original. No terminal da Ana, com os três arquivos na mesma pasta, a saída é a mesma:</p>
+
+<pre class="term" data-cwd="~/sim">$ lua main.lua
+Bom dia, Ana! O pão saiu agora.
+Bom dia, Bia! O pão saiu agora.
+Bom dia, Caio! O pão saiu agora.
+</pre>
+
+<h3>O campo Argumentos</h3>
+<p>Algumas caixas têm um campo <strong>Argumentos</strong>: o que você escreve ali vai para o programa como se fosse digitado depois do nome do arquivo no terminal (<code>lua main.lua Ana</code>), e chega em <code>arg[1]</code>, <code>arg[2]</code>… (aula <a href="arg.html">Argumentos da Linha de Comando</a>). Troque o nome no campo e rode; apague o campo e rode de novo:</p>
+
+<div class="trylua" data-args="Ana">
+<pre class="script" data-file="main.lua">local cliente = arg[1] or "cliente sem nome"
+print("Pedido de " .. cliente)
+</pre>
+</div>
+
+<pre class="term" data-cwd="~/sim">$ lua args.lua Ana
+Pedido de Ana
+$ lua args.lua
+Pedido de cliente sem nome
+</pre>
+
+<h3>Caixas de modo interativo</h3>
+<p>Algumas caixas, em vez de <strong>▶ Rodar</strong>, têm o botão <strong>▶ Abrir o lua</strong>. Elas abrem o <a href="repl.html">modo interativo</a> do Lua (o <code>&gt;</code>): você digita uma linha, aperta <kbd>Enter</kbd>, e o Lua responde. Tudo sai como no terminal: o <code>&gt;&gt;</code> dos blocos, o aviso do <code>local</code>, os erros com <code>stdin:1:</code>. A diferença é que lá não há setas nem histórico. <kbd>Ctrl</kbd>+<kbd>D</kbd> sai.</p>
+
+<div class="trylua" data-repl data-digitar="2 + 3\nnome = &quot;Ana&quot;\nnome .. &quot; Souza&quot;">
+<p class="try-task"><strong>Experimente:</strong> clique em <strong>Abrir o lua</strong> e digite <code>2 + 3</code>, depois <code>nome = "Ana"</code>, depois <code>nome .. " Souza"</code>.</p>
+</div>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+<p>Errar faz parte. Quando o Lua não consegue continuar, ele para e escreve uma <strong>mensagem de erro</strong>: o arquivo e a linha, a explicação e, nos erros durante a execução, o <code>stack traceback</code> (o "rastro" até o erro). No editor ela aparece em <strong>vermelho</strong>, e o código de saída vira <strong>1</strong>. A mensagem é a <strong>real</strong> do Lua e vem em inglês; as aulas traduzem e explicam cada uma. A aula <a href="erros.html">Lendo uma Mensagem de Erro</a> ensina a ler as mensagens do começo ao fim.</p>
+
+<div class="cenario">
+<strong>Um nome escrito errado</strong>
+<p>Rode a caixa:</p>
+<div class="trylua">
+<pre class="script" data-file="main.lua">local produtos = {"pão", "leite"}
+print("Lista da padaria:")
+print("Itens: " .. #produto)
+</pre>
+</div>
+<p>No terminal da Ana, o mesmo programa (salvo como <code>erro.lua</code>) dá a mesma mensagem. Só o nome do arquivo muda:</p>
+<pre class="term" data-cwd="~/sim">$ lua erro.lua
+Lista da padaria:
+lua: erro.lua:3: attempt to get length of a nil value (global 'produto')
+stack traceback:
+	erro.lua:3: in main chunk
+	[C]: in ?
+</pre>
+<p><strong>O que aconteceu:</strong> a linha 2 rodou (apareceu "Lista da padaria:"); na linha 3 (<code>erro.lua:3:</code>), o Lua não conhece nenhum <code>produto</code> (a tabela se chama <code>produtos</code>, com "s"). Um nome que ninguém criou vale <code>nil</code>, e o <code>#</code>, que mede o tamanho, não sabe medir <code>nil</code>: "tentativa de pegar o tamanho de um valor nil (o nome <code>produto</code>)".</p>
+<p><strong>Como consertar:</strong> use o nome exato: <code>#produtos</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Um parêntese sem fechar</strong>
+<pre class="file" data-file="sintaxe.lua">print("Olá, Ana!"
+</pre>
+<pre class="term" data-cwd="~/sim">$ lua sintaxe.lua
+lua: sintaxe.lua:2: ')' expected (to close '(' at line 1) near &lt;eof&gt;
+</pre>
+<p><strong>O que aconteceu:</strong> este erro é diferente: o programa <strong>nem começou</strong>. Antes de rodar, o Lua confere o arquivo inteiro, e aqui ele chegou ao fim (<code>&lt;eof&gt;</code>) esperando o <code>)</code> que fecharia o <code>(</code> da linha 1. É um erro de sintaxe (de escrita), e não tem <code>stack traceback</code>. O editor mostra exatamente a mesma mensagem, com <code>main.lua</code> no lugar de <code>sintaxe.lua</code>.</p>
+<p><strong>Como consertar:</strong> feche o parêntese: <code>print("Olá, Ana!")</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>O <code>Ctrl</code>+<code>D</code> antes da resposta</strong>
+<p>Na caixa do <code>io.read()</code>, lá em cima, aperte <kbd>Ctrl</kbd>+<kbd>D</kbd> no lugar do nome. O programa recebe "fim da entrada" (<code>nil</code>) e quebra na linha 3. A caixa mostra a pergunta e, logo depois, a mensagem em vermelho: <code>lua: main.lua:3: attempt to concatenate a nil value (local 'nome')</code>, com o <code>stack traceback</code>.</p>
+<p><strong>O que aconteceu:</strong> o <code>nome</code> ficou valendo <code>nil</code>, e o <code>..</code> não sabe juntar texto com <code>nil</code>: "tentativa de concatenar um valor nil (a variável <code>nome</code>)". <strong>Como consertar:</strong> rode de novo e digite um nome. Programas de verdade conferem se a leitura deu <code>nil</code> (aula <a href="io-read.html">io.read()</a>).</p>
+<p>No terminal da Ana, o <code>&lt; /dev/null</code> faz o papel do <kbd>Ctrl</kbd>+<kbd>D</kbd> (dá ao programa uma entrada vazia). A mensagem é a mesma, mas repare onde foi parar a pergunta:</p>
+<pre class="term" data-cwd="~/sim">$ lua nome.lua &lt; /dev/null
+lua: nome.lua:3: attempt to concatenate a nil value (local 'nome')
+stack traceback:
+        nome.lua:3: in main chunk
+        [C]: in ?
+Qual é o seu nome?                                 « a pergunta saiu por último
+</pre>
+<p>O <code>io.write</code> sem quebra de linha fica guardado num "rascunho" (o <em>buffer</em>) até ser preciso mostrá-lo; como a entrada não vinha do teclado, nada obrigou o Lua a mostrar a pergunta antes de ler, e ele só a escreveu ao terminar, depois da mensagem de erro. Esse é um dos detalhes em que o terminal e o editor diferem; a aula <a href="io-write.html">io.write()</a> volta a ele.</p>
+</div>
+
+<div class="cenario">
+<strong>Um programa que não termina nunca</strong>
+<p>O laço abaixo soma 1 no contador para sempre (o <code>while true do</code>, "enquanto verdadeiro, faça", você aprende na aula <a href="while.html">while</a>). Rode e, depois de uns segundos, clique em <strong>■ Parar</strong>:</p>
+<div class="trylua" data-sem-fim>
+<pre class="script" data-file="main.lua">local contador = 0
+print("Contando…")
+while true do
+  contador = contador + 1
+end
+</pre>
+</div>
+<p><strong>O que aconteceu:</strong> o editor parou o programa na hora e mostrou <code>^C</code> e <code>[programa interrompido]</code>. Se você não clicar em Parar, o editor para sozinho depois de <strong>10 segundos</strong> rodando, com o aviso <em>"o editor parou o programa: ele rodou mais de 10 segundos sem terminar — laço infinito?"</em>. Enquanto isso, a página continua funcionando normalmente: o Lua roda separado dela.</p>
+<p>No terminal, quem para um programa assim é você, com <kbd>Ctrl</kbd>+<kbd>C</kbd>. O Lua mostra onde estava quando foi interrompido, e o código de saída é 1:</p>
+<pre class="term" data-cwd="~/sim">$ lua laco.lua
+Contando…
+^C
+lua: interrupted!
+stack traceback:
+        laco.lua:4: in main chunk
+        [C]: in ?
+$ echo $?
+1
+</pre>
+<p>("Interrompido!": ele estava na linha 4, a do <code>contador + 1</code>.) <strong>Como consertar:</strong> todo laço precisa de um jeito de terminar, por exemplo <code>while contador &lt; 1000 do</code>.</p>
+</div>
+
+<hr>
+
+<h2>O que o editor não faz</h2>
+<p>O editor roda o Lua de verdade, mas ele vive dentro de uma página da internet, e o navegador, por segurança, não deixa uma página mexer no seu computador. Algumas coisas ficam de fora:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<thead><tr><th>No editor</th><th>Por quê, e onde fazer</th></tr></thead>
+<tbody>
+<tr><td>Nada fica salvo entre um Rodar e outro</td><td>Cada Rodar ganha uma pasta nova. Para guardar arquivos de verdade, rode no seu computador.</td></tr>
+<tr><td>Sem outros programas: <code>os.execute("ls")</code> responde <code>sh: 1: ls: not found</code> e <code>nil  exit  127</code>, e o <code>io.popen</code> não lê nada</td><td>Dentro do navegador não existe um sistema com outros programas. A aula <a href="os-execute.html">Rodando Outros Programas</a> usa o terminal.</td></tr>
+<tr><td>Sem bibliotecas em C nem LuaRocks: o <code>require</code> de uma biblioteca instalada no computador responde <code>module '…' not found:</code></td><td>Não há como carregar bibliotecas compiladas no navegador. Os seus módulos em Lua funcionam (as abas); o LuaRocks fica para o terminal (aula <a href="luarocks.html">LuaRocks</a>).</td></tr>
+<tr><td>Sem as opções da linha de comando: <code>lua -e</code>, <code>lua -v</code>, <code>lua -</code>, <code>luac</code></td><td>O editor roda <code>lua main.lua</code> (ou o modo interativo). Essas opções estão na aula <a href="executar.html">Rodando um Programa</a>.</td></tr>
+<tr><td>Só existe a pasta <code>/home/ana</code> (mais <code>/tmp</code>): arquivos do sistema, como <code>/etc/passwd</code>, não estão lá</td><td>O "disco" do editor é de mentirinha, criado na hora.</td></tr>
+<tr><td>Sem setas nem histórico no modo interativo</td><td>Para repetir uma linha, digite de novo.</td></tr>
+<tr><td>Programa que roda mais de 10 segundos é parado; saída com mais de 2 milhões de caracteres também; memória até 256 MB</td><td>Para a página não travar. Nenhum exemplo do guia chega perto disso.</td></tr>
+</tbody>
+</table>
+</div>
+
+<div class="trylua">
+<p class="try-task"><strong>Experimente:</strong> rode e veja a resposta de um "sistema" sem outros programas. No terminal da Ana, o mesmo <code>os.execute("ls")</code> lista os arquivos da pasta e termina com <code>true  exit  0</code>.</p>
+<pre class="script" data-file="main.lua">print(os.execute("ls"))
+</pre>
+</div>
+
+<hr>
+
+<h2>As missões</h2>
+<p>Muitas caixas têm uma <strong>Missão</strong>: uma tarefa escrita em cima do código. Embaixo da caixa fica uma linha de status que confere a sua resposta a cada Rodar:</p>
+<ul>
+  <li><strong>Missão em andamento…</strong> enquanto ainda não está certo, com uma pista entre parênteses (por exemplo, "a saída ainda não é a esperada" ou "o programa ainda termina com erro");</li>
+  <li><strong>✔ Missão cumprida!</strong>, quando você acerta. Depois de cumprida, ela fica cumprida.</li>
+</ul>
+<p>O guia não compara o seu código letra por letra com a resposta: ele <strong>roda</strong> o seu programa e confere o que ele escreveu. Por isso, quase sempre existe mais de um jeito certo. Às vezes a missão também pede um recurso (como "use um <code>for</code>"), ou um arquivo criado pelo programa, ou até um erro de propósito, para você aprender a reconhecê-lo. Faça a primeira:</p>
+
+<div class="trylua" data-goal="out:Total: R$ 23.50;;semerro">
+<p class="try-task"><strong>Missão:</strong> a Ana comprou 3 pães de R$ 1,50 e 2 litros de leite de R$ 9,50. O programa tem um erro: rode, leia a mensagem (o arquivo, a linha e o nome entre aspas) e conserte. A saída deve ser <code>Total: R$ 23.50</code>.</p>
+<pre class="script" data-file="main.lua">local paes = 3 * 1.50
+local leite = 2 * 9.50
+local total = paes + leites
+print(string.format("Total: R$ %.2f", total))
+</pre>
+<pre class="solucao" data-file="main.lua">local paes = 3 * 1.50
+local leite = 2 * 9.50
+local total = paes + leite
+print(string.format("Total: R$ %.2f", total))
+</pre>
+</div>
+
+<p>Rodou antes de consertar? Então viu <code>lua: main.lua:3: attempt to perform arithmetic on a nil value (global 'leites')</code>: a variável se chama <code>leite</code>, sem o "s", e <code>leites</code>, que ninguém criou, vale <code>nil</code>. (O <code>string.format</code> com <code>%.2f</code> mostra o número com duas casas decimais: aula <a href="string-format.html">string.format</a>.) As missões são feitas para você errar, ler a mensagem e consertar. Se travar de vez, use <strong>Ver solução</strong>; mas tente antes, e depois de ver a solução, digite-a você mesmo.</p>
+
+<hr>
+
+<h2 id="terminal">O mesmo programa no terminal</h2>
+<p>O editor é ótimo para aprender, mas no dia a dia o Lua roda como um programa no seu computador: o <strong><code>lua</code></strong>, que você usa no <strong>terminal</strong>. A aula <a href="instalar.html">Instalar o Lua</a> mostra como instalá-lo, e <a href="executar.html">Rodando um Programa (.lua)</a> ensina o caminho completo. Em resumo:</p>
+<ol class="passo">
+  <li>copie o código da caixa para um editor de texto e salve com um nome terminado em <code>.lua</code>: por exemplo, <code>ola.lua</code>;</li>
+  <li>abra o terminal, entre na pasta do arquivo e digite <code>lua</code>, um espaço e o nome do arquivo;</li>
+  <li>o que o programa escreve aparece logo embaixo, como no terminal da caixa.</li>
+</ol>
+<p>O primeiro programa desta página e o do <code>io.read()</code>, no computador da Ana (ela digitou <code>Ana</code> e apertou <kbd>Enter</kbd>):</p>
+
+<pre class="term" data-cwd="~/sim">$ lua ola.lua
+Olá, Ana!
+Bem-vinda ao Lua.
+$ lua nome.lua
+Qual é o seu nome? Ana
+Prazer, Ana!
+</pre>
+
+<p>O Lua é o mesmo nos dois lugares (5.5.0, do mesmo código-fonte), então as mensagens de erro, os números, os textos e as contas saem iguais, e o que você aprende no editor vale no terminal. O que muda é o lugar onde ele roda:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<thead><tr><th>Assunto</th><th>No editor do guia</th><th>No terminal (<code>lua arquivo.lua</code>)</th></tr></thead>
+<tbody>
+<tr><td>Versão</td><td>Lua 5.5.0</td><td>A do seu computador (nas aulas, 5.5.0, a do Ubuntu 26.04)</td></tr>
+<tr><td>Arquivos que o programa cria</td><td>Somem no próximo Rodar</td><td>Ficam gravados no disco</td></tr>
+<tr><td>Mensagens de erro</td><td>As mesmas, em vermelho, com <code>main.lua</code></td><td>As mesmas, com o nome do seu arquivo</td></tr>
+<tr><td>Parar um programa</td><td>Botão <strong>■ Parar</strong> (ou o limite de 10 s): <code>^C</code> e <code>[programa interrompido]</code></td><td><kbd>Ctrl</kbd>+<kbd>C</kbd>: <code>lua: interrupted!</code>, o <code>stack traceback</code> e código de saída 1</td></tr>
+<tr><td>Data e hora (<code>os.date</code>, <code>os.time</code>)</td><td>O relógio e o fuso do <strong>seu</strong> computador</td><td>O relógio e o fuso do computador onde roda</td></tr>
+<tr><td><code>math.random</code> sem <code>math.randomseed</code></td><td>Sorteia diferente a cada Rodar</td><td>Sorteia diferente a cada vez (e diferente do editor)</td></tr>
+<tr><td>Endereços como <code>table: 0x…</code></td><td>Curtos, e costumam se repetir</td><td>Longos, e mudam a cada vez</td></tr>
+<tr><td>Ordem do <code>pairs</code> em tabelas com chaves de texto</td><td>Pode mudar de um Rodar para outro</td><td>Pode mudar de uma vez para outra</td></tr>
+<tr><td>Outros programas (<code>os.execute</code>), LuaRocks, bibliotecas em C</td><td>Não</td><td>Sim</td></tr>
+<tr><td>Velocidade</td><td>Um pouco mais lento (umas 1,6 vez; nada que se perceba nos exemplos)</td><td>A velocidade normal do computador</td></tr>
+</tbody>
+</table>
+</div>
+
+<div class="warning">
+<strong>No terminal, apagar é para valer</strong>
+<p>No editor, um arquivo apagado ou sobrescrito volta no próximo Rodar. No terminal, o programa mexe nos <strong>seus</strong> arquivos de verdade, e não há botão Restaurar. Antes de rodar no seu computador um programa que grava ou apaga arquivos (com <code>io.open(…, "w")</code> ou <code>os.remove</code>), confira o nome dos arquivos que ele usa.</p>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. A tecla</h3>
+<p>Qual tecla, junto com <kbd>Ctrl</kbd>, roda o programa da caixa?</p>
+<div class="ex-code">Ctrl + <input data-answer="Enter|enter" aria-label="tecla"></div>
+</div>
+
+<div class="exercise">
+<h3>2. O código de saída</h3>
+<p>Que código de saída aparece quando o programa termina com um erro?</p>
+<div class="ex-code">[código de saída: <input data-answer="1" aria-label="código">]</div>
+</div>
+
+<div class="exercise">
+<h3>3. O nome do arquivo</h3>
+<p>Com que nome o editor grava o código da primeira aba?</p>
+<div class="ex-code"><input data-answer="main.lua" aria-label="nome do arquivo"></div>
+</div>
+
+<div class="mc" data-answer="3">
+<p class="mc-q">4. Um programa cria o arquivo <code>lista.txt</code> no editor. Você clica em Rodar de novo. O que acontece com o arquivo?</p>
+<label><input type="radio" name="q4"> Continua lá, com o conteúdo da vez anterior.</label>
+<label><input type="radio" name="q4"> É salvo no seu computador, na pasta Downloads.</label>
+<label><input type="radio" name="q4"> Sumiu: cada Rodar começa com uma pasta nova, só com os arquivos das abas.</label>
+<label><input type="radio" name="q4"> O editor dá erro, porque o arquivo já existe.</label>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">5. A caixa mostrou <code>Qual é o seu nome?</code> e um campo para digitar. O que fazer?</p>
+<label><input type="radio" name="q5"> Clicar em Rodar de novo.</label>
+<label><input type="radio" name="q5"> Digitar a resposta no campo e teclar <kbd>Enter</kbd>.</label>
+<label><input type="radio" name="q5"> Escrever a resposta dentro do código.</label>
+<label><input type="radio" name="q5"> Esperar 10 segundos.</label>
+</div>
+
+<div class="mc" data-answer="4">
+<p class="mc-q">6. No editor, <code>print(os.execute("ls"))</code> mostrou <code>sh: 1: ls: not found</code>. Por quê?</p>
+<label><input type="radio" name="q6"> O seu Lua está quebrado.</label>
+<label><input type="radio" name="q6"> Faltou instalar o <code>ls</code> com o LuaRocks.</label>
+<label><input type="radio" name="q6"> O <code>os.execute</code> não existe no Lua 5.5.</label>
+<label><input type="radio" name="q6"> Dentro do navegador não há outros programas para rodar; no terminal, o mesmo código funciona.</label>
+</div>
+
+<div class="mc" data-answer="1">
+<p class="mc-q">7. Um laço não para nunca. O que o editor faz?</p>
+<label><input type="radio" name="q7"> Você pode clicar em <strong>■ Parar</strong>; se não clicar, ele para sozinho depois de 10 segundos.</label>
+<label><input type="radio" name="q7"> A página trava, e é preciso fechar o navegador.</label>
+<label><input type="radio" name="q7"> O laço roda para sempre, escondido.</label>
+<label><input type="radio" name="q7"> O editor apaga o seu código.</label>
+</div>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li>As caixas Experimente rodam o <strong>Lua 5.5.0 oficial</strong>, traduzido para WebAssembly, dentro do seu navegador. Ele é baixado (uns 340 KB) só no primeiro Rodar, e o seu código não sai do seu computador.</li>
+  <li>Cada <strong>Rodar</strong> é um <code>lua main.lua</code> novo, numa pasta <code>/home/ana</code> nova, só com os arquivos das abas. O terminal da caixa mostra o comando, a saída, os erros em vermelho e o <strong>código de saída</strong>.</li>
+  <li><strong>Restaurar</strong> volta ao código original; <strong>Ver solução</strong> (nas missões) pergunta antes de trocar o seu código. <kbd>Ctrl</kbd>+<kbd>Enter</kbd> roda; o <kbd>Enter</kbd> recua 2 espaços depois de <code>then</code>, <code>do</code>, <code>function(…)</code>.</li>
+  <li>O <code>io.read()</code> espera você digitar no terminal da caixa (<kbd>Ctrl</kbd>+<kbd>D</kbd> = fim da entrada), ou lê do campo <strong>Entrada</strong>. O campo <strong>Argumentos</strong> vira o <code>arg[1]</code>…; as caixas com <strong>Abrir o lua</strong> são o modo interativo.</li>
+  <li>Um laço sem fim para com <strong>■ Parar</strong> ou sozinho, em 10 segundos.</li>
+  <li>O editor não roda outros programas (<code>os.execute</code>), nem LuaRocks e bibliotecas em C, nem as opções <code>lua -e</code>/<code>-v</code>; isso fica para o terminal.</li>
+  <li>As missões rodam o seu programa e conferem a saída: <strong>✔ Missão cumprida!</strong> quando dá certo.</li>
+  <li>No terminal, o mesmo programa dá as mesmas mensagens; mudam a hora, os sorteios, os endereços <code>0x…</code> e o fato de os arquivos ficarem gravados de verdade.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
