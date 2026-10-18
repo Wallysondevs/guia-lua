@@ -183,7 +183,7 @@ stack traceback:
 	[C]: in ?
 Quantos anos você tem?          « a pergunta saiu por último</pre>
 
-<p>(<code>idade3.lua</code> é a solução da missão.) "Tentativa de comparar número com <code>nil</code>". Repare que a pergunta apareceu <strong>depois</strong> do erro: o texto do <code>io.write</code> sem quebra de linha fica guardado esperando o resto da linha, enquanto a mensagem de erro vai direto para a tela; a pergunta só sai quando o programa termina. Não se assuste se isso acontecer com você. Para o programa sobreviver a qualquer entrada, falta o <code>if not idade then</code> do <code>idade2.lua</code>.</p>
+<p>(<code>idade3.lua</code> é a solução da missão.) "Tentativa de comparar número com <code>nil</code>". Repare que a pergunta apareceu <strong>depois</strong> do erro: o texto do <code>io.write</code> sem quebra de linha fica guardado esperando o resto da linha, enquanto a mensagem de erro vai direto para a tela; a pergunta só sai quando o programa termina. Não se assuste se isso acontecer com você. (No editor do guia, com <code>trinta</code> no campo Entrada, a pergunta aparece antes da mensagem, como num terminal em que você digita.) Para o programa sobreviver a qualquer entrada, falta o <code>if not idade then</code> do <code>idade2.lua</code>.</p>
 
 <hr>
 
@@ -304,7 +304,7 @@ stack traceback:
 </div>
 
 <div class="note">
-<strong>Vírgula decimal e o <code>os.setlocale</code> (só no terminal)</strong>
+<strong>Vírgula decimal e o <code>os.setlocale</code></strong>
 <p>O manual também diz que a conversão de texto para número aceita a "marca decimal do idioma atual". Normalmente o Lua começa no idioma neutro (<code>C</code>), em que só o ponto vale. Mas, se o programa chamar <code>os.setlocale("")</code> (usado para ter datas em português; veja <a href="os-date-time.html">Datas e Horas</a>), o idioma vira o do computador da Ana, e muda <strong>mais coisa</strong> do que a data. No lab:</p>
 <pre class="file" data-file="locale.lua">print(tonumber("1,5"))
 print(os.setlocale(""))
@@ -316,7 +316,7 @@ nil
 pt_BR.UTF-8
 1,5	1,5
 1,5</pre>
-<p>Depois do <code>os.setlocale("")</code>, <code>tonumber("1,5")</code> passou a funcionar, mas o <code>print(1.5)</code> passou a mostrar <code>1,5</code>, com vírgula (o código continua escrito com ponto). Se você só quer as datas em português, use <code>os.setlocale("", "time")</code>, que muda só a parte de datas: no lab, com ele, <code>print(1.5)</code> continuou <code>1.5</code>. <strong>No editor do guia</strong> isso não acontece: lá os números continuam com ponto mesmo depois do <code>os.setlocale("")</code>.</p>
+<p>Depois do <code>os.setlocale("")</code>, <code>tonumber("1,5")</code> passou a funcionar, mas o <code>print(1.5)</code> passou a mostrar <code>1,5</code>, com vírgula (o código continua escrito com ponto). Se você só quer as datas em português, use <code>os.setlocale("", "time")</code>, que muda só a parte de datas: no lab, com ele, <code>print(1.5)</code> continuou <code>1.5</code>. <strong>No editor do guia</strong> acontece o mesmo: o mesmo programa mostra <code>1,5</code> com vírgula depois do <code>os.setlocale("")</code>, e o <code>os.setlocale("", "time")</code> também deixa o <code>1.5</code> com ponto.</p>
 </div>
 
 <hr>
