@@ -1,0 +1,699 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua while — repetindo enquanto a condição for verdadeira | Guia Lua</title>
+<meta name="description" content="O laço while do Lua para quem nunca programou: while … do … end, contar com uma variável contadora, contagem regressiva, juntar dinheiro até a meta, somar compras até digitar 0, pedir a nota de novo até ser válida, o laço infinito (Ctrl+C e o interrupted!) e os erros reais do Lua 5.5 (do esquecido, += e ++ que não existem).">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">while</span></h1>
+
+<p class="intro">Até agora, cada linha dos seus programas rodou <strong>uma vez só</strong> (ou nenhuma, com o <a href="if.html">if</a>). Mas boa parte do trabalho de um computador é <strong>repetir</strong>: mostrar os 30 alunos da turma, somar os preços de todas as compras, perguntar de novo até a pessoa digitar uma resposta que preste. Para repetir existem os <strong>laços</strong> (em inglês, <em>loops</em>). O mais simples deles é o <code>while</code>, que em inglês quer dizer "<strong>enquanto</strong>": enquanto a condição for verdadeira, repita.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O que é um laço e como se escreve um <code>while</code>: a condição, o <code>do</code> ("faça") e o <code>end</code>.</li>
+  <li>Como contar de 1 até 5, e de 5 até 1, com uma variável <strong>contadora</strong>.</li>
+  <li>Como repetir quando você <strong>não sabe</strong> quantas voltas vão ser: juntar dinheiro até chegar à meta.</li>
+  <li>Como ler vários valores com <code>io.read()</code> até a pessoa digitar <code>0</code>, e como pedir de novo até ela digitar uma nota válida.</li>
+  <li>O que é um <strong>laço infinito</strong> e como pará-lo: <kbd>Ctrl</kbd>+<kbd>C</kbd> no terminal e o botão Parar no editor.</li>
+  <li>Os erros reais mais comuns: o <code>do</code> esquecido, o <code>+=</code> e o <code>++</code> (que o Lua não tem), e a variável que não existia.</li>
+</ul>
+</div>
+
+<p>Todos os programas desta aula rodaram no <strong>Lua 5.5</strong> da máquina da Ana (usuária <code>ana</code>, computador <code>notebook</code>), salvos na pasta pessoal dela e executados com <code>lua arquivo.lua</code> (veja <a href="executar.html">Rodando um Programa</a>). Você pode rodar cada um no editor do guia.</p>
+
+<hr>
+
+<h2>A ideia: "enquanto tiver pão no cesto, atenda o próximo"</h2>
+<p>A padaria do bairro abre às 6 horas com um cesto de pães. O dono deixa um bilhete para o funcionário: <em>"Enquanto tiver pão no cesto, atenda o próximo cliente."</em> O bilhete não diz quantos clientes vão ser atendidos. Mesmo assim, ele funciona:</p>
+<ol class="passo">
+  <li>O funcionário olha o cesto: tem pão? <strong>Sim</strong> → atende um cliente.</li>
+  <li>Olha de novo: tem pão? <strong>Sim</strong> → atende mais um.</li>
+  <li>… e assim por diante …</li>
+  <li>Olha de novo: tem pão? <strong>Não</strong> → para de atender e vai fazer outra coisa.</li>
+</ol>
+<p>Três detalhes desse bilhete valem para <strong>todo</strong> <code>while</code>:</p>
+<ul>
+  <li>A <strong>pergunta vem antes</strong> de cada atendimento. Se o cesto já começar vazio, ninguém é atendido.</li>
+  <li>Cada volta <strong>muda alguma coisa</strong> (sai pão do cesto). Sem isso, a resposta da pergunta seria sempre a mesma, e o funcionário atenderia para sempre.</li>
+  <li>Quando a resposta vira <strong>não</strong>, ele sai da repetição e continua o resto do dia.</li>
+</ul>
+<p>No Lua, a "pergunta" é uma <strong>condição</strong>, a mesma do <code>if</code>: uma expressão como <code>contador &lt;= 5</code> (veja <a href="operadores-comparacao.html">Comparações</a>). A diferença é que o <code>if</code> roda o bloco <strong>uma vez</strong> se a condição for verdadeira; o <code>while</code> roda o bloco <strong>de novo e de novo</strong>, enquanto ela continuar verdadeira.</p>
+
+<hr>
+
+<h2>1. O primeiro <code>while</code>: contar de 1 a 5</h2>
+
+<pre class="file" data-file="contador.lua">local contador = 1
+while contador &lt;= 5 do
+  print("Volta " .. contador)
+  contador = contador + 1
+end
+print("Fim! contador agora vale " .. contador)
+</pre>
+
+<dl class="anatomy">
+  <dt>local contador = 1</dt><dd>A variável <strong>contadora</strong>, criada <strong>antes</strong> do laço, com o valor inicial. Poderia se chamar <code>volta</code> ou <code>i</code> (de "índice", um nome tradicional para contadores); o importante é que ela exista antes de a condição ser testada.</dd>
+  <dt>while</dt><dd>A palavra-chave do laço: "enquanto".</dd>
+  <dt>contador &lt;= 5</dt><dd>A <strong>condição</strong>, testada <strong>antes de cada volta</strong>. Lê-se: "enquanto o contador for menor ou igual a 5". Ela não precisa de parênteses.</dd>
+  <dt>do</dt><dd>"Faça". Fecha a condição e avisa: "agora vem o bloco que se repete". No <code>if</code> essa palavra é o <code>then</code>; no <code>while</code> é o <code>do</code>. <strong>É obrigatório.</strong></dd>
+  <dt>print("Volta " .. contador)</dt><dd>A primeira linha do <strong>corpo</strong> do laço, com o valor atual do contador juntado ao texto (veja <a href="concatenacao.html">Juntando Textos</a>). Os 2 espaços na frente mostram que ela está dentro do laço.</dd>
+  <dt>contador = contador + 1</dt><dd>"O contador passa a valer o que valia, mais 1". É esta linha que faz o laço <strong>andar</strong>: sem ela, o contador seria 1 para sempre. (O Lua não tem atalho como <code>contador += 1</code> nem <code>contador++</code>: veja <a href="#errado">Quando dá errado</a>.)</dd>
+  <dt>end</dt><dd>Fecha o bloco do laço. Quando o Lua chega aqui, ele <strong>volta lá para cima</strong> e testa a condição de novo.</dd>
+  <dt>print("Fim! …")</dt><dd>Depois do <code>end</code>, fora do laço: roda uma vez só, quando o laço termina.</dd>
+</dl>
+
+<pre class="term">$ lua contador.lua
+Volta 1
+Volta 2
+Volta 3
+Volta 4
+Volta 5
+Fim! contador agora vale 6
+</pre>
+
+<p>Cada execução do corpo se chama uma <strong>volta</strong> (os programadores também dizem <strong>iteração</strong>). Aqui foram 5 voltas.</p>
+
+<h3>Passo a passo: o que o Lua fez</h3>
+<p>Siga a variável <code>contador</code> volta por volta. Fazer de conta que você é o computador é a melhor forma de entender laços:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Momento</th><th>Valor de <code>contador</code></th><th><code>contador &lt;= 5</code>?</th><th>O que acontece</th></tr>
+<tr><td>1º teste</td><td>1</td><td><code>true</code></td><td>Entra: mostra <code>Volta 1</code>, e o contador vira 2</td></tr>
+<tr><td>2º teste</td><td>2</td><td><code>true</code></td><td>Mostra <code>Volta 2</code>, o contador vira 3</td></tr>
+<tr><td>3º teste</td><td>3</td><td><code>true</code></td><td>Mostra <code>Volta 3</code>, o contador vira 4</td></tr>
+<tr><td>4º teste</td><td>4</td><td><code>true</code></td><td>Mostra <code>Volta 4</code>, o contador vira 5</td></tr>
+<tr><td>5º teste</td><td>5</td><td><code>true</code></td><td>Mostra <code>Volta 5</code>, o contador vira 6</td></tr>
+<tr><td>6º teste</td><td>6</td><td><strong><code>false</code></strong></td><td>Sai do laço e vai para a primeira linha depois do <code>end</code></td></tr>
+</table>
+</div>
+
+<p>Por isso a última linha mostra <code>contador agora vale 6</code>: o laço só termina quando a condição fica falsa, e ela só fica falsa quando o contador passa de 5. A condição foi testada <strong>6 vezes</strong> para o corpo rodar <strong>5 vezes</strong>.</p>
+
+<div class="tip">
+<strong>As três peças de todo laço com contador</strong>
+<p>1) o <strong>início</strong>: <code>local contador = 1</code> · 2) a <strong>condição</strong>: <code>contador &lt;= 5</code> · 3) o <strong>passo</strong>: <code>contador = contador + 1</code>. Se faltar qualquer uma, o laço dá errado (a seção <a href="#errado">Quando dá errado</a> mostra cada caso). Na aula <a href="for-numerico.html">for Numérico</a>, você vai ver um laço que cuida das três sozinho.</p>
+</div>
+
+<div class="trylua" data-goal="out:Volta 10;;src:\bwhile\b">
+<p class="try-task"><strong>Missão:</strong> faça o programa contar até <strong>10</strong> em vez de 5. Depois, por curiosidade, troque o valor inicial para 3 e veja quantas voltas sobram.</p>
+<pre class="script" data-file="main.lua">local contador = 1
+while contador &lt;= 5 do
+  print("Volta " .. contador)
+  contador = contador + 1
+end
+print("Fim! contador agora vale " .. contador)
+</pre>
+<pre class="solucao" data-file="main.lua">local contador = 1
+while contador &lt;= 10 do
+  print("Volta " .. contador)
+  contador = contador + 1
+end
+print("Fim! contador agora vale " .. contador)
+</pre>
+</div>
+
+<hr>
+
+<h2>2. Contar para trás</h2>
+<p>O passo não precisa ser "mais 1". Para uma contagem regressiva, comece do maior número, <strong>diminua</strong> e troque a condição para "maior que zero":</p>
+
+<pre class="file" data-file="regressiva.lua">local segundos = 5
+while segundos &gt; 0 do
+  print(segundos .. "...")
+  segundos = segundos - 1
+end
+print("Já!")
+</pre>
+
+<pre class="term">$ lua regressiva.lua
+5...
+4...
+3...
+2...
+1...
+Já!
+</pre>
+
+<p>Quando <code>segundos</code> chega a 0, a pergunta <code>0 &gt; 0</code> dá <code>false</code> e o laço termina. O <code>Já!</code> está <strong>depois</strong> do <code>end</code>, então aparece uma vez só, no fim.</p>
+
+<p>O passo também pode ser de 2 em 2 (<code>contador = contador + 2</code>), de 10 em 10, ou até uma multiplicação (<code>valor = valor * 2</code>), como você vai ver na missão final.</p>
+
+<hr>
+
+<h2>3. Quando você não sabe quantas voltas vão ser</h2>
+<p>Nos dois exemplos acima, dava para saber de antemão: 5 voltas. O <code>while</code> brilha mesmo quando <strong>ninguém sabe</strong> quantas voltas serão. A Ana quer juntar R$ 1000 para comprar um notebook novo. Ela consegue guardar R$ 150 por mês. Quantos meses vai levar?</p>
+
+<pre class="file" data-file="poupanca.lua">local saldo = 0
+local meses = 0
+while saldo &lt; 1000 do
+  saldo = saldo + 150
+  meses = meses + 1
+  print("Mês " .. meses .. ": R$ " .. saldo)
+end
+print("A Ana juntou R$ " .. saldo .. " em " .. meses .. " meses.")
+</pre>
+
+<pre class="term">$ lua poupanca.lua
+Mês 1: R$ 150
+Mês 2: R$ 300
+Mês 3: R$ 450
+Mês 4: R$ 600
+Mês 5: R$ 750
+Mês 6: R$ 900
+Mês 7: R$ 1050
+A Ana juntou R$ 1050 em 7 meses.
+</pre>
+
+<p>Repare nos papéis das duas variáveis:</p>
+<ul>
+  <li><code>saldo</code> é um <strong>acumulador</strong>: começa em 0 e, a cada volta, recebe mais um pouco. É ele que a condição olha.</li>
+  <li><code>meses</code> é um <strong>contador</strong>: conta as voltas, para no fim a gente saber quantas foram.</li>
+</ul>
+<p>No mês 6 o saldo era 900, ainda menor que 1000: mais uma volta. No mês 7 ele passou para 1050, a condição <code>1050 &lt; 1000</code> deu <code>false</code>, e o laço parou. O programa descobriu sozinho que eram 7 meses.</p>
+
+<h3>Zero voltas também é possível</h3>
+<p>Como a pergunta vem <strong>antes</strong> da primeira volta, o corpo pode não rodar nenhuma vez. Se a Ana já tivesse R$ 1200:</p>
+
+<pre class="file" data-file="nunca.lua">local saldo = 1200
+local meses = 0
+while saldo &lt; 1000 do
+  saldo = saldo + 150
+  meses = meses + 1
+end
+print("Meses de espera: " .. meses)
+</pre>
+
+<pre class="term">$ lua nunca.lua
+Meses de espera: 0
+</pre>
+
+<p>Logo no primeiro teste, <code>1200 &lt; 1000</code> deu <code>false</code>: o Lua pulou o bloco inteiro e foi direto para o <code>print</code>. Isso não é erro; é o cesto que já começou vazio. (Se você precisa que o bloco rode <strong>pelo menos uma vez</strong>, existe outro laço, que testa no fim: <a href="repeat.html">repeat … until</a>.)</p>
+
+<hr>
+
+<h2>4. Repetir com <code>io.read()</code>: somar até digitar 0</h2>
+<p>No caixa da padaria, a Ana digita o preço de cada item da compra. Ela não sabe quantos itens o cliente trouxe; quando acabar, ela digita <code>0</code>. Um valor especial que quer dizer "acabou" se chama <strong>sentinela</strong> (como o vigia que avisa a hora de parar).</p>
+
+<pre class="file" data-file="compras.lua">local total = 0
+io.write("Preço do item (0 para terminar): ")
+local preco = tonumber(io.read())
+while preco ~= 0 do
+  total = total + preco
+  io.write("Preço do item (0 para terminar): ")
+  preco = tonumber(io.read())
+end
+print(string.format("Total da compra: R$ %.2f", total))
+</pre>
+
+<dl class="anatomy">
+  <dt>io.write(…) e tonumber(io.read())</dt><dd>A <strong>primeira</strong> leitura acontece antes do laço, para a condição ter o que testar. O <code>io.write</code> mostra a pergunta sem pular linha (veja <a href="io-write.html">io.write()</a>); o <code>io.read()</code> lê o que a pessoa digitou, como texto, e o <code>tonumber</code> o transforma em número (veja <a href="io-read.html">io.read()</a> e <a href="conversao.html">Conversão</a>).</dd>
+  <dt>while preco ~= 0 do</dt><dd>"Enquanto o preço for <strong>diferente</strong> de zero, faça." O <code>~=</code> é o "diferente" do Lua.</dd>
+  <dt>total = total + preco</dt><dd>Junta o preço no acumulador.</dd>
+  <dt>preco = tonumber(io.read())</dt><dd>A <strong>próxima</strong> leitura, no fim do bloco. É ela que faz o laço andar: cada volta lê um preço novo, e a condição testa esse preço novo. Repare que aqui não tem <code>local</code>: a variável <code>preco</code> já existe.</dd>
+  <dt>string.format("… %.2f", total)</dt><dd>Mostra o total com 2 casas decimais (o jeito de escrever dinheiro). Os detalhes estão em <a href="string-format.html">string.format</a>.</dd>
+</dl>
+
+<p>No terminal, a Ana digitou <code>4.50</code>, <code>12.90</code>, <code>3.25</code> e, por fim, <code>0</code>:</p>
+
+<pre class="term">$ lua compras.lua
+Preço do item (0 para terminar): 4.50
+Preço do item (0 para terminar): 12.90
+Preço do item (0 para terminar): 3.25
+Preço do item (0 para terminar): 0
+Total da compra: R$ 20.65
+</pre>
+
+<p>Repare que a pergunta aparece no código <strong>duas vezes</strong>: uma antes do laço e uma no fim do bloco. É o jeito clássico de escrever esse tipo de laço com <code>while</code>. Na seção <a href="#formas">Formas diferentes</a> você vê como escrever a pergunta uma vez só.</p>
+
+<div class="trylua" data-digitar="4.50\n12.90\n0">
+<p class="try-task"><strong>Experimente:</strong> rode o programa e digite os preços de uma compra sua no terminal da caixa (use <strong>ponto</strong> nas casas decimais: <code>4.50</code>; com vírgula o <code>tonumber</code> não entende). Para terminar, digite <code>0</code>. O que acontece se o primeiro preço já for <code>0</code>?</p>
+<pre class="script" data-file="main.lua">local total = 0
+io.write("Preço do item (0 para terminar): ")
+local preco = tonumber(io.read())
+while preco ~= 0 do
+  total = total + preco
+  io.write("Preço do item (0 para terminar): ")
+  preco = tonumber(io.read())
+end
+print(string.format("Total da compra: R$ %.2f", total))
+</pre>
+</div>
+
+<hr>
+
+<h2>5. Pedir de novo até a resposta ser válida</h2>
+<p>A professora da Ana lança as notas da turma num programa. Nota vai de 0 a 10; se ela digitar 15 sem querer, o programa deve <strong>reclamar e perguntar de novo</strong>, quantas vezes for preciso. Isso é <strong>validar a entrada</strong>, e é um dos usos mais comuns do <code>while</code>:</p>
+
+<pre class="file" data-file="nota.lua">io.write("Digite a nota (0 a 10): ")
+local nota = tonumber(io.read())
+while nota &lt; 0 or nota &gt; 10 do
+  print("Nota inválida! Tem de ser de 0 a 10.")
+  io.write("Digite a nota (0 a 10): ")
+  nota = tonumber(io.read())
+end
+print("Nota aceita: " .. nota)
+</pre>
+
+<p>A condição <code>nota &lt; 0 or nota &gt; 10</code> quer dizer "a nota é <strong>inválida</strong>" (menor que 0 <strong>ou</strong> maior que 10; veja <a href="operadores-logicos.html">and, or e not</a>). Enquanto ela for inválida, o programa reclama e lê de novo. Uma tentativa no terminal, digitando <code>15</code>, depois <code>-2</code>, depois <code>8</code>:</p>
+
+<pre class="term">$ lua nota.lua
+Digite a nota (0 a 10): 15
+Nota inválida! Tem de ser de 0 a 10.
+Digite a nota (0 a 10): -2
+Nota inválida! Tem de ser de 0 a 10.
+Digite a nota (0 a 10): 8
+Nota aceita: 8
+</pre>
+
+<p>E se ela digitar <code>8</code> logo de cara? A condição dá <code>false</code> no primeiro teste, o bloco não roda nenhuma vez, e o programa aceita a nota direto. Ninguém leva bronca à toa.</p>
+
+<div class="note">
+<strong>Por que não um <code>if</code>?</strong>
+<p>Um <code>if</code> no lugar do <code>while</code> perguntaria de novo <strong>uma vez só</strong>. Se a pessoa errasse duas vezes seguidas, a segunda nota errada passaria. O <code>while</code> não desiste: só sai quando a resposta presta. A missão abaixo mostra a diferença.</p>
+</div>
+
+<div class="trylua" data-stdin="15\n-3\n8" data-goal="out:Nota aceita: 8;;src:\bwhile\b">
+<p class="try-task"><strong>Missão:</strong> este programa usa <code>if</code> e, por isso, aceita a segunda nota errada. A caixa já vai "digitar" <code>15</code>, <code>-3</code> e <code>8</code>. Rode uma vez para ver o problema (<code>Nota aceita: -3</code>) e troque o <code>if … then</code> por um <code>while … do</code>, para o programa só aceitar o <code>8</code>.</p>
+<pre class="script" data-file="main.lua">io.write("Digite a nota (0 a 10): ")
+local nota = tonumber(io.read())
+if nota &lt; 0 or nota &gt; 10 then
+  print("Nota inválida! Tem de ser de 0 a 10.")
+  io.write("Digite a nota (0 a 10): ")
+  nota = tonumber(io.read())
+end
+print("Nota aceita: " .. nota)
+</pre>
+<pre class="solucao" data-file="main.lua">io.write("Digite a nota (0 a 10): ")
+local nota = tonumber(io.read())
+while nota &lt; 0 or nota &gt; 10 do
+  print("Nota inválida! Tem de ser de 0 a 10.")
+  io.write("Digite a nota (0 a 10): ")
+  nota = tonumber(io.read())
+end
+print("Nota aceita: " .. nota)
+</pre>
+</div>
+
+<p>Esse programa ainda tem um ponto fraco: se a professora digitar <code>oito</code>, por extenso, o <code>tonumber</code> devolve <code>nil</code> e a comparação dá erro (você vai ver a mensagem em <a href="#errado">Quando dá errado</a>). Para se proteger, teste se o valor existe antes de comparar, como em <a href="condicoes-aninhadas.html">Condições Aninhadas</a>: <code>while not nota or nota &lt; 0 or nota &gt; 10 do</code>.</p>
+
+<hr>
+
+<h2>6. O laço infinito, e como pará-lo</h2>
+<p>Um laço cuja condição <strong>nunca</strong> fica falsa não termina nunca: é um <strong>laço infinito</strong>. O jeito mais comum de criar um sem querer é esquecer a linha que faz o laço andar. Olhe o contador da seção 1 sem o <code>contador = contador + 1</code>:</p>
+
+<pre class="file" data-file="infinito.lua">local contador = 1
+while contador &lt;= 5 do
+  print("Volta " .. contador)
+end
+print("Fim!")
+</pre>
+
+<p>O contador fica em 1 para sempre, então <code>1 &lt;= 5</code> é sempre <code>true</code>, e o programa mostra <code>Volta 1</code> sem parar. A Ana deixou ele rodar 1 segundo só (com o comando <code>timeout 1</code>) e contou as linhas com o <code>wc -l</code>:</p>
+
+<pre class="term">$ timeout 1 lua infinito.lua | head -3
+Volta 1
+Volta 1
+Volta 1
+$ timeout 1 lua infinito.lua | wc -l
+800450
+</pre>
+
+<p>Mais de <strong>800 mil</strong> linhas em um segundo (o número muda de um computador para outro). O <code>Fim!</code> nunca chega.</p>
+
+<h3>No terminal: <kbd>Ctrl</kbd>+<kbd>C</kbd></h3>
+<p>Para interromper um programa que não termina, segure <kbd>Ctrl</kbd> e aperte <kbd>C</kbd>. Um laço infinito também pode ser silencioso, sem mostrar nada; aqui a Ana esqueceu de somar o dinheiro no saldo, e o programa ficou parado, "pensando":</p>
+
+<pre class="file" data-file="esqueceu.lua">local saldo = 0
+local meses = 0
+while saldo &lt; 1000 do
+  meses = meses + 1
+end
+print("A Ana juntou R$ " .. saldo .. " em " .. meses .. " meses.")
+</pre>
+
+<pre class="term">$ lua esqueceu.lua
+^C
+lua: interrupted!
+stack traceback:
+        esqueceu.lua:3: in main chunk
+        [C]: in ?
+$ echo $?
+1
+</pre>
+
+<p>Linha por linha:</p>
+<dl class="anatomy">
+  <dt>^C</dt><dd>O terminal mostrando que você apertou <kbd>Ctrl</kbd>+<kbd>C</kbd>.</dd>
+  <dt>lua: interrupted!</dt><dd>"Interrompido!". Não é um defeito do seu código: é o Lua avisando que <strong>você</strong> mandou parar.</dd>
+  <dt>esqueceu.lua:3: in main chunk</dt><dd>Onde o programa estava quando parou: na linha 3, a do <code>while</code>, no programa principal. É uma pista de onde está o laço que não termina. (Dependendo do instante exato do <kbd>Ctrl</kbd>+<kbd>C</kbd>, pode aparecer a linha 4, a outra linha do laço.)</dd>
+  <dt>echo $? → 1</dt><dd>O código de saída do programa (o <code>$?</code> do terminal). 0 quer dizer "terminou bem"; o Lua devolve 1 quando termina com erro, e o <code>interrupted!</code> conta como erro.</dd>
+</dl>
+
+<p>Se a tela estiver enchendo de linhas tão rápido que o <kbd>Ctrl</kbd>+<kbd>C</kbd> parece não fazer efeito, espere um instante: o terminal ainda está mostrando as linhas que já tinham sido impressas.</p>
+
+<h3>No editor do guia</h3>
+<p id="editor-infinito">A caixa "Experimente" roda o Lua de verdade dentro do navegador, então um laço infinito lá também não termina sozinho. A diferença é que o editor tem as suas próprias travas:</p>
+<ul>
+  <li>enquanto o programa roda, o botão <strong>▶ Rodar</strong> vira <strong>■ Parar</strong>. Clicar nele é o <kbd>Ctrl</kbd>+<kbd>C</kbd> do editor: a caixa mostra <code>^C</code> e <code>[programa interrompido]</code>;</li>
+  <li>se o programa passar de <strong>10 segundos</strong> rodando sem terminar, o editor o para sozinho com o aviso <code>(o editor parou o programa: ele rodou mais de 10 segundos sem terminar — laço infinito?)</code> (o tempo em que o programa espera você digitar não conta);</li>
+  <li>se o programa escrever demais (como o <code>Volta 1</code> sem fim), o editor também o para antes disso: mais de 2 milhões de caracteres.</li>
+</ul>
+
+<div class="trylua" data-sem-fim>
+<p class="try-task"><strong>Experimente:</strong> este é o programa da Ana que esqueceu de somar no saldo. Clique em Rodar e depois em <strong>■ Parar</strong> (ou espere os 10 segundos). Depois, conserte: acrescente <code>saldo = saldo + 150</code> dentro do laço e rode de novo.</p>
+<pre class="script" data-file="main.lua">local saldo = 0
+local meses = 0
+while saldo &lt; 1000 do
+  meses = meses + 1
+end
+print("A Ana juntou R$ " .. saldo .. " em " .. meses .. " meses.")
+</pre>
+</div>
+
+<p>Mais detalhes na aula <a href="simulador.html">O Editor do Guia</a>.</p>
+
+<h3>Quando o infinito é de propósito: <code>while true do</code></h3>
+<p>Às vezes o laço infinito é <strong>proposital</strong>: um programa que fica esperando pedidos até alguém mandar parar. Para isso se escreve <code>while true do</code>, uma condição que é sempre verdadeira. Um laço assim precisa de uma saída no meio do bloco, que é o <code>break</code> (em inglês, "quebrar"). Ele aparece logo abaixo, em <a href="#formas">Formas diferentes</a>, e tem aula própria: <a href="break.html">break</a>.</p>
+
+<hr>
+
+<h2>7. <code>while</code> no modo interativo</h2>
+<p>Dá para escrever um laço direto no <code>&gt;</code> do Lua (veja <a href="repl.html">O Modo Interativo</a>). Depois da linha com o <code>do</code>, o prompt muda para <code>&gt;&gt;</code>: o Lua está esperando o resto do laço. Ele só roda quando recebe o <code>end</code>:</p>
+
+<pre class="term">$ lua
+Lua 5.5.0  Copyright (C) 1994-2025 Lua.org, PUC-Rio
+&gt; n = 3
+&gt; while n &gt; 0 do
+&gt;&gt; print(n)
+&gt;&gt; n = n - 1
+&gt;&gt; end
+3
+2
+1
+&gt; n
+0
+&gt; os.exit()
+</pre>
+
+<p>A variável continua lá depois do laço: <code>n</code> terminou valendo 0, o valor que fez a condição <code>n &gt; 0</code> ficar falsa. (Aqui ela foi criada sem <code>local</code> de propósito: no modo interativo, uma <code>local</code> não sobrevive de uma linha para a outra.)</p>
+
+<hr>
+
+<h2 id="formas">Formas diferentes de fazer a mesma coisa</h2>
+<p>A validação da nota (seção 5) pode ser escrita de três formas. A primeira é a que você já viu: lê antes do laço e lê de novo no fim do bloco.</p>
+
+<p>A segunda usa <code>while true do</code> e sai do laço com <code>break</code> quando a nota é boa. A pergunta aparece uma vez só:</p>
+
+<pre class="file" data-file="nota_true.lua">local nota
+while true do
+  io.write("Digite a nota (0 a 10): ")
+  nota = tonumber(io.read())
+  if nota &gt;= 0 and nota &lt;= 10 then
+    break
+  end
+  print("Nota inválida! Tem de ser de 0 a 10.")
+end
+print("Nota aceita: " .. nota)
+</pre>
+
+<pre class="term">$ lua nota_true.lua
+Digite a nota (0 a 10): 11
+Nota inválida! Tem de ser de 0 a 10.
+Digite a nota (0 a 10): 7
+Nota aceita: 7
+</pre>
+
+<p>Quando a nota é válida, o <code>break</code> pula para fora do laço, direto para o <code>print</code> final. A <code>local nota</code> foi criada <strong>antes</strong> do laço porque uma <code>local</code> criada dentro dele sumiria no <code>end</code>.</p>
+
+<p>A terceira usa o <code>repeat … until</code>, um laço que testa a condição <strong>no fim</strong> e, por isso, roda o bloco pelo menos uma vez. É o assunto da próxima aula, <a href="repeat.html">repeat … until</a>. E para contar de 1 a 5 existe uma forma mais curta, o <code>for</code>:</p>
+
+<pre class="file" data-file="contador_for.lua">for contador = 1, 5 do
+  print("Volta " .. contador)
+end
+</pre>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Situação</th><th>Qual usar</th></tr>
+<tr><td>Não se sabe quantas voltas vão ser (até a meta, até digitar 0, até a resposta ser válida)</td><td><code>while condição do … end</code></td></tr>
+<tr><td>O bloco tem de rodar pelo menos uma vez (perguntar primeiro, testar depois)</td><td><code>repeat … until condição</code> (aula <a href="repeat.html">repeat … until</a>)</td></tr>
+<tr><td>Ler, testar e talvez repetir, com a saída no meio do bloco</td><td><code>while true do</code> com <code>break</code> (aula <a href="break.html">break</a>)</td></tr>
+<tr><td>Contar um número conhecido de voltas (de 1 a 10, de 10 a 0…)</td><td><code>for</code> (aula <a href="for-numerico.html">for Numérico</a>)</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+
+<div class="cenario">
+<strong>Esqueceu o <code>do</code></strong>
+<pre class="file" data-file="semdo.lua">local contador = 1
+while contador &lt;= 5
+  print("Volta " .. contador)
+  contador = contador + 1
+end
+</pre>
+<pre class="term">$ lua semdo.lua
+lua: semdo.lua:3: 'do' expected near 'print'
+</pre>
+<p>"Era esperado <code>do</code> perto de <code>print</code>". Como no <code>if</code> sem <code>then</code>, o Lua só percebe a falta na palavra <strong>seguinte</strong>: o erro aponta a linha 3, mas o <code>do</code> faltou no fim da linha 2. Também não apareceu nenhum <code>Volta</code>: com erro de sintaxe, o programa nem começa. <strong>Como consertar:</strong> <code>while contador &lt;= 5 do</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Usou <code>then</code> ou <code>:</code> no lugar do <code>do</code></strong>
+<pre class="file" data-file="python.lua">local contador = 1
+while contador &lt;= 5:
+  print("Volta " .. contador)
+  contador = contador + 1
+end
+</pre>
+<pre class="term">$ lua python.lua
+lua: python.lua:2: 'do' expected near ':'
+</pre>
+<p>Quem vem do Python escreve os dois-pontos; quem acabou de aprender o <code>if</code> escreve <code>then</code> (e recebe <code>'do' expected near 'then'</code>). No Lua, o <code>if</code> usa <code>then</code> e os laços usam <code>do</code>. <strong>Como consertar:</strong> troque o <code>:</code> por <code> do</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Escreveu <code>+=</code> ou <code>++</code></strong>
+<pre class="file" data-file="maisigual.lua">local contador = 1
+while contador &lt;= 5 do
+  print("Volta " .. contador)
+  contador += 1
+end
+</pre>
+<pre class="term">$ lua maisigual.lua
+lua: maisigual.lua:4: syntax error near '+'
+</pre>
+<p>"Erro de sintaxe perto de <code>+</code>". Muitas linguagens têm o atalho <code>contador += 1</code> (ou <code>contador++</code>). <strong>O Lua não tem nenhum dos dois</strong>: com <code>contador++</code> sai a mesma mensagem (<code>maismais.lua:4: syntax error near '+'</code>). <strong>Como consertar:</strong> escreva por extenso: <code>contador = contador + 1</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Esqueceu o <code>end</code></strong>
+<pre class="file" data-file="semendw.lua">local contador = 1
+while contador &lt;= 5 do
+  print("Volta " .. contador)
+  contador = contador + 1
+print("Fim!")
+</pre>
+<pre class="term">$ lua semendw.lua
+lua: semendw.lua:6: 'end' expected (to close 'while' at line 2) near &lt;eof&gt;
+</pre>
+<p>"Era esperado um <code>end</code> para fechar o <code>while</code> da linha 2, perto do fim do arquivo". A mesma mensagem do <code>if</code>, agora dizendo <code>'while'</code>. <strong>Como consertar:</strong> o <code>end</code> vai depois da última linha que deve se repetir (aqui, antes do <code>print("Fim!")</code>).</p>
+</div>
+
+<div class="cenario">
+<strong>A variável não existia antes do laço</strong>
+<pre class="file" data-file="seminicio.lua">while contador &lt;= 5 do
+  print("Volta " .. contador)
+  contador = contador + 1
+end
+</pre>
+<pre class="term">$ lua seminicio.lua
+lua: seminicio.lua:1: attempt to compare nil with number
+stack traceback:
+	seminicio.lua:1: in main chunk
+	[C]: in ?
+</pre>
+<p>"Tentativa de comparar <code>nil</code> com um número". Para testar a condição pela primeira vez, o Lua precisa saber quanto vale o <code>contador</code>, e ninguém deu valor a ele: uma variável que não existe vale <code>nil</code> (veja <a href="nil.html">O Valor nil</a>). <strong>Como consertar:</strong> crie a variável <strong>antes</strong> do <code>while</code>: <code>local contador = 1</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>O passo ficou fora do laço: laço infinito</strong>
+<p>Este é mais traiçoeiro, porque o Lua não reclama de nada:</p>
+<pre class="file" data-file="fora.lua">local contador = 1
+while contador &lt;= 5 do
+  print("Volta " .. contador)
+end
+contador = contador + 1
+</pre>
+<p>O <code>contador = contador + 1</code> está <strong>depois</strong> do <code>end</code>, então está fora do laço: só rodaria depois que o laço terminasse, e o laço nunca termina. O resultado é o mesmo da seção 6: <code>Volta 1</code> sem parar, até o <kbd>Ctrl</kbd>+<kbd>C</kbd>. <strong>Como consertar:</strong> ponha o passo antes do <code>end</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Digitou uma palavra onde o programa esperava um número</strong>
+<pre class="term">$ lua nota.lua
+Digite a nota (0 a 10): oito
+lua: nota.lua:3: attempt to compare nil with number
+stack traceback:
+        nota.lua:3: in main chunk
+        [C]: in ?
+</pre>
+<p>O <code>tonumber("oito")</code> devolveu <code>nil</code>, e a condição do <code>while</code> (linha 3) tentou comparar esse <code>nil</code>. No programa das compras acontece parecido, só que na conta: digitando <code>abc</code>, sai <code>compras.lua:5: attempt to perform arithmetic on a nil value (local 'preco')</code> ("tentativa de fazer conta com um valor <code>nil</code>, a local <code>preco</code>"). <strong>Como consertar:</strong> trate o <code>nil</code> como resposta inválida: <code>while not nota or nota &lt; 0 or nota &gt; 10 do</code>.</p>
+</div>
+
+<div class="trylua" data-goal="out:Volta 5;;semerro">
+<p class="try-task"><strong>Missão:</strong> este programa não roda. Leia a mensagem de erro, conserte, e rode de novo até aparecer <code>Volta 5</code>. (São dois erros: o Lua mostra um de cada vez.)</p>
+<pre class="script" data-file="main.lua">local contador = 1
+while contador &lt;= 5
+  print("Volta " .. contador)
+  contador += 1
+end
+</pre>
+<pre class="solucao" data-file="main.lua">local contador = 1
+while contador &lt;= 5 do
+  print("Volta " .. contador)
+  contador = contador + 1
+end
+</pre>
+</div>
+
+<hr>
+
+<h2>Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>O que faz</th></tr>
+<tr><td><code>while condição do … end</code></td><td>Repete o bloco enquanto a condição for verdadeira; testa <strong>antes</strong> de cada volta</td></tr>
+<tr><td><code>local contador = 1</code> … <code>contador = contador + 1</code></td><td>Início e passo de um laço com contador</td></tr>
+<tr><td><code>contador = contador - 1</code></td><td>Passo para contar para trás</td></tr>
+<tr><td><code>total = total + valor</code></td><td>Acumular: juntar um valor a cada volta</td></tr>
+<tr><td><code>while preco ~= 0 do</code></td><td>Repetir até ler o valor sentinela</td></tr>
+<tr><td><code>while nota &lt; 0 or nota &gt; 10 do</code></td><td>Pedir de novo enquanto a resposta for inválida</td></tr>
+<tr><td><code>while true do</code> … <code>break</code></td><td>Laço "infinito" de propósito, com saída no meio</td></tr>
+<tr><td><kbd>Ctrl</kbd>+<kbd>C</kbd></td><td>No terminal, interrompe o programa (<code>lua: interrupted!</code>, código de saída 1)</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Sintoma</th><th>Causa provável</th></tr>
+<tr><td><code>'do' expected near …</code></td><td>Faltou o <code>do</code> (ou usou <code>then</code>/<code>:</code> no lugar dele)</td></tr>
+<tr><td><code>syntax error near '+'</code></td><td>Usou <code>+=</code> ou <code>++</code>, que o Lua não tem</td></tr>
+<tr><td><code>'end' expected (to close 'while' at line N)</code></td><td>Faltou o <code>end</code> do laço</td></tr>
+<tr><td><code>attempt to compare nil with number</code></td><td>A variável da condição não tem valor (não foi criada, ou o <code>tonumber</code> devolveu <code>nil</code>)</td></tr>
+<tr><td>A mesma linha sem parar, ou o programa "travado"</td><td>Laço infinito: faltou o passo, ou ele ficou depois do <code>end</code></td></tr>
+<tr><td><code>lua: interrupted!</code></td><td>Você apertou <kbd>Ctrl</kbd>+<kbd>C</kbd>: não é defeito no código</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. Complete o laço</h3>
+<p>Complete para o programa mostrar os números de 1 a 3:</p>
+<div class="ex-code">local n = 1<br><input data-answer="while" aria-label="palavra-chave do laço"> n &lt;= 3 <input data-answer="do" aria-label="palavra-chave depois da condição"><br>&nbsp;&nbsp;print(n)<br>&nbsp;&nbsp;n = n <input data-answer="+" aria-label="operador"> 1<br><input data-answer="end" aria-label="palavra-chave do fim"></div>
+</div>
+
+<div class="exercise">
+<h3>2. Quantas vezes?</h3>
+<p>Quantas vezes este laço mostra <code>Oi</code>? Responda com um número.</p>
+<pre class="file" data-file="oi.lua">local x = 10
+while x &gt; 4 do
+  print("Oi")
+  x = x - 2
+end
+</pre>
+<div class="ex-code">Mostra <input data-answer="3" aria-label="número de vezes"> vezes.</div>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">3. Qual é o valor de <code>contador</code> depois deste trecho? <code>local contador = 1</code> / <code>while contador &lt;= 5 do contador = contador + 1 end</code></p>
+<label><input type="radio" name="q3"> 5</label>
+<label><input type="radio" name="q3"> 6</label>
+<label><input type="radio" name="q3"> 1</label>
+<label><input type="radio" name="q3"> O laço nunca termina</label>
+</div>
+
+<div class="mc" data-answer="3">
+<p class="mc-q">4. Qual destas linhas soma 1 ao contador no Lua?</p>
+<label><input type="radio" name="q4"> <code>contador++</code></label>
+<label><input type="radio" name="q4"> <code>contador += 1</code></label>
+<label><input type="radio" name="q4"> <code>contador = contador + 1</code></label>
+<label><input type="radio" name="q4"> <code>contador + 1</code></label>
+</div>
+
+<div class="mc" data-answer="1">
+<p class="mc-q">5. <code>local saldo = 2000</code> / <code>while saldo &lt; 1000 do saldo = saldo + 150 end</code>. Quantas voltas esse laço dá?</p>
+<label><input type="radio" name="q5"> Nenhuma: a condição já é falsa no primeiro teste</label>
+<label><input type="radio" name="q5"> Uma: o <code>while</code> sempre roda pelo menos uma vez</label>
+<label><input type="radio" name="q5"> Infinitas</label>
+<label><input type="radio" name="q5"> Dá erro</label>
+</div>
+
+<div class="mc" data-answer="4">
+<p class="mc-q">6. Um programa fica "travado", sem mostrar nada, e você aperta <kbd>Ctrl</kbd>+<kbd>C</kbd>. O que o Lua mostra?</p>
+<label><input type="radio" name="q6"> <code>attempt to compare nil with number</code></label>
+<label><input type="radio" name="q6"> <code>'do' expected</code></label>
+<label><input type="radio" name="q6"> Nada: o <kbd>Ctrl</kbd>+<kbd>C</kbd> não funciona no Lua</label>
+<label><input type="radio" name="q6"> <code>lua: interrupted!</code> e o <code>stack traceback</code> com a linha onde ele estava</label>
+</div>
+
+<h3>Missão final: o dinheiro que dobra</h3>
+
+<div class="trylua" data-goal="out:em 10 dias: R$ 1024;;src:\bwhile\b">
+<p class="try-task"><strong>Missão:</strong> a Ana leu uma história: alguém começa com R$ 1 e, a cada dia, o dinheiro <strong>dobra</strong>. Em quantos dias passa de R$ 1000? Escreva o <code>while</code> no lugar do comentário: enquanto o <code>valor</code> for menor ou igual a 1000, dobre o valor (<code>valor = valor * 2</code>) e some 1 em <code>dias</code>.</p>
+<pre class="script" data-file="main.lua">local valor = 1
+local dias = 0
+-- escreva o while aqui
+
+print("Passou de R$ 1000 em " .. dias .. " dias: R$ " .. valor)
+</pre>
+<pre class="solucao" data-file="main.lua">local valor = 1
+local dias = 0
+while valor &lt;= 1000 do
+  valor = valor * 2
+  dias = dias + 1
+end
+print("Passou de R$ 1000 em " .. dias .. " dias: R$ " .. valor)
+</pre>
+</div>
+
+<p>A resposta é <strong>10 dias</strong>, com R$ 1024. No lab, saiu <code>Passou de R$ 1000 em 10 dias: R$ 1024</code>. Experimente trocar o 1000 da condição por um milhão (<code>1000000</code>): bastam mais 10 dias (no lab, deu <code>20 dias: R$ 1048576</code>). É a força de dobrar.</p>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li><code>while condição do … end</code> ("enquanto … faça … fim") repete o bloco enquanto a condição for verdadeira. A condição é testada <strong>antes</strong> de cada volta; se for falsa logo de cara, o bloco não roda nenhuma vez.</li>
+  <li>Laço com contador tem três peças: <strong>início</strong> (antes do laço), <strong>condição</strong> e <strong>passo</strong> (dentro do bloco). O passo se escreve por extenso: <code>contador = contador + 1</code> (o Lua não tem <code>+=</code> nem <code>++</code>).</li>
+  <li>O <code>while</code> é a escolha quando não se sabe quantas voltas vão ser: até a meta, até o valor sentinela, até a resposta ser válida.</li>
+  <li>Com <code>io.read()</code>, leia uma vez antes do laço e de novo no fim do bloco, e converta com <code>tonumber</code> (que devolve <code>nil</code> para o que não é número).</li>
+  <li>Sem o passo, o laço é infinito. No terminal, <kbd>Ctrl</kbd>+<kbd>C</kbd> para o programa com <code>lua: interrupted!</code>; no editor, o botão Parar (ou os 10 segundos).</li>
+  <li><code>while true do</code> é um laço infinito de propósito; ele precisa de um <code>break</code> para sair (aula <a href="break.html">break</a>).</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
