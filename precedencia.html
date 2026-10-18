@@ -1,0 +1,460 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua precedência — a ordem dos operadores | Guia Lua</title>
+<meta name="description" content="A precedência dos operadores do Lua para quem nunca programou: quem é calculado primeiro numa expressão (multiplicação antes da soma, ^ antes do sinal de menos, contas antes do .., comparações antes do and/or), a média errada sem parênteses, e os erros reais do Lua 5.5 (attempt to compare boolean with number, concatenate a nil value com or).">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">precedência</span> dos operadores</h1>
+
+<p class="intro">Quanto é <code>2 + 3 * 4</code>? Se você fizer da esquerda para a direita, dá 20; se fizer a multiplicação primeiro, dá 14. O Lua não escolhe na sorte: ele segue uma ordem fixa, a <strong>precedência dos operadores</strong> ("quem vem antes"). Conhecer essa ordem evita resultados errados que <strong>não dão mensagem de erro nenhuma</strong>, como uma média de notas que sai 11 em vez de 7.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O que é precedência e por que <code>2 + 3 * 4</code> dá 14.</li>
+  <li>A ordem das contas: <code>^</code>, depois o sinal de menos, depois <code>* / // %</code>, depois <code>+ -</code>.</li>
+  <li>O que acontece com operadores do mesmo nível (<code>10 - 4 - 3</code>) e a exceção do <code>^</code> e do <code>..</code>.</li>
+  <li>Onde ficam o <code>..</code>, as comparações, o <code>and</code>, o <code>or</code> e o <code>not</code>.</li>
+  <li>Como os <strong>parênteses</strong> mudam a ordem, e quando usá-los mesmo sem precisar.</li>
+  <li>Os erros reais causados pela ordem: a comparação encadeada e o <code>or</code> que chega tarde demais.</li>
+</ul>
+</div>
+
+<p>Todos os programas desta aula rodaram no <strong>Lua 5.5</strong> da máquina da Ana (usuária <code>ana</code>, computador <code>notebook</code>), salvos na pasta pessoal dela e executados com <code>lua arquivo.lua</code> (veja <a href="executar.html">Rodando um Programa</a>). Você pode rodar cada um no editor do guia.</p>
+
+<hr>
+
+<h2>A ideia: a ordem das tarefas de uma receita</h2>
+<p>Numa receita de bolo, algumas tarefas têm de vir antes das outras, não importa a ordem em que foram escritas na folha: primeiro você <strong>bate</strong> os ovos, depois <strong>mistura</strong> com a farinha, e só no fim <strong>assa</strong>. Quem lê a receita sabe disso sem precisar de setinhas.</p>
+<p>Com os operadores é igual. O Lua dá a cada operador um <strong>nível de prioridade</strong>. Numa expressão com vários operadores, ele faz primeiro os de nível mais alto, depois os de nível mais baixo. E, como na receita, você pode mudar a ordem com uma anotação: os <strong>parênteses</strong>. O que está entre parênteses é feito antes de tudo.</p>
+<p>Na escola você aprendeu a mesma regra: "primeiro multiplicação e divisão, depois soma e subtração". O Lua segue essa regra e acrescenta níveis para os outros operadores que você já conheceu: o <code>..</code> (<a href="concatenacao.html">Juntando Textos</a>), o <code>#</code> (<a href="operador-tamanho.html">Operador de Tamanho</a>), as comparações (<a href="operadores-comparacao.html">Comparações</a>), o <code>and</code>/<code>or</code>/<code>not</code> (<a href="operadores-logicos.html">and, or e not</a>) e os de bits (<a href="operadores-bits.html">Operadores de Bits</a>).</p>
+
+<hr>
+
+<h2>1. As contas: a mesma regra da escola</h2>
+
+<pre class="file" data-file="contas.lua">print(2 + 3 * 4)
+print((2 + 3) * 4)
+print(10 - 4 - 3)
+print(100 / 10 / 2)
+print(20 // 3 * 3)
+print(2 * 3 % 4)
+</pre>
+
+<pre class="term">$ lua contas.lua
+14
+20
+3
+5.0
+18
+2</pre>
+
+<dl class="anatomy">
+  <dt>2 + 3 * 4 → 14</dt><dd>A multiplicação tem prioridade maior que a soma: o Lua faz <code>3 * 4</code> = 12 e depois <code>2 + 12</code> = 14.</dd>
+  <dt>(2 + 3) * 4 → 20</dt><dd>Os parênteses mandam fazer a soma primeiro: <code>5 * 4</code> = 20.</dd>
+  <dt>10 - 4 - 3 → 3</dt><dd>Dois operadores do <strong>mesmo nível</strong>: o Lua vai da <strong>esquerda para a direita</strong>. <code>10 - 4</code> = 6, depois <code>6 - 3</code> = 3. (Da direita para a esquerda daria <code>10 - 1</code> = 9.)</dd>
+  <dt>100 / 10 / 2 → 5.0</dt><dd>Também da esquerda para a direita: <code>100 / 10</code> = 10.0, e <code>10.0 / 2</code> = 5.0. O <code>.0</code> é porque o <code>/</code> sempre dá float (veja <a href="divisao.html">Divisão</a>).</dd>
+  <dt>20 // 3 * 3 → 18</dt><dd>O <code>//</code> (divisão inteira) e o <code>*</code> estão no mesmo nível: <code>20 // 3</code> = 6, e <code>6 * 3</code> = 18.</dd>
+  <dt>2 * 3 % 4 → 2</dt><dd>O <code>%</code> (resto) também é do nível da multiplicação: <code>2 * 3</code> = 6, e o resto de 6 por 4 é 2.</dd>
+</dl>
+
+<p>O nome técnico para "da esquerda para a direita, entre operadores do mesmo nível" é <strong>associatividade à esquerda</strong>. Quase todos os operadores do Lua são assim; as duas exceções vêm na seção 2.</p>
+
+<h3>O erro clássico: a média</h3>
+<p>A professora quer a média de duas notas, 8 e 6. A média é a soma dividida por 2, que dá 7. Olhe o que sai sem parênteses:</p>
+
+<pre class="file" data-file="media.lua">local nota1, nota2 = 8, 6
+print(nota1 + nota2 / 2)
+print((nota1 + nota2) / 2)
+</pre>
+
+<pre class="term">$ lua media.lua
+11.0
+7.0</pre>
+
+<p>Na primeira linha, o Lua dividiu <strong>só o 6</strong> por 2 (deu 3.0) e somou com o 8: 11.0. Nenhuma mensagem de erro, só um resultado errado, que é o tipo mais traiçoeiro de erro. Com parênteses, a soma vem primeiro, e a média sai certa: 7.0.</p>
+
+<div class="trylua" data-goal="out:Média: 7.0">
+<p class="try-task"><strong>Missão:</strong> o programa mostra <code>Média: 11.0</code>. Ponha os parênteses no lugar certo para ele mostrar <code>Média: 7.0</code>.</p>
+<pre class="script" data-file="main.lua">local nota1, nota2 = 8, 6
+print("Média: " .. nota1 + nota2 / 2)
+</pre>
+<pre class="solucao" data-file="main.lua">local nota1, nota2 = 8, 6
+print("Média: " .. (nota1 + nota2) / 2)
+</pre>
+</div>
+
+<hr>
+
+<h2>2. A potência e o sinal de menos</h2>
+<p>O <code>^</code> (potência: <code>2 ^ 3</code> = 2 × 2 × 2; veja <a href="operadores-aritmeticos.html">Operadores Aritméticos</a>) é o operador de prioridade <strong>mais alta</strong> de todos. Mais alta até que o sinal de menos na frente de um número:</p>
+
+<pre class="file" data-file="potencia.lua">print(-2 ^ 2)
+print((-2) ^ 2)
+print(2 ^ 3 ^ 2)
+print((2 ^ 3) ^ 2)
+local x = 3
+print(-x ^ 2)
+</pre>
+
+<pre class="term">$ lua potencia.lua
+-4.0
+4.0
+512.0
+64.0
+-9.0</pre>
+
+<dl class="anatomy">
+  <dt>-2 ^ 2 → -4.0</dt><dd>O Lua entende <code>-(2 ^ 2)</code>: primeiro 2 ao quadrado (4), depois o sinal de menos. É a mesma convenção da matemática (−2² = −4). O resultado é float porque o <code>^</code> sempre dá float.</dd>
+  <dt>(-2) ^ 2 → 4.0</dt><dd>Para elevar o −2 ao quadrado, ponha-o entre parênteses.</dd>
+  <dt>2 ^ 3 ^ 2 → 512.0</dt><dd>Exceção à regra da esquerda para a direita: o <code>^</code> é feito da <strong>direita para a esquerda</strong> (associatividade à direita). <code>3 ^ 2</code> = 9, e <code>2 ^ 9</code> = 512. Também é a convenção da matemática para "torres" de potências.</dd>
+  <dt>(2 ^ 3) ^ 2 → 64.0</dt><dd>Com parênteses: <code>8 ^ 2</code> = 64.</dd>
+  <dt>-x ^ 2 → -9.0</dt><dd>Com variável, a mesma coisa: <code>-(3 ^ 2)</code>. Se você queria o quadrado de −3, escreva <code>(-x) ^ 2</code>.</dd>
+</dl>
+
+<p>A outra exceção, também da direita para a esquerda, é o <code>..</code>. Com ele, a ordem não muda o resultado (<code>"a" .. "b" .. "c"</code> é sempre <code>abc</code>), então você nunca vai notar.</p>
+
+<hr>
+
+<h2>3. Os operadores "na frente": <code>-</code>, <code>#</code>, <code>not</code> e <code>~</code></h2>
+<p>Quatro operadores são escritos <strong>antes</strong> de um valor só: o <code>-</code> (negativo), o <code>#</code> (tamanho), o <code>not</code> ("não") e o <code>~</code> ("não" de bits). Eles se chamam <strong>unários</strong> ("de um só"). Eles "grudam" no valor logo à direita e têm prioridade maior que todos os outros, menos o <code>^</code>:</p>
+
+<pre class="file" data-file="unarios.lua">local nome = "Ana"
+print(#nome + 1)
+print(-#nome)
+print(not nil == true)
+print(2 * -3)
+print(- -2)
+</pre>
+
+<pre class="term">$ lua unarios.lua
+4
+-3
+true
+-6
+2</pre>
+
+<ul>
+  <li><code>#nome + 1</code>: o tamanho (3) primeiro, depois a soma: 4.</li>
+  <li><code>-#nome</code>: dois unários seguidos, feitos de dentro para fora: o tamanho (3), depois o negativo: −3.</li>
+  <li><code>not nil == true</code>: o <code>not</code> vem antes do <code>==</code>. O Lua faz <code>not nil</code> (= <code>true</code>) e depois <code>true == true</code>: <code>true</code>. Aqui deu certo por coincidência; a seção 5 mostra quando não dá.</li>
+  <li><code>2 * -3</code>: o menos gruda no 3, e a conta é 2 × (−3) = −6.</li>
+  <li><code>- -2</code>: menos de menos 2 é 2. O <strong>espaço</strong> entre os dois sinais é obrigatório, como você vai ver em <a href="#errado">Quando dá errado</a>.</li>
+</ul>
+
+<hr>
+
+<h2>4. Contas antes do <code>..</code></h2>
+<p>O <code>..</code> tem prioridade <strong>menor</strong> que todas as contas. Isso é bom: dá para montar um texto com uma conta no meio sem parênteses.</p>
+
+<pre class="file" data-file="texto_conta.lua">local preco, quantidade = 4.5, 2
+print("Total: " .. preco * quantidade)
+print("Total: " .. 2 + 3)
+print(1 + 2 .. "")
+print("1" .. 2 * 3)
+</pre>
+
+<pre class="term">$ lua texto_conta.lua
+Total: 9.0
+Total: 5
+3
+16</pre>
+
+<ul>
+  <li><code>"Total: " .. preco * quantidade</code>: a multiplicação primeiro (9.0), depois o <code>..</code>.</li>
+  <li><code>"Total: " .. 2 + 3</code>: a soma primeiro, depois o texto: <code>Total: 5</code> (e não <code>Total: 23</code>).</li>
+  <li><code>1 + 2 .. ""</code>: a soma (3) e depois o texto vazio: o texto <code>3</code>.</li>
+  <li><code>"1" .. 2 * 3</code>: <code>2 * 3</code> = 6, e <code>"1" .. 6</code> = <code>16</code>.</li>
+</ul>
+
+<p>Já os operadores de bits (<code>&amp;</code>, <code>|</code>, <code>&lt;&lt;</code>…) ficam <strong>abaixo</strong> do <code>..</code>: <code>"x = " .. 6 &amp; 3</code> dá erro, e é preciso escrever <code>"x = " .. (6 &amp; 3)</code> (veja <a href="operadores-bits.html">Operadores de Bits</a>).</p>
+
+<hr>
+
+<h2>5. Comparações, <code>and</code> e <code>or</code> por último</h2>
+<p>As comparações (<code>==</code>, <code>~=</code>, <code>&lt;</code>, <code>&gt;</code>, <code>&lt;=</code>, <code>&gt;=</code>) vêm <strong>depois</strong> das contas e do <code>..</code>. Depois delas vem o <code>and</code>, e por último, com a prioridade mais baixa de todas, o <code>or</code>. Assim, as perguntas do dia a dia se escrevem sem parênteses:</p>
+
+<pre class="file" data-file="logicos.lua">local idade = 30
+print(idade &gt;= 18 and idade &lt; 60)
+print(idade &lt; 18 or idade &gt;= 60)
+print(not 1 == 2)
+print(not (1 == 2))
+print(true or false and false)
+print((true or false) and false)
+</pre>
+
+<pre class="term">$ lua logicos.lua
+true
+false
+false
+true
+true
+false</pre>
+
+<dl class="anatomy">
+  <dt>idade &gt;= 18 and idade &lt; 60</dt><dd>As duas comparações são feitas primeiro (<code>true</code> e <code>true</code>), e o <code>and</code> junta: <code>true</code>. É assim que a aula <a href="operadores-logicos.html">and, or e not</a> escreve "entre 18 e 59".</dd>
+  <dt>not 1 == 2 → false</dt><dd>Pegadinha! O <code>not</code> é unário e vem <strong>antes</strong> do <code>==</code>. O Lua faz <code>not 1</code> (o 1 é "verdadeiro", então dá <code>false</code>) e depois <code>false == 2</code>, que é <code>false</code>. Quem lê em português ("não é verdade que 1 é igual a 2") espera <code>true</code>.</dd>
+  <dt>not (1 == 2) → true</dt><dd>Com parênteses, a comparação vem primeiro (<code>false</code>), e o <code>not</code> inverte: <code>true</code>. Para negar uma comparação, use parênteses ou, melhor ainda, o operador contrário: <code>1 ~= 2</code>.</dd>
+  <dt>true or false and false → true</dt><dd>O <code>and</code> vem antes do <code>or</code>: o Lua lê <code>true or (false and false)</code>, que é <code>true</code>.</dd>
+  <dt>(true or false) and false → false</dt><dd>Com parênteses, o <code>or</code> vem primeiro (<code>true</code>), e <code>true and false</code> é <code>false</code>.</dd>
+</dl>
+
+<p>No modo interativo, para conferir rapidamente:</p>
+<pre class="term">$ lua
+Lua 5.5.0  Copyright (C) 1994-2025 Lua.org, PUC-Rio
+&gt; 2 + 3 * 4
+14
+&gt; (2 + 3) * 4
+20
+&gt; -2 ^ 2
+-4.0
+&gt; 2 ^ 3 ^ 2
+512.0
+&gt; not 1 == 2
+false
+&gt; os.exit()</pre>
+
+<hr>
+
+<h2>6. A tabela completa</h2>
+<p>Esta é a ordem oficial do manual do Lua 5.5 (seção 3.4.8), da prioridade <strong>mais alta</strong> (feito primeiro) para a <strong>mais baixa</strong> (feito por último). Operadores na mesma linha têm a mesma prioridade.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Nível</th><th>Operadores</th><th>O que são</th><th>Mesmo nível</th></tr>
+<tr><td>1 (primeiro)</td><td><code>^</code></td><td>potência</td><td>da direita para a esquerda</td></tr>
+<tr><td>2</td><td><code>not</code> <code>#</code> <code>-</code> <code>~</code> (na frente de um valor)</td><td>unários</td><td>de dentro para fora</td></tr>
+<tr><td>3</td><td><code>*</code> <code>/</code> <code>//</code> <code>%</code></td><td>multiplicação, divisões, resto</td><td>da esquerda para a direita</td></tr>
+<tr><td>4</td><td><code>+</code> <code>-</code></td><td>soma e subtração</td><td>da esquerda para a direita</td></tr>
+<tr><td>5</td><td><code>..</code></td><td>concatenação</td><td>da direita para a esquerda</td></tr>
+<tr><td>6</td><td><code>&lt;&lt;</code> <code>&gt;&gt;</code></td><td>deslocamento de bits</td><td>da esquerda para a direita</td></tr>
+<tr><td>7</td><td><code>&amp;</code></td><td>"e" de bits</td><td>da esquerda para a direita</td></tr>
+<tr><td>8</td><td><code>~</code> (entre dois valores)</td><td>ou exclusivo de bits</td><td>da esquerda para a direita</td></tr>
+<tr><td>9</td><td><code>|</code></td><td>"ou" de bits</td><td>da esquerda para a direita</td></tr>
+<tr><td>10</td><td><code>&lt;</code> <code>&gt;</code> <code>&lt;=</code> <code>&gt;=</code> <code>~=</code> <code>==</code></td><td>comparações</td><td>da esquerda para a direita</td></tr>
+<tr><td>11</td><td><code>and</code></td><td>"e"</td><td>da esquerda para a direita</td></tr>
+<tr><td>12 (por último)</td><td><code>or</code></td><td>"ou"</td><td>da esquerda para a direita</td></tr>
+</table>
+</div>
+
+<p>Não precisa decorar. Guarde só o esqueleto: <strong>contas → <code>..</code> → comparações → <code>and</code> → <code>or</code></strong>, com o <code>^</code> e os unários na frente de tudo. Para o resto, use parênteses.</p>
+
+<div class="note">
+<strong>É igual em todas as versões?</strong>
+<p>A ordem das contas, do <code>..</code>, das comparações e do <code>and</code>/<code>or</code> é a mesma desde o Lua 5.1 (e no LuaJIT). O <code>//</code> e os operadores de bits só existem a partir do 5.3; veja <a href="versoes.html">Lua 5.1, LuaJIT, 5.4 e 5.5</a>.</p>
+</div>
+
+<hr>
+
+<h2 id="formas">Formas diferentes de fazer a mesma coisa</h2>
+<p>A mesma conta pode ser escrita confiando na precedência, com parênteses "de sobra" ou em etapas, com variáveis no meio:</p>
+
+<pre class="file" data-file="formas.lua">local preco, quantidade, frete = 4.5, 2, 10
+print(preco * quantidade + frete)
+print((preco * quantidade) + frete)
+local subtotal = preco * quantidade
+local total = subtotal + frete
+print(total)
+</pre>
+
+<pre class="term">$ lua formas.lua
+19.0
+19.0
+19.0</pre>
+
+<p>As três dão o mesmo resultado. Qual escolher?</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Situação</th><th>Qual usar</th></tr>
+<tr><td>A regra da escola resolve, e todo mundo entende (<code>a * b + c</code>)</td><td>Sem parênteses</td></tr>
+<tr><td>Você precisou parar para pensar na ordem (<code>not</code>, <code>-x ^ 2</code>, bits, <code>..</code> com <code>or</code>)</td><td>Parênteses, mesmo que não sejam obrigatórios: quem lê depois agradece</td></tr>
+<tr><td>A conta é comprida e tem partes com significado (subtotal, desconto, frete)</td><td>Em etapas, com variáveis de nomes claros</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+<p>A maioria dos problemas de precedência <strong>não</strong> dá mensagem de erro: só um resultado diferente do esperado (como a média 11.0). Mas alguns param o programa, e a mensagem não fala em "ordem" nenhuma; é preciso reconhecer.</p>
+
+<div class="cenario">
+<strong>O <code>or</code> chegou tarde demais</strong>
+<p>A Ana quer cumprimentar a pessoa pelo nome ou, se não houver nome, por "visitante":</p>
+<pre class="file" data-file="orpadrao.lua">local nome
+print("Olá, " .. (nome or "visitante"))
+print("Olá, " .. nome or "visitante")
+</pre>
+<pre class="term">$ lua orpadrao.lua
+Olá, visitante
+lua: orpadrao.lua:3: attempt to concatenate a nil value (local 'nome')
+stack traceback:
+	orpadrao.lua:3: in main chunk
+	[C]: in ?</pre>
+<p>Linha por linha:</p>
+<dl class="anatomy">
+  <dt>Olá, visitante</dt><dd>A linha 2, com parênteses, funcionou: o <code>nome or "visitante"</code> foi feito primeiro e deu <code>"visitante"</code>.</dd>
+  <dt>orpadrao.lua:3:</dt><dd>O problema está na linha 3, a sem parênteses.</dd>
+  <dt>attempt to concatenate a nil value (local 'nome')</dt><dd>"Tentativa de concatenar um valor <code>nil</code> (a variável local <code>nome</code>)". O <code>or</code> é o operador de prioridade <strong>mais baixa</strong>, então o Lua tentou fazer <code>"Olá, " .. nome</code> primeiro, com <code>nome</code> valendo <code>nil</code>, e parou ali. O <code>or "visitante"</code> nem chegou a ser usado.</dd>
+  <dt>stack traceback: …</dt><dd>O rastro: linha 3 do programa principal (veja <a href="erros.html">Lendo uma Mensagem de Erro</a>).</dd>
+</dl>
+<p><strong>Como consertar:</strong> parênteses em volta do <code>or</code>: <code>"Olá, " .. (nome or "visitante")</code>.</p>
+</div>
+
+<div class="trylua" data-goal="out:Cidade: não informada;;semerro">
+<p class="try-task"><strong>Missão:</strong> o cadastro da cliente não tem cidade, e o programa para com <code>attempt to concatenate a nil value</code>. Ponha os parênteses no lugar certo para ele mostrar <code>Cidade: não informada</code>.</p>
+<pre class="script" data-file="main.lua">local cidade
+print("Cidade: " .. cidade or "não informada")
+</pre>
+<pre class="solucao" data-file="main.lua">local cidade
+print("Cidade: " .. (cidade or "não informada"))
+</pre>
+</div>
+
+<div class="cenario">
+<strong>Comparação encadeada: <code>0 &lt;= nota &lt;= 10</code></strong>
+<p>Na matemática (e no Python), <code>0 ≤ nota ≤ 10</code> quer dizer "a nota está entre 0 e 10". No Lua, não:</p>
+<pre class="file" data-file="encadeado.lua">local nota = 7
+print(0 &lt;= nota &lt;= 10)
+</pre>
+<pre class="term">$ lua encadeado.lua
+lua: encadeado.lua:2: attempt to compare boolean with number
+stack traceback:
+	encadeado.lua:2: in main chunk
+	[C]: in ?</pre>
+<p>"Tentativa de comparar um booleano com um número". As duas comparações estão no mesmo nível, então o Lua vai da esquerda para a direita: <code>0 &lt;= 7</code> dá <code>true</code>, e depois ele tenta <code>true &lt;= 10</code>. Um booleano não é maior nem menor que um número, e o programa para. <strong>Como consertar:</strong> duas comparações ligadas por <code>and</code>:</p>
+<pre class="file" data-file="encadeado2.lua">local nota = 7
+print(0 &lt;= nota and nota &lt;= 10)
+</pre>
+<pre class="term">$ lua encadeado2.lua
+true</pre>
+</div>
+
+<div class="cenario">
+<strong>Dois sinais de menos colados: <code>--</code></strong>
+<pre class="file" data-file="menosmenos.lua">print(--2)
+</pre>
+<pre class="term">$ lua menosmenos.lua
+lua: menosmenos.lua:2: unexpected symbol near &lt;eof&gt;</pre>
+<p>No Lua, <code>--</code> começa um <strong>comentário</strong> (veja <a href="comentarios.html">Comentários</a>). Tudo depois dele na linha some, e sobra só <code>print(</code>, sem fechar. O Lua chega ao fim do arquivo (<code>&lt;eof&gt;</code>, de <em>end of file</em>; por isso a linha 2, depois da última) esperando o resto e reclama de um "símbolo inesperado". <strong>Como consertar:</strong> um espaço entre os sinais (<code>- -2</code>) ou, melhor, parênteses: <code>-(-2)</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>O resultado está errado, mas não há mensagem</strong>
+<p>A média 11.0 em vez de 7.0, o <code>-2 ^ 2</code> que dá −4.0, o <code>not 1 == 2</code> que dá <code>false</code>. Quando uma conta der um número estranho, refaça-a no modo interativo (<code>lua</code>), um pedaço de cada vez, e acrescente parênteses até o resultado bater com o que você quer.</p>
+</div>
+
+<hr>
+
+<h2>Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Expressão</th><th>O Lua entende</th><th>Resultado</th></tr>
+<tr><td><code>2 + 3 * 4</code></td><td><code>2 + (3 * 4)</code></td><td><code>14</code></td></tr>
+<tr><td><code>10 - 4 - 3</code></td><td><code>(10 - 4) - 3</code></td><td><code>3</code></td></tr>
+<tr><td><code>8 + 6 / 2</code></td><td><code>8 + (6 / 2)</code></td><td><code>11.0</code></td></tr>
+<tr><td><code>-2 ^ 2</code></td><td><code>-(2 ^ 2)</code></td><td><code>-4.0</code></td></tr>
+<tr><td><code>2 ^ 3 ^ 2</code></td><td><code>2 ^ (3 ^ 2)</code></td><td><code>512.0</code></td></tr>
+<tr><td><code>#nome + 1</code></td><td><code>(#nome) + 1</code></td><td>o tamanho mais 1</td></tr>
+<tr><td><code>"T: " .. 2 + 3</code></td><td><code>"T: " .. (2 + 3)</code></td><td><code>T: 5</code></td></tr>
+<tr><td><code>not 1 == 2</code></td><td><code>(not 1) == 2</code></td><td><code>false</code></td></tr>
+<tr><td><code>a or b and c</code></td><td><code>a or (b and c)</code></td><td></td></tr>
+<tr><td><code>"Olá, " .. n or "x"</code></td><td><code>("Olá, " .. n) or "x"</code></td><td>erro se <code>n</code> for <code>nil</code></td></tr>
+<tr><td><code>0 &lt;= n &lt;= 10</code></td><td><code>(0 &lt;= n) &lt;= 10</code></td><td><code>attempt to compare boolean with number</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. Calcule como o Lua</h3>
+<p>Responda com o resultado que o Lua mostraria.</p>
+<div class="ex-code"><code>1 + 2 * 3</code> = <input data-answer="7" aria-label="1 + 2 * 3"><br><code>(1 + 2) * 3</code> = <input data-answer="9" aria-label="(1 + 2) * 3"><br><code>20 - 5 - 5</code> = <input data-answer="10" aria-label="20 - 5 - 5"><br><code>-3 ^ 2</code> = <input data-answer="-9.0" aria-label="-3 ^ 2"></div>
+</div>
+
+<div class="exercise">
+<h3>2. Complete com parênteses</h3>
+<p>Complete para calcular a média de <code>a</code>, <code>b</code> e <code>c</code>:</p>
+<div class="ex-code">local media = <input data-answer="(a + b + c)|(a+b+c)" aria-label="soma entre parênteses"> / 3</div>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">3. O que <code>print("Total: " .. 10 + 5)</code> mostra?</p>
+<label><input type="radio" name="q3"> <code>Total: 105</code></label>
+<label><input type="radio" name="q3"> <code>Total: 15</code></label>
+<label><input type="radio" name="q3"> Um erro</label>
+<label><input type="radio" name="q3"> <code>Total: 10 + 5</code></label>
+</div>
+
+<div class="mc" data-answer="4">
+<p class="mc-q">4. Qual destes operadores é feito <strong>por último</strong> numa expressão sem parênteses?</p>
+<label><input type="radio" name="q4"> <code>*</code></label>
+<label><input type="radio" name="q4"> <code>..</code></label>
+<label><input type="radio" name="q4"> <code>==</code></label>
+<label><input type="radio" name="q4"> <code>or</code></label>
+</div>
+
+<div class="mc" data-answer="1">
+<p class="mc-q">5. Como se escreve, no Lua, "a idade está entre 18 e 60"?</p>
+<label><input type="radio" name="q5"> <code>idade &gt;= 18 and idade &lt;= 60</code></label>
+<label><input type="radio" name="q5"> <code>18 &lt;= idade &lt;= 60</code></label>
+<label><input type="radio" name="q5"> <code>idade &gt;= 18 or idade &lt;= 60</code></label>
+<label><input type="radio" name="q5"> <code>not idade &lt; 18 == idade &gt; 60</code></label>
+</div>
+
+<div class="mc" data-answer="3">
+<p class="mc-q">6. Quanto dá <code>2 ^ 2 ^ 3</code>?</p>
+<label><input type="radio" name="q6"> <code>64.0</code></label>
+<label><input type="radio" name="q6"> <code>12.0</code></label>
+<label><input type="radio" name="q6"> <code>256.0</code></label>
+<label><input type="radio" name="q6"> Dá erro</label>
+</div>
+
+<h3>Missão final: Fahrenheit para Celsius</h3>
+
+<div class="trylua" data-goal="out:212 °F = 100.0 °C">
+<p class="try-task"><strong>Missão:</strong> a fórmula para converter de Fahrenheit para Celsius é: tire 32, multiplique por 5 e divida por 9. O programa esqueceu os parênteses e mostra um número estranho. Conserte para ele mostrar <code>212 °F = 100.0 °C</code> (a água fervendo).</p>
+<pre class="script" data-file="main.lua">local fahrenheit = 212
+local celsius = fahrenheit - 32 * 5 / 9
+print(fahrenheit .. " °F = " .. celsius .. " °C")
+</pre>
+<pre class="solucao" data-file="main.lua">local fahrenheit = 212
+local celsius = (fahrenheit - 32) * 5 / 9
+print(fahrenheit .. " °F = " .. celsius .. " °C")
+</pre>
+</div>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li>A <strong>precedência</strong> decide o que o Lua calcula primeiro numa expressão com vários operadores. Parênteses passam na frente de tudo.</li>
+  <li>Ordem, do primeiro ao último: <code>^</code> → unários (<code>-</code>, <code>#</code>, <code>not</code>, <code>~</code>) → <code>* / // %</code> → <code>+ -</code> → <code>..</code> → bits → comparações → <code>and</code> → <code>or</code>.</li>
+  <li>No mesmo nível, da esquerda para a direita (<code>10 - 4 - 3</code> = 3), menos o <code>^</code> e o <code>..</code>, que vão da direita para a esquerda (<code>2 ^ 3 ^ 2</code> = 512.0).</li>
+  <li><code>-2 ^ 2</code> é −4.0; <code>not 1 == 2</code> é <code>false</code>; <code>8 + 6 / 2</code> é 11.0. Erros de ordem quase sempre dão resultado errado sem mensagem.</li>
+  <li>Use parênteses em volta do <code>or</code> dentro de um <code>..</code>, e escreva "entre" com <code>and</code>: <code>0 &lt;= n and n &lt;= 10</code>.</li>
+  <li>Na dúvida, parênteses. Código claro vale mais que código curto.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
