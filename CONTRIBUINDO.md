@@ -9,7 +9,7 @@ O guia é uma **escola**, estilo W3Schools, para quem **nunca programou**. **Uma
 Antes de tudo, leia o `RECURSOS.md`: onde trabalhar (VPS) e como.
 
 ## 1. Esqueleto do arquivo
-Use como modelo a estrutura de uma aula do Guia Python, por exemplo `~/guia-python/print.html` e `~/guia-python/while.html` (cabeçalho, `<main>`, blocos, rodapé, `.exercise`, `.mc`, `dl.anatomy`, `div.cenario`, `div.note`, `table.ref`). Troque:
+Use como modelo a estrutura de uma aula do Guia Python, por exemplo `~/guia-python/print.html` e `~/guia-python/while.html` (na VPS) (cabeçalho, `<main>`, blocos, rodapé, `.exercise`, `.mc`, `dl.anatomy`, `div.cenario`, `div.note`, `table.ref`). Troque:
 - `<title>Lua TEMA — descrição | Guia Lua</title>`;
 - `<h1>Lua <span class="hl">TEMA</span></h1>`;
 - a caixa `.trypy` por **`.trylua`** (seção 3), `main.py` por `main.lua`, `python3` por `lua`.
