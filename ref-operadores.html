@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua Operadores — referência completa com a tabela de precedência do Lua 5.5 | Guia Lua</title>
+<meta name="description" content="Referência rápida de todos os operadores do Lua 5.5: aritméticos (+ - * / // % ^), comparação (== ~= &lt; &gt; &lt;= &gt;=), lógicos (and or not), concatenação (..), tamanho (#) e de bits (&amp; | ~ &lt;&lt; &gt;&gt;), com exemplo, resultado real e a tabela de precedência do manual oficial.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">Operadores</span></h1>
+
+<p class="intro">Esta é a página de consulta rápida de todos os <strong>operadores</strong> do Lua 5.5: os símbolos e palavras que fazem contas (<code>+</code>, <code>*</code>), comparam (<code>==</code>, <code>&lt;</code>), combinam condições (<code>and</code>, <code>or</code>), juntam textos (<code>..</code>), medem tamanho (<code>#</code>) e mexem em bits (<code>&amp;</code>, <code>&lt;&lt;</code>). No fim está a <strong>tabela de precedência</strong>: a ordem em que o Lua faz as operações quando há várias na mesma expressão.</p>
+
+<div class="note">
+<strong>Como ler as tabelas</strong>
+<ul>
+  <li><strong>Exemplo</strong> é o que você digitaria depois do <code>&gt;</code> do <a href="repl.html">modo interativo</a>.</li>
+  <li><strong>Resultado</strong> é o que o Lua 5.5.0 respondeu no computador da Ana. Vários valores aparecem separados por vírgula; no terminal, o Lua separa com TAB.</li>
+  <li>Preste atenção no <code>.0</code>: <code>3</code> é inteiro, <code>3.0</code> é float. Veja <a href="numeros.html">Números (inteiro e float)</a>.</li>
+</ul>
+</div>
+
+<p>Assim fica no terminal da Ana:</p>
+
+<pre class="term">$ lua
+Lua 5.5.0  Copyright (C) 1994-2025 Lua.org, PUC-Rio
+&gt; 7 / 2, 7 // 2, 7 % 2
+3.5	3	1
+&gt; 2 + 3 * 4
+14
+&gt; "Ana" .. " " .. "Lima"
+Ana Lima
+&gt; 1 ~= 2
+true
+&gt; x += 1
+stdin:1: syntax error near '+'
+&gt; os.exit()
+</pre>
+
+<p>O <code>2 + 3 * 4</code> deu <code>14</code>, não <code>20</code>: a multiplicação vem antes da soma. "Diferente" no Lua é <code>~=</code> (não <code>!=</code>). E o <code>x += 1</code> de outras linguagens não existe: o Lua respondeu <em>syntax error near '+'</em> ("erro de sintaxe perto do <code>+</code>"). Escreva <code>x = x + 1</code>.</p>
+
+<p>Pule direto para o grupo que você procura:</p>
+<ul>
+  <li><a href="#aritmeticos">Aritméticos</a>: <code>+</code> <code>-</code> <code>*</code> <code>/</code> <code>//</code> <code>%</code> <code>^</code></li>
+  <li><a href="#comparacao">Comparação</a>: <code>==</code> <code>~=</code> <code>&lt;</code> <code>&gt;</code> <code>&lt;=</code> <code>&gt;=</code></li>
+  <li><a href="#logicos">Lógicos</a>: <code>and</code> <code>or</code> <code>not</code></li>
+  <li><a href="#texto">Texto e tamanho</a>: <code>..</code> <code>#</code></li>
+  <li><a href="#bits">Bits</a>: <code>&amp;</code> <code>|</code> <code>~</code> <code>&lt;&lt;</code> <code>&gt;&gt;</code></li>
+  <li><a href="#precedencia">A tabela de precedência</a></li>
+  <li><a href="#nao-existem">Operadores que não existem no Lua</a></li>
+</ul>
+
+<hr>
+
+<h2 id="aritmeticos">Aritméticos</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Operador</th><th>Faz</th><th>Exemplo</th><th>Resultado</th><th>Aula</th></tr>
+<tr><td><code>+</code></td><td>soma</td><td><code>7 + 2</code></td><td><code>9</code></td><td><a href="operadores-aritmeticos.html">Operadores Aritméticos</a></td></tr>
+<tr><td><code>-</code></td><td>subtração; sozinho na frente, troca o sinal</td><td><code>7 - 2, -7</code></td><td><code>5</code>, <code>-7</code></td><td></td></tr>
+<tr><td><code>*</code></td><td>multiplicação</td><td><code>7 * 2</code></td><td><code>14</code></td><td></td></tr>
+<tr><td><code>/</code></td><td>divisão: <strong>sempre</strong> dá float</td><td><code>7 / 2, 10 / 2</code></td><td><code>3.5</code>, <code>5.0</code></td><td><a href="divisao.html">Divisão: /, // e %</a></td></tr>
+<tr><td><code>//</code></td><td>divisão "para baixo" (<em>floor division</em>): arredonda o resultado para baixo. Com dois inteiros, dá inteiro</td><td><code>7 // 2, 7.0 // 2, -7 // 2</code></td><td><code>3</code>, <code>3.0</code>, <code>-4</code></td><td><a href="divisao.html">Divisão: /, // e %</a></td></tr>
+<tr><td><code>%</code></td><td>resto da divisão (<em>módulo</em>). O resultado tem o sinal do segundo número</td><td><code>7 % 2, -7 % 2, 7 % -2, 5.5 % 2</code></td><td><code>1</code>, <code>1</code>, <code>-1</code>, <code>1.5</code></td><td><a href="divisao.html">Divisão: /, // e %</a></td></tr>
+<tr><td><code>^</code></td><td>potência: <strong>sempre</strong> dá float</td><td><code>7 ^ 2, 2 ^ 0.5</code></td><td><code>49.0</code>, <code>1.4142135623730951</code></td><td><a href="operadores-aritmeticos.html">Operadores Aritméticos</a></td></tr>
+<tr><td></td><td>inteiro com float: o resultado é float</td><td><code>3 + 0.0, 2^53</code></td><td><code>3.0</code>, <code>9007199254740992.0</code></td><td><a href="numeros.html">Números</a></td></tr>
+<tr><td></td><td>textos com números são convertidos sozinhos</td><td><code>"10" + 5, "3" * "4", "0x10" + 0</code></td><td><code>15</code>, <code>12</code>, <code>16</code></td><td><a href="conversao.html">Conversão</a></td></tr>
+<tr><td></td><td>dividir por zero: float vira infinito…</td><td><code>8 // 0.0, -8 // 0.0</code></td><td><code>inf</code>, <code>-inf</code></td><td><a href="ref-math.html">A Biblioteca math</a></td></tr>
+<tr><td></td><td>…inteiro é erro</td><td><code>3 // 0</code>, <code>3 % 0</code></td><td><code>stdin:1: attempt to divide by zero</code>, <code>stdin:1: attempt to perform 'n%0'</code></td><td><a href="ref-erros.html">Mensagens de Erro</a></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2 id="comparacao">Comparação</h2>
+
+<p>Todos devolvem <code>true</code> ou <code>false</code>.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Operador</th><th>Pergunta</th><th>Exemplo</th><th>Resultado</th><th>Aula</th></tr>
+<tr><td><code>==</code></td><td>é igual?</td><td><code>1 == 1.0, "abc" == "abc"</code></td><td><code>true</code>, <code>true</code></td><td><a href="operadores-comparacao.html">Comparações</a></td></tr>
+<tr><td></td><td>tipos diferentes nunca são iguais (aqui não há conversão!)</td><td><code>"1" == 1</code></td><td><code>false</code></td><td></td></tr>
+<tr><td></td><td>tabelas: só se forem <strong>a mesma</strong> tabela</td><td><code>{} == {}</code></td><td><code>false</code></td><td><a href="tabelas-referencia.html">Tabelas São Referências</a></td></tr>
+<tr><td><code>~=</code></td><td>é diferente?</td><td><code>1 ~= 2, nil ~= false</code></td><td><code>true</code>, <code>true</code></td><td><a href="operadores-comparacao.html">Comparações</a></td></tr>
+<tr><td><code>&lt;</code>, <code>&gt;</code></td><td>menor? maior?</td><td><code>3 &lt; 5, 10 &lt; 9</code></td><td><code>true</code>, <code>false</code></td><td></td></tr>
+<tr><td></td><td>textos: pela ordem dos códigos (maiúsculas antes, e <code>"10"</code> antes de <code>"9"</code>)</td><td><code>"a" &lt; "b", "Z" &lt; "a", "10" &lt; "9"</code></td><td><code>true</code>, <code>true</code>, <code>true</code></td><td><a href="table-sort.html">table.sort</a></td></tr>
+<tr><td><code>&lt;=</code>, <code>&gt;=</code></td><td>menor ou igual? maior ou igual?</td><td><code>3 &lt;= 3, 4 &gt;= 5</code></td><td><code>true</code>, <code>false</code></td><td></td></tr>
+<tr><td></td><td>número com texto não dá para comparar</td><td><code>1 &lt; "2"</code></td><td><code>stdin:1: attempt to compare number with string</code></td><td><a href="ref-erros.html">Mensagens de Erro</a></td></tr>
+<tr><td></td><td>nem tabelas (sem o metamétodo <code>__lt</code>)</td><td><code>{} &lt; {}</code></td><td><code>stdin:1: attempt to compare two table values</code></td><td><a href="ref-metametodos.html">Metamétodos</a></td></tr>
+<tr><td></td><td>não existe "entre": <code>1 &lt; 2</code> vira <code>true</code>, e <code>true &lt; 3</code> é erro</td><td><code>1 &lt; 2 &lt; 3</code></td><td><code>stdin:1: attempt to compare boolean with number</code></td><td></td></tr>
+</table>
+</div>
+
+<p>Para "x está entre 1 e 3", escreva <code>x &gt;= 1 and x &lt;= 3</code>.</p>
+
+<hr>
+
+<h2 id="logicos">Lógicos</h2>
+
+<p>Para o Lua, só <code>false</code> e <code>nil</code> são "falsos"; <strong>todo o resto</strong> é verdadeiro, inclusive <code>0</code> e o texto vazio <code>""</code>. O <code>and</code> e o <code>or</code> não devolvem só <code>true</code>/<code>false</code>: devolvem um dos dois valores, e só calculam o segundo se precisarem.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Operador</th><th>Devolve</th><th>Exemplo</th><th>Resultado</th><th>Aula</th></tr>
+<tr><td><code>a and b</code></td><td><code>a</code>, se <code>a</code> for falso; senão, <code>b</code></td><td><code>nil and 1, 0 and "zero é verdadeiro"</code></td><td><code>nil</code>, <code>zero é verdadeiro</code></td><td><a href="operadores-logicos.html">and, or e not</a></td></tr>
+<tr><td><code>a or b</code></td><td><code>a</code>, se <code>a</code> for verdadeiro; senão, <code>b</code></td><td><code>false or nil</code></td><td><code>nil</code></td><td></td></tr>
+<tr><td><code>not a</code></td><td><code>true</code> se <code>a</code> for falso, <code>false</code> se não</td><td><code>not (1 == 2)</code></td><td><code>true</code></td><td></td></tr>
+<tr><td><code>a and b or c</code></td><td>o "se então senão" numa linha (cuidado se <code>b</code> puder ser <code>false</code>/<code>nil</code>)</td><td><code>5 &gt; 3 and "sim" or "não"</code></td><td><code>sim</code></td><td><a href="and-or-ternario.html">O Truque do and/or</a></td></tr>
+<tr><td></td><td>proteção contra <code>nil</code>: o <code>and</code> não chega a ler <code>x.nome</code></td><td><code>x = nil; print(x and x.nome or "sem nome")</code></td><td><code>sem nome</code></td><td></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2 id="texto">Texto e tamanho</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Operador</th><th>Faz</th><th>Exemplo</th><th>Resultado</th><th>Aula</th></tr>
+<tr><td><code>..</code></td><td>junta textos (<em>concatenação</em>). Números viram texto</td><td><code>"Ana" .. " " .. "Lima", 1 .. 2, 1.5 .. "!"</code></td><td><code>Ana Lima</code>, <code>12</code>, <code>1.5!</code></td><td><a href="concatenacao.html">Juntando Textos</a></td></tr>
+<tr><td></td><td><code>nil</code> (e <code>true</code>, tabelas) não</td><td><code>"total: " .. nil</code></td><td><code>stdin:1: attempt to concatenate a nil value</code></td><td><a href="ref-erros.html">Mensagens de Erro</a></td></tr>
+<tr><td><code>#</code></td><td>tamanho: de um texto (em <strong>bytes</strong>) ou de uma lista</td><td><code>#"Ana", #"ação", #{10, 20, 30}, #""</code></td><td><code>3</code>, <code>6</code>, <code>3</code>, <code>0</code></td><td><a href="operador-tamanho.html">O Operador de Tamanho</a></td></tr>
+<tr><td></td><td>número não tem tamanho</td><td><code>#42</code></td><td><code>stdin:1: attempt to get length of a number value</code></td><td></td></tr>
+</table>
+</div>
+
+<div class="tip">
+<strong>Escreva <code>1 .. 2</code> com espaços</strong>
+<p>Grudado num número, o ponto pode ser lido como a vírgula decimal: <code>1..2</code> deu <code>stdin:1: malformed number near '1..2'</code> ("número malformado"). Com espaços (<code>1 .. 2</code>) dá <code>12</code>. Entre textos e variáveis, os espaços são só uma questão de leitura, mas o costume é sempre usá-los.</p>
+</div>
+
+<hr>
+
+<h2 id="bits">Bits</h2>
+
+<p>Trabalham com os <strong>bits</strong> (os zeros e uns) de números inteiros. Floats sem parte decimal são convertidos; os outros dão erro. Mais em <a href="operadores-bits.html">Operadores de Bits</a>.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Operador</th><th>Faz</th><th>Exemplo</th><th>Resultado</th></tr>
+<tr><td><code>&amp;</code></td><td>E bit a bit (<code>0101 &amp; 0011 = 0001</code>)</td><td><code>5 &amp; 3</code></td><td><code>1</code></td></tr>
+<tr><td><code>|</code></td><td>OU bit a bit</td><td><code>5 | 3</code></td><td><code>7</code></td></tr>
+<tr><td><code>~</code> (entre dois)</td><td>OU exclusivo (<em>xor</em>)</td><td><code>5 ~ 3</code></td><td><code>6</code></td></tr>
+<tr><td><code>~</code> (na frente)</td><td>NÃO bit a bit: inverte todos os bits</td><td><code>~5</code></td><td><code>-6</code></td></tr>
+<tr><td><code>&lt;&lt;</code></td><td>empurra os bits para a esquerda (cada casa = vezes 2)</td><td><code>1 &lt;&lt; 4</code></td><td><code>16</code></td></tr>
+<tr><td><code>&gt;&gt;</code></td><td>empurra para a direita, enchendo com zeros (o sinal não é mantido)</td><td><code>256 &gt;&gt; 4, -1 &gt;&gt; 60</code></td><td><code>16</code>, <code>15</code></td></tr>
+<tr><td></td><td>64 casas ou mais: tudo zero</td><td><code>1 &lt;&lt; 64</code></td><td><code>0</code></td></tr>
+<tr><td></td><td>float sem parte decimal funciona; com parte decimal, não</td><td><code>3.0 &amp; 1</code>, <code>3.5 &amp; 1</code></td><td><code>1</code>, <code>stdin:1: number has no integer representation</code></td></tr>
+<tr><td></td><td>texto não é convertido aqui (ao contrário do <code>+</code>)</td><td><code>"3" &amp; 1</code></td><td><code>stdin:1: attempt to perform bitwise operation on a string value (constant '3')</code></td></tr>
+</table>
+</div>
+
+<div class="note">
+<strong>LuaJIT e Lua 5.1 não têm estes operadores</strong>
+<p>Os operadores de bits e o <code>//</code> chegaram no Lua 5.3. No lab, <code>luajit -e 'print(7 // 2)'</code> deu <code>unexpected symbol near '/'</code>. No LuaJIT, as operações de bits são funções da biblioteca <code>bit</code> (<code>bit.band</code>, <code>bit.bor</code>…; ilustrativo, não mostrado aqui). Veja <a href="versoes.html">As Diferenças entre Versões</a>.</p>
+</div>
+
+<hr>
+
+<h2 id="precedencia">A tabela de precedência</h2>
+
+<p>Quando uma expressão tem vários operadores, o Lua faz primeiro os de <strong>maior</strong> precedência. Esta é a tabela do manual do Lua 5.5 (§3.4.8), da maior para a menor (o manual escreve da menor para a maior). Operadores na mesma linha têm a mesma precedência e são feitos da esquerda para a direita, menos <code>..</code> e <code>^</code>, que vão da <strong>direita</strong> para a esquerda.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Ordem</th><th>Operadores</th><th>Exemplo</th><th>Resultado</th><th>Porque</th></tr>
+<tr><td>1 (primeiro)</td><td><code>^</code></td><td><code>2 ^ 3 ^ 2, (2 ^ 3) ^ 2</code></td><td><code>512.0</code>, <code>64.0</code></td><td>da direita para a esquerda: <code>2 ^ (3 ^ 2)</code> = <code>2 ^ 9</code></td></tr>
+<tr><td></td><td></td><td><code>-2 ^ 2, (-2) ^ 2</code></td><td><code>-4.0</code>, <code>4.0</code></td><td><code>^</code> vem antes do sinal de menos: <code>-(2 ^ 2)</code></td></tr>
+<tr><td>2</td><td>os de um operando só: <code>not</code> <code>#</code> <code>-</code> <code>~</code></td><td><code>not 1 == 2</code></td><td><code>false</code></td><td>é <code>(not 1) == 2</code>, ou seja, <code>false == 2</code></td></tr>
+<tr><td></td><td></td><td><code>#"abc" + 1</code></td><td><code>4</code></td><td><code>(#"abc") + 1</code></td></tr>
+<tr><td>3</td><td><code>*</code> <code>/</code> <code>//</code> <code>%</code></td><td><code>2 * 3 % 4, 7 // 2 * 2</code></td><td><code>2</code>, <code>6</code></td><td>mesma linha: da esquerda para a direita (<code>6 % 4</code>, <code>3 * 2</code>)</td></tr>
+<tr><td>4</td><td><code>+</code> <code>-</code></td><td><code>2 + 3 * 4, (2 + 3) * 4</code></td><td><code>14</code>, <code>20</code></td><td>a multiplicação vem antes</td></tr>
+<tr><td></td><td></td><td><code>10 - 4 - 3</code></td><td><code>3</code></td><td><code>(10 - 4) - 3</code></td></tr>
+<tr><td>5</td><td><code>..</code></td><td><code>1 + 2 .. "", 2 .. 3 + 1</code></td><td><code>3</code>, <code>24</code></td><td>a soma vem antes da junção: <code>"2" .. "4"</code></td></tr>
+<tr><td>6</td><td><code>&lt;&lt;</code> <code>&gt;&gt;</code></td><td><code>1 + 2 &lt;&lt; 1, 1 &lt;&lt; 1 + 2</code></td><td><code>6</code>, <code>8</code></td><td>a soma vem antes: <code>3 &lt;&lt; 1</code>, <code>1 &lt;&lt; 3</code></td></tr>
+<tr><td>7</td><td><code>&amp;</code></td><td colspan="3" rowspan="3">os de bits vêm <strong>antes</strong> das comparações: <code>1 | 2 == 3</code> deu <code>true</code>, porque é <code>(1 | 2) == 3</code></td></tr>
+<tr><td>8</td><td><code>~</code> (entre dois)</td></tr>
+<tr><td>9</td><td><code>|</code></td></tr>
+<tr><td>10</td><td><code>&lt;</code> <code>&gt;</code> <code>&lt;=</code> <code>&gt;=</code> <code>~=</code> <code>==</code></td><td><code>"a" .. "b" == "ab", 1 &lt; 2 == true</code></td><td><code>true</code>, <code>true</code></td><td>a junção e a comparação vêm antes do <code>==</code></td></tr>
+<tr><td>11</td><td><code>and</code></td><td rowspan="2"><code>5 &gt; 3 and "sim" or "não"</code></td><td rowspan="2"><code>sim</code></td><td rowspan="2">primeiro a comparação, depois o <code>and</code>, por fim o <code>or</code></td></tr>
+<tr><td>12 (por último)</td><td><code>or</code></td></tr>
+</table>
+</div>
+
+<div class="tip">
+<strong>Na dúvida, use parênteses</strong>
+<p>Ninguém decora a tabela inteira. Os parênteses deixam a intenção clara para quem lê e para o Lua: <code>(a + b) / 2</code>, <code>not (x == y)</code>, <code>(n &amp; 1) == 0</code>. A explicação com mais exemplos está em <a href="precedencia.html">Precedência dos Operadores</a>.</p>
+</div>
+
+<hr>
+
+<h2 id="nao-existem">Operadores que não existem no Lua</h2>
+
+<p>Quem vem de outra linguagem costuma tentar estes. Cada um dá erro de sintaxe (mensagens reais do modo interativo):</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Em outras linguagens</th><th>Mensagem no Lua 5.5</th><th>No Lua, escreva</th></tr>
+<tr><td><code>x += 1</code>, <code>x -= 1</code>…</td><td><code>stdin:1: syntax error near '+'</code></td><td><code>x = x + 1</code></td></tr>
+<tr><td><code>x++</code>, <code>x--</code></td><td><code>x++</code>: <code>stdin:1: syntax error near '+'</code>. E <code>x--</code> nem dá erro: o <code>--</code> começa um comentário! Com <code>x = 5</code>, digitar <code>x--</code> mostrou <code>5</code></td><td><code>x = x + 1</code></td></tr>
+<tr><td><code>!=</code> (diferente)</td><td><code>stdin:1: unexpected symbol near '1'</code> (com <code>1 != 2</code>)</td><td><code>~=</code></td></tr>
+<tr><td><code>!x</code> (negação)</td><td><code>stdin:1: unexpected symbol near '!'</code></td><td><code>not x</code></td></tr>
+<tr><td><code>2 ** 3</code> (potência)</td><td><code>stdin:1: unexpected symbol near '2'</code></td><td><code>2 ^ 3</code></td></tr>
+<tr><td><code>&amp;&amp;</code>, <code>||</code></td><td><code>true &amp;&amp; false</code>: <code>stdin:1: unexpected symbol near 'true'</code></td><td><code>and</code>, <code>or</code></td></tr>
+<tr><td><code>a ? b : c</code></td><td><code>1 ? 2 : 3</code>: <code>stdin:1: unexpected symbol near '1'</code></td><td><code>a and b or c</code>, ou um <code>if</code></td></tr>
+</table>
+</div>
+
+<p>A troca de valores, que em outras linguagens precisa de uma variável extra, no Lua é uma atribuição múltipla: <code>a, b = 1, 2; a, b = b, a; print(a, b)</code> deu <code>2	1</code>. Veja <a href="atribuicao-multipla.html">Atribuição Múltipla</a>.</p>
+
+<hr>
+
+<h2>Experimente</h2>
+
+<div class="trylua" data-goal="out:Média: 8.0">
+<p class="try-task"><strong>Missão:</strong> a Ana tirou 7, 8 e 9, mas o programa diz que a média é <code>18.0</code>. O problema é a precedência: a divisão acontece antes da soma, então só o <code>n3</code> está sendo dividido por 3. Use parênteses para que a soma aconteça primeiro. O resultado certo é <code>Média: 8.0</code>.</p>
+<pre class="script" data-file="main.lua">local n1, n2, n3 = 7, 8, 9
+
+local media = n1 + n2 + n3 / 3
+print("Média: " .. media)
+</pre>
+<pre class="solucao" data-file="main.lua">local n1, n2, n3 = 7, 8, 9
+
+local media = (n1 + n2 + n3) / 3
+print("Média: " .. media)
+</pre>
+</div>
+
+<div class="trylua">
+<p class="try-task"><strong>Livre:</strong> teste os operadores e a precedência. Antes de rodar, tente adivinhar cada resultado.</p>
+<pre class="script" data-file="main.lua">print(7 / 2, 7 // 2, 7 % 2, 7 ^ 2)
+print(2 + 3 * 4, (2 + 3) * 4, 2 ^ 3 ^ 2)
+print(1 == 1.0, "1" == 1, "10" + 5)
+print(nil or "padrão", 0 and "verdadeiro")
+print("Ana" .. " " .. 30, #"Ana")
+print(5 &amp; 3, 5 | 3, 1 &lt;&lt; 4)
+</pre>
+</div>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li>Aritméticos: <code>+ - * / // % ^</code>. O <code>/</code> e o <code>^</code> sempre dão float; <code>//</code> arredonda para baixo; <code>%</code> é o resto.</li>
+  <li>Comparação: <code>== ~= &lt; &gt; &lt;= &gt;=</code>. Diferente é <code>~=</code>. Tipos diferentes nunca são iguais; número e texto não se comparam com <code>&lt;</code>.</li>
+  <li>Lógicos: <code>and or not</code>; só <code>nil</code> e <code>false</code> são falsos. <code>x or padrao</code> dá um valor padrão.</li>
+  <li><code>..</code> junta textos; <code>#</code> dá o tamanho (texto em bytes).</li>
+  <li>Bits: <code>&amp; | ~ &lt;&lt; &gt;&gt;</code> e <code>~x</code>, só com inteiros.</li>
+  <li>Precedência, da maior para a menor: <code>^</code>; <code>not # - ~</code>; <code>* / // %</code>; <code>+ -</code>; <code>..</code>; <code>&lt;&lt; &gt;&gt;</code>; <code>&amp;</code>; <code>~</code>; <code>|</code>; comparações; <code>and</code>; <code>or</code>. Na dúvida, parênteses.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
