@@ -243,7 +243,7 @@ Nome do cliente? Ana
 </div>
 
 <div class="trylua" data-stdin="12\nAna" data-goal="out:12 pães para [Ana]">
-<p class="try-task"><strong>Missão:</strong> nesta caixa, a entrada já vem pronta: <code>12</code> e <code>Ana</code>, uma em cada linha (por isso ela não aparece digitada). Rode e veja o cliente sair vazio. Depois conserte a leitura da quantidade para que saia <code>12 pães para [Ana]</code>.</p>
+<p class="try-task"><strong>Missão:</strong> nesta caixa, a entrada já vem pronta: <code>12</code> e <code>Ana</code>, uma em cada linha, no campo <strong>Entrada</strong> (o terminal da caixa mostra cada linha lida como se alguém a tivesse digitado). Rode e veja o cliente sair vazio. Depois conserte a leitura da quantidade para que saia <code>12 pães para [Ana]</code>.</p>
 <pre class="script" data-file="main.lua">io.write("Quantos pães? ")
 local qtd = io.read("n")
 io.write("Nome do cliente? ")
@@ -278,7 +278,7 @@ stack traceback:
         [C]: in ?
 </pre>
 
-<p>O <code>nome</code> ficou <code>nil</code>, e o <code>..</code> não sabe juntar <code>nil</code> com texto. A mensagem saiu colada na pergunta porque o Ctrl-D não pula linha. O mesmo acontece se o programa recebe a entrada vazia de propósito, com <code>&lt; /dev/null</code> (o "arquivo vazio" do Linux).</p>
+<p>O <code>nome</code> ficou <code>nil</code>, e o <code>..</code> não sabe juntar <code>nil</code> com texto. A mensagem saiu colada na pergunta porque o Ctrl-D não pula linha. O mesmo erro acontece se o programa recebe a entrada vazia de propósito, com <code>&lt; /dev/null</code> (o "arquivo vazio" do Linux).</p>
 
 <p>Esse <code>nil</code> é útil: é o jeito de um programa saber que não há mais o que ler. Mais adiante, com uma repetição, você vai ler linha por linha "até vir <code>nil</code>" (aulas <a href="while.html">while</a> e <a href="io-lines.html">Linha por Linha</a>).</p>
 
@@ -306,7 +306,7 @@ stack traceback:
 
 <div class="note">
 <strong>O jeito antigo: <code>"*l"</code>, <code>"*n"</code>, <code>"*a"</code></strong>
-<p>Em código antigo e em tutoriais, os formatos aparecem com asterisco: <code>io.read("*l")</code>, <code>io.read("*n")</code>. No Lua 5.5 o asterisco ainda é aceito (é ignorado): na máquina da Ana, <code>io.read("*l")</code> e <code>io.read("*n")</code> funcionaram igualzinho. Mas no <strong>Lua 5.1 e no LuaJIT</strong> (Neovim, LÖVE) o asterisco é obrigatório, e o jeito novo dá erro:</p>
+<p>Em código antigo e em tutoriais, os formatos aparecem com asterisco: <code>io.read("*l")</code>, <code>io.read("*n")</code>. No Lua 5.5 o asterisco ainda é aceito (é ignorado): na máquina da Ana, <code>io.read("*l")</code> e <code>io.read("*n")</code> funcionaram igualzinho. Mas no <strong>Lua 5.1</strong> o asterisco é obrigatório, e o jeito novo dá erro (o LuaJIT do Neovim e do LÖVE, que segue o 5.1, aceita as duas formas: na máquina da Ana, <code>io.read("l")</code> funcionou nele):</p>
 <pre class="term">$ printf 'Ana\n' | lua5.1 novo.lua
 lua5.1: novo.lua:1: bad argument #1 to 'read' (invalid option)
 stack traceback:
@@ -314,7 +314,7 @@ stack traceback:
 	novo.lua:1: in main chunk
 	[C]: ?
 </pre>
-<p>(O <code>novo.lua</code> tem só <code>local linha = io.read("l")</code> e <code>print(linha)</code>; no 5.5 ele mostra <code>Anabela</code> ou o que vier.) Se o seu código tiver de rodar nas duas versões, escreva com asterisco, ou use <code>io.read()</code> sem nada, que funciona em todas. Mais em <a href="versoes.html">Lua 5.1, LuaJIT, 5.4 e 5.5</a>.</p>
+<p>(O <code>novo.lua</code> tem só <code>local linha = io.read("l")</code> e <code>print(linha)</code>; no 5.5 ele mostra <code>Ana</code>.) Se o seu código tiver de rodar nas duas versões, escreva com asterisco, ou use <code>io.read()</code> sem nada, que funciona em todas. Mais em <a href="versoes.html">Lua 5.1, LuaJIT, 5.4 e 5.5</a>.</p>
 </div>
 
 <hr>
@@ -347,7 +347,7 @@ stack traceback:
 	[C]: in ?
 Qual é o seu nome? ana@notebook:~$
 </pre>
-<p>"Tentativa de concatenar (juntar) um valor nil (a variável local <code>nome</code>)". É o mesmo caso da seção 6, agora com a entrada vazia vinda de <code>/dev/null</code>. A pergunta apareceu <strong>depois</strong> do erro: a saída normal esperou numa fila (a pergunta não termina com Enter), e a mensagem de erro saiu na hora (o mesmo efeito da aula <a href="io-write.html">io.write</a>). <strong>Como consertar:</strong> um programa que pode receber o fim da entrada precisa conferir se veio <code>nil</code> antes de usar a resposta (<a href="if.html">if</a>, ou o truque <code>local nome = io.read() or "visitante"</code> da aula <a href="operadores-logicos.html">and, or e not</a>).</p>
+<p>"Tentativa de concatenar (juntar) um valor nil (a variável local <code>nome</code>)". É o mesmo caso da seção 6, agora com a entrada vazia vinda de <code>/dev/null</code>. A pergunta apareceu <strong>depois</strong> do erro: a saída normal esperou numa fila (a pergunta não termina com Enter), e a mensagem de erro saiu na hora (o mesmo efeito da aula <a href="io-write.html">io.write</a>). No editor do guia, apertar <kbd>Ctrl</kbd>+<kbd>D</kbd> no terminal da caixa dá o resultado da seção 6: a pergunta aparece antes da mensagem, como no terminal da Ana digitando. <strong>Como consertar:</strong> um programa que pode receber o fim da entrada precisa conferir se veio <code>nil</code> antes de usar a resposta (<a href="if.html">if</a>, ou o truque <code>local nome = io.read() or "visitante"</code> da aula <a href="operadores-logicos.html">and, or e not</a>).</p>
 </div>
 
 <div class="cenario">
