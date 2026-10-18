@@ -61,6 +61,7 @@ stack traceback:
   <li><a href="#codigo">Carregar código e módulos</a>: <code>load</code>, <code>loadfile</code>, <code>dofile</code>, <code>require</code></li>
   <li><a href="#memoria">Memória</a>: <code>collectgarbage</code></li>
   <li><a href="#variaveis">Variáveis globais prontas</a>: <code>_G</code>, <code>_VERSION</code>, <code>arg</code> e as tabelas das bibliotecas</li>
+  <li><a href="#coroutine">Bônus: coroutine e debug</a></li>
   <li><a href="#az">Todas de A a Z</a></li>
 </ul>
 
@@ -304,6 +305,45 @@ assert collectgarbage dofile error getmetatable ipairs load loadfile next pairs 
 <div class="note">
 <strong>Veio de um Lua mais antigo?</strong>
 <p>Algumas globais do <strong>Lua 5.1 e do LuaJIT</strong> (Neovim, LÖVE) não existem no 5.5. No lab, <code>unpack, loadstring, setfenv, getfenv, module, table.getn, math.pow</code> deram todos <code>nil</code> no <code>lua</code> (5.5), e todos existem no <code>luajit</code>. Os substitutos: <code>table.unpack</code> no lugar de <code>unpack</code>; <code>load</code> no lugar de <code>loadstring</code>; <code>_ENV</code> no lugar de <code>setfenv</code>/<code>getfenv</code>; <code>#t</code> no lugar de <code>table.getn(t)</code>; <code>x ^ y</code> no lugar de <code>math.pow(x, y)</code>. No outro sentido, <code>warn</code> não existe no LuaJIT nem no 5.1 (só a partir do 5.4), e <code>rawlen</code> não existe no 5.1. Veja <a href="versoes.html">Lua 5.1, LuaJIT, 5.4 e 5.5</a>.</p>
+</div>
+
+<hr>
+
+<h2 id="coroutine">Bônus: as bibliotecas <code>coroutine</code> e <code>debug</code></h2>
+
+<p>Estas duas não têm página de referência própria. As 8 funções de <code>coroutine</code> (<em>corrotinas</em>: funções que podem pausar e continuar depois). Nos exemplos, a Ana criou antes <code>co = coroutine.create(function(a) local b = coroutine.yield(a * 2); return b + 1 end)</code>; os exemplos seguem em ordem.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Função</th><th>O que faz</th><th>Exemplo</th><th>Resultado</th><th>Aula</th></tr>
+<tr><td><code>coroutine.create(f)</code></td><td>Cria uma corrotina com a função <code>f</code> (ainda parada).</td><td><code>coroutine.status(co)</code></td><td><code>suspended</code></td><td><a href="corrotinas.html">Corrotinas</a></td></tr>
+<tr><td><code>coroutine.resume(co, …)</code></td><td>Roda (ou continua) até o próximo <code>yield</code> ou até o fim. Devolve <code>true</code> e os valores, ou <code>false</code> e o erro.</td><td><code>coroutine.resume(co, 5)</code></td><td><code>true</code>, <code>10</code></td><td></td></tr>
+<tr><td></td><td>o valor passado vira o resultado do <code>yield</code></td><td><code>coroutine.resume(co, 10)</code></td><td><code>true</code>, <code>11</code></td><td></td></tr>
+<tr><td></td><td>depois do fim</td><td><code>coroutine.resume(co)</code></td><td><code>false</code>, <code>cannot resume dead coroutine</code></td><td></td></tr>
+<tr><td><code>coroutine.yield(…)</code></td><td>Pausa a corrotina e entrega valores a quem chamou o <code>resume</code>.</td><td>fora de uma corrotina: <code>coroutine.yield(1)</code></td><td><code>attempt to yield from outside a coroutine</code></td><td><a href="corrotinas-produtor.html">Produtor e Consumidor</a></td></tr>
+<tr><td><code>coroutine.status(co)</code></td><td><code>"suspended"</code>, <code>"running"</code>, <code>"normal"</code> ou <code>"dead"</code>.</td><td>(depois do segundo <code>resume</code>) <code>coroutine.status(co)</code></td><td><code>dead</code></td><td></td></tr>
+<tr><td><code>coroutine.wrap(f)</code></td><td>Como <code>create</code>, mas devolve uma função que faz o <code>resume</code> sozinha (e passa o erro adiante).</td><td><code>gen = coroutine.wrap(function() for i = 1, 3 do coroutine.yield(i) end end); print(gen(), gen(), gen())</code></td><td><code>1	2	3</code></td><td><a href="corrotinas-wrap.html">coroutine.wrap e Geradores</a></td></tr>
+<tr><td><code>coroutine.isyieldable()</code></td><td>O código atual pode dar <code>yield</code>?</td><td><code>coroutine.isyieldable()</code>, e dentro de um <code>wrap</code></td><td><code>false</code>, e <code>true</code></td><td></td></tr>
+<tr><td><code>coroutine.running()</code></td><td>A corrotina atual e se ela é a principal.</td><td><code>select(2, coroutine.running())</code></td><td><code>true</code> (fora de corrotinas, estamos na principal)</td><td></td></tr>
+<tr><td><code>coroutine.close(co)</code></td><td>Encerra uma corrotina pausada (rodando os <code>&lt;close&gt;</code> pendentes).</td><td><code>c2 = coroutine.create(function() coroutine.yield() end); coroutine.resume(c2); print(coroutine.close(c2), coroutine.status(c2))</code></td><td><code>true	dead</code></td><td></td></tr>
+</table>
+</div>
+
+<p>A biblioteca <code>debug</code> (16 funções) serve para ferramentas de depuração; num programa comum, só o <code>debug.traceback</code> é usado com frequência. Use as outras com cuidado: elas quebram regras da linguagem (veem variáveis <code>local</code> de outras funções, mudam metatabelas de números…). A aula é <a href="debug.html">A Biblioteca debug</a>.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Função</th><th>O que faz</th><th>Exemplo</th><th>Resultado</th></tr>
+<tr><td><code>debug.traceback(msg)</code></td><td>O texto <code>msg</code> seguido do <code>stack traceback:</code> do ponto atual. Muito usado com o <code>xpcall</code>.</td><td><code>xpcall(f, debug.traceback)</code></td><td>a mensagem do erro com o traceback (veja <a href="xpcall.html">xpcall e debug.traceback</a>)</td></tr>
+<tr><td><code>debug.getinfo(f ou nível, o_que)</code></td><td>Informações sobre uma função ou sobre um nível da pilha (de onde veio, linha atual…).</td><td><code>debug.getinfo(print).what, debug.getinfo(1, "l").currentline</code></td><td><code>C</code>, <code>1</code></td></tr>
+<tr><td><code>debug.getlocal(nível, n)</code> / <code>debug.setlocal</code></td><td>Lê / muda a variável <code>local</code> número <code>n</code> de uma função da pilha.</td><td><code>f = function() local segredo = 42; return debug.getlocal(1, 1) end; print(f())</code></td><td><code>segredo	42</code></td></tr>
+<tr><td><code>debug.getupvalue(f, n)</code> / <code>debug.setupvalue</code></td><td>Lê / muda a variável "de fora" número <code>n</code> de uma closure.</td><td><code>function g() local x = 1; return function() return x end end; h = g(); print(debug.getupvalue(h, 1))</code></td><td><code>x	1</code></td></tr>
+<tr><td><code>debug.setmetatable(v, mt)</code> / <code>debug.getmetatable</code></td><td>Como <code>setmetatable</code>, mas para <strong>qualquer</strong> tipo (até números), e sem respeitar o <code>__metatable</code>.</td><td><code>debug.setmetatable(10, {__index = {dobro = function(n) return n * 2 end}}); print((21):dobro()); debug.setmetatable(10, nil)</code></td><td><code>42</code></td></tr>
+<tr><td><code>debug.getregistry()</code></td><td>A tabela interna de registro do Lua.</td><td><code>type(debug.getregistry())</code></td><td><code>table</code></td></tr>
+<tr><td><code>debug.sethook</code>, <code>debug.gethook</code></td><td>Liga uma função que é chamada a cada linha, chamada ou retorno (para fazer depuradores e medidores).</td><td colspan="2">—</td></tr>
+<tr><td><code>debug.debug()</code></td><td>Abre um prompt <code>lua_debug&gt;</code> para digitar comandos no meio do programa (<code>cont</code> sai).</td><td colspan="2">—</td></tr>
+<tr><td><code>debug.upvalueid</code>, <code>debug.upvaluejoin</code>, <code>debug.getuservalue</code>, <code>debug.setuservalue</code></td><td>Uso avançado: identificar e ligar variáveis de closures; valores ligados a <em>userdata</em> (dados de bibliotecas em C).</td><td colspan="2">—</td></tr>
+</table>
 </div>
 
 <hr>

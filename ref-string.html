@@ -204,7 +204,7 @@ stdin:1: unexpected symbol near '"Ana"'
 <tr><td><code>b</code> / <code>B</code></td><td>1 byte com sinal / sem sinal</td><td><code>&lt;</code> / <code>&gt;</code> / <code>=</code></td><td>ordem dos bytes: menos importante primeiro / mais importante primeiro / a da máquina</td></tr>
 <tr><td><code>h</code> / <code>H</code></td><td><em>short</em> (2 bytes no PC) com / sem sinal</td><td><code>i</code><em>n</em> / <code>I</code><em>n</em></td><td>inteiro de <em>n</em> bytes (1 a 16) com / sem sinal</td></tr>
 <tr><td><code>l</code> / <code>L</code></td><td><em>long</em> com / sem sinal</td><td><code>j</code> / <code>J</code></td><td>o inteiro do Lua (8 bytes) com / sem sinal</td></tr>
-<tr><td><code>f</code> / <code>d</code> / <code>n</code></td><td><em>float</em> (4 bytes) / <em>double</em> (8) / o número do Lua</td><td><code>T</code></td><td><em>size_t</em> (tamanho, 8 bytes no PC)</td></tr>
+<tr><td><code>f</code> / <code>d</code> / <code>n</code></td><td><em>float</em> (4 bytes) / <em>double</em> (8) / o número do Lua</td><td><code>T</code></td><td><em>size_t</em> (tamanho: 8 bytes no PC; 4 no editor do guia, que é de 32 bits, e o mesmo vale para <code>l</code>/<code>L</code>)</td></tr>
 <tr><td><code>c</code><em>n</em></td><td>texto de exatamente <em>n</em> bytes</td><td><code>z</code></td><td>texto terminado em byte zero</td></tr>
 <tr><td><code>s</code><em>n</em></td><td>texto com o tamanho na frente, em <em>n</em> bytes</td><td><code>x</code> / <code>X</code><em>op</em> / <code>!</code><em>n</em></td><td>1 byte de enchimento / alinhar como <em>op</em> / alinhamento máximo <em>n</em></td></tr>
 </table>
