@@ -19,6 +19,7 @@
 #include <unistd.h>
 #include <time.h>
 #include <sys/types.h>
+#include <dlfcn.h>
 
 #define GUIA(n) __attribute__((import_module("guia"), import_name(n)))
 GUIA("fuso") int guia_fuso(double t);                       /* segundos a leste do UTC no instante t */
@@ -189,3 +190,63 @@ int guia_errno(int e) {
     default: return e;
     }
 }
+
+/* ---- 7. as mensagens de erro do sistema com o texto da glibc (a do lab) ----
+   (a musl escreve algumas de outro jeito: "Invalid seek" × "Illegal seek") */
+char *__real_strerror(int e);
+char *__wrap_strerror(int e) {
+    switch (e) {
+    case ESPIPE: return "Illegal seek";
+    case EMFILE: return "Too many open files";
+    case ENOMEM: return "Cannot allocate memory";
+    case ENOTSUP: return "Operation not supported";
+    case EXDEV: return "Invalid cross-device link";
+    case ENAMETOOLONG: return "File name too long";
+    case ELOOP: return "Too many levels of symbolic links";
+    case EBUSY: return "Device or resource busy";
+    case EIO: return "Input/output error";
+    case ERANGE: return "Numerical result out of range";
+    case EDOM: return "Numerical argument out of domain";
+    case EILSEQ: return "Invalid or incomplete multibyte or wide character";
+    case ENFILE: return "Too many open files in system";
+    case ETXTBSY: return "Text file busy";
+    case ENOTTY: return "Inappropriate ioctl for device";
+    case EAGAIN: return "Resource temporarily unavailable";
+    case 0: return "Success";
+    default: return __real_strerror(e);
+    }
+}
+
+/* ---- 8. package.loadlib / require de módulo em C (.so) ----
+   No navegador não há bibliotecas dinâmicas: dlopen sempre falha, com a mensagem
+   que o glibc daria (arquivo que não existe; ou um arquivo que não é ELF). */
+#include <sys/stat.h>
+static char dl_msg[640];
+static int dl_tem = 0;
+void *dlopen(const char *caminho, int flags) {
+    struct stat st;
+    (void)flags;
+    if (!caminho) { snprintf(dl_msg, sizeof dl_msg, "dlopen: invalid caller"); dl_tem = 1; return NULL; }
+    if (!strchr(caminho, '/') || stat(caminho, &st) != 0)
+        snprintf(dl_msg, sizeof dl_msg, "%s: cannot open shared object file: No such file or directory", caminho);
+    else if (S_ISDIR(st.st_mode))
+        snprintf(dl_msg, sizeof dl_msg, "%s: cannot read file data: Is a directory", caminho);
+    else if (st.st_size < 64)
+        snprintf(dl_msg, sizeof dl_msg, "%s: file too short", caminho);
+    else
+        snprintf(dl_msg, sizeof dl_msg, "%s: invalid ELF header", caminho);
+    dl_tem = 1;
+    return NULL;
+}
+char *dlerror(void) {
+    if (!dl_tem) return NULL;
+    dl_tem = 0;
+    return dl_msg;
+}
+void *dlsym(void *restrict h, const char *restrict nome) {
+    (void)h;
+    snprintf(dl_msg, sizeof dl_msg, "undefined symbol: %s", nome);
+    dl_tem = 1;
+    return NULL;
+}
+int dlclose(void *h) { (void)h; return 0; }

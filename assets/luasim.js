@@ -12,7 +12,7 @@
    ===================================================================== */
 (function () {
   "use strict";
-  var LUA_BYTES = 338370;    // download na 1ª vez (lua.wasm; atualizado por tools/construir-lua.sh)
+  var LUA_BYTES = 340502;    // download na 1ª vez (lua.wasm; atualizado por tools/construir-lua.sh)
   var LUA_VERSAO = "5.5.0";
   var TEMPO_MAX = 10000;     // ms rodando sem parar (sem contar a espera pelo teclado)
   var MAX_LINHAS = 3000;     // linhas mostradas no terminal (o resto é resumido)
@@ -590,7 +590,21 @@
     LuaSim.caixas.push(api);
   }
 
+  // o visual da caixa .trylua (o style.css do guia traz as classes .ts-*/.tc-*/.tp do editor,
+  // mas a moldura era só da .trypy): o luasim.js põe a sua, sem mexer no style.css
+  function estilo() {
+    if (document.getElementById("luasim-estilo")) return;
+    var st = document.createElement("style");
+    st.id = "luasim-estilo";
+    st.textContent =
+      ".trylua{margin:22px 0;padding:4px 18px 14px;border:2px dashed var(--accent);border-radius:10px;min-width:0}" +
+      ".trylua .sim{max-width:100%}" +
+      "@media (max-width:600px){.trylua{padding:4px 10px 12px}}";
+    (document.head || document.documentElement).appendChild(st);
+  }
+
   function montarTudo() {
+    estilo();
     Array.prototype.forEach.call(document.querySelectorAll(".trylua"), function (b) {
       try { montar(b); } catch (e) { console.error("luasim:", e); }
     });

@@ -36,10 +36,10 @@ echo '#define DEB_HOST_MULTIARCH "x86_64-linux-gnu"' > src/lua5.5-deb-multiarch.
 grep -q 'lua_pushinteger(L, en);' src/lauxlib.c
 sed -i 's/lua_pushinteger(L, en);/lua_pushinteger(L, guia_errno(en));/' src/lauxlib.c
 
-# -DLUA_USE_POSIX: o Lua "de Linux" (mkstemp, localtime_r, popen, _setjmp…), sem
-#   LUA_USE_DLOPEN (não há bibliotecas .so no navegador).
+# -DLUA_USE_LINUX: como o pacote do Ubuntu (LUA_USE_POSIX: mkstemp, localtime_r, popen,
+#   _setjmp…; LUA_USE_DLOPEN: o dlopen do guia-rt.c sempre falha, com a mensagem do glibc).
 # -mllvm -wasm-enable-sjlj: os erros do Lua (setjmp/longjmp) com as exceções do WebAssembly.
-FLAGS=(--target=wasm32-wasip1 -O2 -Wall -Wextra -DLUA_COMPAT_5_4 -DLUA_USE_POSIX
+FLAGS=(--target=wasm32-wasip1 -O2 -Wall -Wextra -DLUA_COMPAT_5_4 -DLUA_USE_LINUX
        -D_WASI_EMULATED_SIGNAL -D_WASI_EMULATED_PROCESS_CLOCKS -D_GNU_SOURCE
        -Wno-deprecated-declarations -mllvm -wasm-enable-sjlj -I "$SRC/inc" -include "$SRC/guia.h")
 cd src
@@ -54,7 +54,7 @@ done
 "$CC" "${FLAGS[@]}" -c "$SRC/guia-rt.c" -o guia-rt.o
 "$CC" --target=wasm32-wasip1 -O2 "${OBJS[@]}" guia-rt.o -o lua.wasm \
   -lsetjmp -lwasi-emulated-signal -lwasi-emulated-process-clocks -lm \
-  -Wl,--wrap=__stdio_read,--wrap=localtime_r,--wrap=localtime,--wrap=mktime,--wrap=strftime \
+  -Wl,--wrap=__stdio_read,--wrap=localtime_r,--wrap=localtime,--wrap=mktime,--wrap=strftime,--wrap=strerror \
   -Wl,-z,stack-size=8388608 -Wl,--stack-first -Wl,--max-memory=268435456 -Wl,--strip-all
 cp lua.wasm "$SAIDA/lua.wasm"
 # a licença do Lua (MIT) está no fim do readme.html e no lua.h
