@@ -444,7 +444,7 @@ print("Vencedor: " .. nomes[i])
   <li><code>math.randomseed(42)</code>, uma vez no começo, faz os sorteios se repetirem (na mesma versão do Lua; o editor do guia dá os mesmos números do terminal).</li>
   <li>Receitas: <code>lista[math.random(#lista)]</code>, <code>if math.random() &lt; 0.3 then</code>, Fisher–Yates para embaralhar, <code>table.remove</code> para não repetir.</li>
   <li>No Lua 5.1 e no LuaJIT, sem semente, os números se repetem: daí o <code>math.randomseed(os.time())</code> dos códigos antigos.</li>
-  <li>Erros: <code>interval is empty</code> (intervalo ao contrário ou lista vazia), <code>number has no integer representation</code> (número quebrado).</li>
+  <li>Erros: <code>interval is empty</code> (intervalo ao contrário, como <code>math.random(1, #lista)</code> com a lista vazia; já o <code>math.random(#lista)</code> não dá erro e devolve um número gigante), <code>number has no integer representation</code> (número quebrado).</li>
 </ul>
 
 <div class="pager"></div>
