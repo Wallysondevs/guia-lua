@@ -68,6 +68,7 @@ Olá, Ana!
 - **Vários arquivos** (módulo próprio, `.txt`, `.csv`): vários `<pre class="script" data-file="…">` na mesma caixa viram abas; o primeiro é o que roda (`lua main.lua`), os outros ficam na pasta do programa (`require "contas"` acha `contas.lua`).
 - `data-stdin="linha1\nlinha2"`: o que o `io.read()` vai ler. Sem `data-stdin`, o programa **pede e o leitor digita** no terminal da caixa.
 - `data-args="a b"`: o que chega em `arg[1]`, `arg[2]`… (e em `...` do arquivo principal).
+- `data-repl`: o **modo interativo**. Sem `pre.script`, a caixa é um terminal com `lua` (o leitor digita depois do `> `; o botão vira **Abrir o lua**); com `pre.script`, é `lua -i main.lua`. Caixa sem `pre.script` é sempre livre (sem `data-goal`). Ponha em `data-digitar="1 + 1\nx = 10"` o que o testador deve digitar (detalhes na §4.3).
 - Sem `data-goal`: caixa livre. Com `data-goal`: missão, e o `pre.solucao` é **obrigatório** (um por aba que muda).
 - Cada Rodar parte do zero: arquivos e variáveis da execução anterior somem.
 
@@ -124,6 +125,7 @@ No `.exercise`, `data-answer="a|b"` aceita respostas alternativas (a comparaçã
 - **Sem `data-stdin`**: o programa para no `io.read` e o leitor **digita no terminal da caixa** (Enter envia; **Ctrl+D** = fim da entrada, o `io.read()` devolve `nil`; Ctrl+C = Parar). Funciona em laços, com `io.read("n")` (o resto da linha fica para o próximo `io.read`, como no lab), `io.lines()` e `io.read("a")`. O `io.write("Nome: ")` sem `\n` aparece **antes** de esperar, como no terminal do lab.
 - Como: no **Chrome/Edge** (e onde houver JSPI) o programa fica de fato parado esperando. Nos navegadores sem JSPI (Safari e, conforme a versão, Firefox) o editor usa o modo **por repetição**: roda até o `io.read`, o leitor digita, e roda **de novo do começo** com as linhas já digitadas, mostrando só o que é novo — parece contínuo. Nesse modo o relógio (`os.time`) começa igual a cada repetição e `math.random` (mesmo sem `math.randomseed`) e a ordem do `pairs` se repetem, para a saída não mudar no meio; um programa lento fica lento a cada linha.
 - **Missão que lê o teclado**: use `data-stdin` (o mais simples) ou, se o leitor deve **digitar**, **`data-digitar="Bia\n30"`**: o editor ignora esse atributo (o leitor digita), mas o testador e o `testar-navegador.js` digitam essas linhas quando o programa pede. Sem nenhum dos dois, o testador manda "fim de entrada" (`nil`) e avisa.
+- **Modo interativo (`data-repl`)**: a caixa sem `pre.script` mostra `ana@notebook:~$ lua`, o cabeçalho `Lua 5.5.0  Copyright…` e o `> `; o leitor digita (Enter executa, Ctrl+D sai, ■ Parar encerra). Com `pre.script`, é `lua -i main.lua`. No editor, o `data-stdin` é ignorado nessas caixas (`lua < arquivo` não é interativo); o testador digita o `data-digitar`. Uma mensagem de erro mostrada no `> ` conta como erro para as metas (`semerro` falha), mesmo que a sessão continue.
 - **Laço infinito de propósito** (para mostrar o ■ Parar): ponha **`data-sem-fim`** na `div.trylua`. O testador confere que ele de fato não termina (FALHA se terminar). Sem o atributo, uma caixa que passa de 10 s é FALHA.
 
 ### 4.4 O que funciona e o que não funciona no editor (conferido com `tools/sim.js` e no Chromium)
@@ -141,7 +143,8 @@ No `.exercise`, `data-answer="a|b"` aceita respostas alternativas (a comparaçã
 | `require` de módulo em C (`.so`), `package.loadlib`, LuaRocks | **✘** não há bibliotecas dinâmicas no navegador: `module 'x' not found:` (igual ao lab quando o módulo não está instalado) ou `x.so: cannot open shared object file: No such file or directory`. Ensine LuaRocks no lab |
 | `os.setlocale`: `"pt_BR.UTF-8"`, `""` (= `pt_BR.UTF-8`, o `LANG` da Ana), `"pt_PT.UTF-8"`, `"en_US.UTF-8"`, `"C"`, `"C.UTF-8"`, `"POSIX"`, com ou sem categoria (`"numeric"`, `"time"`, `"collate"`…) | ✔ como no lab (são os locales instalados lá): devolve o mesmo nome (um que não existe, como `"pt_BR"` ou `"fr_FR.UTF-8"`, dá `nil`); com `numeric` em português os números saem e entram com vírgula (`3,5`, `tonumber("3,5")`, `string.format("%.2f")` = `1,50`); com `time`, `os.date` em português (`qui 05 mar 2026 14:07:09`, `março`, `%x` = `05/03/2026`); com `collate`, `<` e `table.sort` comparam textos na ordem do idioma (`álvaro Ana bia caio Érica Zeca`). Conferido com o lab, linha a linha |
 | Arquivos do sistema (`/etc/passwd`, `/usr/share/…`) | **✘** o disco do editor só tem `/home/ana`, `/tmp` e `/etc/hostname` (`notebook`) |
-| O modo interativo (`lua` sem arquivo, `> `), `lua -i`, `lua -e`, `luac` | **✘** o editor roda arquivos (`lua main.lua`); o `> ` se mostra com `pre.term` colhido no lab (`-t`) |
+| O modo interativo: `data-repl` (§3) | ✔ `lua` (o leitor digita depois do `> `, a continuação `>> `, o `warning: locals do not survive…`, os erros `stdin:1: …` e o Ctrl+D que sai: tudo igual ao lab `-t`) e `lua -i main.lua` (com `pre.script`). Sem setas nem histórico (↑) do readline |
+| `lua -e`, `lua -v`, `lua -` , `luac` | **✘** o editor roda `lua main.lua` (ou o `data-repl`); mostre esses no lab |
 
 ### 4.5 Diferenças editor × lab (com o mesmo programa)
 | Assunto | Editor | Lab (`lua`) |
@@ -168,6 +171,7 @@ Por isso: **meta e texto da aula não podem depender** de nada da tabela acima (
   timeout 60 node tools/sim.js - < programa.lua          (o programa vem da entrada; vira main.lua)
   timeout 60 node tools/sim.js -e 'print(10 // 3)'
   timeout 60 node tools/sim.js main.lua --digitar "Ana\n30"   (o leitor digitando, sem data-stdin; --repeticao força o modo por repetição)
+  timeout 60 node tools/sim.js --repl --digitar "1 + 1\nx = 10\nx * 2"   (o modo interativo, data-repl; com main.lua: lua -i main.lua)
   ```
   Mostra o terminal da caixa e `[código de saída: N]`; com `--goal`, diz se a missão passaria e qual meta falhou. `--json` dá tudo em JSON. Sem `--stdin`/`--digitar`, o `io.read()` recebe fim de entrada (`nil`). O fuso do `sim.js` é `America/Sao_Paulo` (o do lab); outro: `TZ=Europe/Lisbon node tools/sim.js …`.
 - **`tools/testar-missoes.js`** (ou, do notebook, `~/guia-lua-lab/testar pagina.html`) — confere a página: contrato das caixas, metas, **inicial falha e solução passa**, `data-sem-fim`, `data-digitar`, `<`/`&` sem escape em `pre`, links fora da NIVEIS (aviso), privacidade (FALHA; inclui a lista de `~/.guia-proibido`):

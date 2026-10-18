@@ -12,7 +12,7 @@
    ===================================================================== */
 (function () {
   "use strict";
-  var LUA_BYTES = 345270;    // download na 1ª vez (lua.wasm; atualizado por tools/construir-lua.sh)
+  var LUA_BYTES = 345446;    // download na 1ª vez (lua.wasm; atualizado por tools/construir-lua.sh)
   var LUA_VERSAO = "5.5.0";
   var TEMPO_MAX = 10000;     // ms rodando sem parar (sem contar a espera pelo teclado)
   var MAX_LINHAS = 3000;     // linhas mostradas no terminal (o resto é resumido)
@@ -148,7 +148,11 @@
   LuaSim.dividirArgs = dividirArgs;
   function citarArg(x) { return /^[\w@%+=:,.\/-]+$/.test(x) ? x : "'" + String(x).replace(/'/g, "'\\''") + "'"; }
   LuaSim.citarArg = citarArg;
-  function linhaComando(arquivo, args) { return "lua " + citarArg(arquivo) + (args && args.length ? " " + args.map(citarArg).join(" ") : ""); }
+  // repl: o modo interativo (data-repl): "lua" sem programa, ou "lua -i main.lua" com um
+  function linhaComando(arquivo, args, repl) {
+    if (repl === "so") return "lua";
+    return "lua " + (repl ? "-i " : "") + citarArg(arquivo) + (args && args.length ? " " + args.map(citarArg).join(" ") : "");
+  }
   LuaSim.linhaComando = linhaComando;
 
   // Texto com cores ANSI (io.write("\27[31m") …) → HTML
@@ -269,7 +273,9 @@
     if (box.getAttribute("data-montado")) return;
     box.setAttribute("data-montado", "1");
     var meta = box.getAttribute("data-goal") || "";
-    var stdinAttr = box.getAttribute("data-stdin");
+    var repl = box.hasAttribute("data-repl");
+    // no modo interativo o leitor digita (o data-stdin seria um "lua < arquivo", que não é interativo)
+    var stdinAttr = repl ? null : box.getAttribute("data-stdin");
     var argsAttr = box.getAttribute("data-args");
     var scripts = Array.prototype.slice.call(box.querySelectorAll("pre.script"));
     var sols = Array.prototype.slice.call(box.querySelectorAll("pre.solucao"));
@@ -277,6 +283,8 @@
     if (!abas.length) abas.push({ nome: "main.lua", original: "", atual: "" });
     var solucao = sols.length ? sols.map(function (p, i) { return { nome: p.getAttribute("data-file") || (abas[i] ? abas[i].nome : "main.lua"), codigo: lerPre(p) }; }) : null;
     scripts.concat(sols).forEach(function (p) { p.style.display = "none"; });
+    var soRepl = repl && !scripts.length;
+    var TXT_RODAR = soRepl ? "▶ Abrir o lua" : "▶ Rodar";
     var ativa = 0;
 
     var w = el("div", { "class": "ts tc tp" });
@@ -290,10 +298,11 @@
       '<div class="ts-confirma" hidden><span>Trocar o seu código pela solução?</span> <button type="button" class="sim-btn2 ts-sim">Sim, mostrar</button> <button type="button" class="sim-btn2 secundario ts-nao">Cancelar</button></div>' +
       '<div class="ts-editor"><pre class="ts-nums" aria-hidden="true"></pre><textarea class="ts-code" spellcheck="false" autocapitalize="off" autocomplete="off" wrap="off" aria-label="Código Lua (Ctrl+Enter roda)"></textarea></div>' +
       '<div class="ts-run">' + argsHtml + entradaHtml + '<span class="ts-sp"></span>' +
-      '<button type="button" class="ts-rodar" title="Ctrl+Enter">▶ Rodar</button></div>' +
+      '<button type="button" class="ts-rodar" title="Ctrl+Enter">' + TXT_RODAR + '</button></div>' +
       '<div class="tc-carga" hidden><span class="tc-carga-txt"></span><span class="tc-barra"><i></i></span></div>' +
       '<div class="sim ts-saida" hidden><div class="sim-bar"><span class="sim-dots"><i></i><i></i><i></i></span><span class="sim-title">Terminal — ana@notebook: ~</span></div><div class="sim-screen ts-tela"><div class="sim-out"></div></div></div>';
     box.appendChild(w);
+    if (soRepl) { w.querySelector(".ts-bar").style.display = "none"; w.querySelector(".ts-editor").style.display = "none"; }
     var status = null;
     if (meta) { status = el("p", { "class": "sim-status", "aria-live": "polite" }, "Missão em andamento…"); box.appendChild(status); }
 
@@ -494,7 +503,7 @@
       out.appendChild(el("div", { "class": "ts-codigo" + (codigo ? " ts-erro" : "") }, codigo === null || codigo === undefined ? "[programa interrompido]" : "[código de saída: " + codigo + "]"));
       rolar();
       sessao = null; if (dono === parar) dono = null;
-      btn.textContent = "▶ Rodar"; btn.disabled = false;
+      btn.textContent = TXT_RODAR; btn.disabled = false;
       var r = { interrompido: !res, motivo: motivo || null, saida: s.texto, exit: codigo, excecao: res ? !!res.excecao : null, traceback: res ? res.traceback || "" : null, falhas: null, modo: res ? res.modo : null };
       if (res) r.falhas = verificar({ out: s.texto, excecao: !!res.excecao, traceback: res.traceback || "", exit: res.exit, arquivos: res.arquivos || {} });
       var fs = aoTerminar; aoTerminar = [];
@@ -533,7 +542,7 @@
       saidaBox.hidden = false;
       out.innerHTML = "";
       var args = argsIn ? dividirArgs(argsIn.value) : [];
-      linhaCmd(linhaComando(arqs[0].nome, args));
+      linhaCmd(linhaComando(arqs[0].nome, args, soRepl ? "so" : repl));
       var s = sessao = { texto: "", fila: [], desenho: null, gasto: 0, desde: 0, esperando: false, fim: false, rodando: false };
       btn.textContent = "■ Parar"; btn.disabled = false;
       garantirLua().then(function () {
@@ -560,11 +569,11 @@
           else if (m.ev === "falha") { s.motivo = "(o Lua do navegador falhou: " + String(m.msg).split("\n")[0] + ")"; console.error("luasim:", m.msg); encerrarWorker(); }
           else if (m.ev === "morto") finalizar(s, null, s.motivo || "(o Lua foi reiniciado)");
         };
-        var req = { arquivos: arqs, args: args, stdin: stdin, modo: window.LUASIM_SEM_JSPI ? "repeticao" : "auto", conferir: arquivosDaMeta(meta) };
+        var req = { arquivos: arqs, args: args, stdin: stdin, repl: repl, modo: window.LUASIM_SEM_JSPI ? "repeticao" : "auto", conferir: arquivosDaMeta(meta) };
         s.id = enviar({ op: "executar", req: req }, s.ouvinte);
       }, function () {
         if (sessao !== s) return;
-        sessao = null; btn.textContent = "▶ Rodar"; btn.disabled = false;
+        sessao = null; btn.textContent = TXT_RODAR; btn.disabled = false;
         var fs = aoTerminar; aoTerminar = [];
         fs.forEach(function (f) { try { f({ interrompido: true, motivo: "falha ao carregar", falhas: null }); } catch (e) {} });
       });

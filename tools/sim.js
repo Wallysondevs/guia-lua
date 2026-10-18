@@ -15,6 +15,9 @@
 //   --goal META       o data-goal: diz se a missão passaria e qual meta falhou
 //   --tempo MS        limite (padrão 10000, como o editor)
 //   --json            o resultado em JSON (saida, exit, excecao, traceback…)
+//   --repl            o modo interativo (data-repl): "lua" (sem arquivos) ou "lua -i main.lua";
+//                     as linhas do --digitar são o que se digita no "> "
+//     timeout 60 node tools/sim.js --repl --digitar "1 + 1\nx = 10\nx * 2"
 // Sem --stdin nem --digitar, o io.read() recebe "fim de entrada" (nil), como
 // `lua main.lua < /dev/null`. No editor o leitor digitaria.
 "use strict";
@@ -24,7 +27,7 @@ const LuaSim = require("../assets/luasim.js");
 
 const a = process.argv.slice(2);
 const arqs = [];
-let codigo = null, stdin = null, digitar = null, args = [], goal = null, tempo = 10000, json = false, repeticao = false;
+let codigo = null, stdin = null, digitar = null, args = [], goal = null, tempo = 10000, json = false, repeticao = false, repl = false;
 function uso(c) {
   console.error("uso: timeout 60 node tools/sim.js main.lua [outros…] [--stdin TEXTO | --digitar TEXTO [--repeticao]] [--args \"a b\"] [--goal META] [--tempo MS] [--json]\n" +
     "     timeout 60 node tools/sim.js -e 'CÓDIGO' […]\n" +
@@ -41,11 +44,13 @@ for (let i = 0; i < a.length; i++) {
   else if (x === "--tempo") tempo = +a[++i];
   else if (x === "--json") json = true;
   else if (x === "--repeticao") repeticao = true;
+  else if (x === "--repl") repl = true;
   else if (x === "-h" || x === "--help") uso(0);
   else if (x.startsWith("--")) { console.error("opção desconhecida: " + x); uso(2); }
   else arqs.push(x);
 }
-if (codigo === null && !arqs.length) uso(2);
+if (codigo === null && !arqs.length && !repl) uso(2);
+if (repl && stdin !== null) { console.error("--repl usa --digitar (no modo interativo o leitor digita; --stdin seria \"lua < arquivo\")"); process.exit(2); }
 const arquivos = [];
 if (codigo !== null) arquivos.push({ nome: "main.lua", codigo: codigo.endsWith("\n") ? codigo : codigo + "\n" });
 for (const p of arqs) {
@@ -54,18 +59,20 @@ for (const p of arqs) {
   const c = fs.readFileSync(p, "utf8");
   arquivos.push({ nome: path.basename(p), codigo: /\.lua$/i.test(p) || !arquivos.length ? c : LuaSim.comEnter(c) });
 }
+if (!arquivos.length) arquivos.push({ nome: "main.lua", codigo: "" });
+const soRepl = repl && !arquivos[0].codigo.trim();
 
 (async () => {
   const { abrirMotor } = await import("./motor-node.mjs");
   const m = await abrirMotor({ jspi: !repeticao });
   const req = {
-    arquivos, args,
+    arquivos, args, repl,
     stdin: stdin !== null ? LuaSim.textoEntrada(stdin) : null,
     modo: repeticao ? "repeticao" : "auto",
     conferir: goal ? LuaSim.arquivosDaMeta(goal) : [],
   };
   const linhas = digitar !== null ? LuaSim.decodificarAttr(digitar).replace(/\n$/, "").split("\n") : null;
-  if (!json) process.stdout.write("ana@notebook:~$ " + LuaSim.linhaComando(arquivos[0].nome, args) + "\n");
+  if (!json) process.stdout.write("ana@notebook:~$ " + LuaSim.linhaComando(arquivos[0].nome, args, soRepl ? "so" : repl) + "\n");
   const r = await m.rodar(req, {
     digitar: linhas, tempo,
     aoSaida: json ? null : (t, s) => process.stdout.write(s),
@@ -86,7 +93,7 @@ for (const p of arqs) {
         : "(o Lua do navegador falhou: " + String(r.msg || r.motivo).split("\n")[0] + ")\n[programa interrompido]");
     } else console.log("[código de saída: " + r.exit + "]");
     const extra = [];
-    if (r.excecao) extra.push("terminou com erro (o lua escreveu \"lua: …\")");
+    if (r.excecao) extra.push(repl ? "mostrou uma mensagem de erro" : "terminou com erro (o lua escreveu \"lua: …\")");
     if (r.sinal) extra.push("sinal " + r.sinal + ": " + r.detalhe);
     if (r.modo === "repeticao") extra.push(r.repeticoes + " repetições (modo por repetição)");
     if (stdin === null && digitar === null && /\bio\.read\b|\bio\.lines\s*\(\s*\)|io\.stdin|\bio\.input\b/.test(arquivos.map((x) => x.codigo).join("\n")))

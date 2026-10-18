@@ -339,6 +339,28 @@ async function testeInterface(pg) {
   t = await pg.evaluate(() => [...document.querySelectorAll("#cx-cores .sim-out span")].map((x) => x.className + ":" + x.textContent).join("|"));
   P(/c-r:vermelho/.test(t) && /c-n c-g:verde negrito/.test(t) && /c-b:azul/.test(t), "cx-cores: " + JSON.stringify(t));
 
+  // 14. o modo interativo (data-repl)
+  P(/Abrir o lua/.test(await pg.evaluate(() => document.querySelector("#cx-repl .ts-rodar").textContent)), "cx-repl: o botão não diz Abrir o lua");
+  P(await pg.evaluate(() => getComputedStyle(document.querySelector("#cx-repl .ts-editor")).display === "none"), "cx-repl: o editor de código aparece");
+  await clicar(sel("cx-repl", ".ts-rodar"));
+  await digitar("cx-repl", "2 * 21");
+  await digitar("cx-repl", "for i = 1, 2 do");
+  await digitar("cx-repl", "print(i)");
+  await digitar("cx-repl", "end");
+  P(await campo("cx-repl"), "cx-repl: o campo não voltou depois do end");
+  await pg.focus(sel("cx-repl", ".ts-campo"));
+  await pg.keyboard.down("Control"); await pg.keyboard.press("d"); await pg.keyboard.up("Control");
+  P(await terminou("cx-repl"), "cx-repl: Ctrl+D não saiu do lua");
+  t = await texto("cx-repl");
+  P(/^ana@notebook:~\$ lua\nLua 5\.5\.0  Copyright \(C\) 1994-2025 Lua\.org, PUC-Rio\n> 2 \* 21\n42\n> for i = 1, 2 do\n>> print\(i\)\n>> end\n1\n2\n> \n\[código de saída: 0\]/.test(t), "cx-repl: " + JSON.stringify(t));
+  await clicar(sel("cx-repl-i", ".ts-rodar"));
+  await digitar("cx-repl-i", "dobro(21)");
+  P(await esperar(() => /\n42\n> $/.test(document.querySelector("#cx-repl-i .sim-out").innerText)), "cx-repl-i: dobro(21) não deu 42: " + JSON.stringify(await texto("cx-repl-i")));
+  await clicar(sel("cx-repl-i", ".ts-rodar"));
+  P(await terminou("cx-repl-i", 3000), "cx-repl-i: Parar não parou");
+  t = await texto("cx-repl-i");
+  P(/^ana@notebook:~\$ lua -i main\.lua\nLua 5\.5\.0  Copyright \(C\) 1994-2025 Lua\.org, PUC-Rio\ncarregado!\n> dobro\(21\)\n42\n> \^C\n\[programa interrompido\]/.test(t), "cx-repl-i: " + JSON.stringify(t));
+
   t = await pg.evaluate(() => LuaSim._estado().info);
   notas.push("Lua " + t.lua + " (" + t.versaoCompleta + "), JSPI " + (t.jspi ? "sim" : "não") + (semJspi ? " (--semjspi: modo por repetição)" : ""));
   return { problemas, notas };

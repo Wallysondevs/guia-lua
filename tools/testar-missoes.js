@@ -13,6 +13,7 @@
 //     caixa livre: roda (erro/laço infinito viram aviso/FALHA);
 //     data-digitar="Ana\n30": o que o testador "digita" quando a caixa (sem data-stdin) lê o teclado;
 //     data-sem-fim: a caixa tem um laço infinito de propósito (o testador confere que o editor o para);
+//     data-repl: o modo interativo ("lua" ou "lua -i main.lua"); o testador digita o data-digitar;
 //   - todo <pre>: "<" e "&" escapados (&lt; &amp;);
 //   - links internos só para páginas da NIVEIS (aviso); nada da máquina real (FALHA).
 // --nativo: roda o inicial e a solução também no lua do lab (~/guia-lua-lab/lab)
@@ -231,16 +232,18 @@ async function testarPagina(arq, motor, lab) {
 
   async function rodar(cx, abas, onde) {
     const stdinAttr = cx.at["data-stdin"];
+    const repl = "data-repl" in cx.at;
     const req = {
+      repl,
       arquivos: arquivosDe(abas),
       args: cx.at["data-args"] !== undefined ? LuaSim.dividirArgs(cx.at["data-args"]) : [],
-      stdin: stdinAttr !== undefined ? LuaSim.textoEntrada(stdinAttr) : null,
+      stdin: stdinAttr !== undefined && !repl ? LuaSim.textoEntrada(stdinAttr) : null,
       modo: "auto",
       conferir: cx.goal ? LuaSim.arquivosDaMeta(cx.goal) : [],
     };
     let pediu = false;
     const semFim = "data-sem-fim" in cx.at;
-    const dig = stdinAttr === undefined && cx.at["data-digitar"] !== undefined ? LuaSim.decodificarAttr(cx.at["data-digitar"]).replace(/\n$/, "").split("\n") : null;
+    const dig = (stdinAttr === undefined || "data-repl" in cx.at) && cx.at["data-digitar"] !== undefined ? LuaSim.decodificarAttr(cx.at["data-digitar"]).replace(/\n$/, "").split("\n") : null;
     const r = await motor.rodar(req, { tempo: semFim ? 3000 : LuaSim.TEMPO_MAX, digitar: dig, aoEspera: () => { pediu = true; } });
     r.pediuTeclado = pediu;
     if (semFim) {
@@ -252,7 +255,7 @@ async function testarPagina(arq, motor, lab) {
     } else if (r.ms > 3000) itens.push({ grav: "aviso", linha: onde.linha, msg: onde.nome + ": levou " + r.ms + " ms (o editor para em " + LuaSim.TEMPO_MAX / 1000 + " s; o navegador do leitor pode ser mais lento)" });
     if (pediu && stdinAttr === undefined && !dig)
       itens.push({ grav: "aviso", linha: onde.linha, msg: onde.nome + ": lê o teclado (io.read) e a caixa não tem data-stdin nem data-digitar: no editor o leitor digita; aqui o testador mandou fim de entrada (o io.read() devolveu nil)" + (r.excecao ? " e o programa terminou com erro: " + linhaErro(r) : "") });
-    if (lab && !r.interrompido) {
+    if (lab && !r.interrompido && !repl) {
       nComparados++;
       const n = lab.rodar(req.arquivos, { args: req.args, stdin: req.stdin !== null ? req.stdin : dig ? dig.join("\n") + "\n" : "" });
       const d = lab.comparar(r, n, req.arquivos.map((a) => a.codigo).join("\n"));
@@ -269,10 +272,16 @@ async function testarPagina(arq, motor, lab) {
     const nome = "caixa " + (k + 1), L = cx.linha, goal = cx.goal;
     const fal = (msg) => itens.push({ grav: "FALHA", linha: L, msg: nome + ": " + msg });
     const avi = (msg) => itens.push({ grav: "aviso", linha: L, msg: nome + ": " + msg });
-    if (!cx.script.length) { fal('sem <pre class="script" data-file="main.lua"> (o código inicial da caixa)'); continue; }
-    const abas = cx.script.map((p, i) => ({ nome: p.at["data-file"] || (i === 0 ? "main.lua" : "arquivo" + i + ".txt"), codigo: textoPre(p.cru) }));
+    const repl = "data-repl" in cx.at;
+    if (repl) {
+      if ("data-stdin" in cx.at) avi("data-repl com data-stdin: no modo interativo o leitor digita (o editor ignora o data-stdin; para o testador, use data-digitar)");
+      if (cx.at["data-digitar"] === undefined) avi("data-repl sem data-digitar: o testador só abre o lua e manda Ctrl+D (ponha as linhas que o leitor digitaria)");
+      if (goal !== undefined && !cx.script.length) { fal("data-repl sem pre.script não pode ter data-goal (não há código para mudar; deixe a caixa livre)"); continue; }
+    }
+    if (!cx.script.length && !repl) { fal('sem <pre class="script" data-file="main.lua"> (o código inicial da caixa)'); continue; }
+    const abas = !cx.script.length ? [{ nome: "main.lua", codigo: "" }] : cx.script.map((p, i) => ({ nome: p.at["data-file"] || (i === 0 ? "main.lua" : "arquivo" + i + ".txt"), codigo: textoPre(p.cru) }));
     cx.script.forEach((p, i) => { if (!p.at["data-file"]) avi('o <pre class="script"> nº ' + (i + 1) + ' não tem data-file (o editor chama de "' + abas[i].nome + '")'); });
-    if (!/\.lua$/i.test(abas[0].nome)) fal('o 1º <pre class="script"> é o que roda: precisa ser um .lua (data-file="' + abas[0].nome + '")');
+    if (cx.script.length && !/\.lua$/i.test(abas[0].nome)) fal('o 1º <pre class="script"> é o que roda: precisa ser um .lua (data-file="' + abas[0].nome + '")');
     const nomes = abas.map((a) => a.nome);
     if (new Set(nomes).size !== nomes.length) fal("duas abas com o mesmo data-file: " + nomes.join(", "));
     for (const n of nomes) if (/^\/|(^|\/)\.\.(\/|$)/.test(n)) fal('data-file="' + n + '": o nome é relativo à pasta do programa (/home/ana)');
@@ -291,7 +300,8 @@ async function testarPagina(arq, motor, lab) {
         const rs = await rodar(cx, abasSol, { nome: nome + ", solução", linha: sols[0].linha });
         if (!rs.interrompido && rs.excecao) fal("a solução termina com erro: " + linhaErro(rs));
       }
-      if (r.excecao) avi("caixa livre que termina com erro (de propósito? o leitor vê a mensagem em vermelho): " + linhaErro(r));
+      if (repl) itens.push({ grav: "ok", linha: L, msg: nome + " (livre, modo interativo): " + (r.excecao ? "mostrou um erro (" + linhaErro(r) + ") e " : "") + "terminou com Ctrl+D (código de saída " + r.exit + ")" });
+      else if (r.excecao) avi("caixa livre que termina com erro (de propósito? o leitor vê a mensagem em vermelho): " + linhaErro(r));
       else itens.push({ grav: "ok", linha: L, msg: nome + " (livre): roda sem erro (código de saída " + r.exit + ")" });
       continue;
     }

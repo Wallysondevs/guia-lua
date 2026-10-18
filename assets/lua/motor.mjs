@@ -19,7 +19,7 @@
                     {ev:"espera", id}         (o programa quer uma linha do teclado)
                     {ev:"limite", id}         (saída grande demais: o dono encerra o worker)
                     {ev:"fim", id, res}  |  {ev:"falha", id, msg}
-   req = { arquivos:[{nome, codigo}], args:[…], stdin: texto|null,
+   req = { arquivos:[{nome, codigo}], args:[…], stdin: texto|null, repl: bool,
            modo: "texto"|"jspi"|"repeticao"|"auto", conferir:[nomes], semente }
    res = { exit, excecao: bool (o lua escreveu "lua: …"), tipo: null, traceback,
            arquivos:{nome: texto|null}, modo, repeticoes, sinal, detalhe }
@@ -192,6 +192,7 @@ export async function rodarLua(modulo, opts) {
   const disco = opts.disco || criarDisco([]);
   const entrada = opts.entrada || criarEntrada({ texto: "" });
   const jspi = !!opts.jspi && typeof WebAssembly.Suspending === "function";
+  const stdinTty = opts.stdinTty !== false; // texto do data-stdin = "lua main.lua < entrada.txt" (não é terminal)
   const limite = opts.limiteSaida || LIMITE_SAIDA * 4;
   const inicio = performance.now();
   const base = opts.relogio && opts.relogio.base !== undefined ? opts.relogio.base : Date.now();
@@ -363,7 +364,7 @@ export async function rodarLua(modulo, opts) {
       const f = fds.get(fd);
       if (!f) return E.BADF;
       const v = mem();
-      v.setUint8(p, f.tipo === "tty" ? FT.CHAR : f.tipo === "dir" ? FT.DIR : FT.FILE);
+      v.setUint8(p, f.tipo === "tty" ? (f.fd === 0 && !stdinTty ? FT.UNKNOWN : FT.CHAR) : f.tipo === "dir" ? FT.DIR : FT.FILE);
       v.setUint16(p + 2, f.append ? 1 : 0, true);
       v.setBigUint64(p + 8, f.tipo === "tty" ? DIREITOS_TTY : TODOS_DIREITOS, true);
       v.setBigUint64(p + 16, f.tipo === "tty" ? 0n : TODOS_DIREITOS, true);
@@ -549,12 +550,20 @@ export async function servirMotor(opts) {
     enviar({ ev: "saida", id: atual.id, partes: [{ t, s }] });
   }
 
+  // "lua main.lua args…"; no modo interativo (req.repl): "lua" (sem programa) ou "lua -i main.lua"
+  function argsDe(req) {
+    const a = (req.args || []).map(String);
+    if (!req.repl) return ["lua", req.arquivos[0].nome].concat(a);
+    return req.arquivos[0].codigo.trim() ? ["lua", "-i", req.arquivos[0].nome].concat(a) : ["lua"];
+  }
+
   async function umaVez(req, cfg) {
-    const disco = criarDisco(req.arquivos);
+    // no modo interativo sem programa ("lua"), a pasta não tem o main.lua vazio
+    const disco = criarDisco(req.repl && !req.arquivos[0].codigo.trim() ? req.arquivos.slice(1) : req.arquivos);
     const dec = { out: new TextDecoder(), err: new TextDecoder() };
     const r = await rodarLua(modulo, {
-      args: ["lua"].concat([req.arquivos[0].nome], (req.args || []).map(String)),
-      disco, entrada: cfg.entrada, jspi: cfg.jspi, relogio: cfg.relogio, aleatorio: cfg.aleatorio,
+      args: argsDe(req),
+      disco, entrada: cfg.entrada, jspi: cfg.jspi, relogio: cfg.relogio, aleatorio: cfg.aleatorio, stdinTty: cfg.stdinTty,
       aoSaida: (t, b) => { const s = dec[t].decode(b, { stream: true }); if (s) cfg.saida(t, s); },
     });
     const fimOut = dec.out.decode(), fimErr = dec.err.decode();
@@ -587,7 +596,7 @@ export async function servirMotor(opts) {
           const g = guardadas; guardadas = [];
           for (const x of g) { if (x.op === "eof") entrada.fim(); else entrada.adicionar(String(x.texto)); }
         }
-        res = await umaVez(req, { entrada, jspi: modo === "jspi", saida: paraFila, aleatorio: req.semente !== undefined && req.semente !== null ? sorteador(semente) : undefined });
+        res = await umaVez(req, { entrada, jspi: modo === "jspi", stdinTty: modo !== "texto", saida: paraFila, aleatorio: req.semente !== undefined && req.semente !== null ? sorteador(semente) : undefined });
       } else {
         // "por repetição" (navegador sem JSPI): roda até pedir uma linha nova; o leitor
         // digita; roda de novo do começo com as linhas já digitadas, mostrando só o que
