@@ -1,0 +1,539 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua Chamada de Cauda — return f() sem estourar a pilha | Guia Lua</title>
+<meta name="description" content="A chamada de cauda (tail call) do Lua 5.5 para quem nunca programou: por que return f(n - 1) não empilha, a contagem de um milhão sem stack overflow, o acumulador, o que é e o que não é chamada de cauda (testado no lab), o (...tail calls...) do stack traceback e um passeio pela casa da Ana feito de funções.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">Chamada de Cauda</span> (return f())</h1>
+
+<p class="intro">Na aula <a href="recursao.html">Recursão</a>, você viu que cada chamada que ainda não terminou ocupa um lugar na <strong>pilha de chamadas</strong>, e que, com umas 500 mil chamadas empilhadas, o Lua para com <code>stack overflow</code>. Existe uma exceção a essa regra, e o Lua é uma das poucas linguagens populares que a garante: quando a <strong>última coisa</strong> que uma função faz é <code>return outra_funcao(...)</code>, a chamada nova <strong>ocupa o lugar</strong> da antiga em vez de empilhar. Isso se chama <strong>chamada de cauda</strong> (em inglês, <em>tail call</em>: a chamada que fica "no rabo" da função).</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O que é uma chamada de cauda e por que ela <strong>não ocupa pilha</strong>.</li>
+  <li>Uma contagem de <strong>um milhão</strong> de chamadas recursivas que funciona, e a quase igual que estoura.</li>
+  <li>A técnica do <strong>acumulador</strong>, que transforma uma recursão comum em chamada de cauda.</li>
+  <li>Exatamente quais formas de <code>return</code> contam como chamada de cauda (e as que parecem, mas não contam), testadas uma a uma no lab.</li>
+  <li>A linha <code>(...tail calls...)</code> do <code>stack traceback</code> e o que ela esconde.</li>
+  <li>Um passeio pela casa da Ana feito de funções que passam a vez umas para as outras.</li>
+</ul>
+</div>
+
+<p>Todos os programas desta aula rodaram no <strong>Lua 5.5</strong> da máquina da Ana (usuária <code>ana</code>, computador <code>notebook</code>) com <code>lua arquivo.lua</code>.</p>
+
+<hr>
+
+<h2>A ideia: passar o bastão em vez de esperar</h2>
+<p>Pense no atendimento de uma loja por telefone. Você liga, a atendente não sabe responder, e há dois jeitos de ela agir:</p>
+<ul>
+  <li><strong>"Aguarde na linha."</strong> Ela liga para o setor de vendas e fica com você na espera. O setor de vendas também não sabe, liga para o estoque e fica na espera… Cada pessoa ocupa uma linha telefônica, esperando a resposta voltar. Com gente demais esperando, as linhas acabam. Essa é a recursão comum: cada chamada fica parada esperando, ocupando a pilha.</li>
+  <li><strong>"Vou transferir a sua ligação."</strong> Ela passa você direto para o setor de vendas e <strong>desliga</strong>. Ela não precisa saber a resposta, porque não vai fazer mais nada com ela. Vendas transfere para o estoque e desliga também. Só uma linha fica ocupada, por mais transferências que haja. Essa é a chamada de cauda.</li>
+</ul>
+<p>A atendente só pode transferir e desligar se não tiver <strong>mais nada a fazer</strong> depois. Se ela precisasse anotar a resposta, somar alguma coisa ou dar um recado, teria de esperar na linha. É exatamente essa a regra do Lua: a chamada só é de cauda se for a última coisa que a função faz, e se o resultado dela for devolvido <strong>sem nenhuma mudança</strong>.</p>
+
+<hr>
+
+<h2>1. Um milhão de chamadas, sem estourar</h2>
+
+<pre class="file" data-file="cauda1.lua">local function contagem(n)
+  if n == 0 then
+    return "Já!"
+  end
+  return contagem(n - 1)
+end
+
+print(contagem(10))
+print(contagem(1000000))
+</pre>
+
+<pre class="term">$ lua cauda1.lua
+Já!
+Já!</pre>
+
+<dl class="anatomy">
+  <dt>if n == 0 then return "Já!" end</dt><dd>O caso base, como em toda recursão.</dd>
+  <dt>return contagem(n - 1)</dt><dd>A <strong>chamada de cauda</strong>: a função não faz nada com o resultado de <code>contagem(n - 1)</code>; ela simplesmente o devolve. Então o Lua joga fora a chamada atual e põe a nova no lugar dela, como a atendente que transfere e desliga.</dd>
+  <dt>contagem(1000000)</dt><dd>Um milhão de chamadas recursivas, o dobro do que caberia na pilha. E deu certo, porque nunca houve mais de uma <code>contagem</code> empilhada ao mesmo tempo.</dd>
+</dl>
+
+<p>Agora, a versão que parece igual, mas guarda o resultado numa local antes de devolver:</p>
+
+<pre class="file" data-file="cauda2.lua">local function contagem(n)
+  if n == 0 then
+    return "Já!"
+  end
+  local r = contagem(n - 1)
+  return r
+end
+
+print(contagem(10))
+print(contagem(1000000))
+</pre>
+
+<pre class="term">$ lua cauda2.lua
+Já!
+lua: cauda2.lua:5: stack overflow
+stack traceback:
+	cauda2.lua:5: in upvalue 'contagem'
+	…                                « mais 9 linhas iguais
+	...	(skipping 499974 levels)
+	cauda2.lua:5: in upvalue 'contagem'
+	…                                « mais 7 linhas iguais
+	cauda2.lua:5: in local 'contagem'
+	cauda2.lua:10: in main chunk
+	[C]: in ?</pre>
+
+<p>A <code>contagem(10)</code> funcionou; a de um milhão estourou. A diferença é uma linha só: depois de <code>local r = contagem(n - 1)</code>, a função ainda tem trabalho a fazer (o <code>return r</code>). Para fazê-lo, ela precisa continuar existindo enquanto a chamada de dentro roda: é a atendente "aguardando na linha". Para você, as duas versões fazem a mesma coisa; para o Lua, só a primeira é uma chamada de cauda.</p>
+
+<div class="trylua" data-goal="semerro;;src:return contagem\(n - 1\)">
+<p class="try-task"><strong>Missão:</strong> este programa estoura a pilha na contagem de um milhão. Troque as linhas 5 e 6 por uma <strong>chamada de cauda</strong>, sem mudar o que a função devolve, para o programa terminar sem erro e mostrar <code>Já!</code> duas vezes.</p>
+<pre class="script" data-file="main.lua">local function contagem(n)
+  if n == 0 then
+    return "Já!"
+  end
+  local r = contagem(n - 1)
+  return r
+end
+
+print(contagem(10))
+print(contagem(1000000))
+</pre>
+<pre class="solucao" data-file="main.lua">local function contagem(n)
+  if n == 0 then
+    return "Já!"
+  end
+  return contagem(n - 1)
+end
+
+print(contagem(10))
+print(contagem(1000000))
+</pre>
+</div>
+
+<hr>
+
+<h2>2. O que é e o que não é chamada de cauda</h2>
+<p>A regra oficial do manual do Lua é curta: uma chamada de cauda tem a forma <code>return função(argumentos)</code>, e nada mais. Qualquer coisa que a função precise fazer com o resultado <strong>depois</strong> da chamada estraga a cauda. Para não depender de teoria, cada linha da tabela abaixo foi testada no lab com o mesmo programa, trocando só a linha da chamada recursiva:</p>
+
+<pre class="file" data-file="c_a.lua">local function f(n)
+  if n == 0 then return "fim" end
+  return f(n - 1)
+end
+print(pcall(f, 1000000))
+</pre>
+
+<pre class="term">$ lua c_a.lua
+true	fim</pre>
+
+<p>(O <a href="pcall.html">pcall</a> roda a função "protegida": devolve <code>true</code> e o resultado se deu certo, ou <code>false</code> e a mensagem de erro, sem quebrar o programa.) Com as outras formas no lugar da linha 3:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Linha 3</th><th>Saída real com 1 milhão</th><th>É de cauda?</th><th>Por quê</th></tr>
+<tr><td><code>return f(n - 1)</code></td><td><code>true	fim</code></td><td><strong>Sim</strong></td><td>Devolve o resultado direto, sem mexer</td></tr>
+<tr><td><code>do return f(n - 1) end</code></td><td><code>true	fim</code></td><td><strong>Sim</strong></td><td>O <code>do … end</code> não muda nada</td></tr>
+<tr><td><code>if … then return f(n - 1) else return f(n - 1) end</code></td><td><code>true	fim</code></td><td><strong>Sim</strong></td><td>Cada <code>return</code> dentro do <code>if</code> conta</td></tr>
+<tr><td><code>return self:contar(n - 1)</code> (um <a href="metodos.html">método</a>)</td><td><code>true	fim</code></td><td><strong>Sim</strong></td><td>Chamada com <code>:</code> também vale</td></tr>
+<tr><td><code>local r = f(n - 1); return r</code></td><td><code>false	c_g.lua:3: stack overflow</code></td><td>Não</td><td>Guarda numa local, depois devolve: são dois passos</td></tr>
+<tr><td><code>f(n - 1)</code> (sem <code>return</code>)</td><td><code>false	c_d.lua:3: stack overflow</code></td><td>Não</td><td>Depois da chamada, a função ainda precisa terminar (e devolver "nada")</td></tr>
+<tr><td><code>return f(n - 1) .. ""</code></td><td><code>false	c_b.lua:3: stack overflow</code></td><td>Não</td><td>Ainda falta fazer o <code>..</code> com o resultado</td></tr>
+<tr><td><code>return f(n - 1) or 0</code></td><td><code>false	c_f.lua:3: stack overflow</code></td><td>Não</td><td>Ainda falta testar o <code>or</code></td></tr>
+<tr><td><code>return (f(n - 1))</code></td><td><code>false	c_c.lua:3: stack overflow</code></td><td>Não</td><td>Os parênteses cortam o resultado para <strong>um</strong> valor só (veja <a href="retornos-multiplos.html">Vários Retornos</a>): é um trabalho a mais</td></tr>
+<tr><td><code>return 1, f(n - 1)</code></td><td><code>false	c_e.lua:3: stack overflow</code></td><td>Não</td><td>Ainda falta juntar o <code>1</code> com o resultado</td></tr>
+</table>
+</div>
+
+<p>Um último caso, mais raro: dentro do escopo de uma variável <code>&lt;close&gt;</code> (veja <a href="close.html">Fechamento Automático</a>), o <code>return f(n - 1)</code> também deixa de ser de cauda, porque a função ainda precisa "fechar" a variável depois. No lab, com <code>local x &lt;close&gt; = nil</code> antes da linha 3, deu <code>false	c_k.lua:4: stack overflow</code>. O manual do Lua 5.5 diz isso com todas as letras: é chamada de cauda o <code>return</code> de uma chamada "fora do escopo de uma variável a ser fechada".</p>
+
+<p>Os parênteses são a pegadinha mais traiçoeira: <code>return (f(n - 1))</code> parece idêntico a <code>return f(n - 1)</code>, mas não é de cauda. E a conta mais comum de todas, <code>return n * fatorial(n - 1)</code>, também não é: a multiplicação acontece <strong>depois</strong> que a chamada volta.</p>
+
+<hr>
+
+<h2>3. O acumulador: levando a conta junto</h2>
+<p>Como fazer o fatorial, ou a soma de 1 até n, com chamada de cauda, se a conta acontece depois da chamada? O truque é <strong>levar a conta junto</strong>: em vez de cada chamada esperar a resposta para somar, ela soma antes e passa o resultado parcial para a próxima, num parâmetro a mais. Esse parâmetro se chama <strong>acumulador</strong>.</p>
+<p>A soma comum (a da aula de recursão) estoura com um milhão:</p>
+
+<pre class="file" data-file="soma_normal.lua">local function soma_ate(n)
+  if n == 0 then
+    return 0
+  end
+  return n + soma_ate(n - 1)
+end
+
+print(soma_ate(100))
+print(soma_ate(1000000))
+</pre>
+
+<pre class="term">$ lua soma_normal.lua
+5050
+lua: soma_normal.lua:5: stack overflow
+stack traceback:
+	soma_normal.lua:5: in upvalue 'soma_ate'
+	…                                « e o resto do rastro, como na seção 1</pre>
+
+<p>A versão com acumulador:</p>
+
+<pre class="file" data-file="soma_acc.lua">local function soma_ate(n, acumulado)
+  acumulado = acumulado or 0
+  if n == 0 then
+    return acumulado
+  end
+  return soma_ate(n - 1, acumulado + n)
+end
+
+print(soma_ate(4))
+print(soma_ate(100))
+print(soma_ate(1000000))
+</pre>
+
+<pre class="term">$ lua soma_acc.lua
+10
+5050
+500000500000</pre>
+
+<dl class="anatomy">
+  <dt>soma_ate(n, acumulado)</dt><dd>Um parâmetro a mais: quanto já foi somado até agora.</dd>
+  <dt>acumulado = acumulado or 0</dt><dd>Quem chama de fora escreve só <code>soma_ate(4)</code>; aí o <code>acumulado</code> chega <code>nil</code> e começa em 0.</dd>
+  <dt>if n == 0 then return acumulado end</dt><dd>O caso base devolve a conta pronta: ela foi sendo feita no caminho.</dd>
+  <dt>return soma_ate(n - 1, acumulado + n)</dt><dd>A soma acontece <strong>antes</strong> da chamada (dentro dos argumentos). Depois dela, não sobra nada a fazer: é uma chamada de cauda.</dd>
+</dl>
+
+<p>Veja a diferença na conta de <code>soma_ate(4)</code>:</p>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Recursão comum (espera e soma na volta)</th><th>Com acumulador (soma na ida)</th></tr>
+<tr><td><code>soma_ate(4)</code> = 4 + <code>soma_ate(3)</code><br>= 4 + (3 + <code>soma_ate(2)</code>)<br>= 4 + (3 + (2 + <code>soma_ate(1)</code>))<br>= 4 + (3 + (2 + (1 + 0)))<br>= 10</td><td><code>soma_ate(4, 0)</code><br>→ <code>soma_ate(3, 4)</code><br>→ <code>soma_ate(2, 7)</code><br>→ <code>soma_ate(1, 9)</code><br>→ <code>soma_ate(0, 10)</code> → 10</td></tr>
+</table>
+</div>
+<p>Na coluna da esquerda, a expressão vai crescendo: cada parêntese aberto é uma chamada esperando na pilha. Na da direita, a linha nunca cresce: cada chamada só passa o bastão.</p>
+
+<hr>
+
+<h2>4. O que o <code>stack traceback</code> mostra numa chamada de cauda</h2>
+<p>Se a chamada de cauda joga fora a função anterior, o que sobra para o rastro do erro mostrar? Veja o caixa da padaria, em que três funções passam a vez com <code>return</code>, e a última tem um erro:</p>
+
+<pre class="file" data-file="rastro_cauda.lua">local function pagar(valor)
+  return valor + nil
+end
+
+local function fechar_conta(itens)
+  local total = 0
+  for _, p in ipairs(itens) do total = total + p end
+  return pagar(total)
+end
+
+local function caixa()
+  return fechar_conta({4, 6})
+end
+
+caixa()
+</pre>
+
+<pre class="term">$ lua rastro_cauda.lua
+lua: rastro_cauda.lua:2: attempt to perform arithmetic on a nil value
+stack traceback:
+	rastro_cauda.lua:2: in function &lt;rastro_cauda.lua:1&gt;
+	(...tail calls...)
+	rastro_cauda.lua:15: in main chunk
+	[C]: in ?</pre>
+
+<dl class="anatomy">
+  <dt>rastro_cauda.lua:2: in function &lt;rastro_cauda.lua:1&gt;</dt><dd>O erro foi na linha 2, numa função <strong>definida na linha 1</strong>. Repare que o nome <code>pagar</code> sumiu: o Lua descobre o nome de uma função olhando <strong>quem a chamou</strong>, e quem a chamou (a <code>fechar_conta</code>) já foi descartado. Ele só consegue dizer onde ela foi escrita.</dd>
+  <dt>(...tail calls...)</dt><dd>"(…chamadas de cauda…)": aqui havia uma ou mais funções que passaram a vez com <code>return</code>, e que não existem mais na pilha. Quantas e quais, o Lua não sabe dizer.</dd>
+  <dt>rastro_cauda.lua:15: in main chunk</dt><dd>A linha 15 do programa principal, o <code>caixa()</code>, que começou tudo.</dd>
+</dl>
+
+<p>O mesmo programa, com cada <code>return f()</code> trocado por "guarda numa local e depois devolve" (o <code>rastro_normal.lua</code>), mostra o caminho inteiro, com os nomes:</p>
+
+<pre class="term">$ lua rastro_normal.lua
+lua: rastro_normal.lua:2: attempt to perform arithmetic on a nil value
+stack traceback:
+	rastro_normal.lua:2: in upvalue 'pagar'
+	rastro_normal.lua:8: in upvalue 'fechar_conta'
+	rastro_normal.lua:13: in local 'caixa'
+	rastro_normal.lua:17: in main chunk
+	[C]: in ?</pre>
+
+<p>É o preço da chamada de cauda: menos memória, rastro mais curto. Na maioria das vezes, o <code>in function &lt;arquivo:linha&gt;</code> basta para achar o problema: vá à linha indicada. Se um dia você precisar do caminho completo para investigar um erro, troque temporariamente o <code>return f()</code> por <code>local r = f() return r</code>. (Cada linha do rastro está explicada em <a href="erros.html">Lendo uma Mensagem de Erro</a>.)</p>
+
+<div class="note">
+<strong>E nas outras versões?</strong>
+<p>A chamada de cauda não é novidade: o Lua 5.1, o LuaJIT e o 5.4 do lab também rodaram o <code>c_a.lua</code> de um milhão sem estourar (<code>true	fim</code>). O rastro é que muda. No <code>lua5.1</code>, cada chamada descartada vira uma linha <code>(tail call): ?</code>:</p>
+<pre class="term">$ lua5.1 rastro_cauda.lua
+lua5.1: rastro_cauda.lua:2: attempt to perform arithmetic on a nil value
+stack traceback:
+	rastro_cauda.lua:2: in function &lt;rastro_cauda.lua:1&gt;
+	(tail call): ?
+	(tail call): ?
+	rastro_cauda.lua:15: in main chunk
+	[C]: ?</pre>
+<p>E o LuaJIT, no lab, chamou a função do erro de <code>in function 'caixa'</code>, um nome que não é o dela. Moral: numa chamada de cauda, desconfie do nome e confie na <strong>linha</strong>. Mais em <a href="versoes.html">as diferenças entre versões</a>.</p>
+</div>
+
+<hr>
+
+<h2>5. Funções que passam a vez: um passeio pela casa</h2>
+<p>A chamada de cauda não serve só para recursão. Ela permite escrever um programa como um conjunto de "lugares", em que cada função faz a sua parte e <strong>passa a vez</strong> para a próxima, sem nunca voltar. Um joguinho de andar pela casa da Ana:</p>
+
+<pre class="file" data-file="casa.lua">local sala, cozinha, quintal
+
+function sala()
+  print("Você está na SALA. Para onde? (cozinha/quintal/sair)")
+  local escolha = io.read()
+  if escolha == "cozinha" then return cozinha()
+  elseif escolha == "quintal" then return quintal()
+  elseif escolha == "sair" or escolha == nil then return "Até logo!"
+  else
+    print("Não entendi.")
+    return sala()
+  end
+end
+
+function cozinha()
+  print("Você está na COZINHA. Tem bolo de fubá! (sala)")
+  io.read()
+  return sala()
+end
+
+function quintal()
+  print("Você está no QUINTAL. O cachorro late. (sala)")
+  io.read()
+  return sala()
+end
+
+print(sala())
+</pre>
+
+<p>No terminal da Ana, digitando <code>cozinha</code>, <code>sala</code>, <code>banheiro</code>, <code>quintal</code>, <code>sala</code> e <code>sair</code>:</p>
+
+<pre class="term">$ lua casa.lua
+Você está na SALA. Para onde? (cozinha/quintal/sair)
+cozinha
+Você está na COZINHA. Tem bolo de fubá! (sala)
+sala
+Você está na SALA. Para onde? (cozinha/quintal/sair)
+banheiro
+Não entendi.
+Você está na SALA. Para onde? (cozinha/quintal/sair)
+quintal
+Você está no QUINTAL. O cachorro late. (sala)
+sala
+Você está na SALA. Para onde? (cozinha/quintal/sair)
+sair
+Até logo!</pre>
+
+<dl class="anatomy">
+  <dt>local sala, cozinha, quintal</dt><dd>Declara as três locais antes, porque uma função chama a outra (o mesmo truque da recursão mútua em <a href="recursao.html">Recursão</a>). Os <code>function sala()</code> de baixo, sem <code>local</code>, preenchem essas locais.</dd>
+  <dt>return cozinha()</dt><dd>"Transfere" para a cozinha. A <code>sala</code> não precisa voltar; ela só passa a vez.</dd>
+  <dt>return "Até logo!"</dt><dd>O fim do passeio. Esse texto volta direto para o <code>print</code> da última linha, porque todas as funções do caminho foram descartadas.</dd>
+  <dt>escolha == nil</dt><dd>Se a entrada acabar (<code>io.read()</code> devolve <code>nil</code>), o passeio termina em vez de perguntar para sempre.</dd>
+</dl>
+
+<p>Por mais voltas que o visitante dê pela casa, a pilha nunca cresce: cada cômodo é uma chamada de cauda. Com <code>cozinha()</code> sem o <code>return</code>, cada visita deixaria uma chamada esperando, e um visitante muito animado acabaria num <code>stack overflow</code>.</p>
+
+<div class="trylua">
+<p class="try-task"><strong>Experimente:</strong> rode e passeie pela casa digitando os cômodos no terminal da caixa (<code>cozinha</code>, <code>sala</code>, <code>quintal</code>…); para terminar, digite <code>sair</code>. Depois acrescente um cômodo novo, o <code>quarto</code>: uma função <code>quarto()</code> que termina com <code>return sala()</code> (não esqueça de pôr o nome <code>quarto</code> na linha 1) e uma opção a mais no <code>if</code> da <code>sala</code>.</p>
+<pre class="script" data-file="main.lua">local sala, cozinha, quintal
+
+function sala()
+  print("Você está na SALA. Para onde? (cozinha/quintal/sair)")
+  local escolha = io.read()
+  if escolha == "cozinha" then return cozinha()
+  elseif escolha == "quintal" then return quintal()
+  elseif escolha == "sair" or escolha == nil then return "Até logo!"
+  else
+    print("Não entendi.")
+    return sala()
+  end
+end
+
+function cozinha()
+  print("Você está na COZINHA. Tem bolo de fubá! (sala)")
+  io.read()
+  return sala()
+end
+
+function quintal()
+  print("Você está no QUINTAL. O cachorro late. (sala)")
+  io.read()
+  return sala()
+end
+
+print(sala())
+</pre>
+</div>
+
+<hr>
+
+<h2 id="formas">Formas diferentes de fazer a mesma coisa</h2>
+<p>A soma de 1 até um milhão, de três jeitos que funcionam:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Forma</th><th>Código</th><th>Quando usar</th></tr>
+<tr><td>Laço</td><td><code>local s = 0 for i = 1, n do s = s + i end</code></td><td>O mais simples e o mais rápido para contas em linha reta. É o jeito normal no Lua.</td></tr>
+<tr><td>Recursão com acumulador (cauda)</td><td><code>return soma_ate(n - 1, acumulado + n)</code></td><td>Quando o problema é naturalmente recursivo e pode ter muitos passos. Também em funções que passam a vez (o passeio pela casa, menus, "máquinas de estados").</td></tr>
+<tr><td>Recursão comum</td><td><code>return n + soma_ate(n - 1)</code></td><td>Quando a profundidade é pequena (até alguns milhares), como em árvores e cardápios. Mais fácil de ler, mas estoura perto de 500 mil no Lua 5.5.</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+
+<div class="cenario">
+<strong>Achou que era de cauda, mas não era: <code>stack overflow</code></strong>
+<p>Os casos da tabela da seção 2: <code>return (f(x))</code>, <code>return f(x) .. ""</code>, <code>return n * f(x)</code>, <code>local r = f(x) return r</code>. Todos dão <code>stack overflow</code> com muitas chamadas. A pergunta para se fazer é: "depois que a chamada volta, esta função ainda faz <strong>alguma coisa</strong>?" Se a resposta for sim, não é de cauda. <strong>Como consertar:</strong> leve a conta junto, num acumulador (seção 3), e deixe o <code>return f(…)</code> limpo.</p>
+</div>
+
+<div class="cenario">
+<strong>Chamada de cauda sem caso base: o programa não para nunca</strong>
+<pre class="file" data-file="infinito.lua">local function rodar(n)
+  return rodar(n + 1)
+end
+rodar(1)
+</pre>
+<p>Numa recursão comum, faltar o caso base dá <code>stack overflow</code> em menos de um segundo. Numa chamada de cauda, a pilha nunca enche, então não há estouro: o programa fica rodando para sempre, como um laço infinito. No terminal, a Ana precisou apertar <kbd>Ctrl</kbd>+<kbd>C</kbd>:</p>
+<pre class="term">$ lua infinito.lua
+^C
+lua: infinito.lua:4: interrupted!
+stack traceback:
+        infinito.lua:2: in function &lt;infinito.lua:1&gt;
+        (...tail calls...)
+        infinito.lua:4: in main chunk
+        [C]: in ?
+$ echo $?
+1</pre>
+<p><code>interrupted!</code> quer dizer "interrompido": foi você que mandou parar. O rastro de novo mostra <code>(...tail calls...)</code> no lugar das chamadas descartadas. No editor do guia, depois de 10 segundos, a caixa para o programa sozinha com a mensagem <code>o editor parou o programa: ele rodou mais de 10 segundos sem terminar — laço infinito?</code>. <strong>Como consertar:</strong> o mesmo de sempre: um caso base que seja alcançado.</p>
+</div>
+
+<div class="cenario">
+<strong>O rastro não mostra quem chamou</strong>
+<p>Não é um erro do Lua, mas confunde: o erro aparece <code>in function &lt;arquivo.lua:1&gt;</code>, sem nome, e logo abaixo <code>(...tail calls...)</code>. É a seção 4. Vá direto à linha da mensagem (<code>arquivo.lua:2:</code>) e, se precisar saber o caminho, troque os <code>return f()</code> do caminho por <code>local r = f() return r</code> enquanto investiga.</p>
+</div>
+
+<hr>
+
+<h2>Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>É chamada de cauda?</th></tr>
+<tr><td><code>return f(x)</code>, <code>return obj:metodo(x)</code>, <code>return t.campo(x)</code></td><td>Sim: não ocupa pilha</td></tr>
+<tr><td><code>return f(x)</code> dentro de <code>if</code>/<code>else</code>/<code>do</code></td><td>Sim</td></tr>
+<tr><td><code>return (f(x))</code></td><td>Não (os parênteses cortam para um valor)</td></tr>
+<tr><td><code>return f(x) + 1</code>, <code>return n * f(x)</code>, <code>return f(x) .. ""</code>, <code>return f(x) or y</code></td><td>Não (ainda falta uma conta)</td></tr>
+<tr><td><code>return a, f(x)</code></td><td>Não</td></tr>
+<tr><td><code>f(x)</code> sozinho no fim da função</td><td>Não (falta o <code>return</code>)</td></tr>
+<tr><td><code>local r = f(x) return r</code></td><td>Não</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Sintoma</th><th>Causa provável</th></tr>
+<tr><td><code>stack overflow</code> numa recursão com muitos passos</td><td>A chamada não é de cauda: transforme com um acumulador</td></tr>
+<tr><td>O programa não termina, sem erro</td><td>Chamada de cauda sem caso base (laço infinito disfarçado)</td></tr>
+<tr><td><code>in function &lt;arquivo:N&gt;</code> e <code>(...tail calls...)</code> no rastro</td><td>O caminho passou por chamadas de cauda: os nomes se perderam, a linha não</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="3">
+<p class="mc-q">1. Qual destas linhas é uma chamada de cauda?</p>
+<label><input type="radio" name="q1"> <code>return 1 + conta(n - 1)</code></label>
+<label><input type="radio" name="q1"> <code>return (conta(n - 1))</code></label>
+<label><input type="radio" name="q1"> <code>return conta(n - 1, total + n)</code></label>
+<label><input type="radio" name="q1"> <code>conta(n - 1)</code></label>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">2. Por que <code>return n * fatorial(n - 1)</code> não é de cauda?</p>
+<label><input type="radio" name="q2"> Porque tem dois parâmetros</label>
+<label><input type="radio" name="q2"> Porque a multiplicação acontece depois que a chamada volta</label>
+<label><input type="radio" name="q2"> Porque o Lua não faz chamadas de cauda com números</label>
+<label><input type="radio" name="q2"> Porque falta um <code>end</code></label>
+</div>
+
+<div class="mc" data-answer="4">
+<p class="mc-q">3. Uma função recursiva com <code>return f(n + 1)</code> e sem caso base. O que acontece?</p>
+<label><input type="radio" name="q3"> <code>stack overflow</code> na hora</label>
+<label><input type="radio" name="q3"> Erro de sintaxe</label>
+<label><input type="radio" name="q3"> Ela roda uma vez e para</label>
+<label><input type="radio" name="q3"> Ela roda sem parar, até alguém interromper</label>
+</div>
+
+<div class="exercise">
+<h3>4. Complete o acumulador</h3>
+<p>Complete para <code>multiplicar(n, acc)</code> calcular o fatorial com chamada de cauda (<code>multiplicar(5, 1)</code> dá 120):</p>
+<div class="ex-code">local function multiplicar(n, acc)<br>&nbsp;&nbsp;if n &lt;= 1 then<br>&nbsp;&nbsp;&nbsp;&nbsp;return <input data-answer="acc" aria-label="o que devolver"><br>&nbsp;&nbsp;end<br>&nbsp;&nbsp;<input data-answer="return" aria-label="palavra-chave"> multiplicar(n - 1, acc * n)<br>end</div>
+</div>
+
+<div class="exercise">
+<h3>5. O que o rastro mostra?</h3>
+<p>Num erro dentro de uma função alcançada por chamadas de cauda, que linha aparece no <code>stack traceback</code> no lugar das funções descartadas?</p>
+<div class="ex-code"><input data-answer="(...tail calls...)" aria-label="a linha do rastro"></div>
+</div>
+
+<h3>Missão final: a soma de um milhão</h3>
+
+<div class="trylua" data-goal="out:500000500000;;semerro;;src:return soma_ate\(">
+<p class="try-task"><strong>Missão:</strong> esta soma estoura a pilha com um milhão. Reescreva a <code>soma_ate</code> com um <strong>acumulador</strong> (um segundo parâmetro), para que a chamada recursiva seja de cauda e o programa mostre <code>5050</code> e <code>500000500000</code>. Dica: <code>acumulado = acumulado or 0</code> deixa a chamada de fora continuar com um argumento só.</p>
+<pre class="script" data-file="main.lua">local function soma_ate(n)
+  if n == 0 then
+    return 0
+  end
+  return n + soma_ate(n - 1)
+end
+
+print(soma_ate(100))
+print(soma_ate(1000000))
+</pre>
+<pre class="solucao" data-file="main.lua">local function soma_ate(n, acumulado)
+  acumulado = acumulado or 0
+  if n == 0 then
+    return acumulado
+  end
+  return soma_ate(n - 1, acumulado + n)
+end
+
+print(soma_ate(100))
+print(soma_ate(1000000))
+</pre>
+</div>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li>Uma <strong>chamada de cauda</strong> é <code>return f(…)</code> como última ação, devolvendo o resultado sem mexer. O Lua a executa <strong>no lugar</strong> da função atual, sem empilhar.</li>
+  <li>Com ela, uma recursão de um milhão de passos funciona; a mesma recursão sem a cauda estoura com <code>stack overflow</code> perto de 500 mil.</li>
+  <li>Não são de cauda: <code>return (f(x))</code>, <code>return n * f(x)</code>, <code>return f(x) .. ""</code>, <code>return a, f(x)</code>, <code>f(x)</code> sem <code>return</code>, e guardar numa local antes de devolver.</li>
+  <li>Para transformar uma recursão comum, use um <strong>acumulador</strong>: faça a conta antes da chamada e passe o resultado parcial adiante.</li>
+  <li>No rastro de erro, as funções descartadas viram <code>(...tail calls...)</code>, e a função do erro aparece como <code>in function &lt;arquivo:linha&gt;</code>.</li>
+  <li>Chamada de cauda sem caso base não estoura: vira um programa que nunca termina.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
