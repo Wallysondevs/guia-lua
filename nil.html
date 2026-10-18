@@ -1,0 +1,481 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua nil — o valor que representa "nada" | Guia Lua</title>
+<meta name="description" content="O valor nil do Lua 5.5 para quem nunca programou: o que é o nil, de onde ele vem (variável que não existe, campo que falta, função sem return, tonumber que falha), como apagar um valor, como testar com x == nil e if not x, o valor padrão com or, e os erros reais: attempt to perform arithmetic on a nil value, attempt to index a nil value, attempt to call a nil value.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua: O Valor <span class="hl">nil</span></h1>
+
+<p class="intro">Às vezes, a resposta certa é <strong>"não tem nada aqui"</strong>: a variável que ninguém criou, o telefone que o cliente não deu, o número que a pessoa não digitou direito. Para isso o Lua tem um valor especial, o <code>nil</code> (do latim <em>nihil</em>, "nada"). Ele é o único valor do tipo <code>nil</code>, e você vai encontrá-lo o tempo todo, principalmente nas mensagens de erro. Entender de onde ele vem é metade do trabalho de consertar um programa.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O que é o <code>nil</code>: a ausência de valor.</li>
+  <li>De onde ele aparece: variável que não existe ou sem valor, campo que falta numa tabela, posição além do fim de uma lista, função sem <code>return</code>, <code>tonumber</code> que falha.</li>
+  <li>Como "apagar" uma variável ou um campo dando <code>nil</code> a ele.</li>
+  <li>Como testar se algo é <code>nil</code>: <code>x == nil</code>, <code>x ~= nil</code> e <code>if not x then</code>.</li>
+  <li>O valor padrão com <code>or</code>: <code>nome or "visitante"</code>.</li>
+  <li>Os erros reais mais comuns do Lua, todos causados por um <code>nil</code> no lugar errado, e como ler cada um.</li>
+</ul>
+</div>
+
+<p>Todos os programas desta aula rodaram no <strong>Lua 5.5</strong> da máquina da Ana (usuária <code>ana</code>, computador <code>notebook</code>), salvos na pasta pessoal dela e executados com <code>lua arquivo.lua</code> (veja <a href="executar.html">Rodando um Programa</a>). Você pode rodar cada um no editor do guia.</p>
+
+<hr>
+
+<h2>A ideia: a gaveta vazia</h2>
+<p>Pense numa variável como uma gaveta com etiqueta (veja <a href="variaveis.html">Variáveis</a>). A gaveta <code>preco</code> guarda <code>4.50</code>; a gaveta <code>nome</code> guarda <code>"Ana"</code>. E se você abrir uma gaveta vazia, ou procurar uma gaveta que nem existe? O Lua não inventa nada: ele responde <code>nil</code>, "nada".</p>
+<ul>
+  <li><code>nil</code> <strong>não é zero</strong>: zero é um número (a gaveta tem um papel escrito "0").</li>
+  <li><code>nil</code> <strong>não é o texto vazio <code>""</code></strong>: o texto vazio é um texto (a gaveta tem um papel em branco).</li>
+  <li><code>nil</code> <strong>não é <code>false</code></strong>: <code>false</code> é a resposta "não" a uma pergunta (veja <a href="booleanos.html">Booleanos</a>).</li>
+  <li><code>nil</code> é a gaveta <strong>sem papel nenhum</strong>.</li>
+</ul>
+
+<hr>
+
+<h2>1. O primeiro <code>nil</code></h2>
+
+<pre class="file" data-file="nada.lua">print(nil)
+print(type(nil))
+print(sobrenome)
+local apelido
+print(apelido, type(apelido))
+</pre>
+
+<pre class="term">$ lua nada.lua
+nil
+nil
+nil
+nil	nil</pre>
+
+<dl class="anatomy">
+  <dt>print(nil)</dt><dd>O <code>nil</code> pode ser escrito direto, como palavra reservada (minúscula, sem aspas). O <code>print</code> mostra <code>nil</code>.</dd>
+  <dt>print(type(nil))</dt><dd>O tipo do <code>nil</code> se chama… <code>nil</code>. O <code>type</code> devolve o <strong>texto</strong> <code>"nil"</code> (veja <a href="type.html">Descobrindo o Tipo</a>), que o <code>print</code> mostra sem as aspas.</dd>
+  <dt>print(sobrenome)</dt><dd>Ninguém criou uma variável <code>sobrenome</code>. Em muitas linguagens isso daria erro; no Lua, <strong>uma variável que não existe vale <code>nil</code></strong>, sem aviso nenhum.</dd>
+  <dt>local apelido</dt><dd>Uma variável criada <strong>sem valor</strong> (sem o <code>=</code>) começa com <code>nil</code>. Ela existe, mas a gaveta está vazia.</dd>
+</dl>
+
+<p>No modo interativo (veja <a href="repl.html">O Modo Interativo</a>):</p>
+
+<pre class="term">$ lua
+Lua 5.5.0  Copyright (C) 1994-2025 Lua.org, PUC-Rio
+&gt; sobrenome
+nil
+&gt; x = 10
+&gt; x
+10
+&gt; x = nil
+&gt; x
+nil
+&gt; type(x)
+nil
+&gt; os.exit()</pre>
+
+<div class="warning">
+<strong>O lado perigoso: erro de digitação vira <code>nil</code></strong>
+<p>Como uma variável inexistente vale <code>nil</code> em silêncio, um erro de digitação (<code>totl</code> em vez de <code>total</code>, <code>True</code> em vez de <code>true</code>) não é avisado na hora. O programa só para mais adiante, quando tenta <strong>usar</strong> esse <code>nil</code>. É um dos motivos para usar sempre <code>local</code> e nomes claros (veja <a href="local.html">local × Global</a>).</p>
+</div>
+
+<hr>
+
+<h2>2. Dar <code>nil</code> para "apagar"</h2>
+<p>Guardar <code>nil</code> numa variável é esvaziar a gaveta: o valor antigo some.</p>
+
+<pre class="file" data-file="apagar.lua">local cupom = "DESCONTO10"
+print("cupom:", cupom)
+cupom = nil
+print("cupom:", cupom)
+</pre>
+
+<pre class="term">$ lua apagar.lua
+cupom:	DESCONTO10
+cupom:	nil</pre>
+
+<p>Numa <strong>tabela</strong> (o "fichário" do Lua, que tem aula própria: <a href="tabelas.html">Tabelas</a>), dar <code>nil</code> a um campo <strong>remove</strong> o campo. Para o Lua, "o campo vale <code>nil</code>" e "o campo não existe" são a mesma coisa:</p>
+
+<pre class="file" data-file="campo.lua">local cliente = { nome = "Ana", telefone = "9999-0000" }
+print(cliente.telefone)
+cliente.telefone = nil
+print(cliente.telefone)
+for chave, valor in pairs(cliente) do print(chave, valor) end
+</pre>
+
+<pre class="term">$ lua campo.lua
+9999-0000
+nil
+nome	Ana</pre>
+
+<p>O <code>for … in pairs</code> (que percorre todos os campos; aula <a href="pairs.html">pairs</a>) mostrou só o <code>nome</code>: o <code>telefone</code> não está mais lá.</p>
+
+<hr>
+
+<h2>3. De onde vem o <code>nil</code></h2>
+<p>Além da variável que não existe, o <code>nil</code> aparece em vários lugares. Reconhecê-los ajuda a achar a origem de um erro:</p>
+
+<pre class="file" data-file="origens.lua">local cliente = { nome = "Ana", idade = 30 }
+print(cliente.nome, cliente.telefone)
+local lista = { "pão", "leite" }
+print(lista[1], lista[2], lista[3])
+local function avisar()
+  print("(avisando)")
+end
+print(avisar())
+print(tonumber("doze"), math.tointeger(2.5))
+local a, b, c = 1, 2
+print(a, b, c)
+</pre>
+
+<pre class="term">$ lua origens.lua
+Ana	nil
+pão	leite	nil
+(avisando)
+
+nil	nil
+1	2	nil</pre>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Origem</th><th>Exemplo</th><th>Por quê</th></tr>
+<tr><td>Campo que não existe</td><td><code>cliente.telefone</code></td><td>A tabela não tem esse campo</td></tr>
+<tr><td>Posição depois do fim da lista</td><td><code>lista[3]</code> numa lista de 2 itens</td><td>Não há terceiro item (aula <a href="listas.html">Tabelas como Listas</a>)</td></tr>
+<tr><td>Função sem <code>return</code></td><td><code>local r = avisar()</code></td><td>A função não devolve nada (aula <a href="return.html">return</a>)</td></tr>
+<tr><td>Conversão que falhou</td><td><code>tonumber("doze")</code>, <code>math.tointeger(2.5)</code></td><td>Não dá para converter (veja <a href="conversao.html">Conversão</a> e <a href="numeros.html">Números</a>)</td></tr>
+<tr><td>Faltou valor na atribuição</td><td><code>local a, b, c = 1, 2</code></td><td>Três gavetas, dois valores: o <code>c</code> fica vazio (aula <a href="atribuicao-multipla.html">Atribuição Múltipla</a>)</td></tr>
+<tr><td>Fim da entrada</td><td><code>io.read()</code> quando não há mais nada para ler</td><td>Acabaram as linhas (aula <a href="io-read.html">io.read()</a>)</td></tr>
+</table>
+</div>
+
+<div class="note">
+<strong>Por que o <code>print(avisar())</code> mostrou uma linha vazia, e não <code>nil</code>?</strong>
+<p>Uma função sem <code>return</code> devolve, a rigor, <strong>nenhum valor</strong>. Quando você guarda esse "nenhum valor" numa variável, ela fica com <code>nil</code>. Mas o <code>print(avisar())</code> recebe <strong>zero</strong> valores para mostrar, e o <code>print</code> sem nada mostra uma linha vazia. No lab:</p>
+<pre class="file" data-file="retorno.lua">local function avisar()
+  print("(avisando)")
+end
+local r = avisar()
+print("r =", r)
+print(avisar())
+</pre>
+<pre class="term">$ lua retorno.lua
+(avisando)
+r =	nil
+(avisando)
+                «  a linha vazia do print() sem nada</pre>
+<p>Para quase tudo no dia a dia, "nenhum valor" e <code>nil</code> se comportam igual. A diferença tem aula própria, no nível avançado: <a href="select.html">select e o Número de Argumentos</a>.</p>
+</div>
+
+<div class="note">
+<strong><em>fail</em>: o <code>nil</code> que quer dizer "não deu"</strong>
+<p>O manual do Lua 5.5 descreve várias funções (<code>tonumber</code>, <code>math.tointeger</code>, <code>io.open</code>, <code>string.find</code>) dizendo que, quando não conseguem, elas devolvem <em>fail</em> ("falha"). E explica: <em>"Currently, fail is equal to nil, but that may change in future versions"</em>, "hoje o <em>fail</em> é igual a <code>nil</code>, mas isso pode mudar em versões futuras". A recomendação do manual é testar com <code>not</code> (<code>if not n then</code>), que funciona para <code>nil</code> e para <code>false</code>, em vez de <code>n == nil</code>.</p>
+</div>
+
+<hr>
+
+<h2>4. Testando se algo é <code>nil</code></h2>
+
+<pre class="file" data-file="comparar.lua">local x
+print(x == nil, x ~= nil)
+print(nil == false, not nil)
+print(type(x) == "nil")
+</pre>
+
+<pre class="term">$ lua comparar.lua
+true	false
+false	true
+true</pre>
+
+<dl class="anatomy">
+  <dt>x == nil</dt><dd>"<code>x</code> é <code>nil</code>?" → <code>true</code>.</dd>
+  <dt>x ~= nil</dt><dd>"<code>x</code> é <strong>diferente</strong> de <code>nil</code>?" (o <code>~=</code> é o "diferente" do Lua; veja <a href="operadores-comparacao.html">Comparações</a>) → <code>false</code>. É o jeito de perguntar "tem alguma coisa aí?".</dd>
+  <dt>nil == false → false</dt><dd>Os dois contam como falsos numa condição, mas são valores diferentes.</dd>
+  <dt>not nil → true</dt><dd>Como <code>nil</code> conta como falso, o <code>not</code> o transforma em <code>true</code>. Daí o <code>if not x then</code>: "se não houver <code>x</code>".</dd>
+  <dt>type(x) == "nil"</dt><dd>Outro jeito, comparando o <strong>texto</strong> do tipo. Funciona, mas é mais comprido.</dd>
+</dl>
+
+<div class="trylua" data-goal="out:Total com frete: 15;;semerro">
+<p class="try-task"><strong>Missão:</strong> o programa deveria mostrar <code>Total com frete: 15</code>, mas para com <code>attempt to perform arithmetic on a nil value (global 'totl')</code>. Leia a mensagem: ela diz o nome da variável que está <code>nil</code>. Conserte o erro de digitação.</p>
+<pre class="script" data-file="main.lua">local total = 10
+local frete = 5
+print("Total com frete: " .. totl + frete)
+</pre>
+<pre class="solucao" data-file="main.lua">local total = 10
+local frete = 5
+print("Total com frete: " .. total + frete)
+</pre>
+</div>
+
+<hr>
+
+<h2>5. Valor padrão: <code>x or "outra coisa"</code></h2>
+<p>Muitas vezes, quando um valor está faltando, você quer usar um valor "de reserva". A cafeteria da Ana chama o cliente pelo nome; se ninguém disse o nome, chama de "visitante":</p>
+
+<pre class="file" data-file="padrao.lua">local nome_digitado = nil
+local nome = nome_digitado or "visitante"
+print("Olá, " .. nome .. "!")
+nome_digitado = "Ana"
+nome = nome_digitado or "visitante"
+print("Olá, " .. nome .. "!")
+</pre>
+
+<pre class="term">$ lua padrao.lua
+Olá, visitante!
+Olá, Ana!</pre>
+
+<p>O <code>or</code> ("ou") devolve o valor da esquerda se ele existir (não for <code>nil</code> nem <code>false</code>); senão, devolve o da direita. Lê-se: "o nome digitado, <strong>ou</strong>, se não houver, <code>"visitante"</code>". Como o <code>or</code> funciona por inteiro é assunto da aula <a href="operadores-logicos.html">and, or e not</a>.</p>
+
+<div class="warning">
+<strong>O <code>or</code> também troca o <code>false</code></strong>
+<p>Se a variável puder valer <code>false</code> de propósito (por exemplo, <code>quer_sacola = false</code>), o <code>quer_sacola or true</code> vai trocar o <code>false</code> por <code>true</code>. Para esse caso, teste o <code>nil</code> explicitamente: <code>if quer_sacola == nil then quer_sacola = true end</code>.</p>
+</div>
+
+<hr>
+
+<h2 id="formas">Formas diferentes de fazer a mesma coisa</h2>
+<p>Para perguntar "tem valor?":</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Jeito</th><th>Exemplo</th><th>Quando usar</th></tr>
+<tr><td>Pela condição</td><td><code>if x then</code> / <code>if not x then</code></td><td><strong>O mais comum.</strong> Quando <code>x</code> nunca vai ser <code>false</code> de propósito (números, textos, tabelas). É o que o manual recomenda para resultados <em>fail</em>.</td></tr>
+<tr><td>Comparando com <code>nil</code></td><td><code>if x ~= nil then</code> / <code>if x == nil then</code></td><td>Quando <code>x</code> pode ser <code>false</code> e você quer separar "falso" de "não tem"</td></tr>
+<tr><td>Pelo tipo</td><td><code>if type(x) == "nil" then</code></td><td>Raramente; serve quando você já está olhando o tipo por outro motivo</td></tr>
+</table>
+</div>
+
+<p>Para usar um valor de reserva:</p>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Longo</th><th>Curto (faz o mesmo, se <code>nome</code> não puder ser <code>false</code>)</th></tr>
+<tr><td><code>local nome = digitado</code><br><code>if nome == nil then nome = "visitante" end</code></td><td><code>local nome = digitado or "visitante"</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+<p>O <code>nil</code> em si nunca dá erro: o erro vem quando alguém tenta <strong>usar</strong> o nada como se fosse alguma coisa. A mensagem sempre segue o mesmo molde: <em>attempt to</em> ("tentativa de") + o que se tentou fazer + <em>a nil value</em> ("um valor nil") + entre parênteses, <strong>onde estava o nil</strong>. Essa última parte é a pista mais valiosa.</p>
+
+<div class="cenario">
+<strong>Conta com <code>nil</code>: o erro de digitação</strong>
+<pre class="file" data-file="typo.lua">local total = 10
+local frete = 5
+print(totl + frete)
+</pre>
+<pre class="term">$ lua typo.lua
+lua: typo.lua:3: attempt to perform arithmetic on a nil value (global 'totl')
+stack traceback:
+	typo.lua:3: in main chunk
+	[C]: in ?</pre>
+<dl class="anatomy">
+  <dt>lua: typo.lua:3:</dt><dd>Arquivo <code>typo.lua</code>, linha 3.</dd>
+  <dt>attempt to perform arithmetic on a nil value</dt><dd>"Tentativa de fazer conta com um valor <code>nil</code>".</dd>
+  <dt>(global 'totl')</dt><dd>O <code>nil</code> estava numa variável <strong>global</strong> chamada <code>totl</code>. "Global" aqui é um alarme: você só criou variáveis <code>local</code>, então uma global com nome parecido quase sempre é <strong>erro de digitação</strong>.</dd>
+  <dt>stack traceback:</dt><dd>"Rastro da pilha": a linha 3 do programa principal (<code>in main chunk</code>), que foi chamado pelo próprio <code>lua</code> (<code>[C]: in ?</code>). Mais em <a href="erros.html">Lendo uma Mensagem de Erro</a>.</dd>
+</dl>
+<p><strong>Como consertar:</strong> <code>print(total + frete)</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Juntar <code>nil</code> num texto: o campo com nome errado</strong>
+<pre class="file" data-file="typo2.lua">local cliente = { nome = "Ana" }
+print("Olá, " .. cliente.nme)
+</pre>
+<pre class="term">$ lua typo2.lua
+lua: typo2.lua:2: attempt to concatenate a nil value (field 'nme')
+stack traceback:
+	typo2.lua:2: in main chunk
+	[C]: in ?</pre>
+<p>"Tentativa de juntar um valor <code>nil</code>, no <strong>campo</strong> (<em>field</em>) <code>nme</code>". A tabela tem <code>nome</code>, não <code>nme</code>, e um campo que não existe vale <code>nil</code>. <strong>Como consertar:</strong> <code>cliente.nome</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Usar o <code>nil</code> como se fosse uma tabela</strong>
+<pre class="file" data-file="indexar.lua">local pedido = nil
+print(pedido.total)
+</pre>
+<pre class="term">$ lua indexar.lua
+lua: indexar.lua:2: attempt to index a nil value (local 'pedido')
+stack traceback:
+	indexar.lua:2: in main chunk
+	[C]: in ?</pre>
+<p>"Tentativa de <strong>indexar</strong> um valor <code>nil</code>" ("indexar" é pegar um campo com <code>.</code> ou <code>[ ]</code>), na variável local <code>pedido</code>. Não dá para abrir uma gaveta dentro de uma gaveta que não existe. Acontece muito quando uma função que devia devolver uma tabela devolveu <code>nil</code>. <strong>Como consertar:</strong> descubra por que <code>pedido</code> ficou <code>nil</code>, ou proteja: <code>if pedido then print(pedido.total) end</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Chamar o <code>nil</code> como se fosse função</strong>
+<pre class="file" data-file="chamar.lua">local function somar(a, b) return a + b end
+print(Somar(2, 3))
+</pre>
+<pre class="term">$ lua chamar.lua
+lua: chamar.lua:2: attempt to call a nil value (global 'Somar')
+stack traceback:
+	chamar.lua:2: in main chunk
+	[C]: in ?</pre>
+<p>"Tentativa de <strong>chamar</strong> um valor <code>nil</code> (a global <code>Somar</code>)". A função se chama <code>somar</code>, com minúscula; <code>Somar</code> não existe. É o mesmo erro do clássico <code>pirnt("oi")</code>. <strong>Como consertar:</strong> <code>somar(2, 3)</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Comparar com <code>nil</code></strong>
+<pre class="file" data-file="cmp.lua">local nota
+if nota &gt;= 6 then print("aprovado") end
+</pre>
+<pre class="term">$ lua cmp.lua
+lua: cmp.lua:2: attempt to compare number with nil
+stack traceback:
+	cmp.lua:2: in main chunk
+	[C]: in ?</pre>
+<p>"Tentativa de comparar número com <code>nil</code>". A variável <code>nota</code> foi criada sem valor. (A ordem "number with nil" sai invertida porque, por dentro, o Lua troca <code>a &gt;= b</code> por <code>b &lt;= a</code>.) Repare que esta mensagem <strong>não</strong> diz o nome da variável: olhe a linha 2 e procure quem pode estar vazio.</p>
+</div>
+
+<div class="cenario">
+<strong>Medir o tamanho do <code>nil</code></strong>
+<pre class="file" data-file="cmp2.lua">local cliente = {}
+print(#cliente.nome)
+</pre>
+<pre class="term">$ lua cmp2.lua
+lua: cmp2.lua:2: attempt to get length of a nil value (field 'nome')
+stack traceback:
+	cmp2.lua:2: in main chunk
+	[C]: in ?</pre>
+<p>"Tentativa de pegar o tamanho (com <code>#</code>) de um valor <code>nil</code>, no campo <code>nome</code>". A tabela está vazia, então <code>cliente.nome</code> é <code>nil</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Usar <code>nil</code> como chave de tabela</strong>
+<pre class="term">$ lua -e 'local t = {} t[nil] = 1'
+lua: (command line):1: table index is nil
+stack traceback:
+	(command line):1: in main chunk
+	[C]: in ?</pre>
+<p>"O índice da tabela é <code>nil</code>". Uma tabela aceita quase qualquer valor como chave, menos o <code>nil</code> (como guardar algo na gaveta "nenhuma"?). Normalmente a chave veio de uma variável que ficou vazia.</p>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>A mensagem diz…</th><th>Você tentou…</th><th>com <code>nil</code></th></tr>
+<tr><td><code>attempt to perform arithmetic on a nil value</code></td><td>fazer conta (<code>+ - * /</code>…)</td><td><code>totl + 1</code></td></tr>
+<tr><td><code>attempt to concatenate a nil value</code></td><td>juntar texto com <code>..</code></td><td><code>"Olá, " .. nome</code></td></tr>
+<tr><td><code>attempt to index a nil value</code></td><td>pegar um campo (<code>.</code> ou <code>[ ]</code>)</td><td><code>pedido.total</code></td></tr>
+<tr><td><code>attempt to call a nil value</code></td><td>chamar como função (<code>( )</code>)</td><td><code>Somar(2, 3)</code></td></tr>
+<tr><td><code>attempt to compare … with nil</code></td><td>comparar com <code>&lt; &gt; &lt;= &gt;=</code></td><td><code>nota &gt;= 6</code></td></tr>
+<tr><td><code>attempt to get length of a nil value</code></td><td>medir com <code>#</code></td><td><code>#cliente.nome</code></td></tr>
+<tr><td><code>table index is nil</code></td><td>usar como chave</td><td><code>t[nil] = 1</code></td></tr>
+</table>
+</div>
+
+<p>E entre parênteses: <code>(global 'x')</code> = variável global (desconfie de erro de digitação), <code>(local 'x')</code> = variável local, <code>(field 'x')</code> = campo de tabela.</p>
+
+<hr>
+
+<h2>Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>O que faz / o que dá</th></tr>
+<tr><td><code>nil</code></td><td>O valor "nada" (minúsculo, sem aspas); único valor do tipo <code>nil</code></td></tr>
+<tr><td><code>type(nil)</code></td><td><code>"nil"</code> (um texto)</td></tr>
+<tr><td>variável que não existe</td><td>vale <code>nil</code>, sem erro</td></tr>
+<tr><td><code>local x</code></td><td>cria <code>x</code> com <code>nil</code></td></tr>
+<tr><td><code>x = nil</code></td><td>esvazia a variável</td></tr>
+<tr><td><code>t.campo = nil</code></td><td>remove o campo da tabela</td></tr>
+<tr><td><code>x == nil</code> / <code>x ~= nil</code></td><td>"está vazio?" / "tem valor?"</td></tr>
+<tr><td><code>if not x then</code></td><td>"se não houver <code>x</code>" (pega <code>nil</code> e <code>false</code>)</td></tr>
+<tr><td><code>x or "padrão"</code></td><td><code>x</code> se houver; senão, <code>"padrão"</code></td></tr>
+<tr><td><code>nil == false</code></td><td><code>false</code> (valores diferentes, embora os dois sejam falsos numa condição)</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. O que aparece?</h3>
+<p>Escreva o que o <code>print</code> mostra:</p>
+<div class="ex-code">local t = { nome = "Bia" }<br>print(t.idade) → <input data-answer="nil" aria-label="valor de t.idade"><br>print(type(t.idade)) → <input data-answer="nil" aria-label="tipo de t.idade"><br>print(t.idade == nil) → <input data-answer="true" aria-label="t.idade igual a nil"></div>
+</div>
+
+<div class="exercise">
+<h3>2. O valor de reserva</h3>
+<p>Complete para <code>cidade</code> valer <code>"Recife"</code> quando <code>digitada</code> for <code>nil</code>:</p>
+<div class="ex-code">local cidade = digitada <input data-answer="or" aria-label="operador"> "Recife"</div>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">3. A mensagem <code>attempt to call a nil value (global 'pirnt')</code> quer dizer:</p>
+<label><input type="radio" name="q3"> Que o <code>print</code> está quebrado</label>
+<label><input type="radio" name="q3"> Que você chamou uma função que não existe: <code>pirnt</code> está escrito errado</label>
+<label><input type="radio" name="q3"> Que faltou um <code>end</code></label>
+<label><input type="radio" name="q3"> Que a variável <code>pirnt</code> é zero</label>
+</div>
+
+<div class="mc" data-answer="4">
+<p class="mc-q">4. Qual destas afirmações é verdadeira?</p>
+<label><input type="radio" name="q4"> <code>nil</code> é a mesma coisa que <code>0</code></label>
+<label><input type="radio" name="q4"> <code>nil == false</code> dá <code>true</code></label>
+<label><input type="radio" name="q4"> Usar uma variável que não existe dá erro na hora</label>
+<label><input type="radio" name="q4"> Dar <code>nil</code> a um campo de tabela remove o campo</label>
+</div>
+
+<div class="mc" data-answer="1">
+<p class="mc-q">5. Em <code>local a, b = 10</code>, quanto vale <code>b</code>?</p>
+<label><input type="radio" name="q5"> <code>nil</code></label>
+<label><input type="radio" name="q5"> <code>10</code></label>
+<label><input type="radio" name="q5"> <code>0</code></label>
+<label><input type="radio" name="q5"> Dá erro</label>
+</div>
+
+<div class="mc" data-answer="3">
+<p class="mc-q">6. <code>attempt to index a nil value (local 'pedido')</code>. O que aconteceu?</p>
+<label><input type="radio" name="q6"> <code>pedido</code> é um número</label>
+<label><input type="radio" name="q6"> Faltou o <code>local</code></label>
+<label><input type="radio" name="q6"> O programa tentou pegar um campo (<code>pedido.algo</code>) de <code>pedido</code>, que está <code>nil</code></label>
+<label><input type="radio" name="q6"> A tabela <code>pedido</code> está cheia</label>
+</div>
+
+<h3>Missão final: a saudação da cafeteria</h3>
+
+<div class="trylua" data-goal="out:Olá, visitante!;;src:\bor\b;;semerro">
+<p class="try-task"><strong>Missão:</strong> o cliente não disse o nome, e o programa para com <code>attempt to concatenate a nil value (local 'nome')</code>. Use o <code>or</code> para o programa chamar o cliente de <code>visitante</code> quando o nome for <code>nil</code>, e mostrar <code>Olá, visitante!</code>.</p>
+<pre class="script" data-file="main.lua">local nome = nil
+print("Olá, " .. nome .. "!")
+</pre>
+<pre class="solucao" data-file="main.lua">local nome = nil
+print("Olá, " .. (nome or "visitante") .. "!")
+</pre>
+</div>
+
+<p>Dá para escrever o <code>or</code> dentro da frase, entre parênteses, como na solução, ou numa linha antes: <code>nome = nome or "visitante"</code>. Depois de cumprir a missão, troque o <code>nil</code> por <code>"Ana"</code>: deve aparecer <code>Olá, Ana!</code>.</p>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li><code>nil</code> é o valor "nada": a ausência de valor. Não é <code>0</code>, nem <code>""</code>, nem <code>false</code>.</li>
+  <li>Variável que não existe ou criada sem valor, campo que falta, posição além do fim da lista, função sem <code>return</code> e conversão que falhou: tudo dá <code>nil</code>, em silêncio.</li>
+  <li><code>x = nil</code> esvazia a variável; <code>t.campo = nil</code> remove o campo.</li>
+  <li>Teste com <code>if not x then</code> (o mais comum) ou <code>x == nil</code> / <code>x ~= nil</code> (quando <code>false</code> também é um valor possível).</li>
+  <li><code>x or "padrão"</code> dá um valor de reserva quando <code>x</code> é <code>nil</code>.</li>
+  <li>Os erros <code>attempt to … a nil value</code> mostram entre parênteses onde estava o <code>nil</code>: <code>global</code> (desconfie de erro de digitação), <code>local</code> ou <code>field</code>.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
