@@ -1,0 +1,679 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua Parâmetros e Argumentos — mandando informações para a função | Guia Lua</title>
+<meta name="description" content="Parâmetros e argumentos em Lua para quem está começando: a função que recebe informações, vários parâmetros e a ordem deles, o que o Lua faz com argumentos a mais (descarta) e a menos (viram nil), o valor padrão com x = x or 10 e a armadilha do false, parâmetros como variáveis locais, a tabela como argumento e os erros reais do Lua 5.5.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">Parâmetros e Argumentos</span></h1>
+
+<p class="intro">Na aula <a href="funcoes.html">Funções</a>, a função <code>bom_dia()</code> sempre dizia a mesma coisa: "Bom dia, Ana!". Mas a padaria tem muitos clientes. Seria ruim escrever uma função para cada um. Nesta aula a função passa a <strong>receber informações</strong> de quem a chama: o nome do cliente, o preço, a quantidade. Assim, uma função só serve para todos os casos.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O que é um <strong>parâmetro</strong> e o que é um <strong>argumento</strong> (e por que são coisas diferentes).</li>
+  <li>A criar funções com um ou vários parâmetros, e por que a ordem importa.</li>
+  <li>O que o Lua faz quando você manda argumentos <strong>a mais</strong> (descarta) ou <strong>a menos</strong> (viram <code>nil</code>).</li>
+  <li>A dar um <strong>valor padrão</strong> com <code>x = x or 10</code>, e a armadilha desse truque com <code>false</code>.</li>
+  <li>Que o parâmetro é uma variável local da função.</li>
+  <li>A mandar uma tabela como argumento, para quando há muitas informações.</li>
+  <li>Os erros reais: <code>attempt to concatenate a nil value (local 'nome')</code>, a vírgula esquecida e o tipo errado.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>A ideia: a ficha com espaços em branco</h2>
+<p>Na padaria, a Ana tem um bloquinho de pedidos já impresso: "Pedido de ____ unidades de ____ para ____". Cada folha é igual, mas os <strong>espaços em branco</strong> mudam: numa, ela escreve "10, pão francês, Bia"; na outra, "1, bolo de milho, Seu Joaquim".</p>
+
+<p>Uma função com parâmetros é esse bloquinho:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>No bloquinho</th><th>No Lua</th><th>Onde aparece</th></tr>
+<tr><td>O espaço em branco impresso na folha</td><td><strong>Parâmetro</strong></td><td>Na <strong>definição</strong>: <code>local function saudar(nome)</code></td></tr>
+<tr><td>O que a Ana escreve no espaço</td><td><strong>Argumento</strong></td><td>Na <strong>chamada</strong>: <code>saudar("Ana")</code></td></tr>
+</table>
+</div>
+
+<p>Muita gente usa as duas palavras como se fossem a mesma coisa, e tudo bem na conversa. Mas saber a diferença ajuda a ler as mensagens de erro e a documentação.</p>
+
+<hr>
+
+<h2>1. Uma função com um parâmetro</h2>
+<p>A função <code>saudar</code> recebe o nome de quem vai ser cumprimentado:</p>
+
+<pre class="file" data-file="saudar.lua">local function saudar(nome)
+  print("Bom dia, " .. nome .. "!")
+end
+
+saudar("Ana")
+saudar("Bia")
+saudar("Seu Joaquim")
+</pre>
+
+<pre class="term">$ lua saudar.lua
+Bom dia, Ana!
+Bom dia, Bia!
+Bom dia, Seu Joaquim!
+</pre>
+
+<dl class="anatomy">
+  <dt>(nome)</dt><dd>Na definição, dentro dos parênteses, fica o <strong>parâmetro</strong>: um nome de variável que você escolhe. Ele ainda não tem valor; é o espaço em branco da ficha.</dd>
+  <dt>"Bom dia, " .. nome .. "!"</dt><dd>Dentro do corpo, <code>nome</code> é usado como qualquer variável. O <code>..</code> junta os textos (aula <a href="concatenacao.html">Juntando Textos</a>).</dd>
+  <dt>saudar("Ana")</dt><dd>Na chamada, dentro dos parênteses, vai o <strong>argumento</strong>: o valor de verdade. O Lua faz <code>nome = "Ana"</code> e então executa o corpo.</dd>
+</dl>
+
+<p>Cada chamada preenche a ficha de novo: na primeira, <code>nome</code> vale <code>"Ana"</code>; na segunda, <code>"Bia"</code>; na terceira, <code>"Seu Joaquim"</code>. Uma função, três resultados diferentes.</p>
+
+<h3>O argumento pode ser qualquer valor</h3>
+<p>Não precisa ser um texto escrito ali na hora. Pode ser uma variável, ou uma conta, ou um texto montado com <code>..</code>: o Lua calcula o valor <strong>antes</strong> de entrar na função.</p>
+
+<pre class="file" data-file="variavel_arg.lua">local function saudar(nome)
+  print("Bom dia, " .. nome .. "!")
+end
+
+local cliente = "Carla"
+saudar(cliente)
+saudar("Dona " .. cliente)
+</pre>
+
+<pre class="term">$ lua variavel_arg.lua
+Bom dia, Carla!
+Bom dia, Dona Carla!
+</pre>
+
+<p>Repare que a variável de fora se chama <code>cliente</code> e o parâmetro se chama <code>nome</code>. Os nomes não precisam ser iguais: o que passa para a função é o <strong>valor</strong> (<code>"Carla"</code>), não o nome da variável.</p>
+
+<div class="trylua" data-goal="src:function parabens|parabens = function;;outre:Parabéns, Ana!\nParabéns, Bia!;;semerro">
+<p class="try-task"><strong>Missão:</strong> crie uma função <code>parabens</code> com um parâmetro <code>nome</code>, que mostre <code>Parabéns, NOME!</code>. Chame-a com <code>"Ana"</code> e depois com <code>"Bia"</code>.</p>
+<pre class="script" data-file="main.lua">local function saudar(nome)
+  print("Bom dia, " .. nome .. "!")
+end
+
+saudar("Ana")
+</pre>
+<pre class="solucao" data-file="main.lua">local function parabens(nome)
+  print("Parabéns, " .. nome .. "!")
+end
+
+parabens("Ana")
+parabens("Bia")
+</pre>
+</div>
+
+<hr>
+
+<h2>2. Vários parâmetros</h2>
+<p>Uma função pode receber quantas informações precisar. Os parâmetros são separados por <strong>vírgula</strong>, e os argumentos também:</p>
+
+<pre class="file" data-file="dois.lua">local function item(produto, preco)
+  print(produto .. ": R$ " .. string.format("%.2f", preco))
+end
+
+item("Pão francês", 0.80)
+item("Leite", 5.50)
+item("Bolo", 18)
+</pre>
+
+<pre class="term">$ lua dois.lua
+Pão francês: R$ 0.80
+Leite: R$ 5.50
+Bolo: R$ 18.00
+</pre>
+
+<p>(O <code>string.format("%.2f", preco)</code> escreve o número com duas casas depois do ponto; está na aula <a href="string-format.html">string.format</a>.)</p>
+
+<h3>Quem vai para onde: a ordem</h3>
+<p>O Lua liga os argumentos aos parâmetros <strong>pela posição</strong>: o 1º argumento vai para o 1º parâmetro, o 2º para o 2º, e assim por diante. Ele não olha o significado:</p>
+
+<pre class="file" data-file="ordem_args.lua">local function apresentar(nome, idade)
+  print(nome .. " tem " .. idade .. " anos")
+end
+
+apresentar("Ana", 30)
+apresentar(30, "Ana")
+</pre>
+
+<pre class="term">$ lua ordem_args.lua
+Ana tem 30 anos
+30 tem Ana anos
+</pre>
+
+<p>Na segunda chamada, <code>nome</code> recebeu <code>30</code> e <code>idade</code> recebeu <code>"Ana"</code>. O Lua não reclamou, porque <code>..</code> aceita número e texto. O resultado só ficou sem sentido. Quem confere a ordem é você.</p>
+
+<hr>
+
+<h2>3. Argumentos a mais e a menos</h2>
+<p>E se a quantidade de argumentos não bater com a de parâmetros? Muitas linguagens dão erro na hora. <strong>O Lua não</strong>: ele ajusta sozinho.</p>
+
+<pre class="file" data-file="falta.lua">local function mostrar(a, b, c)
+  print("a =", a, "b =", b, "c =", c)
+end
+
+mostrar(1, 2, 3)
+mostrar(1, 2)
+mostrar(1)
+mostrar()
+mostrar(1, 2, 3, 4, 5)
+</pre>
+
+<pre class="term">$ lua falta.lua
+a =	1	b =	2	c =	3
+a =	1	b =	2	c =	nil
+a =	1	b =	nil	c =	nil
+a =	nil	b =	nil	c =	nil
+a =	1	b =	2	c =	3
+</pre>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Situação</th><th>O que o Lua faz</th><th>Exemplo</th></tr>
+<tr><td>Argumentos <strong>a menos</strong></td><td>Os parâmetros que sobraram vazios valem <code>nil</code></td><td><code>mostrar(1)</code>: <code>b</code> e <code>c</code> são <code>nil</code></td></tr>
+<tr><td>Argumentos <strong>a mais</strong></td><td>Os que não têm parâmetro são <strong>descartados</strong>, sem aviso</td><td><code>mostrar(1, 2, 3, 4, 5)</code>: o 4 e o 5 somem</td></tr>
+<tr><td>Nenhum argumento</td><td>Todos os parâmetros valem <code>nil</code></td><td><code>mostrar()</code></td></tr>
+</table>
+</div>
+
+<p>É como a ficha da padaria: se o cliente não disse o nome, o espaço fica em branco (<code>nil</code>); se ele falou mais coisas do que a ficha tem espaço, o que sobrou não é anotado.</p>
+
+<p>Isso é cômodo, mas tem um preço: o erro não aparece na chamada, e sim mais tarde, quando a função tenta <strong>usar</strong> o <code>nil</code>:</p>
+
+<pre class="file" data-file="falta_erro.lua">local function saudar(nome)
+  print("Bom dia, " .. nome .. "!")
+end
+
+saudar()
+</pre>
+
+<pre class="term">$ lua falta_erro.lua
+lua: falta_erro.lua:2: attempt to concatenate a nil value (local 'nome')
+stack traceback:
+	falta_erro.lua:2: in local 'saudar'
+	falta_erro.lua:5: in main chunk
+	[C]: in ?
+</pre>
+
+<dl class="anatomy">
+  <dt>falta_erro.lua:2:</dt><dd>O erro foi na <strong>linha 2</strong>, dentro da função: a linha do <code>..</code>.</dd>
+  <dt>attempt to concatenate a nil value</dt><dd>"Tentativa de concatenar (juntar com <code>..</code>) um valor <code>nil</code>". Não dá para juntar "Bom dia, " com o nada.</dd>
+  <dt>(local 'nome')</dt><dd>O valor <code>nil</code> estava na variável <strong>local</strong> <code>nome</code>. Todo parâmetro é uma variável local (seção 5), por isso o Lua escreve <code>local</code>.</dd>
+  <dt>falta_erro.lua:2: in local 'saudar'</dt><dd>A linha 2 fica dentro da função local <code>saudar</code>.</dd>
+  <dt>falta_erro.lua:5: in main chunk</dt><dd>E quem chamou <code>saudar</code> foi a linha 5 do programa principal. <strong>É aqui que está o erro de verdade</strong>: a chamada <code>saudar()</code>, sem o nome.</dd>
+</dl>
+
+<p>Por isso vale ler o rastro até o fim: a primeira linha diz <strong>onde estourou</strong>; as de baixo dizem <strong>de onde veio</strong> o valor ruim.</p>
+
+<div class="trylua">
+<p class="try-task"><strong>Experimente:</strong> rode e compare as linhas. Depois, acrescente um quarto parâmetro <code>d</code> na função (e no <code>print</code>) e veja o que muda na última chamada.</p>
+<pre class="script" data-file="main.lua">local function mostrar(a, b, c)
+  print("a =", a, "b =", b, "c =", c)
+end
+
+mostrar(1, 2, 3)
+mostrar(1)
+mostrar(1, 2, 3, 4, 5)
+</pre>
+</div>
+
+<hr>
+
+<h2>4. Valor padrão: <code>x = x or 10</code></h2>
+<p>Às vezes um argumento é <strong>opcional</strong>: se a pessoa não mandar, a função usa um valor de costume, o <strong>valor padrão</strong>. O Lua não tem um jeito especial de escrever isso na definição. Usa-se um truque com o <code>or</code> (aula <a href="operadores-logicos.html">and, or e not</a>):</p>
+
+<pre class="file" data-file="padrao.lua">local function saudar(nome)
+  nome = nome or "cliente"
+  print("Bom dia, " .. nome .. "!")
+end
+
+saudar("Ana")
+saudar()
+</pre>
+
+<pre class="term">$ lua padrao.lua
+Bom dia, Ana!
+Bom dia, cliente!
+</pre>
+
+<dl class="anatomy">
+  <dt>nome or "cliente"</dt><dd>O <code>or</code> devolve o primeiro valor se ele for "verdadeiro"; senão, devolve o segundo. Como <code>nil</code> conta como falso, <code>nil or "cliente"</code> dá <code>"cliente"</code>, e <code>"Ana" or "cliente"</code> dá <code>"Ana"</code>.</dd>
+  <dt>nome = …</dt><dd>O resultado é guardado de volta no próprio parâmetro. Daí para baixo, <code>nome</code> sempre tem um texto.</dd>
+</dl>
+
+<p>Com números funciona igual. E aqui o Lua tem uma diferença importante de outras linguagens: <strong>o 0 conta como verdadeiro</strong>. Só <code>nil</code> e <code>false</code> são falsos (aula <a href="booleanos.html">Booleanos</a>). Então, mandar <code>0</code> é diferente de não mandar nada:</p>
+
+<pre class="file" data-file="padrao_num.lua">local function repetir(texto, vezes)
+  vezes = vezes or 3
+  print(string.rep(texto, vezes, " "))
+end
+
+repetir("oi", 2)
+repetir("oi")
+repetir("oi", 0)
+</pre>
+
+<pre class="term">$ lua padrao_num.lua
+oi oi
+oi oi oi
+                                                   « linha vazia: 0 vezes
+</pre>
+
+<p><code>repetir("oi")</code> usou o padrão 3. <code>repetir("oi", 0)</code> respeitou o 0 e mostrou uma linha vazia, porque <code>0 or 3</code> dá <code>0</code>. (O terceiro argumento do <code>string.rep</code>, <code>" "</code>, é o que vai entre as repetições.)</p>
+
+<h3>A armadilha: quando o argumento pode ser <code>false</code></h3>
+<p>O truque do <code>or</code> trata <code>nil</code> e <code>false</code> do mesmo jeito. Na maioria das vezes isso não importa. Mas, se o parâmetro é um "sim ou não" e o padrão é <code>true</code>, a pessoa nunca mais consegue dizer "não":</p>
+
+<pre class="file" data-file="armadilha.lua">local function aviso(texto, com_moldura)
+  com_moldura = com_moldura or true
+  if com_moldura then
+    print("*** " .. texto .. " ***")
+  else
+    print(texto)
+  end
+end
+
+aviso("Promoção de pão")
+aviso("Promoção de pão", true)
+aviso("Promoção de pão", false)
+</pre>
+
+<pre class="term">$ lua armadilha.lua
+*** Promoção de pão ***
+*** Promoção de pão ***
+*** Promoção de pão ***                            « pediu false e veio com moldura!
+</pre>
+
+<p>Na terceira chamada, <code>com_moldura</code> chegou valendo <code>false</code>. Mas <code>false or true</code> dá <code>true</code>: o <code>or</code> viu um valor falso e pegou o segundo. O "não" da Ana foi trocado por "sim", sem nenhum erro.</p>
+
+<p><strong>O conserto:</strong> perguntar só pelo <code>nil</code>, com <code>== nil</code>. Assim, <code>false</code> passa intacto:</p>
+
+<pre class="file" data-file="armadilha_certo.lua">local function aviso(texto, com_moldura)
+  if com_moldura == nil then
+    com_moldura = true
+  end
+  if com_moldura then
+    print("*** " .. texto .. " ***")
+  else
+    print(texto)
+  end
+end
+
+aviso("Promoção de pão")
+aviso("Promoção de pão", true)
+aviso("Promoção de pão", false)
+</pre>
+
+<pre class="term">$ lua armadilha_certo.lua
+*** Promoção de pão ***
+*** Promoção de pão ***
+Promoção de pão
+</pre>
+
+<div class="tip">
+<strong>Regra prática</strong>
+<p><code>x = x or PADRAO</code> é seguro quando <code>x</code> é um texto, um número ou uma tabela. Quando <code>x</code> pode ser <code>false</code> de propósito, use <code>if x == nil then x = PADRAO end</code>.</p>
+</div>
+
+<div class="trylua" data-goal="outre:\nAviso: forno desligado\n$;;semerro">
+<p class="try-task"><strong>Missão:</strong> a última chamada pede o aviso <strong>sem</strong> moldura, mas ele sai com moldura. Conserte o valor padrão para que a última linha da saída seja só <code>Aviso: forno desligado</code>.</p>
+<pre class="script" data-file="main.lua">local function aviso(texto, com_moldura)
+  com_moldura = com_moldura or true
+  if com_moldura then
+    print("*** " .. texto .. " ***")
+  else
+    print(texto)
+  end
+end
+
+aviso("Aviso: pão quentinho")
+aviso("Aviso: forno desligado", false)
+</pre>
+<pre class="solucao" data-file="main.lua">local function aviso(texto, com_moldura)
+  if com_moldura == nil then
+    com_moldura = true
+  end
+  if com_moldura then
+    print("*** " .. texto .. " ***")
+  else
+    print(texto)
+  end
+end
+
+aviso("Aviso: pão quentinho")
+aviso("Aviso: forno desligado", false)
+</pre>
+</div>
+
+<hr>
+
+<h2>5. O parâmetro é uma variável local</h2>
+<p>Todo parâmetro funciona como uma variável <code>local</code> criada no começo da função: ele só existe <strong>dentro</strong> dela. Fora, o nome não significa nada:</p>
+
+<pre class="file" data-file="param_local.lua">local function saudar(nome)
+  print("Bom dia, " .. nome .. "!")
+end
+
+saudar("Ana")
+print(nome)
+</pre>
+
+<pre class="term">$ lua param_local.lua
+Bom dia, Ana!
+nil
+</pre>
+
+<p>O <code>print(nome)</code> da última linha procurou uma variável <code>nome</code> fora da função, não achou, e mostrou <code>nil</code>. O <code>nome</code> do parâmetro acabou junto com a chamada.</p>
+
+<h3>Mudar o parâmetro não muda a variável de fora</h3>
+<p>O argumento é <strong>copiado</strong> para o parâmetro. Se a função muda o parâmetro, muda só a cópia:</p>
+
+<pre class="file" data-file="copia.lua">local function dobrar(n)
+  n = n * 2
+  print("dentro da função:", n)
+end
+
+local estoque = 10
+dobrar(estoque)
+print("fora da função:  ", estoque)
+</pre>
+
+<pre class="term">$ lua copia.lua
+dentro da função:	20
+fora da função:  	10
+</pre>
+
+<p>O <code>estoque</code> continuou 10. Para a função "devolver" o resultado, existe o <code>return</code>, assunto da próxima aula (<a href="return.html">return</a>).</p>
+
+<div class="warning">
+<strong>Com tabelas é diferente</strong>
+<p>Uma tabela não é copiada: a função recebe <strong>a mesma tabela</strong>, e o que ela muda lá dentro aparece fora:</p>
+<pre class="file" data-file="tabela_param.lua">local function adicionar(lista, item)
+  lista[#lista + 1] = item
+end
+
+local compras = {"leite"}
+adicionar(compras, "pão")
+adicionar(compras, "café")
+print(#compras, compras[1], compras[2], compras[3])
+</pre>
+<pre class="term">$ lua tabela_param.lua
+3	leite	pão	café
+</pre>
+<p>Isso é útil (a função arruma a lista para você) e, às vezes, uma surpresa. A explicação completa está em <a href="tabelas-referencia.html">Tabelas São Referências</a>.</p>
+</div>
+
+<hr>
+
+<h2>6. Muitas informações: uma tabela como argumento</h2>
+<p>Com quatro, cinco parâmetros, fica difícil lembrar a ordem (e a seção 2 mostrou o que acontece quando a ordem troca). Uma saída comum no Lua é mandar <strong>uma tabela só</strong>, com campos de nome:</p>
+
+<pre class="file" data-file="nomeados.lua">local function cadastrar(dados)
+  local nome = dados.nome or "sem nome"
+  local idade = dados.idade or 0
+  local cidade = dados.cidade or "Recife"
+  print(nome .. ", " .. idade .. " anos, " .. cidade)
+end
+
+cadastrar({nome = "Ana", idade = 30})
+cadastrar{idade = 25, nome = "Bia", cidade = "Natal"}
+cadastrar{}
+</pre>
+
+<pre class="term">$ lua nomeados.lua
+Ana, 30 anos, Recife
+Bia, 25 anos, Natal
+sem nome, 0 anos, Recife
+</pre>
+
+<dl class="anatomy">
+  <dt>cadastrar({nome = "Ana", idade = 30})</dt><dd>Um argumento só: uma tabela com os campos <code>nome</code> e <code>idade</code> (aula <a href="dicionarios.html">Tabelas como Dicionários</a>). Os campos podem vir em qualquer ordem.</dd>
+  <dt>dados.nome or "sem nome"</dt><dd>O mesmo truque do valor padrão, agora campo por campo. A cidade que não veio fica <code>"Recife"</code>.</dd>
+  <dt>cadastrar{…}</dt><dd>Quando o único argumento é uma tabela escrita ali na hora, o Lua deixa <strong>tirar os parênteses</strong>: <code>cadastrar{…}</code> é o mesmo que <code>cadastrar({…})</code>.</dd>
+</dl>
+
+<p>O mesmo atalho vale quando o único argumento é um texto entre aspas:</p>
+
+<pre class="file" data-file="texto_sem_parenteses.lua">print "Olá, Ana!"
+local function saudar(nome)
+  print("Bom dia, " .. nome .. "!")
+end
+saudar "Bia"
+</pre>
+
+<pre class="term">$ lua texto_sem_parenteses.lua
+Olá, Ana!
+Bom dia, Bia!
+</pre>
+
+<p>Você vai ver essa forma em código dos outros (por exemplo, <code>require "modulo"</code>). Neste guia, fora do <code>f{…}</code> com tabela, usamos sempre os parênteses: é mais claro para quem está começando, e só funciona com <strong>um</strong> argumento, que seja um texto ou uma tabela escritos ali.</p>
+
+<hr>
+
+<h2>Formas diferentes de dar um valor padrão</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Forma</th><th>Exemplo</th><th>Quando usar</th></tr>
+<tr><td><code>or</code></td><td><code>nome = nome or "cliente"</code></td><td>O caso comum: textos, números, tabelas. Curto e claro</td></tr>
+<tr><td><code>if … == nil</code></td><td><code>if com_moldura == nil then com_moldura = true end</code></td><td>Quando o parâmetro pode ser <code>false</code> de propósito</td></tr>
+<tr><td>Tabela de opções</td><td><code>local cidade = dados.cidade or "Recife"</code></td><td>Muitos parâmetros opcionais, em qualquer ordem</td></tr>
+<tr><td>Sem padrão</td><td><code>local function saudar(nome)</code></td><td>Quando o argumento é obrigatório: sem ele, a função não faz sentido</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+
+<div class="cenario">
+<strong>Faltou um argumento numa conta</strong>
+<pre class="file" data-file="falta_conta.lua">local function total(preco, quantidade)
+  print("Total: " .. preco * quantidade)
+end
+
+total(2.5, 4)
+total(2.5)
+</pre>
+<pre class="term">$ lua falta_conta.lua
+Total: 10.0
+lua: falta_conta.lua:2: attempt to perform arithmetic on a nil value (local 'quantidade')
+stack traceback:
+	falta_conta.lua:2: in local 'total'
+	falta_conta.lua:6: in main chunk
+	[C]: in ?
+</pre>
+<p>A primeira chamada funcionou. A segunda esqueceu a quantidade, que virou <code>nil</code>. <code>attempt to perform arithmetic on a nil value (local 'quantidade')</code>: "tentativa de fazer conta com um valor <code>nil</code> (a variável local <code>quantidade</code>)". O rastro aponta a linha 6 como a chamada culpada. <strong>Como consertar:</strong> mande os dois argumentos, <code>total(2.5, 1)</code>, ou dê um padrão: <code>quantidade = quantidade or 1</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Esquecer a vírgula entre os parâmetros</strong>
+<pre class="file" data-file="virgula.lua">local function item(produto preco)
+  print(produto, preco)
+end
+</pre>
+<pre class="term">$ lua virgula.lua
+lua: virgula.lua:1: ')' expected near 'preco'
+</pre>
+<p><code>')' expected near 'preco'</code>: "esperava <code>)</code> perto de <code>preco</code>". Depois de <code>produto</code>, o Lua esperava uma vírgula (mais um parâmetro) ou o <code>)</code> (fim da lista). Na <strong>chamada</strong>, o erro é parecido: <code>item("Leite" 5.50)</code> dá <code>')' expected near '5.50'</code>. <strong>Como consertar:</strong> <code>item(produto, preco)</code> e <code>item("Leite", 5.50)</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Mandar um tipo que a função não espera</strong>
+<pre class="file" data-file="tipo.lua">local function dobro(n)
+  print(n * 2)
+end
+
+dobro(21)
+dobro("21")
+dobro("vinte")
+</pre>
+<pre class="term">$ lua tipo.lua
+42
+42
+lua: tipo.lua:2: attempt to mul a 'string' with a 'number'
+stack traceback:
+	[C]: in metamethod 'mul'
+	tipo.lua:2: in local 'dobro'
+	tipo.lua:7: in main chunk
+	[C]: in ?
+</pre>
+<p>O Lua não confere o tipo do argumento na entrada da função. <code>dobro("21")</code> até funcionou, porque o Lua converte um texto que parece número quando ele entra numa conta (aula <a href="conversao.html">Conversão</a>). Mas <code>"vinte"</code> não vira número: <code>attempt to mul a 'string' with a 'number'</code> é "tentativa de multiplicar (<em>mul</em>) um texto por um número". A linha <code>[C]: in metamethod 'mul'</code> é o pedaço interno do Lua que tentou a multiplicação; as linhas de baixo, como sempre, mostram que a chamada culpada foi a da linha 7.</p>
+<p><strong>Como se proteger:</strong> a função pode conferir o tipo com <code>type</code> e parar com uma mensagem clara usando <code>error</code> (aula <a href="error.html">error: Lançando Erros</a>):</p>
+<pre class="file" data-file="checar.lua">local function dobro(n)
+  if type(n) ~= "number" then
+    error("dobro: esperava um número, veio " .. type(n), 2)
+  end
+  print(n * 2)
+end
+
+dobro(21)
+dobro({})
+</pre>
+<pre class="term">$ lua checar.lua
+42
+lua: checar.lua:9: dobro: esperava um número, veio table
+stack traceback:
+	[C]: in global 'error'
+	checar.lua:3: in local 'dobro'
+	checar.lua:9: in main chunk
+	[C]: in ?
+</pre>
+<p>Agora a mensagem fala em português e já aponta a linha 9, a da chamada errada (é o que o <code>2</code> no fim do <code>error</code> pede).</p>
+</div>
+
+<div class="cenario">
+<strong>Sem erro, mas errado: a ordem trocada e o <code>false</code> engolido</strong>
+<p>Dois problemas desta aula <strong>não dão mensagem nenhuma</strong>: argumentos na ordem errada (<code>30 tem Ana anos</code>, seção 2) e o <code>false</code> trocado por <code>true</code> no <code>x = x or true</code> (seção 4). O programa roda e o resultado sai torto. <strong>Como evitar:</strong> confira a ordem dos parâmetros na definição antes de chamar (ou use a tabela de opções da seção 6), e use <code>== nil</code> nos padrões de "sim ou não".</p>
+</div>
+
+<hr>
+
+<h2>Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>O que faz</th></tr>
+<tr><td><code>local function f(a, b) … end</code></td><td>Define uma função com dois parâmetros, <code>a</code> e <code>b</code></td></tr>
+<tr><td><code>f(1, 2)</code></td><td>Chama com dois argumentos: <code>a = 1</code>, <code>b = 2</code></td></tr>
+<tr><td><code>f(1)</code></td><td><code>b</code> vale <code>nil</code> (argumento a menos)</td></tr>
+<tr><td><code>f(1, 2, 3)</code></td><td>O <code>3</code> é descartado (argumento a mais)</td></tr>
+<tr><td><code>a = a or 10</code></td><td>Valor padrão: se <code>a</code> for <code>nil</code> (ou <code>false</code>), vira 10</td></tr>
+<tr><td><code>if a == nil then a = true end</code></td><td>Valor padrão que respeita o <code>false</code></td></tr>
+<tr><td><code>f{nome = "Ana"}</code></td><td>O mesmo que <code>f({nome = "Ana"})</code>: uma tabela como argumento</td></tr>
+<tr><td><code>f "texto"</code></td><td>O mesmo que <code>f("texto")</code></td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Sintoma</th><th>Causa provável</th></tr>
+<tr><td><code>attempt to concatenate a nil value (local '…')</code></td><td>Faltou o argumento; o parâmetro ficou <code>nil</code> e entrou num <code>..</code></td></tr>
+<tr><td><code>attempt to perform arithmetic on a nil value (local '…')</code></td><td>Faltou o argumento; o parâmetro ficou <code>nil</code> e entrou numa conta</td></tr>
+<tr><td><code>')' expected near …</code></td><td>Faltou uma vírgula entre parâmetros ou entre argumentos</td></tr>
+<tr><td><code>attempt to mul a 'string' with a 'number'</code></td><td>Um texto que não é número foi mandado para uma função que faz conta</td></tr>
+<tr><td>Resultado trocado, sem erro</td><td>Argumentos fora de ordem</td></tr>
+<tr><td><code>false</code> virou <code>true</code></td><td>Padrão com <code>or true</code>; troque por <code>== nil</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. Dois parâmetros</h3>
+<p>Complete a definição para a função receber <code>produto</code> e <code>preco</code>:</p>
+<div class="ex-code">local function etiqueta(produto<input data-answer="," aria-label="o que separa os parâmetros"> preco)</div>
+</div>
+
+<div class="exercise">
+<h3>2. Valor padrão</h3>
+<p>Complete a linha para que <code>quantidade</code> valha 1 quando não for mandada:</p>
+<div class="ex-code">quantidade = quantidade <input data-answer="or" aria-label="operador"> 1</div>
+</div>
+
+<div class="mc" data-answer="3">
+<p class="mc-q">3. A função é <code>local function f(a, b, c)</code> e a chamada é <code>f(10, 20)</code>. Quanto vale <code>c</code> lá dentro?</p>
+<label><input type="radio" name="q3"> <code>0</code></label>
+<label><input type="radio" name="q3"> <code>20</code></label>
+<label><input type="radio" name="q3"> <code>nil</code></label>
+<label><input type="radio" name="q3"> O Lua dá erro antes de entrar na função</label>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">4. A função é <code>local function f(a)</code> e a chamada é <code>f(1, 2, 3)</code>. O que acontece com o <code>2</code> e o <code>3</code>?</p>
+<label><input type="radio" name="q4"> O Lua dá erro: argumentos demais</label>
+<label><input type="radio" name="q4"> São descartados, sem aviso</label>
+<label><input type="radio" name="q4"> São somados ao <code>a</code></label>
+<label><input type="radio" name="q4"> Viram <code>nil</code></label>
+</div>
+
+<div class="mc" data-answer="4">
+<p class="mc-q">5. Dentro de uma função está <code>ligado = ligado or true</code>. A chamada mandou <code>false</code> para <code>ligado</code>. Quanto ele vale depois dessa linha?</p>
+<label><input type="radio" name="q5"> <code>false</code></label>
+<label><input type="radio" name="q5"> <code>nil</code></label>
+<label><input type="radio" name="q5"> Dá erro</label>
+<label><input type="radio" name="q5"> <code>true</code></label>
+</div>
+
+<div class="mc" data-answer="1">
+<p class="mc-q">6. Com <code>vezes = vezes or 3</code>, a chamada manda <code>0</code>. Quanto vale <code>vezes</code>?</p>
+<label><input type="radio" name="q6"> <code>0</code>, porque no Lua o 0 conta como verdadeiro</label>
+<label><input type="radio" name="q6"> <code>3</code>, porque o 0 conta como falso</label>
+<label><input type="radio" name="q6"> <code>nil</code></label>
+<label><input type="radio" name="q6"> <code>false</code></label>
+</div>
+
+<h3>Missão final: o pedido da padaria</h3>
+
+<div class="trylua" data-goal="out:2x café;;out:1x pão de queijo;;semerro">
+<p class="try-task"><strong>Missão:</strong> rode o programa e leia o erro. Depois, faça a <code>quantidade</code> valer <strong>1</strong> quando ela não for mandada, sem mexer nas chamadas. A saída tem de ser <code>2x café</code> e <code>1x pão de queijo</code>.</p>
+<pre class="script" data-file="main.lua">local function pedido(item, quantidade)
+  print(quantidade .. "x " .. item)
+end
+
+pedido("café", 2)
+pedido("pão de queijo")
+</pre>
+<pre class="solucao" data-file="main.lua">local function pedido(item, quantidade)
+  quantidade = quantidade or 1
+  print(quantidade .. "x " .. item)
+end
+
+pedido("café", 2)
+pedido("pão de queijo")
+</pre>
+</div>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li><strong>Parâmetro</strong> é o nome na definição (<code>function saudar(nome)</code>); <strong>argumento</strong> é o valor na chamada (<code>saudar("Ana")</code>).</li>
+  <li>Vários parâmetros e argumentos vão separados por vírgula e são ligados <strong>pela posição</strong>.</li>
+  <li>Argumentos a menos viram <code>nil</code>; a mais são descartados. O Lua não avisa: o erro aparece depois, quando o <code>nil</code> é usado (<code>attempt to concatenate a nil value (local 'nome')</code>).</li>
+  <li>Valor padrão: <code>x = x or PADRAO</code>. Se <code>x</code> pode ser <code>false</code> de propósito, use <code>if x == nil then x = PADRAO end</code>. O 0 é verdadeiro no Lua.</li>
+  <li>O parâmetro é uma variável local; mudar um número ou texto lá dentro não muda a variável de fora (tabelas são a exceção).</li>
+  <li>Muitas opções: mande uma tabela, <code>f{nome = "Ana", idade = 30}</code>.</li>
+  <li>Próxima aula: a função devolvendo um resultado com <a href="return.html">return</a>.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
