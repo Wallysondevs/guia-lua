@@ -1,0 +1,637 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua Recursão — a função que chama a si mesma | Guia Lua</title>
+<meta name="description" content="Recursão no Lua 5.5 para quem nunca programou: o caso base e o caso recursivo, contagem regressiva, fatorial (e o estouro dos inteiros no 21!), somar uma lista, percorrer um cardápio com subcategorias, Fibonacci lento e com memória, a pilha de chamadas e o erro real stack overflow, com a profundidade medida no lab.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">Recursão</span></h1>
+
+<p class="intro">Uma função pode chamar qualquer função, inclusive <strong>ela mesma</strong>. Quando isso acontece, dizemos que a função é <strong>recursiva</strong>, e a técnica se chama <strong>recursão</strong>. Parece um truque de mágica (como a função pode usar a si mesma se ela ainda nem terminou?), mas é só uma forma de resolver um problema grande quebrando-o em <strong>um pedaço igual, só que menor</strong>, até chegar num pedaço tão pequeno que a resposta é óbvia.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>As duas partes de toda função recursiva: o <strong>caso base</strong> (onde ela para) e o <strong>caso recursivo</strong> (onde ela chama a si mesma com um problema menor).</li>
+  <li>Contagem regressiva, fatorial e soma de uma lista, passo a passo, com o "rastro" das chamadas.</li>
+  <li>Onde a recursão brilha de verdade: percorrer uma estrutura com <strong>níveis dentro de níveis</strong> (um cardápio com subcategorias).</li>
+  <li>Por que o Fibonacci recursivo é lento, e como uma tabela de "memória" resolve.</li>
+  <li>O que é a <strong>pilha de chamadas</strong> e o erro real <code>stack overflow</code>: quantas chamadas cabem no Lua 5.5.</li>
+  <li>Por que a função recursiva precisa ser <code>local function nome</code>, e o erro <code>(global 'fatorial')</code>.</li>
+</ul>
+</div>
+
+<p>Todos os programas desta aula rodaram no <strong>Lua 5.5</strong> da máquina da Ana (usuária <code>ana</code>, computador <code>notebook</code>) com <code>lua arquivo.lua</code>. Antes, convém conhecer <a href="funcoes.html">Funções</a> e <a href="return.html">return</a>.</p>
+
+<hr>
+
+<h2>A ideia: a fila do pão</h2>
+<p>A Ana chega à padaria e encontra uma fila enorme. Ela quer saber em que posição está, mas não dá para contar daqui. Então ela cutuca a pessoa da frente: "qual é a sua posição?". Essa pessoa também não sabe, e cutuca a da frente dela com a mesma pergunta. E assim por diante, até chegar à primeira pessoa da fila, que olha para o balcão e diz: "eu sou a 1ª!".</p>
+<p>Aí as respostas voltam: a segunda pessoa pensa "a da minha frente é a 1ª, então eu sou a 2ª", e conta para quem perguntou. A terceira faz 2 + 1 = 3. … Até a resposta chegar à Ana.</p>
+<p>Repare nas duas regras que cada pessoa segue, que são as duas partes de <strong>toda</strong> recursão:</p>
+<ol class="passo">
+  <li><strong>Caso base:</strong> se não tem ninguém na sua frente, responda 1. É a pergunta que se responde sem perguntar para mais ninguém. É ele que faz a recursão <strong>parar</strong>.</li>
+  <li><strong>Caso recursivo:</strong> senão, pergunte a mesma coisa para a pessoa da frente (um problema <strong>menor</strong>: a fila dela é mais curta) e some 1 à resposta.</li>
+</ol>
+<p>Sem o caso base, ninguém nunca pararia de perguntar. Sem o problema ficar menor a cada passo, a pergunta nunca chegaria ao começo da fila. Nos dois casos, o resultado é o mesmo: o programa quebra com <code>stack overflow</code>, como você vai ver na seção 6.</p>
+
+<hr>
+
+<h2>1. A primeira função recursiva: contagem regressiva</h2>
+
+<pre class="file" data-file="contagem.lua">local function contagem(n)
+  if n == 0 then
+    print("Já!")
+    return
+  end
+  print(n .. "...")
+  contagem(n - 1)
+end
+
+contagem(3)
+</pre>
+
+<dl class="anatomy">
+  <dt>local function contagem(n)</dt><dd>Uma função comum, com um parâmetro <code>n</code> (quantos segundos faltam). O <code>local function</code> é importante aqui; a seção <a href="#errado">Quando dá errado</a> mostra por quê.</dd>
+  <dt>if n == 0 then … return end</dt><dd>O <strong>caso base</strong>: quando não falta mais nada, mostra <code>Já!</code> e o <code>return</code> sai da função sem chamar mais ninguém. É aqui que a recursão para.</dd>
+  <dt>print(n .. "...")</dt><dd>O trabalho desta chamada: mostrar o número atual.</dd>
+  <dt>contagem(n - 1)</dt><dd>O <strong>caso recursivo</strong>: a função chama a si mesma com um problema <strong>menor</strong> (um segundo a menos). Cada chamada fica esperando a próxima terminar.</dd>
+</dl>
+
+<pre class="term">$ lua contagem.lua
+3...
+2...
+1...
+Já!</pre>
+
+<p>O que aconteceu, chamada por chamada:</p>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Chamada</th><th><code>n == 0</code>?</th><th>O que faz</th></tr>
+<tr><td><code>contagem(3)</code></td><td>não</td><td>Mostra <code>3...</code> e chama <code>contagem(2)</code></td></tr>
+<tr><td>&nbsp;&nbsp;<code>contagem(2)</code></td><td>não</td><td>Mostra <code>2...</code> e chama <code>contagem(1)</code></td></tr>
+<tr><td>&nbsp;&nbsp;&nbsp;&nbsp;<code>contagem(1)</code></td><td>não</td><td>Mostra <code>1...</code> e chama <code>contagem(0)</code></td></tr>
+<tr><td>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<code>contagem(0)</code></td><td><strong>sim</strong></td><td>Mostra <code>Já!</code> e volta. Depois cada chamada de cima termina, uma de cada vez.</td></tr>
+</table>
+</div>
+
+<p>Cada chamada tem o <strong>seu próprio</strong> <code>n</code>. O <code>n</code> da <code>contagem(3)</code> continua valendo 3 o tempo todo, mesmo enquanto a <code>contagem(2)</code> está rodando com o <code>n</code> dela valendo 2. Parâmetros são locais, e cada chamada ganha as suas (veja <a href="escopo.html">Escopo e Blocos</a>).</p>
+
+<hr>
+
+<h2>2. Recursão que devolve um valor: o fatorial</h2>
+<p>O <strong>fatorial</strong> de um número (escrito <code>5!</code> na matemática) é a multiplicação de todos os inteiros de 1 até ele: <code>5! = 5 × 4 × 3 × 2 × 1 = 120</code>. Ele aparece em contas de combinação: de quantas formas diferentes dá para arrumar 5 pães na vitrine? 120.</p>
+<p>A sacada para a recursão: <code>5! = 5 × 4!</code>. E <code>4! = 4 × 3!</code>. E assim vai, até <code>1! = 1</code>, que é o caso base.</p>
+
+<pre class="file" data-file="fatorial.lua">local function fatorial(n)
+  if n &lt;= 1 then
+    return 1
+  end
+  return n * fatorial(n - 1)
+end
+
+print(fatorial(1))
+print(fatorial(3))
+print(fatorial(5))
+print(fatorial(10))
+print(fatorial(20))
+</pre>
+
+<dl class="anatomy">
+  <dt>if n &lt;= 1 then return 1 end</dt><dd>Caso base: o fatorial de 1 (e de 0, por definição) é 1. Usar <code>&lt;= 1</code> em vez de <code>== 1</code> protege a função se alguém chamar <code>fatorial(0)</code>.</dd>
+  <dt>return n * fatorial(n - 1)</dt><dd>Caso recursivo: "o meu resultado é <code>n</code> vezes o fatorial do número anterior". Para fazer essa multiplicação, a chamada atual precisa <strong>esperar</strong> a resposta de <code>fatorial(n - 1)</code>.</dd>
+</dl>
+
+<pre class="term">$ lua fatorial.lua
+1
+6
+120
+3628800
+2432902008176640000</pre>
+
+<h3>Seguindo o rastro das chamadas</h3>
+<p>Para enxergar a ida e a volta, a versão abaixo recebe um segundo parâmetro, <code>nivel</code>, que só serve para recuar o texto (2 espaços por nível, com <code>string.rep</code>):</p>
+
+<pre class="file" data-file="rastro.lua">local function fatorial(n, nivel)
+  local recuo = string.rep("  ", nivel)
+  print(recuo .. "fatorial(" .. n .. ") começou")
+  if n &lt;= 1 then
+    print(recuo .. "fatorial(" .. n .. ") devolve 1")
+    return 1
+  end
+  local resultado = n * fatorial(n - 1, nivel + 1)
+  print(recuo .. "fatorial(" .. n .. ") devolve " .. resultado)
+  return resultado
+end
+
+print("Resultado:", fatorial(4, 0))
+</pre>
+
+<pre class="term">$ lua rastro.lua
+fatorial(4) começou
+  fatorial(3) começou
+    fatorial(2) começou
+      fatorial(1) começou
+      fatorial(1) devolve 1
+    fatorial(2) devolve 2
+  fatorial(3) devolve 6
+fatorial(4) devolve 24
+Resultado:	24</pre>
+
+<p>A saída tem o formato de um <strong>V</strong> deitado: primeiro as chamadas vão <strong>descendo</strong> (cada uma pede ajuda à próxima e fica esperando), até o caso base. Depois as respostas vão <strong>subindo</strong>, e cada chamada termina a sua multiplicação: 1, depois 2 × 1 = 2, depois 3 × 2 = 6, depois 4 × 6 = 24. É a fila do pão: as perguntas vão até a frente, as respostas voltam.</p>
+
+<div class="trylua">
+<p class="try-task"><strong>Experimente:</strong> rode e acompanhe o V. Depois troque o <code>4</code> da última linha por <code>6</code>: quantos níveis de recuo aparecem? E o que acontece com <code>fatorial(1, 0)</code>?</p>
+<pre class="script" data-file="main.lua">local function fatorial(n, nivel)
+  local recuo = string.rep("  ", nivel)
+  print(recuo .. "fatorial(" .. n .. ") começou")
+  if n &lt;= 1 then
+    print(recuo .. "fatorial(" .. n .. ") devolve 1")
+    return 1
+  end
+  local resultado = n * fatorial(n - 1, nivel + 1)
+  print(recuo .. "fatorial(" .. n .. ") devolve " .. resultado)
+  return resultado
+end
+
+print("Resultado:", fatorial(4, 0))
+</pre>
+</div>
+
+<div class="warning">
+<strong>O fatorial cresce rápido demais: o 21! dá negativo</strong>
+<p>O <code>20!</code> já é <code>2432902008176640000</code>, um número com 19 algarismos. O Lua 5.5 guarda inteiros em 64 bits, e o maior inteiro possível é perto de 9,2 × 10<sup>18</sup>. O <code>21!</code> passa disso, e a conta "dá a volta" para os negativos, sem nenhum aviso. Com um <code>1.0</code> (um <em>float</em>) no lugar, o resultado é aproximado, mas fica positivo:</p>
+<pre class="term">$ lua fatorial21.lua
+-4249290049419214848
+5.109094217170944e+19</pre>
+<p>(O programa é o mesmo <code>fatorial</code>, com <code>print(fatorial(21))</code> e <code>print(fatorial(21.0))</code>. O <code>e+19</code> quer dizer "vezes 10 elevado a 19".) Isso não é culpa da recursão; um laço daria o mesmo resultado. Os detalhes estão em <a href="numeros.html">Números (inteiro e float)</a>.</p>
+</div>
+
+<hr>
+
+<h2>3. Recursão com listas: somar os itens</h2>
+<p>Dá para pensar numa lista do mesmo jeito: "a soma da lista é o primeiro item mais a soma <strong>do resto</strong>". E a soma de uma lista vazia é 0 (caso base). Esta versão anda pela lista com um índice <code>i</code>:</p>
+
+<pre class="file" data-file="soma_lista.lua">local function soma(lista, i)
+  i = i or 1
+  if i &gt; #lista then
+    return 0
+  end
+  return lista[i] + soma(lista, i + 1)
+end
+
+print(soma({10, 20, 30}))
+print(soma({}))
+</pre>
+
+<dl class="anatomy">
+  <dt>i = i or 1</dt><dd>Se quem chamou não passou o <code>i</code>, ele vale <code>nil</code>, e o <code>or</code> põe 1 no lugar: a soma começa do primeiro item (veja <a href="operadores-logicos.html">and, or e not</a>).</dd>
+  <dt>if i &gt; #lista then return 0 end</dt><dd>Caso base: o índice passou do último item (<code>#lista</code> é o tamanho). Não sobrou nada para somar.</dd>
+  <dt>lista[i] + soma(lista, i + 1)</dt><dd>Caso recursivo: o item atual mais a soma do resto da lista.</dd>
+</dl>
+
+<pre class="term">$ lua soma_lista.lua
+60
+0</pre>
+
+<p>Funciona, mas sejamos honestos: para somar uma lista, um <a href="for-numerico.html">for</a> é mais simples e mais rápido. A recursão vale mesmo a pena no próximo caso.</p>
+
+<hr>
+
+<h2>4. Onde a recursão brilha: níveis dentro de níveis</h2>
+<p>O cardápio da padaria tem categorias, e algumas categorias têm subcategorias: "Doces" tem "Bolos", que tem "Cenoura" e "Fubá". Ninguém sabe de antemão quantos níveis existem. Com laços, você precisaria de um <code>for</code> dentro de um <code>for</code> dentro de um <code>for</code>… e quantos? Com recursão, uma função dá conta de qualquer profundidade:</p>
+
+<pre class="file" data-file="cardapio.lua">local cardapio = {
+  nome = "Padaria",
+  itens = {
+    { nome = "Pães", itens = {
+      { nome = "Francês" },
+      { nome = "Integral" },
+    }},
+    { nome = "Doces", itens = {
+      { nome = "Bolos", itens = {
+        { nome = "Cenoura" },
+        { nome = "Fubá" },
+      }},
+      { nome = "Sonho" },
+    }},
+    { nome = "Café" },
+  },
+}
+
+local function mostrar(no, nivel)
+  print(string.rep("  ", nivel) .. "- " .. no.nome)
+  if no.itens then
+    for _, filho in ipairs(no.itens) do
+      mostrar(filho, nivel + 1)
+    end
+  end
+end
+
+mostrar(cardapio, 0)
+</pre>
+
+<pre class="term">$ lua cardapio.lua
+- Padaria
+  - Pães
+    - Francês
+    - Integral
+  - Doces
+    - Bolos
+      - Cenoura
+      - Fubá
+    - Sonho
+  - Café</pre>
+
+<dl class="anatomy">
+  <dt>cardapio</dt><dd>Uma <a href="tabelas-aninhadas.html">tabela aninhada</a>: cada "nó" tem um <code>nome</code> e, às vezes, uma lista <code>itens</code> com mais nós dentro.</dd>
+  <dt>print(…)</dt><dd>Mostra o nome deste nó, recuado conforme o nível.</dd>
+  <dt>if no.itens then</dt><dd>Caso base "escondido": um nó <strong>sem</strong> <code>itens</code> (como "Francês") não chama mais ninguém. A recursão para sozinha nas folhas.</dd>
+  <dt>mostrar(filho, nivel + 1)</dt><dd>Caso recursivo: cada filho é mostrado <strong>do mesmo jeito</strong>, um nível mais para dentro. O problema fica menor porque cada filho é um pedaço menor do cardápio.</dd>
+</dl>
+
+<p>Pastas dentro de pastas no computador, comentários com respostas de respostas, a árvore genealógica da família, menus com submenus: tudo isso tem o mesmo formato, e a recursão é o jeito natural de percorrer.</p>
+
+<hr>
+
+<h2>5. Cuidado com a repetição: o Fibonacci</h2>
+<p>A sequência de Fibonacci começa com 1, 1, e cada número seguinte é a soma dos dois anteriores: 1, 1, 2, 3, 5, 8, 13… A definição já é recursiva: <code>fib(n) = fib(n - 1) + fib(n - 2)</code>. Escrevendo do jeito mais direto, e contando quantas vezes a função é chamada:</p>
+
+<pre class="file" data-file="fib.lua">local chamadas = 0
+local function fib(n)
+  chamadas = chamadas + 1
+  if n &lt;= 2 then return 1 end
+  return fib(n - 1) + fib(n - 2)
+end
+
+for _, n in ipairs({10, 20, 30}) do
+  chamadas = 0
+  print("fib(" .. n .. ") = " .. fib(n), "chamadas: " .. chamadas)
+end
+</pre>
+
+<pre class="term">$ lua fib.lua
+fib(10) = 55	chamadas: 109
+fib(20) = 6765	chamadas: 13529
+fib(30) = 832040	chamadas: 1664079</pre>
+
+<p>Mais de <strong>1,6 milhão</strong> de chamadas para calcular o 30º número! O motivo: <code>fib(30)</code> chama <code>fib(29)</code> e <code>fib(28)</code>; mas <code>fib(29)</code> também chama <code>fib(28)</code>, que é calculado de novo do zero. E cada um deles recalcula os de baixo, outra vez e outra vez. A cada número a mais, o trabalho quase dobra.</p>
+
+<h3>A solução: anotar o que já foi calculado</h3>
+<p>Se a função guardar cada resposta numa tabela, ela nunca calcula a mesma coisa duas vezes. Essa técnica se chama <strong>memoização</strong> (de "memória"):</p>
+
+<pre class="file" data-file="fib_memo.lua">local chamadas = 0
+local guardados = {}
+local function fib(n)
+  chamadas = chamadas + 1
+  if n &lt;= 2 then return 1 end
+  if guardados[n] then return guardados[n] end
+  local r = fib(n - 1) + fib(n - 2)
+  guardados[n] = r
+  return r
+end
+
+print(fib(30), "chamadas: " .. chamadas)
+chamadas = 0
+print(fib(90), "chamadas: " .. chamadas)
+</pre>
+
+<pre class="term">$ lua fib_memo.lua
+832040	chamadas: 57
+2880067194370816120	chamadas: 121</pre>
+
+<p>De 1.664.079 chamadas para <strong>57</strong>. E o <code>fib(90)</code>, que sem a memória levaria anos, sai na hora (aproveitando o que já estava guardado até o 30). A tabela <code>guardados</code> fica fora da função, numa local que ela enxerga (veja <a href="closures.html">Closures</a>).</p>
+
+<hr>
+
+<h2>6. A pilha de chamadas e o <code>stack overflow</code></h2>
+<p>Cada chamada que ainda não terminou precisa ser lembrada em algum lugar: qual função era, em que linha ela parou, quanto valiam as locais dela. O Lua guarda isso numa <strong>pilha de chamadas</strong> (em inglês, <em>call stack</em>), como uma pilha de pratos: cada chamada nova é um prato em cima; cada <code>return</code> tira o prato de cima.</p>
+<p>A pilha tem um tamanho máximo. Uma recursão que nunca chega ao caso base empilha pratos até não caber mais nenhum, e o Lua para o programa com o erro <code>stack overflow</code> ("estouro da pilha"). Veja um fatorial em que a Ana esqueceu o caso base:</p>
+
+<pre class="file" data-file="sem_base.lua">local function fatorial(n)
+  return n * fatorial(n - 1)
+end
+
+print(fatorial(5))
+</pre>
+
+<pre class="term">$ lua sem_base.lua
+lua: sem_base.lua:2: stack overflow
+stack traceback:
+	sem_base.lua:2: in upvalue 'fatorial'
+	sem_base.lua:2: in upvalue 'fatorial'
+	sem_base.lua:2: in upvalue 'fatorial'
+	sem_base.lua:2: in upvalue 'fatorial'
+	sem_base.lua:2: in upvalue 'fatorial'
+	sem_base.lua:2: in upvalue 'fatorial'
+	sem_base.lua:2: in upvalue 'fatorial'
+	sem_base.lua:2: in upvalue 'fatorial'
+	sem_base.lua:2: in upvalue 'fatorial'
+	sem_base.lua:2: in upvalue 'fatorial'
+	...	(skipping 499974 levels)
+	sem_base.lua:2: in upvalue 'fatorial'
+	sem_base.lua:2: in upvalue 'fatorial'
+	sem_base.lua:2: in upvalue 'fatorial'
+	sem_base.lua:2: in upvalue 'fatorial'
+	sem_base.lua:2: in upvalue 'fatorial'
+	sem_base.lua:2: in upvalue 'fatorial'
+	sem_base.lua:2: in upvalue 'fatorial'
+	sem_base.lua:2: in upvalue 'fatorial'
+	sem_base.lua:2: in local 'fatorial'
+	sem_base.lua:5: in main chunk
+	[C]: in ?
+$ echo $?
+1</pre>
+
+<p>Linha por linha:</p>
+<dl class="anatomy">
+  <dt>lua: sem_base.lua:2: stack overflow</dt><dd>O erro aconteceu na linha 2 (a chamada recursiva): a pilha de chamadas encheu.</dd>
+  <dt>stack traceback:</dt><dd>O "rastro da pilha": a lista das chamadas que estavam empilhadas, <strong>da mais recente (em cima) para a mais antiga (embaixo)</strong>.</dd>
+  <dt>sem_base.lua:2: in upvalue 'fatorial'</dt><dd>Uma chamada de <code>fatorial</code> parada na linha 2. A palavra <code>upvalue</code> quer dizer que, de dentro da função, o nome <code>fatorial</code> é uma local "de fora" que a função enxerga (a aula <a href="erros.html">Lendo uma Mensagem de Erro</a> explica todos esses nomes).</dd>
+  <dt>...	(skipping 499974 levels)</dt><dd>"Pulando 499974 níveis": o rastro inteiro teria meio milhão de linhas iguais, então o Lua mostra só as 10 primeiras e as 11 últimas.</dd>
+  <dt>sem_base.lua:2: in local 'fatorial'</dt><dd>A <strong>primeira</strong> chamada, feita pelo programa principal, que conhece a função como a local <code>fatorial</code>.</dd>
+  <dt>sem_base.lua:5: in main chunk</dt><dd>O programa principal, parado na linha 5 (o <code>print(fatorial(5))</code>).</dd>
+  <dt>[C]: in ?</dt><dd>Quem começou tudo: o próprio programa <code>lua</code>, escrito em C.</dd>
+  <dt>echo $? → 1</dt><dd>O código de saída 1 quer dizer "terminou com erro".</dd>
+</dl>
+
+<p>Sem caso base, a conta nunca para: 5, 4, 3, 2, 1, 0, −1, −2… até a pilha estourar. Repare que o <code>print</code> nunca chegou a mostrar nada.</p>
+
+<h3>Quantas chamadas cabem na pilha?</h3>
+<p>Dá para medir: o programa abaixo desce sem parar, anota até onde chegou e usa o <a href="pcall.html">pcall</a> para capturar o erro em vez de quebrar:</p>
+
+<pre class="file" data-file="profundidade.lua">local maior = 0
+local function descer(n)
+  maior = n
+  descer(n + 1)
+end
+
+print(pcall(descer, 1))
+print("chegou a", maior, "chamadas")
+</pre>
+
+<pre class="term">$ lua profundidade.lua
+false	profundidade.lua:4: stack overflow
+chegou a	499992	chamadas</pre>
+
+<p>Quase <strong>500 mil</strong> chamadas empilhadas no Lua 5.5 da Ana. O editor do guia, que roda o mesmo Lua 5.5 no navegador, chega exatamente ao mesmo número. Mas esse limite não é fixo: ele é contado em "espaço de pilha", e cada chamada ocupa mais espaço quanto mais locais ela tem. Com 10 locais a mais dentro do <code>descer</code>, a mesma medição parou em <code>83332</code>. E em outras versões o limite é bem menor: no lab, o mesmo <code>profundidade.lua</code> chegou a <code>21827</code> no LuaJIT e a <code>16380</code> no Lua 5.1 (o 5.4 deu os mesmos 499992 do 5.5).</p>
+
+<div class="tip">
+<strong>Uma recursão que não estoura</strong>
+<p>Existe um tipo especial de chamada que <strong>não empilha</strong>: quando a última coisa que a função faz é <code>return outra_chamada(...)</code>, sem nenhuma conta depois. Com ela, uma função pode chamar a si mesma um milhão de vezes sem estourar nada. É a próxima aula: <a href="chamada-cauda.html">Chamada de Cauda</a>.</p>
+</div>
+
+<hr>
+
+<h2>7. Duas funções que se chamam: recursão mútua</h2>
+<p>A recursão também pode dar uma volta: <code>a</code> chama <code>b</code>, que chama <code>a</code>. Um exemplo clássico (de brincadeira, porque o <code>%</code> resolve isso numa linha): "um número é par se o anterior for ímpar".</p>
+
+<pre class="file" data-file="par_impar.lua">local impar
+
+local function par(n)
+  if n == 0 then return true end
+  return impar(n - 1)
+end
+
+function impar(n)
+  if n == 0 then return false end
+  return par(n - 1)
+end
+
+print(par(10), impar(7), par(3))
+</pre>
+
+<pre class="term">$ lua par_impar.lua
+true	true	false</pre>
+
+<p>O detalhe de escopo: a <code>par</code> usa a <code>impar</code>, que só é escrita depois. Por isso a linha 1 <strong>declara</strong> a local <code>impar</code> antes (vazia), e a linha 8 (<code>function impar</code>, sem <code>local</code>) preenche essa mesma local. Sem a linha 1, a <code>par</code> procuraria uma global <code>impar</code>. A regra está em <a href="escopo.html">Escopo e Blocos</a>.</p>
+
+<hr>
+
+<h2 id="formas">Formas diferentes de fazer a mesma coisa</h2>
+<p>Quase toda recursão pode virar um laço, e vice-versa. O fatorial com <code>for</code>:</p>
+
+<pre class="file" data-file="laco.lua">local function fatorial(n)
+  local r = 1
+  for i = 2, n do
+    r = r * i
+  end
+  return r
+end
+print(fatorial(5), fatorial(20))
+</pre>
+
+<pre class="term">$ lua laco.lua
+120	2432902008176640000</pre>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Situação</th><th>Qual usar</th></tr>
+<tr><td>Contar, somar, percorrer uma lista "reta"</td><td>Um laço (<code>for</code>, <code>while</code>): mais simples, sem limite de pilha</td></tr>
+<tr><td>Estruturas com níveis dentro de níveis (cardápio, pastas, árvores)</td><td>Recursão: o código fica curto e aguenta qualquer profundidade de níveis</td></tr>
+<tr><td>A definição do problema já é recursiva (fatorial, Fibonacci, potência)</td><td>Recursão para entender; laço (ou memoização) se ficar lento ou fundo demais</td></tr>
+<tr><td>Recursão com milhares de passos em linha reta</td><td><a href="chamada-cauda.html">Chamada de cauda</a> (<code>return f(…)</code>), que não empilha</td></tr>
+</table>
+</div>
+
+<div class="trylua" data-goal="out:1024;;out:81;;src:return.*potencia\(">
+<p class="try-task"><strong>Missão:</strong> a função <code>potencia(base, exp)</code> deveria calcular <code>base</code> elevado a <code>exp</code> (2 elevado a 10 = 1024). O caso base já está pronto (qualquer número elevado a 0 é 1). Complete o caso recursivo: a potência é <code>base</code> vezes a potência com o expoente um a menos.</p>
+<pre class="script" data-file="main.lua">local function potencia(base, exp)
+  if exp == 0 then
+    return 1
+  end
+  return base
+end
+
+print(potencia(2, 10))
+print(potencia(3, 4))
+</pre>
+<pre class="solucao" data-file="main.lua">local function potencia(base, exp)
+  if exp == 0 then
+    return 1
+  end
+  return base * potencia(base, exp - 1)
+end
+
+print(potencia(2, 10))
+print(potencia(3, 4))
+</pre>
+</div>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+
+<div class="cenario">
+<strong>Esqueceu o caso base</strong>
+<p>É o <code>sem_base.lua</code> da seção 6: <code>lua: sem_base.lua:2: stack overflow</code>, um rastro com <code>(skipping 499974 levels)</code> e código de saída 1. Quando vir <code>stack overflow</code> e o rastro repetindo a <strong>mesma função</strong> na <strong>mesma linha</strong>, procure o caso base: ele falta, ou nunca é alcançado. <strong>Como consertar:</strong> um <code>if</code> no começo da função que devolve a resposta sem chamar a si mesma.</p>
+</div>
+
+<div class="cenario">
+<strong>O caso base existe, mas a recursão passa por cima dele</strong>
+<pre class="file" data-file="neg.lua">local function fatorial(n)
+  if n == 1 then
+    return 1
+  end
+  return n * fatorial(n - 1)
+end
+
+print(fatorial(5))
+print(fatorial(0))
+</pre>
+<pre class="term">$ lua neg.lua
+120
+lua: neg.lua:5: stack overflow
+stack traceback:
+	neg.lua:5: in upvalue 'fatorial'
+	neg.lua:5: in upvalue 'fatorial'
+	…                                « mais 8 linhas iguais
+	...	(skipping 499974 levels)
+	neg.lua:5: in upvalue 'fatorial'
+	…                                « mais 7 linhas iguais
+	neg.lua:5: in local 'fatorial'
+	neg.lua:9: in main chunk
+	[C]: in ?</pre>
+<p>O <code>fatorial(5)</code> funcionou (<code>120</code>), mas o <code>fatorial(0)</code> estourou. O caso base só pega o 1 <strong>exatamente</strong>; começando do 0, a conta vai para −1, −2, −3… e nunca passa pelo 1. A linha <code>neg.lua:9: in main chunk</code> diz qual chamada do programa principal causou o problema: a da linha 9. <strong>Como consertar:</strong> um caso base que cubra "1 ou menos": <code>if n &lt;= 1 then</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Escreveu <code>local fatorial = function</code> em vez de <code>local function fatorial</code></strong>
+<pre class="file" data-file="localfun.lua">local fatorial = function(n)
+  if n &lt;= 1 then return 1 end
+  return n * fatorial(n - 1)
+end
+
+print(fatorial(5))
+</pre>
+<pre class="term">$ lua localfun.lua
+lua: localfun.lua:3: attempt to call a nil value (global 'fatorial')
+stack traceback:
+	localfun.lua:3: in local 'fatorial'
+	localfun.lua:6: in main chunk
+	[C]: in ?</pre>
+<p>"Tentativa de chamar um valor <code>nil</code> (global <code>'fatorial'</code>)". De novo a pista <code>global</code>: uma local só vale <strong>depois</strong> da linha que a declara, e a função inteira (linhas 1 a 4) faz parte dessa linha. Quando o Lua leu o <code>fatorial(n - 1)</code> da linha 3, a local <code>fatorial</code> ainda não existia, e ele entendeu "uma global chamada <code>fatorial</code>", que não existe. Repare no rastro: a primeira chamada funcionou (<code>in local 'fatorial'</code>, vinda da linha 6); o erro foi na chamada de dentro.</p>
+<p><strong>Como consertar:</strong> use <code>local function fatorial(n)</code>. Essa forma é um atalho que o Lua traduz para <code>local fatorial; fatorial = function(n) … end</code>: primeiro cria a local, depois põe a função nela, e assim a função enxerga o próprio nome.</p>
+</div>
+
+<div class="cenario">
+<strong>Fibonacci "travado"</strong>
+<p>Não é erro, mas parece: um <code>fib(40)</code> sem memoização faz mais de 200 milhões de chamadas (204.668.309, pela conta do contador) e demora bastante: no editor do guia, ele passou do limite de 10 segundos e foi interrompido, com a mensagem <code>o editor parou o programa: ele rodou mais de 10 segundos sem terminar</code>. Se uma recursão com duas chamadas (<code>fib(n - 1) + fib(n - 2)</code>) está lenta, guarde os resultados numa tabela (seção 5).</p>
+</div>
+
+<hr>
+
+<h2>Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Peça</th><th>O que é</th><th>Exemplo</th></tr>
+<tr><td>Caso base</td><td>A resposta sem chamar a si mesma; faz a recursão parar</td><td><code>if n &lt;= 1 then return 1 end</code></td></tr>
+<tr><td>Caso recursivo</td><td>Chama a si mesma com um problema menor</td><td><code>return n * fatorial(n - 1)</code></td></tr>
+<tr><td><code>local function nome</code></td><td>A forma certa de declarar uma função recursiva local</td><td><code>local function fib(n) … end</code></td></tr>
+<tr><td>Declaração antecipada</td><td>Para duas funções que se chamam</td><td><code>local impar</code> … <code>function impar(n) … end</code></td></tr>
+<tr><td>Memoização</td><td>Guardar resultados numa tabela para não recalcular</td><td><code>if guardados[n] then return guardados[n] end</code></td></tr>
+<tr><td>Pilha de chamadas</td><td>As chamadas que ainda não terminaram</td><td>No Lua 5.5, cerca de 500 mil chamadas simples</td></tr>
+<tr><td><code>stack overflow</code></td><td>A pilha encheu: recursão sem fim (ou funda demais)</td><td><code>lua: sem_base.lua:2: stack overflow</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. Complete o caso base</h3>
+<p>Complete para a função somar os números de 1 até <code>n</code> (<code>soma_ate(4)</code> dá 10):</p>
+<div class="ex-code">local function soma_ate(n)<br>&nbsp;&nbsp;if n == 0 then<br>&nbsp;&nbsp;&nbsp;&nbsp;return <input data-answer="0" aria-label="valor do caso base"><br>&nbsp;&nbsp;end<br>&nbsp;&nbsp;return n + soma_ate(n <input data-answer="- 1|-1" aria-label="o problema menor">)<br>end</div>
+</div>
+
+<div class="exercise">
+<h3>2. Quanto dá?</h3>
+<pre class="file" data-file="ex2.lua">local function f(n)
+  if n == 0 then return 0 end
+  return 2 + f(n - 1)
+end
+print(f(5))
+</pre>
+<div class="ex-code">O programa mostra <input data-answer="10" aria-label="valor mostrado"></div>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">3. O erro foi <code>stack overflow</code> e o rastro repete <code>conta.lua:4: in upvalue 'conta'</code> milhares de vezes. Qual é a causa mais provável?</p>
+<label><input type="radio" name="q3"> Uma variável global com o nome errado</label>
+<label><input type="radio" name="q3"> A função <code>conta</code> nunca chega a um caso base</label>
+<label><input type="radio" name="q3"> O arquivo tem mais de 200 locais</label>
+<label><input type="radio" name="q3"> Faltou um <code>end</code> na linha 4</label>
+</div>
+
+<div class="mc" data-answer="1">
+<p class="mc-q">4. Por que <code>local f = function(n) … f(n - 1) … end</code> dá <code>attempt to call a nil value (global 'f')</code>?</p>
+<label><input type="radio" name="q4"> Porque a local <code>f</code> só começa a valer depois da declaração inteira, e a função foi escrita dentro dela</label>
+<label><input type="radio" name="q4"> Porque funções anônimas não podem ter parâmetros</label>
+<label><input type="radio" name="q4"> Porque o Lua não permite recursão em funções locais</label>
+<label><input type="radio" name="q4"> Porque falta um <code>return</code></label>
+</div>
+
+<div class="mc" data-answer="3">
+<p class="mc-q">5. Qual destes problemas é o melhor candidato para recursão?</p>
+<label><input type="radio" name="q5"> Mostrar os números de 1 a 100</label>
+<label><input type="radio" name="q5"> Somar os preços de uma lista de compras</label>
+<label><input type="radio" name="q5"> Mostrar todas as pastas e subpastas de uma pasta, em qualquer profundidade</label>
+<label><input type="radio" name="q5"> Ler uma linha do teclado</label>
+</div>
+
+<h3>Missão final: a soma que estourava</h3>
+
+<div class="trylua" data-goal="out:5050;;semerro">
+<p class="try-task"><strong>Missão:</strong> a função <code>soma_ate(n)</code> deveria somar 1 + 2 + … + n, mas ela estoura a pilha (<code>stack overflow</code>). Rode para ver o erro e acrescente o caso base que falta (a soma até 0 é 0), para o programa mostrar <code>5050</code>.</p>
+<pre class="script" data-file="main.lua">local function soma_ate(n)
+  return n + soma_ate(n - 1)
+end
+
+print(soma_ate(100))
+</pre>
+<pre class="solucao" data-file="main.lua">local function soma_ate(n)
+  if n == 0 then
+    return 0
+  end
+  return n + soma_ate(n - 1)
+end
+
+print(soma_ate(100))
+</pre>
+</div>
+
+<p>No lab, com o caso base, <code>soma_ate(100)</code> deu <code>5050</code> e até <code>soma_ate(100000)</code> funcionou (<code>5000050000</code>): cem mil chamadas empilhadas ainda cabem nos ~500 mil do Lua 5.5. No LuaJIT, que para perto de 22 mil, o mesmo programa estouraria.</p>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li>Uma função <strong>recursiva</strong> chama a si mesma com um problema menor.</li>
+  <li>Toda recursão precisa de um <strong>caso base</strong> (resposta direta, sem nova chamada) e de um <strong>caso recursivo</strong> que se aproxime dele a cada passo.</li>
+  <li>As chamadas descem até o caso base e as respostas sobem de volta; cada chamada tem as suas próprias locais.</li>
+  <li>A recursão brilha em estruturas com níveis dentro de níveis; para contas "em linha reta", um laço costuma ser mais simples.</li>
+  <li>Duas chamadas recursivas por vez (Fibonacci) podem explodir o trabalho; guardar os resultados numa tabela (memoização) resolve.</li>
+  <li>Sem caso base, a pilha de chamadas enche e o Lua para com <code>stack overflow</code> (no 5.5, perto de 500 mil chamadas simples).</li>
+  <li>Declare com <code>local function nome</code>, senão a função não enxerga o próprio nome (<code>(global 'nome')</code>).</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
