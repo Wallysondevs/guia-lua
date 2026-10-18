@@ -62,7 +62,6 @@ function classificar(dif, fonte) {
   if (fonte && /\bos\.(execute|getenv|tmpname)\b|io\.popen/.test(fonte)) r.add("informações do sistema (os.execute, io.popen, os.getenv)");
   if (fonte && /collectgarbage\s*\(\s*["'](count|step|param)|collectgarbage\s*\(\s*\)/.test(fonte)) r.add("memória usada (o editor é de 32 bits: números menores)");
   if (fonte && /string\.(pack|packsize|unpack)\s*\(|:pack\b/.test(fonte)) r.add("string.pack com l/L/T (long e size_t: 4 bytes no editor, 8 no lab)");
-  if (fonte && /os\.setlocale/.test(fonte)) r.add("os.setlocale (o editor só tem o locale C)");
   return Array.from(r);
 }
 
