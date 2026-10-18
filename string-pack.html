@@ -1,0 +1,567 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua string.pack — dados binários com pack, unpack e packsize | Guia Lua</title>
+<meta name="description" content="string.pack, string.unpack e string.packsize do Lua para quem nunca programou: a diferença entre texto e binário, os formatos mais usados (B, h, i4, j, d, f, z, s1), a ordem dos bytes (&lt; e &gt;), gravar e ler um arquivo binário e os erros reais do Lua 5.5.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">string.pack</span></h1>
+
+<p class="intro">Até aqui, todo arquivo que você gravou era <strong>texto</strong>: dá para abrir no editor e ler. Mas muitos arquivos do computador não são assim: imagens, músicas, o "save" de um jogo, os dados de um sensor. Eles guardam os números <strong>do jeito que o computador guarda na memória</strong>, em bytes, e por isso se chamam <strong>arquivos binários</strong>. Para criar e ler esses bytes, o Lua tem três funções: <code>string.pack</code> ("empacotar"), <code>string.unpack</code> ("desempacotar") e <code>string.packsize</code> ("tamanho do pacote").</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>A diferença entre guardar um número como <strong>texto</strong> e como <strong>binário</strong>.</li>
+  <li>Como <code>string.pack</code> transforma valores em bytes, com um <strong>formato</strong> (<code>"i4"</code>, <code>"d"</code>, <code>"z"</code>…).</li>
+  <li>Como ver esses bytes, um por um, em hexadecimal.</li>
+  <li>Como <code>string.unpack</code> faz o caminho de volta, e o que é a <strong>posição</strong> que ele devolve.</li>
+  <li>Como <code>string.packsize</code> diz o tamanho de um registro.</li>
+  <li>A <strong>ordem dos bytes</strong> (<code>&lt;</code> e <code>&gt;</code>) e por que ela importa.</li>
+  <li>Como <strong>gravar e ler um arquivo binário</strong>, e os erros reais mais comuns.</li>
+</ul>
+</div>
+
+<p>Os programas desta aula rodaram no <strong>Lua 5.5</strong> da máquina da Ana (usuária <code>ana</code>, computador <code>notebook</code>), com <code>lua arquivo.lua</code>. Antes, é bom conhecer <a href="io-open.html">io.open</a>, <a href="string-format.html">string.format</a> e <a href="string-sub.html">string.byte</a>.</p>
+
+<hr>
+
+<h2>A ideia: o formulário de quadradinhos</h2>
+<p>Lembra daqueles formulários de papel com um quadradinho para cada letra? "Nome: □□□□□□□□□□", "Idade: □□", "CEP: □□□□□-□□□". Cada campo tem um <strong>número fixo de quadradinhos</strong>, sempre no mesmo lugar. Quem lê o formulário sabe exatamente onde começa cada campo, sem precisar procurar vírgulas nem espaços.</p>
+<p>Um arquivo binário é um formulário assim. O "molde" que diz quantos quadradinhos (bytes) cada campo tem e em que ordem eles vêm se chama <strong>formato</strong>. Com o formato <code>"i4 d B"</code>, por exemplo, você combina: "primeiro um inteiro de 4 bytes, depois um número com vírgula de 8 bytes, depois um número pequeno de 1 byte". O <code>string.pack</code> preenche o formulário; o <code>string.unpack</code> lê de volta, usando o <strong>mesmo</strong> molde.</p>
+
+<hr>
+
+<h2>1. Texto × binário: o número 100</h2>
+<p>O número 100, escrito como <strong>texto</strong>, são três caracteres: <code>"1"</code>, <code>"0"</code> e <code>"0"</code>. Escrito em <strong>binário</strong> como um inteiro de 4 bytes, são 4 bytes que formam o número. Para <strong>ver</strong> os bytes, este programa tem uma função <code>hex</code> que mostra cada byte em hexadecimal (base 16, de <code>00</code> a <code>FF</code>; veja <a href="string-format.html">string.format</a>, que faz isso com o <code>%02X</code>):</p>
+
+<pre class="file" data-file="texto_binario.lua">local function hex(s)
+  local partes = {}
+  for i = 1, #s do
+    partes[i] = string.format("%02X", s:byte(i))
+  end
+  return table.concat(partes, " ")
+end
+
+local como_texto = tostring(100)
+local como_binario = string.pack("i4", 100)
+print("Texto:  ", #como_texto, "bytes:", hex(como_texto))
+print("Binário:", #como_binario, "bytes:", hex(como_binario))
+</pre>
+
+<pre class="term">$ lua texto_binario.lua
+Texto:  	3	bytes:	31 30 30
+Binário:	4	bytes:	64 00 00 00</pre>
+
+<dl class="anatomy">
+  <dt>local function hex(s)</dt><dd>Uma ajudante que vamos usar a aula toda: passa por cada byte do texto <code>s</code> (<code>s:byte(i)</code> dá o número do byte, de 0 a 255) e escreve esse número com 2 dígitos hexadecimais.</dd>
+  <dt>31 30 30</dt><dd>O texto <code>"100"</code>: <code>31</code> é o código do caractere <code>"1"</code> e <code>30</code> é o do <code>"0"</code>. Três bytes.</dd>
+  <dt>string.pack("i4", 100)</dt><dd>Empacota o número 100 como um <strong>inteiro</strong> (<code>i</code>) de <strong>4 bytes</strong> (<code>4</code>). O resultado é uma <strong>string</strong> do Lua, mas não é um texto para ler: é só um saquinho de 4 bytes.</dd>
+  <dt>64 00 00 00</dt><dd>100 em hexadecimal é <code>64</code>. Os outros três bytes são zero. O byte "pequeno" veio primeiro (a seção 4 explica essa ordem).</dd>
+</dl>
+
+<p>Para o número 100 o binário até ficou maior (4 bytes contra 3). Mas pense em 2 bilhões: como texto são 10 caracteres; em <code>"i4"</code>, continuam sendo 4 bytes. E o mais importante: num formato binário, <strong>todo</strong> número ocupa o mesmo espaço, então cada campo fica sempre no mesmo lugar, como no formulário.</p>
+
+<div class="note">
+<strong>A "string" do Lua guarda qualquer byte</strong>
+<p>No Lua, uma string é uma sequência de bytes, qualquer byte, inclusive o zero. É por isso que o <code>string.pack</code> pode devolver uma string: ela serve de "saquinho de bytes". O <code>#</code> conta os bytes (veja <a href="operador-tamanho.html">O Operador de Tamanho</a>). Só não adianta mandar <code>print</code> nela: sairiam caracteres estranhos. Para ver, use a <code>hex</code>.</p>
+</div>
+
+<hr>
+
+<h2>2. Os formatos mais usados</h2>
+<p>Cada letra do formato é um tipo de campo. Este programa empacota um valor de cada tipo e mostra os bytes:</p>
+
+<pre class="file" data-file="formatos.lua">local function hex(s)
+  local partes = {}
+  for i = 1, #s do
+    partes[i] = string.format("%02X", s:byte(i))
+  end
+  return table.concat(partes, " ")
+end
+
+print("B   255     ", hex(string.pack("B", 255)))
+print("b   -1      ", hex(string.pack("b", -1)))
+print("h   1000    ", hex(string.pack("h", 1000)))
+print("i4  100000  ", hex(string.pack("i4", 100000)))
+print("j   1       ", hex(string.pack("j", 1)))
+print("d   1.5     ", hex(string.pack("d", 1.5)))
+print("f   1.5     ", hex(string.pack("f", 1.5)))
+print("z   Ana     ", hex(string.pack("z", "Ana")))
+print("s1  Ana     ", hex(string.pack("s1", "Ana")))
+</pre>
+
+<pre class="term">$ lua formatos.lua
+B   255     	FF
+b   -1      	FF
+h   1000    	E8 03
+i4  100000  	A0 86 01 00
+j   1       	01 00 00 00 00 00 00 00
+d   1.5     	00 00 00 00 00 00 F8 3F
+f   1.5     	00 00 C0 3F
+z   Ana     	41 6E 61 00
+s1  Ana     	03 41 6E 61</pre>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Formato</th><th>O que guarda</th><th>Bytes (no lab)</th><th>Faixa / observação</th></tr>
+<tr><td><code>B</code></td><td>inteiro pequeno <strong>sem</strong> sinal</td><td>1</td><td>0 a 255 (uma idade, uma nota de 0 a 10)</td></tr>
+<tr><td><code>b</code></td><td>inteiro pequeno <strong>com</strong> sinal</td><td>1</td><td>−128 a 127. Repare: −1 virou <code>FF</code>, o mesmo byte do 255 em <code>B</code>. O formato é que diz como ler.</td></tr>
+<tr><td><code>h</code> / <code>H</code></td><td>inteiro "curto" (<em>short</em>), com / sem sinal</td><td>2</td><td>−32768 a 32767 / 0 a 65535</td></tr>
+<tr><td><code>i4</code> / <code>I4</code></td><td>inteiro de <strong>n</strong> bytes (aqui 4), com / sem sinal</td><td>4</td><td>o número depois do <code>i</code> pode ir de 1 a 16</td></tr>
+<tr><td><code>i</code> (sem número)</td><td>inteiro do tamanho do <code>int</code> da máquina</td><td>4</td><td>prefira escrever o número (<code>i4</code>): fica igual em qualquer computador</td></tr>
+<tr><td><code>j</code></td><td>um inteiro do Lua (<code>lua_Integer</code>)</td><td>8</td><td>cabe qualquer inteiro do Lua</td></tr>
+<tr><td><code>d</code></td><td>número com vírgula de precisão dupla (<em>double</em>)</td><td>8</td><td>o mesmo tipo do <code>float</code> do Lua: guarda 1.5 sem perder nada</td></tr>
+<tr><td><code>f</code></td><td>número com vírgula de precisão simples (<em>float</em>)</td><td>4</td><td>ocupa metade, mas tem menos casas de precisão</td></tr>
+<tr><td><code>n</code></td><td>um float do Lua (<code>lua_Number</code>)</td><td>8</td><td>no Lua normal, igual ao <code>d</code></td></tr>
+<tr><td><code>z</code></td><td>texto terminado por um byte zero</td><td>tamanho + 1</td><td><code>41 6E 61</code> é "Ana", e o <code>00</code> marca o fim</td></tr>
+<tr><td><code>s1</code> / <code>s2</code> / <code>s4</code></td><td>texto com o <strong>tamanho na frente</strong>, num inteiro de 1, 2 ou 4 bytes</td><td>tamanho + 1, 2 ou 4</td><td><code>03</code> = 3 letras, depois "Ana". Com <code>s1</code>, o texto pode ter até 255 bytes</td></tr>
+<tr><td><code>c10</code></td><td>texto de tamanho <strong>fixo</strong> (aqui 10 bytes)</td><td>10</td><td>o quadradinho fixo do formulário</td></tr>
+<tr><td><code>x</code></td><td>um byte zero de enchimento</td><td>1</td><td>para pular espaço</td></tr>
+</table>
+</div>
+
+<p>Os tamanhos sem número (<code>h</code>, <code>i</code>, <code>j</code>, <code>d</code>…) são os do computador onde o programa roda. Os números da tabela saíram no lab (um computador comum de 64 bits); os formatos com o tamanho escrito (<code>i4</code>, <code>s1</code>) são iguais em qualquer lugar.</p>
+
+<hr>
+
+<h2>3. O caminho de volta: <code>string.unpack</code></h2>
+<p><code>string.unpack(formato, dados)</code> lê os bytes com o <strong>mesmo</strong> formato e devolve os valores. E devolve <strong>mais um</strong>: a posição do primeiro byte que ele <strong>não</strong> leu, onde começaria o próximo campo:</p>
+
+<pre class="file" data-file="desempacotar.lua">local dados = string.pack("i4", 100)
+local numero, proxima = string.unpack("i4", dados)
+print(numero, proxima)
+
+local registro = string.pack("&lt;z B d", "Bia", 9, 8.5)
+print(#registro)
+local nome, idade, nota, fim = string.unpack("&lt;z B d", registro)
+print(nome, idade, nota, fim)
+</pre>
+
+<pre class="term">$ lua desempacotar.lua
+100	5
+13
+Bia	9	8.5	14</pre>
+
+<dl class="anatomy">
+  <dt>100	5</dt><dd>O número de volta, e a posição <code>5</code>: ele leu os bytes 1, 2, 3 e 4; o próximo seria o 5.</dd>
+  <dt>"&lt;z B d"</dt><dd>Um formato com <strong>três campos</strong>, separados por espaço (os espaços são só para ler melhor; o Lua os ignora): o nome terminado em zero, a idade em 1 byte e a nota em 8 bytes. O <code>&lt;</code> do começo fixa a ordem dos bytes (seção 4).</dd>
+  <dt>13</dt><dd>4 bytes do <code>"Bia"</code> com o zero + 1 da idade + 8 da nota = 13.</dd>
+  <dt>nome, idade, nota, fim</dt><dd>Um valor para cada campo, na ordem, e no fim a posição seguinte (14 = 13 + 1). Igualzinho a uma <a href="retornos-multiplos.html">função com vários retornos</a>.</dd>
+</dl>
+
+<p>Para ler a partir de um lugar no meio, passe a posição como terceiro argumento: <code>string.unpack("i4", dados, 5)</code> começa no byte 5. É assim que se lê um campo depois do outro (a seção 6 usa isso).</p>
+
+<hr>
+
+<h2>4. A ordem dos bytes: <code>&lt;</code> e <code>&gt;</code></h2>
+<p>Um número de vários bytes pode ser gravado começando pelo byte "pequeno" ou pelo "grande", como uma data que pode ser escrita <code>18/10/2026</code> ou <code>2026/10/18</code>. Os dois jeitos existem de verdade:</p>
+
+<pre class="file" data-file="ordem.lua">local function hex(s)
+  local partes = {}
+  for i = 1, #s do
+    partes[i] = string.format("%02X", s:byte(i))
+  end
+  return table.concat(partes, " ")
+end
+
+print("&lt;i4", hex(string.pack("&lt;i4", 1000)))
+print("&gt;i4", hex(string.pack("&gt;i4", 1000)))
+print("=i4", hex(string.pack("=i4", 1000)))
+print(string.unpack("&lt;i4", string.pack("&gt;i4", 1000)))
+</pre>
+
+<pre class="term">$ lua ordem.lua
+&lt;i4	E8 03 00 00
+&gt;i4	00 00 03 E8
+=i4	E8 03 00 00
+-402456576	5</pre>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>No formato</th><th>Nome</th><th>1000 (hexadecimal 3E8) fica</th></tr>
+<tr><td><code>&lt;</code></td><td><em>little-endian</em> ("a ponta pequena primeiro")</td><td><code>E8 03 00 00</code></td></tr>
+<tr><td><code>&gt;</code></td><td><em>big-endian</em> ("a ponta grande primeiro"); muito usado em protocolos de rede</td><td><code>00 00 03 E8</code></td></tr>
+<tr><td><code>=</code> (ou nada)</td><td>a ordem do computador onde o programa roda (no lab, a pequena primeiro)</td><td><code>E8 03 00 00</code></td></tr>
+</table>
+</div>
+
+<p>A última linha mostra o perigo: gravar com <code>&gt;</code> e ler com <code>&lt;</code> não dá erro nenhum, só um número <strong>errado</strong> (<code>-402456576</code> em vez de 1000). Por isso, num arquivo que vai para outro computador, <strong>escreva a ordem no formato</strong> (<code>&lt;</code> ou <code>&gt;</code>) e use o mesmo formato para gravar e para ler.</p>
+
+<hr>
+
+<h2>5. O tamanho de um registro: <code>string.packsize</code></h2>
+<p><code>string.packsize(formato)</code> diz quantos bytes um formato ocupa, <strong>sem</strong> empacotar nada:</p>
+
+<pre class="file" data-file="tamanho.lua">print(string.packsize("i4"))
+print(string.packsize("B"))
+print(string.packsize("d"))
+print(string.packsize("&lt;i4 B d"))
+print(string.packsize("!&lt;i4 B d"))
+print(string.packsize("j"), string.packsize("n"))
+</pre>
+
+<pre class="term">$ lua tamanho.lua
+4
+1
+8
+13
+16
+8	8</pre>
+
+<p><code>"&lt;i4 B d"</code> dá 4 + 1 + 8 = 13. Com um <code>!</code> na frente, o Lua <strong>alinha</strong> cada campo, como um programa em C faria: ele põe bytes de enchimento para o <code>d</code> começar numa posição múltipla de 8, e o total vira 16. Você só precisa do <code>!</code> para conversar com programas em C; para os seus arquivos, sem ele fica menor.</p>
+<p>O <code>packsize</code> só funciona com campos de tamanho fixo: com <code>z</code> ou <code>s1</code> (texto de tamanho variável) ele dá erro, porque o tamanho depende do texto.</p>
+
+<div class="trylua" data-goal="out:Tamanho do registro: 13 bytes;;src:z\s*B\s*d">
+<p class="try-task"><strong>Missão:</strong> o registro da Bia usa <code>i4</code> (4 bytes) para a idade, mas uma idade cabe folgada em <strong>1 byte</strong> (0 a 255). Troque o formato da idade para o de 1 byte sem sinal e veja o registro encolher.</p>
+<pre class="script" data-file="main.lua">local FORMATO = "&lt;z i4 d"   -- nome, idade, nota
+local registro = string.pack(FORMATO, "Bia", 9, 8.5)
+print("Tamanho do registro: " .. #registro .. " bytes")
+print(string.unpack(FORMATO, registro))
+</pre>
+<pre class="solucao" data-file="main.lua">local FORMATO = "&lt;z B d"   -- nome, idade, nota
+local registro = string.pack(FORMATO, "Bia", 9, 8.5)
+print("Tamanho do registro: " .. #registro .. " bytes")
+print(string.unpack(FORMATO, registro))
+</pre>
+</div>
+
+<hr>
+
+<h2>6. Gravando um arquivo binário</h2>
+<p>A lojinha da Ana guarda o estoque num arquivo binário: para cada produto, o <strong>código</strong> (<code>i4</code>), o <strong>preço</strong> (<code>d</code>) e a <strong>quantidade</strong> (<code>B</code>). Cada produto vira um registro de 13 bytes, um atrás do outro:</p>
+
+<pre class="file" data-file="gravar.lua">local FORMATO = "&lt;i4 d B"   -- código, preço, quantidade
+
+local produtos = {
+  { codigo = 101, preco = 4.5,  quantidade = 12 },
+  { codigo = 102, preco = 12.9, quantidade = 3 },
+  { codigo = 103, preco = 7.25, quantidade = 30 },
+}
+
+local f = assert(io.open("estoque.bin", "wb"))
+for _, p in ipairs(produtos) do
+  f:write(string.pack(FORMATO, p.codigo, p.preco, p.quantidade))
+end
+f:close()
+print("Gravei " .. #produtos .. " produtos de " .. string.packsize(FORMATO) .. " bytes cada")
+</pre>
+
+<pre class="term">$ lua gravar.lua
+Gravei 3 produtos de 13 bytes cada
+$ ls -l estoque.bin
+-rw-rw-r-- 1 ana ana 39 Oct 18 16:41 estoque.bin</pre>
+
+<dl class="anatomy">
+  <dt>local FORMATO = "&lt;i4 d B"</dt><dd>O molde do registro, numa variável só. Quem grava e quem lê usam a mesma; se mudar, muda nos dois lugares de uma vez.</dd>
+  <dt>io.open("estoque.bin", "wb")</dt><dd>Abre para escrever (<code>w</code>) em modo <strong>binário</strong> (<code>b</code>). No Linux, o <code>b</code> não muda nada; no Windows, sem ele, o sistema mexe nos bytes de quebra de linha e estraga o arquivo. Escreva sempre: não custa nada. O <a href="assert.html">assert</a> para o programa com a mensagem do sistema se o arquivo não abrir.</dd>
+  <dt>f:write(string.pack(…))</dt><dd>Grava os 13 bytes de cada produto. O <code>write</code> aceita a string de bytes como aceita qualquer texto.</dd>
+  <dt>39</dt><dd>O <code>ls -l</code> confirma: 3 produtos × 13 bytes = 39 bytes.</dd>
+</dl>
+
+<p>Abrir esse arquivo num editor de texto mostraria lixo. Para olhar os bytes, o Linux tem o <code>hexdump -C</code>:</p>
+
+<pre class="term">$ hexdump -C estoque.bin
+00000000  65 00 00 00 00 00 00 00  00 00 12 40 0c 66 00 00  |e..........@.f..|
+00000010  00 cd cc cc cc cc cc 29  40 03 67 00 00 00 00 00  |.......)@.g.....|
+00000020  00 00 00 00 1d 40 1e                              |.....@.|
+00000027</pre>
+
+<p>À esquerda, a posição (em hexadecimal); no meio, os bytes; à direita, os bytes que por acaso são letras. Dá para achar os campos: <code>65 00 00 00</code> é o código 101 (hexadecimal 65), os 8 bytes seguintes são o preço 4.5, e o <code>0c</code> é a quantidade 12. Logo depois começa o produto 102 (<code>66</code>).</p>
+
+<hr>
+
+<h2>7. Lendo o arquivo de volta</h2>
+<p>Como cada registro tem exatamente 13 bytes, dá para ler de 13 em 13 com <code>f:read(n)</code>, que lê <code>n</code> bytes (e devolve <code>nil</code> no fim do arquivo):</p>
+
+<pre class="file" data-file="ler.lua">local FORMATO = "&lt;i4 d B"
+local TAMANHO = string.packsize(FORMATO)
+
+local f = assert(io.open("estoque.bin", "rb"))
+while true do
+  local pedaco = f:read(TAMANHO)
+  if not pedaco then break end
+  local codigo, preco, quantidade = string.unpack(FORMATO, pedaco)
+  print(string.format("%d  R$ %6.2f  x%d", codigo, preco, quantidade))
+end
+f:close()
+</pre>
+
+<pre class="term">$ lua ler.lua
+101  R$   4.50  x12
+102  R$  12.90  x3
+103  R$   7.25  x30</pre>
+
+<p>Os três produtos voltaram iguaizinhos. O <code>"rb"</code> é "ler em modo binário". Repare que o preço 12.9 voltou como 12.90: o formato <code>d</code> guarda o número com vírgula do Lua sem perder nada.</p>
+
+<h3>Outro jeito: ler tudo e andar com a posição</h3>
+<p>Também dá para ler o arquivo inteiro com <code>f:read("a")</code> e ir desempacotando com a <strong>posição</strong> que o <code>unpack</code> devolve:</p>
+
+<pre class="file" data-file="ler_tudo.lua">local FORMATO = "&lt;i4 d B"
+
+local f = assert(io.open("estoque.bin", "rb"))
+local dados = f:read("a")
+f:close()
+
+local pos = 1
+local total = 0
+while pos &lt;= #dados do
+  local codigo, preco, quantidade
+  codigo, preco, quantidade, pos = string.unpack(FORMATO, dados, pos)
+  total = total + quantidade
+end
+print("Bytes lidos: " .. #dados)
+print("Unidades no estoque: " .. total)
+</pre>
+
+<pre class="term">$ lua ler_tudo.lua
+Bytes lidos: 39
+Unidades no estoque: 45</pre>
+
+<p>A cada volta, o <code>unpack</code> lê um registro a partir de <code>pos</code> e devolve a posição do próximo, que vai direto para a variável <code>pos</code>. Quando <code>pos</code> passa do tamanho dos dados, acabou. Esse jeito também funciona com campos de tamanho variável (<code>z</code>, <code>s1</code>), em que não dá para saber o tamanho de antemão.</p>
+
+<hr>
+
+<h2 id="formas">Formas diferentes de fazer a mesma coisa</h2>
+<p>O mesmo estoque poderia ser guardado como <strong>texto</strong>, uma linha por produto (<code>101;4.5;12</code>), e lido com <a href="io-lines.html">io.lines</a>. Qual escolher?</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Situação</th><th>Qual usar</th></tr>
+<tr><td>Um arquivo que pessoas vão abrir, ler ou editar (lista de compras, CSV de notas)</td><td><strong>Texto</strong> (<a href="arquivos-escrever.html">Escrevendo Arquivos</a>)</td></tr>
+<tr><td>Ler ou criar um formato que já existe e é binário (imagem, som, protocolo de rede, "save" de jogo)</td><td><code>string.pack</code>/<code>unpack</code>, com o formato da especificação</td></tr>
+<tr><td>Muitos números, onde espaço e velocidade importam</td><td>Binário, com registros de tamanho fixo</td></tr>
+<tr><td>Registros de tamanho fixo</td><td><code>f:read(string.packsize(FORMATO))</code> em laço</td></tr>
+<tr><td>Campos de tamanho variável (<code>z</code>, <code>s1</code>) ou o arquivo inteiro na memória</td><td><code>f:read("a")</code> e <code>string.unpack(FORMATO, dados, pos)</code></td></tr>
+</table>
+</div>
+
+<div class="note">
+<strong>Outras versões</strong>
+<p><code>string.pack</code>, <code>string.unpack</code> e <code>string.packsize</code> existem desde o <strong>Lua 5.3</strong> (no lab, também no <code>lua5.4</code>). No <strong>Lua 5.1</strong> e no <strong>LuaJIT</strong> elas não existem: <code>luajit -e 'print(string.pack)'</code> mostra <code>nil</code>, e quem usa o LuaJIT recorre a outras ferramentas (como a biblioteca <code>ffi</code> dele). Veja <a href="versoes.html">as diferenças entre as versões</a>.</p>
+</div>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+
+<div class="cenario">
+<strong>O número não cabe no campo</strong>
+<pre class="file" data-file="idade.lua">local registro = string.pack("B", 300)
+print(#registro)
+</pre>
+<pre class="term">$ lua idade.lua
+lua: idade.lua:1: bad argument #2 to 'pack' (unsigned overflow)
+stack traceback:
+	[C]: in field 'pack'
+	idade.lua:1: in main chunk
+	[C]: in ?</pre>
+<dl class="anatomy">
+  <dt>idade.lua:1:</dt><dd>O erro está na linha 1 do arquivo.</dd>
+  <dt>bad argument #2 to 'pack'</dt><dd>"Argumento ruim, o nº 2, para a <code>pack</code>": o segundo valor entre parênteses, o <code>300</code>.</dd>
+  <dt>(unsigned overflow)</dt><dd>"Estouro sem sinal": 300 não cabe num <code>B</code>, que vai só até 255. (Num formato com sinal, como <code>i2</code> com 40000, a mensagem é <code>integer overflow</code>.)</dd>
+  <dt>[C]: in field 'pack'</dt><dd>O erro aconteceu dentro do <code>pack</code>, que é um campo da tabela <code>string</code> escrito em C.</dd>
+</dl>
+<p><strong>Como consertar:</strong> escolha um formato maior (<code>H</code> vai até 65535, <code>i4</code> até uns 2 bilhões).</p>
+</div>
+
+<div class="cenario">
+<strong>Número com vírgula num campo de inteiro</strong>
+<pre class="file" data-file="meio.lua">local preco = 4.5
+local dados = string.pack("i4", preco)
+print(#dados)
+</pre>
+<pre class="term">$ lua meio.lua
+lua: meio.lua:2: bad argument #2 to 'pack' (number has no integer representation)
+stack traceback:
+	[C]: in field 'pack'
+	meio.lua:2: in main chunk
+	[C]: in ?</pre>
+<p>"O número não tem representação inteira": 4.5 não é um inteiro, e o <code>i4</code> só guarda inteiros. O Lua não arredonda escondido. <strong>Como consertar:</strong> use <code>d</code> para números com vírgula (ou guarde o preço em centavos, <code>450</code>, num inteiro).</p>
+</div>
+
+<div class="cenario">
+<strong>Dados curtos demais</strong>
+<pre class="file" data-file="curto.lua">local dados = string.pack("i2", 7)
+local a, b = string.unpack("i2 i2", dados)
+print(a, b)
+</pre>
+<pre class="term">$ lua curto.lua
+lua: curto.lua:2: bad argument #2 to 'unpack' (data string too short)
+stack traceback:
+	[C]: in field 'unpack'
+	curto.lua:2: in main chunk
+	[C]: in ?</pre>
+<p>"A string de dados é curta demais": o formato pede 4 bytes (dois <code>i2</code>), e só havia 2. Acontece quando o formato de leitura não é o mesmo da gravação, ou quando o arquivo acabou no meio de um registro (gravação interrompida). <strong>Como consertar:</strong> use o mesmo formato dos dois lados, e confira o tamanho antes (<code>#pedaco == TAMANHO</code>).</p>
+</div>
+
+<div class="cenario">
+<strong>Letra que não existe no formato</strong>
+<pre class="file" data-file="letra.lua">print(string.packsize("i4 w"))
+</pre>
+<pre class="term">$ lua letra.lua
+lua: letra.lua:1: invalid format option 'w'
+stack traceback:
+	[C]: in field 'packsize'
+	letra.lua:1: in main chunk
+	[C]: in ?</pre>
+<p>"Opção de formato inválida <code>'w'</code>". Não existe o formato <code>w</code>. Confira as letras na tabela da seção 2 (maiúscula e minúscula são diferentes: <code>B</code> é sem sinal, <code>b</code> é com sinal).</p>
+</div>
+
+<div class="cenario">
+<strong>O erro que não dá erro: formato trocado na leitura</strong>
+<pre class="file" data-file="trocado.lua">local FORMATO = "&gt;i4 d B"   -- errado: o arquivo foi gravado com "&lt;"
+local f = assert(io.open("estoque.bin", "rb"))
+local pedaco = f:read(string.packsize(FORMATO))
+f:close()
+print(string.unpack(FORMATO, pedaco))
+</pre>
+<pre class="term">$ lua trocado.lua
+1694498816	2.3082746973703e-320	12	14</pre>
+<p>Nenhuma mensagem de erro, só números absurdos: o código 101 virou <code>1694498816</code> e o preço virou um número minúsculo. Para o <code>unpack</code>, bytes são só bytes; quem sabe o que eles querem dizer é o formato. Só a quantidade (<code>12</code>) saiu certa, porque um campo de 1 byte não tem ordem. <strong>Como consertar:</strong> o mesmo <code>FORMATO</code> na gravação e na leitura. Se o número que sai é absurdo, desconfie primeiro da ordem dos bytes e do tamanho dos campos.</p>
+</div>
+
+<hr>
+
+<h2>Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Chamada</th><th>O que faz</th></tr>
+<tr><td><code>string.pack(fmt, v1, v2, …)</code></td><td>Empacota os valores em bytes e devolve uma string</td></tr>
+<tr><td><code>string.unpack(fmt, dados [, pos])</code></td><td>Desempacota a partir de <code>pos</code> (padrão 1); devolve os valores e a posição seguinte</td></tr>
+<tr><td><code>string.packsize(fmt)</code></td><td>O tamanho em bytes (só formatos de tamanho fixo)</td></tr>
+<tr><td><code>B</code> <code>b</code> · <code>H</code> <code>h</code> · <code>I4</code> <code>i4</code> · <code>j</code></td><td>Inteiros: 1 byte, 2 bytes, n bytes, inteiro do Lua (maiúscula = sem sinal)</td></tr>
+<tr><td><code>d</code> · <code>f</code> · <code>n</code></td><td>Números com vírgula: 8 bytes, 4 bytes, float do Lua</td></tr>
+<tr><td><code>z</code> · <code>s1</code> <code>s4</code> · <code>c10</code></td><td>Textos: terminado em zero, com tamanho na frente, tamanho fixo</td></tr>
+<tr><td><code>&lt;</code> · <code>&gt;</code> · <code>=</code></td><td>Ordem dos bytes: pequena primeiro, grande primeiro, a da máquina</td></tr>
+<tr><td><code>!</code> · <code>x</code></td><td>Alinhar como em C · um byte zero de enchimento</td></tr>
+<tr><td><code>io.open(nome, "wb")</code> / <code>"rb"</code></td><td>Abrir arquivo binário para gravar / ler</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. Complete</h3>
+<p>Complete para empacotar o número 7 como um inteiro de 4 bytes:</p>
+<div class="ex-code">local dados = string.<input data-answer="pack" aria-label="função">("i<input data-answer="4" aria-label="tamanho">", 7)</div>
+</div>
+
+<div class="exercise">
+<h3>2. Quantos bytes?</h3>
+<p>Quanto dá <code>string.packsize("&lt;i4 i4 B")</code>?</p>
+<div class="ex-code">Dá <input data-answer="9" aria-label="bytes"> bytes.</div>
+</div>
+
+<div class="exercise">
+<h3>3. A posição</h3>
+<p><code>local n, pos = string.unpack("i2", string.pack("i2 i2", 5, 6))</code>. Quanto vale <code>pos</code>?</p>
+<div class="ex-code">pos = <input data-answer="3" aria-label="posição"></div>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">4. Qual formato guarda uma nota de 0 a 10 no menor espaço?</p>
+<label><input type="radio" name="q4"> <code>d</code></label>
+<label><input type="radio" name="q4"> <code>B</code></label>
+<label><input type="radio" name="q4"> <code>j</code></label>
+<label><input type="radio" name="q4"> <code>i4</code></label>
+</div>
+
+<div class="mc" data-answer="3">
+<p class="mc-q">5. Um arquivo foi gravado com <code>"&gt;i4"</code> e lido com <code>"&lt;i4"</code>. O que acontece?</p>
+<label><input type="radio" name="q5"> O Lua dá erro <code>invalid format option</code></label>
+<label><input type="radio" name="q5"> O Lua percebe e corrige sozinho</label>
+<label><input type="radio" name="q5"> Sai um número errado, sem mensagem de erro</label>
+<label><input type="radio" name="q5"> O arquivo é apagado</label>
+</div>
+
+<div class="mc" data-answer="1">
+<p class="mc-q">6. Por que <code>string.packsize("z")</code> dá erro?</p>
+<label><input type="radio" name="q6"> Porque o tamanho de um texto terminado em zero depende do texto</label>
+<label><input type="radio" name="q6"> Porque <code>z</code> não existe</label>
+<label><input type="radio" name="q6"> Porque <code>packsize</code> só aceita <code>i4</code></label>
+<label><input type="radio" name="q6"> Porque faltou o <code>&lt;</code></label>
+</div>
+
+<h3>Missão final: o valor do estoque</h3>
+
+<div class="trylua" data-goal="out:Valor do estoque: R$ 310.20;;arquivo:estoque.bin;;src:string\.unpack">
+<p class="try-task"><strong>Missão:</strong> a primeira parte do programa grava o <code>estoque.bin</code>. A segunda lê os registros, mas ainda não desempacota nada, por isso o valor sai zero. No lugar do comentário, desempacote o <code>pedaco</code> com o <code>FORMATO</code> e some <code>preco * quantidade</code> no <code>valor</code>.</p>
+<pre class="script" data-file="main.lua">local FORMATO = "&lt;i4 d B"   -- código, preço, quantidade
+
+-- 1) gravar
+local f = assert(io.open("estoque.bin", "wb"))
+f:write(string.pack(FORMATO, 101, 4.5, 12))
+f:write(string.pack(FORMATO, 102, 12.9, 3))
+f:write(string.pack(FORMATO, 103, 7.25, 30))
+f:close()
+
+-- 2) ler
+local valor = 0
+local entrada = assert(io.open("estoque.bin", "rb"))
+while true do
+  local pedaco = entrada:read(string.packsize(FORMATO))
+  if not pedaco then break end
+  -- desempacote aqui e some preco * quantidade no valor
+end
+entrada:close()
+print(string.format("Valor do estoque: R$ %.2f", valor))
+</pre>
+<pre class="solucao" data-file="main.lua">local FORMATO = "&lt;i4 d B"   -- código, preço, quantidade
+
+-- 1) gravar
+local f = assert(io.open("estoque.bin", "wb"))
+f:write(string.pack(FORMATO, 101, 4.5, 12))
+f:write(string.pack(FORMATO, 102, 12.9, 3))
+f:write(string.pack(FORMATO, 103, 7.25, 30))
+f:close()
+
+-- 2) ler
+local valor = 0
+local entrada = assert(io.open("estoque.bin", "rb"))
+while true do
+  local pedaco = entrada:read(string.packsize(FORMATO))
+  if not pedaco then break end
+  local codigo, preco, quantidade = string.unpack(FORMATO, pedaco)
+  valor = valor + preco * quantidade
+end
+entrada:close()
+print(string.format("Valor do estoque: R$ %.2f", valor))
+</pre>
+</div>
+
+<p>No lab, a solução mostrou <code>Valor do estoque: R$ 310.20</code> (4,50 × 12 + 12,90 × 3 + 7,25 × 30).</p>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li>Um arquivo <strong>binário</strong> guarda os valores como bytes, em campos de tamanho combinado; o <strong>formato</strong> é o molde desses campos.</li>
+  <li><code>string.pack(fmt, …)</code> transforma valores em uma string de bytes; <code>string.unpack(fmt, dados, pos)</code> faz o caminho de volta e devolve também a próxima posição; <code>string.packsize(fmt)</code> dá o tamanho.</li>
+  <li>Formatos comuns: <code>B</code> (0–255), <code>h</code>, <code>i4</code>, <code>j</code>, <code>d</code>, <code>f</code>, <code>z</code>, <code>s1</code>. Maiúscula = sem sinal.</li>
+  <li>Escreva a ordem dos bytes no formato (<code>&lt;</code> ou <code>&gt;</code>) e use <strong>o mesmo formato</strong> para gravar e ler: formato trocado não dá erro, dá número errado.</li>
+  <li>Arquivos binários se abrem com <code>"wb"</code> e <code>"rb"</code>; para ver os bytes, <code>hexdump -C</code>.</li>
+  <li>Essas funções existem desde o Lua 5.3; não existem no 5.1 nem no LuaJIT.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
