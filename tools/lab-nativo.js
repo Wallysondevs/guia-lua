@@ -50,6 +50,7 @@ const CONHECIDAS = [
   [/0x[0-9a-f]{6,}/i, "endereços de memória (table: 0x…, function: 0x…)"],
   [/sh: 1: .*: not found|not found|interrupted!/, "comandos do sistema (os.execute/io.popen: no navegador não há outros programas)"],
   [/\/tmp\/lua_\w{6}/, "nome sorteado do os.tmpname()"],
+  [/resulting string too large|not enough memory/, "limites de memória (o editor é WebAssembly de 32 bits, com no máximo 256 MB)"],
 ];
 function classificar(dif, fonte) {
   const r = new Set();
@@ -57,7 +58,10 @@ function classificar(dif, fonte) {
   if (fonte && /math\.random\b/.test(fonte) && !/math\.randomseed\s*\(\s*[^)\s]/.test(fonte)) r.add("números sorteados sem math.randomseed(N)");
   if (fonte && /\bos\.(time|date|clock|difftime)\b/.test(fonte)) r.add("data, hora e tempo medido");
   if (fonte && /\b(pairs|next)\s*\(/.test(fonte)) r.add("ordem do pairs/next (chaves de texto: muda a cada execução)");
-  if (fonte && /\bos\.(execute|getenv|tmpname)\b|io\.popen|collectgarbage\s*\(\s*["']count/.test(fonte)) r.add("informações do sistema (os.execute, io.popen, os.getenv, memória)");
+  if (fonte && /\bos\.(execute|getenv|tmpname)\b|io\.popen/.test(fonte)) r.add("informações do sistema (os.execute, io.popen, os.getenv)");
+  if (fonte && /collectgarbage\s*\(\s*["'](count|step|param)|collectgarbage\s*\(\s*\)/.test(fonte)) r.add("memória usada (o editor é de 32 bits: números menores)");
+  if (fonte && /string\.(pack|packsize|unpack)\s*\(|:pack\b/.test(fonte)) r.add("string.pack com l/L/T (long e size_t: 4 bytes no editor, 8 no lab)");
+  if (fonte && /os\.setlocale/.test(fonte)) r.add("os.setlocale (o editor só tem o locale C)");
   return Array.from(r);
 }
 

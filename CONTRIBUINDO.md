@@ -135,7 +135,7 @@ No `.exercise`, `data-answer="a|b"` aceita respostas alternativas (a comparaçã
 | `arg`, `...` do arquivo principal (`data-args`) | ✔ `arg[0]` = `main.lua`, `arg[-1]` = `lua` |
 | `os.exit(n)`, `os.exit(true/false)` | ✔ o código de saída aparece na caixa (`exit:N`); o que estava no buffer (`io.write` sem `\n`) é escrito antes, como no lab |
 | `os.time`, `os.date`, `os.clock`, `os.difftime` | ✔ com o **relógio e o fuso do navegador do leitor** (`os.date("%z %Z")` = `-0300 -03` em São Paulo). `os.clock()` conta o tempo rodando, sem a espera pelo teclado |
-| `os.getenv` | ✔ `HOME`=`/home/ana`, `USER`=`ana`, `LANG`=`pt_BR.UTF-8`, `TERM`, `SHELL`, `PATH` |
+| `os.getenv` | ✔ as mesmas variáveis do lab: `HOME`=`/home/ana`, `USER`=`ana`, `LANG`=`pt_BR.UTF-8`, `TERM`, `SHELL`, `PATH`, `EDITOR`…; só o `TZ` é o fuso do leitor (`America/Sao_Paulo` no lab) |
 | `math.random` | ✔ sem `math.randomseed` sorteia diferente a cada Rodar (como no lab); `math.randomseed(42)` dá **os mesmos números do lab** |
 | `os.execute("ls")`, `io.popen("date")` | **✘** no navegador não há shell nem outros programas: o comando responde como num Linux em que ele não existe — `sh: 1: ls: not found` (no stderr) e `nil  exit  127`; `io.popen(...)` lê `""` e o `:close()` dá `nil  exit  127`. Só `os.execute()` (= `true`), `"true"`, `"false"` e `"exit N"` funcionam. Mostre comandos do sistema no lab |
 | `require` de módulo em C (`.so`), `package.loadlib`, LuaRocks | **✘** não há bibliotecas dinâmicas no navegador: `module 'x' not found:` (igual ao lab quando o módulo não está instalado) ou `x.so: cannot open shared object file: No such file or directory`. Ensine LuaRocks no lab |
@@ -153,6 +153,7 @@ No `.exercise`, `data-answer="a|b"` aceita respostas alternativas (a comparaçã
 | `os.execute`, `io.popen` | `sh: 1: ls: not found`, `nil exit 127` | rodam o comando de verdade |
 | `os.setlocale("pt_BR.UTF-8")` + números/datas | nada muda (`3.5`, datas em inglês) | `3,5`, datas em português |
 | `string.packsize("l")`, `("L")`, `("T")` (`long`, `size_t`) | `4` (o WebAssembly é de 32 bits) | `8`. Os outros formatos (`i`, `j`, `n`, `d`, `s`…) são iguais |
+| Memória medida: `collectgarbage("count")`, `collectgarbage("param", "stepsize")` | números menores (32 bits: cada tabela, texto e ponteiro ocupa menos) | maiores (64 bits) |
 | `string.rep("x", 1 << 40)` (texto gigante) | `resulting string too large` | `not enough memory` |
 | Memória cheia (laço que guarda sem parar) | `not enough memory` ao passar de 256 MB | continua até a memória da máquina acabar |
 | `0/0` | `-nan` no PC; pode sair `nan` em aparelhos com outro processador | `-nan` |

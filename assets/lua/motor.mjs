@@ -27,11 +27,18 @@
 
 export const HOME = "/home/ana";
 export const LIMITE_SAIDA = 2000000; // caracteres de saída por execução
+// as variáveis de ambiente do lab (env no terminal da Ana); o TZ é o fuso do leitor (o relógio do editor)
 export const AMBIENTE = {
-  SHELL: "/bin/bash", PWD: HOME, LOGNAME: "ana", HOME: HOME, LANG: "pt_BR.UTF-8",
-  TERM: "xterm-256color", USER: "ana", SHLVL: "1",
-  PATH: "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin", _: "/usr/bin/lua",
+  EDITOR: "nano", HOME: HOME, LANG: "pt_BR.UTF-8", LANGUAGE: "pt_BR:pt:en", LOGNAME: "ana",
+  PATH: "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin", PWD: HOME, SHELL: "/bin/bash",
+  SHLVL: "1", TERM: "xterm-256color", TERMINFO: "/usr/share/terminfo", TZ: "America/Sao_Paulo", USER: "ana",
+  _: "/usr/bin/lua",
 };
+function ambiente() {
+  const a = Object.assign({}, AMBIENTE);
+  try { const z = Intl.DateTimeFormat().resolvedOptions().timeZone; if (z) a.TZ = z; } catch (e) { /* fica o do lab */ }
+  return a;
+}
 
 const enc = new TextEncoder();
 
@@ -180,7 +187,7 @@ export function sorteador(semente) {
  */
 export async function rodarLua(modulo, opts) {
   const args = opts.args || ["lua"];
-  const env = Object.entries(opts.env || AMBIENTE).map(([k, v]) => k + "=" + v);
+  const env = Object.entries(opts.env || ambiente()).map(([k, v]) => k + "=" + v);
   const disco = opts.disco || criarDisco([]);
   const entrada = opts.entrada || criarEntrada({ texto: "" });
   const jspi = !!opts.jspi && typeof WebAssembly.Suspending === "function";
