@@ -1,0 +1,547 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua operadores de bits — &amp;, |, ~, &lt;&lt; e &gt;&gt; | Guia Lua</title>
+<meta name="description" content="Os operadores de bits do Lua para quem nunca programou: números em binário como uma fileira de interruptores, &amp; (e), | (ou), ~ (ou exclusivo e não), &lt;&lt; e &gt;&gt; (deslocar), permissões ligadas e desligadas, cores em hexadecimal, e os erros reais do Lua 5.5 (number has no integer representation, bitwise operation on a string value).">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">operadores de bits</span></h1>
+
+<p class="intro">Por dentro do computador, todo número é guardado como uma fileira de <strong>bits</strong>: zeros e uns, como interruptores desligados e ligados. Os <strong>operadores de bits</strong> mexem diretamente nesses interruptores. Você não vai precisar deles na maior parte dos programas, mas eles aparecem em jogos (para guardar várias opções num número só), em cores (<code>0xFF8800</code>), em arquivos e em redes. Esta aula mostra o que cada um faz, do zero.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O que é um número em <strong>binário</strong>, contando com interruptores.</li>
+  <li>Os operadores <code>&amp;</code> ("e"), <code>|</code> ("ou"), <code>~</code> ("ou exclusivo" e "não"), <code>&lt;&lt;</code> e <code>&gt;&gt;</code> (deslocar).</li>
+  <li>Um uso de verdade: ligar, desligar e conferir <strong>permissões</strong> guardadas num número só.</li>
+  <li>Os números em <strong>hexadecimal</strong> (<code>0xFF</code>) e como separar as partes de uma cor.</li>
+  <li>A diferença entre <code>~</code> (bits) e <code>~=</code> (diferente).</li>
+  <li>Os erros reais: número com casas decimais e texto no lugar de número.</li>
+</ul>
+</div>
+
+<p>Todos os programas desta aula rodaram no <strong>Lua 5.5</strong> da máquina da Ana (usuária <code>ana</code>, computador <code>notebook</code>), salvos na pasta pessoal dela e executados com <code>lua arquivo.lua</code> (veja <a href="executar.html">Rodando um Programa</a>). Você pode rodar cada um no editor do guia.</p>
+
+<div class="warning">
+<strong>Só a partir do Lua 5.3</strong>
+<p>Estes operadores existem no Lua 5.3, 5.4 e 5.5. No <strong>Lua 5.1 e no LuaJIT</strong> (Neovim, LÖVE, OpenResty) eles não existem, e a mesma linha é erro de sintaxe; no LuaJIT, usa-se a biblioteca <code>bit</code>. A seção <a href="#versoes">Em outras versões</a> mostra as duas saídas.</p>
+</div>
+
+<hr>
+
+<h2>A ideia: uma fileira de interruptores</h2>
+<p>Imagine um painel com 4 interruptores, e cada um tem um <strong>valor</strong> escrito embaixo: da direita para a esquerda, 1, 2, 4 e 8 (cada um vale o dobro do anterior). Para guardar um número, você liga os interruptores cujos valores somam esse número:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Número</th><th>8</th><th>4</th><th>2</th><th>1</th><th>Em binário</th><th>Conta</th></tr>
+<tr><td>0</td><td>0</td><td>0</td><td>0</td><td>0</td><td><code>0000</code></td><td>nada ligado</td></tr>
+<tr><td>1</td><td>0</td><td>0</td><td>0</td><td>1</td><td><code>0001</code></td><td>1</td></tr>
+<tr><td>2</td><td>0</td><td>0</td><td>1</td><td>0</td><td><code>0010</code></td><td>2</td></tr>
+<tr><td>3</td><td>0</td><td>0</td><td>1</td><td>1</td><td><code>0011</code></td><td>2 + 1</td></tr>
+<tr><td>5</td><td>0</td><td>1</td><td>0</td><td>1</td><td><code>0101</code></td><td>4 + 1</td></tr>
+<tr><td>6</td><td>0</td><td>1</td><td>1</td><td>0</td><td><code>0110</code></td><td>4 + 2</td></tr>
+<tr><td>7</td><td>0</td><td>1</td><td>1</td><td>1</td><td><code>0111</code></td><td>4 + 2 + 1</td></tr>
+<tr><td>10</td><td>1</td><td>0</td><td>1</td><td>0</td><td><code>1010</code></td><td>8 + 2</td></tr>
+<tr><td>12</td><td>1</td><td>1</td><td>0</td><td>0</td><td><code>1100</code></td><td>8 + 4</td></tr>
+</table>
+</div>
+
+<p>Cada interruptor é um <strong>bit</strong> (de <em>binary digit</em>, "dígito binário"): 0 = desligado, 1 = ligado. Escrever um número assim, só com 0 e 1, é escrever em <strong>binário</strong>. No Lua, cada número inteiro tem <strong>64</strong> desses interruptores (veja <a href="numeros.html">Números</a>); nos exemplos, mostramos só os 4 da direita, porque os outros estão desligados.</p>
+
+<p>Os operadores de bits comparam dois painéis <strong>interruptor por interruptor</strong>, na mesma posição, e montam um painel novo com o resultado.</p>
+
+<hr>
+
+<h2>1. <code>&amp;</code>, <code>|</code> e <code>~</code>: comparando interruptor por interruptor</h2>
+
+<pre class="file" data-file="bits.lua">print(6 &amp; 3)
+print(6 | 3)
+print(6 ~ 3)
+print(~0)
+print(1 &lt;&lt; 3)
+print(40 &gt;&gt; 2)
+</pre>
+
+<pre class="term">$ lua bits.lua
+2
+7
+5
+-1
+8
+10</pre>
+
+<p>Vamos aos três primeiros, com 6 (<code>0110</code>) e 3 (<code>0011</code>) um embaixo do outro:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th></th><th>8</th><th>4</th><th>2</th><th>1</th><th>Resultado</th></tr>
+<tr><td>6</td><td>0</td><td>1</td><td>1</td><td>0</td><td></td></tr>
+<tr><td>3</td><td>0</td><td>0</td><td>1</td><td>1</td><td></td></tr>
+<tr><td><code>6 &amp; 3</code> (ligado nos <strong>dois</strong>)</td><td>0</td><td>0</td><td>1</td><td>0</td><td>2</td></tr>
+<tr><td><code>6 | 3</code> (ligado em <strong>pelo menos um</strong>)</td><td>0</td><td>1</td><td>1</td><td>1</td><td>7</td></tr>
+<tr><td><code>6 ~ 3</code> (ligado em <strong>só um</strong> dos dois)</td><td>0</td><td>1</td><td>0</td><td>1</td><td>5</td></tr>
+</table>
+</div>
+
+<dl class="anatomy">
+  <dt>&amp; ("e" de bits)</dt><dd>O interruptor do resultado fica ligado só se estiver ligado no primeiro <strong>e</strong> no segundo número. Só o do valor 2 está ligado nos dois: dá 2. Em inglês, <em>bitwise AND</em>.</dd>
+  <dt>| ("ou" de bits)</dt><dd>Fica ligado se estiver ligado no primeiro <strong>ou</strong> no segundo (ou nos dois). Os interruptores 4, 2 e 1: dá 7. A barra vertical <code>|</code> fica, na maioria dos teclados, na mesma tecla da contrabarra <code>\</code>, com <kbd>Shift</kbd>. Em inglês, <em>bitwise OR</em>.</dd>
+  <dt>~ entre dois números ("ou exclusivo")</dt><dd>Fica ligado se estiver ligado em <strong>só um</strong> dos dois, nunca nos dois. Os interruptores 4 e 1: dá 5. Em inglês, <em>exclusive OR</em>, ou <strong>XOR</strong>. O símbolo é o til, <code>~</code>.</dd>
+</dl>
+
+<div class="note">
+<strong>Não confunda com <code>and</code> e <code>or</code></strong>
+<p>O <code>and</code> e o <code>or</code> (aula <a href="operadores-logicos.html">and, or e not</a>) trabalham com <strong>verdadeiro e falso</strong>, a resposta inteira de uma pergunta. O <code>&amp;</code> e o <code>|</code> trabalham com os <strong>bits de um número</strong>, um por um, e devolvem outro número.</p>
+</div>
+
+<p>No modo interativo:</p>
+<pre class="term">$ lua
+Lua 5.5.0  Copyright (C) 1994-2025 Lua.org, PUC-Rio
+&gt; 6 &amp; 3
+2
+&gt; 6 | 3
+7
+&gt; 6 ~ 3
+5
+&gt; os.exit()</pre>
+
+<div class="trylua" data-goal="out:12 | 10 = 14;;out:12 ~ 10 = 6">
+<p class="try-task"><strong>Missão:</strong> 12 é <code>1100</code> e 10 é <code>1010</code>. Pense na resposta antes e depois acrescente duas linhas, iguais à primeira, para mostrar <code>12 | 10</code> e <code>12 ~ 10</code>. Não esqueça os parênteses em volta da conta (a seção 6 explica por quê).</p>
+<pre class="script" data-file="main.lua">print("12 &amp; 10 = " .. (12 &amp; 10))
+</pre>
+<pre class="solucao" data-file="main.lua">print("12 &amp; 10 = " .. (12 &amp; 10))
+print("12 | 10 = " .. (12 | 10))
+print("12 ~ 10 = " .. (12 ~ 10))
+</pre>
+</div>
+
+<hr>
+
+<h2>2. <code>~</code> sozinho: inverter todos os interruptores</h2>
+<p>Escrito <strong>antes</strong> de um número só, o <code>~</code> é o "não" de bits (<em>bitwise NOT</em>): ele inverte <strong>cada um</strong> dos 64 interruptores. O que estava ligado desliga, e o que estava desligado liga. No <code>bits.lua</code>, <code>~0</code> deu <code>-1</code>:</p>
+<ul>
+  <li>0 é o painel com os 64 interruptores desligados;</li>
+  <li><code>~0</code> liga os 64; e o Lua, como quase todo computador, usa o primeiro interruptor da esquerda para dizer "este número é negativo". O painel com tudo ligado é, por essa regra (chamada de <strong>complemento de dois</strong>), o número −1.</li>
+</ul>
+<p>Na prática, o <code>~</code> sozinho quase só aparece num truque: <code>x &amp; ~VALOR</code>, que <strong>desliga</strong> um interruptor. Ele aparece na seção 4.</p>
+
+<hr>
+
+<h2>3. <code>&lt;&lt;</code> e <code>&gt;&gt;</code>: deslocar os interruptores</h2>
+<p><code>x &lt;&lt; n</code> empurra todos os bits de <code>x</code> <strong>n casas para a esquerda</strong>, entrando zeros pela direita. <code>x &gt;&gt; n</code> empurra para a <strong>direita</strong>, e os bits que "caem" pela direita somem. Como cada casa vale o dobro da anterior, deslocar para a esquerda é multiplicar por 2, por 4, por 8…, e deslocar para a direita é dividir:</p>
+
+<pre class="file" data-file="desloca.lua">print(5 &lt;&lt; 1, 5 &lt;&lt; 2, 5 &lt;&lt; 3)
+print(5 * 2, 5 * 4, 5 * 8)
+print(100 &gt;&gt; 1, 100 &gt;&gt; 2, 101 &gt;&gt; 1)
+print(100 // 2, 100 // 4, 101 // 2)
+print(1 &lt;&lt; 10)
+</pre>
+
+<pre class="term">$ lua desloca.lua
+10	20	40
+10	20	40
+50	25	50
+50	25	50
+1024</pre>
+
+<dl class="anatomy">
+  <dt>5 &lt;&lt; 1</dt><dd>5 é <code>0101</code>; uma casa para a esquerda vira <code>1010</code>, que é 10. O mesmo que <code>5 * 2</code>.</dd>
+  <dt>101 &gt;&gt; 1</dt><dd>101 é ímpar: o bit do 1 "cai" pela direita e some. Dá 50, igual à <strong>divisão inteira</strong> <code>101 // 2</code> (veja <a href="divisao.html">Divisão</a>).</dd>
+  <dt>1 &lt;&lt; 10</dt><dd>2 multiplicado por ele mesmo 10 vezes: 1024. É um jeito comum de escrever potências de 2.</dd>
+</dl>
+
+<div class="warning">
+<strong>Com números negativos, não é divisão</strong>
+<p>O <code>&gt;&gt;</code> do Lua sempre entra com zeros pela esquerda, inclusive no interruptor do sinal. Com número negativo, o resultado não tem nada a ver com dividir:</p>
+<pre class="file" data-file="negativo.lua">print(~5)
+print(-1 &gt;&gt; 1)
+print(-8 &gt;&gt; 1, -8 // 2)
+print(1 &lt;&lt; 63, 1 &lt;&lt; 64)
+print(math.maxinteger, math.mininteger)
+</pre>
+<pre class="term">$ lua negativo.lua
+-6
+9223372036854775807
+9223372036854775804	-4
+-9223372036854775808	0
+9223372036854775807	-9223372036854775808</pre>
+<p><code>-8 &gt;&gt; 1</code> deu um número enorme e positivo, enquanto <code>-8 // 2</code> deu −4. E deslocar 64 casas (o painel inteiro) zera tudo. Para multiplicar e dividir, use <code>*</code> e <code>//</code>; os deslocamentos são para mexer em bits.</p>
+</div>
+
+<hr>
+
+<h2>4. Um uso de verdade: permissões ligadas e desligadas</h2>
+<p>No sistema da lojinha, cada funcionário pode ou não <strong>ler</strong> o estoque, <strong>escrever</strong> no estoque e <strong>apagar</strong> itens. Em vez de três variáveis <code>true</code>/<code>false</code>, dá para guardar as três respostas num número só, um interruptor para cada permissão. Esse tipo de interruptor se chama <strong>flag</strong> ("bandeirinha"):</p>
+
+<pre class="file" data-file="permissoes.lua">local LER = 1
+local ESCREVER = 2
+local APAGAR = 4
+local ana = LER | ESCREVER
+print("permissões da Ana:", ana)
+print("pode ler?", ana &amp; LER ~= 0)
+print("pode apagar?", ana &amp; APAGAR ~= 0)
+ana = ana | APAGAR
+print("agora:", ana, ana &amp; APAGAR ~= 0)
+ana = ana &amp; ~ESCREVER
+print("sem escrever:", ana, ana &amp; ESCREVER ~= 0)
+ana = ana ~ LER
+print("trocou ler:", ana)
+ana = ana ~ LER
+print("trocou de novo:", ana)
+</pre>
+
+<pre class="term">$ lua permissoes.lua
+permissões da Ana:	3
+pode ler?	true
+pode apagar?	false
+agora:	7	true
+sem escrever:	5	false
+trocou ler:	4
+trocou de novo:	5</pre>
+
+<dl class="anatomy">
+  <dt>LER = 1, ESCREVER = 2, APAGAR = 4</dt><dd>Cada permissão é um interruptor diferente: <code>001</code>, <code>010</code> e <code>100</code>. Os valores são potências de 2 justamente para não se misturarem. Os nomes em maiúsculas são um costume para valores que nunca mudam (veja <a href="const.html">Constantes</a>).</dd>
+  <dt>LER | ESCREVER</dt><dd><strong>Liga</strong> as duas permissões: <code>001 | 010</code> = <code>011</code> = 3.</dd>
+  <dt>ana &amp; LER ~= 0</dt><dd><strong>Confere</strong> uma permissão: o <code>&amp;</code> deixa ligado só o interruptor do <code>LER</code>, se ele estiver ligado em <code>ana</code>. Se o resultado não for 0 (<code>~= 0</code>, "diferente de zero"; veja <a href="operadores-comparacao.html">Comparações</a>), a permissão existe. Com o <code>APAGAR</code>, deu 0, e a resposta foi <code>false</code>.</dd>
+  <dt>ana = ana | APAGAR</dt><dd>Liga mais um interruptor: <code>011 | 100</code> = <code>111</code> = 7. Se ele já estivesse ligado, nada mudaria.</dd>
+  <dt>ana = ana &amp; ~ESCREVER</dt><dd><strong>Desliga</strong> um interruptor: <code>~ESCREVER</code> é o painel com tudo ligado <strong>menos</strong> o do 2; o <code>&amp;</code> com ele mantém todos os outros e apaga o do 2. <code>111</code> vira <code>101</code> = 5.</dd>
+  <dt>ana = ana ~ LER</dt><dd><strong>Troca</strong> um interruptor: se estava ligado, desliga; se estava desligado, liga. Fazer duas vezes volta ao começo (5 → 4 → 5).</dd>
+</dl>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Quero…</th><th>Escreva</th></tr>
+<tr><td>ligar a permissão P</td><td><code>x = x | P</code></td></tr>
+<tr><td>desligar a permissão P</td><td><code>x = x &amp; ~P</code></td></tr>
+<tr><td>trocar (liga ↔ desliga) a permissão P</td><td><code>x = x ~ P</code></td></tr>
+<tr><td>saber se P está ligada</td><td><code>x &amp; P ~= 0</code></td></tr>
+</table>
+</div>
+
+<div class="trylua" data-goal="out:pode apagar? true;;src:\|\s*APAGAR">
+<p class="try-task"><strong>Missão:</strong> o Beto só pode ler. Dê a ele também a permissão de <strong>apagar</strong>, com <code>beto = beto | APAGAR</code>, antes da pergunta, para o programa mostrar <code>pode apagar? true</code>.</p>
+<pre class="script" data-file="main.lua">local LER = 1
+local ESCREVER = 2
+local APAGAR = 4
+local beto = LER
+print("pode apagar? " .. tostring(beto &amp; APAGAR ~= 0))
+</pre>
+<pre class="solucao" data-file="main.lua">local LER = 1
+local ESCREVER = 2
+local APAGAR = 4
+local beto = LER
+beto = beto | APAGAR
+print("pode apagar? " .. tostring(beto &amp; APAGAR ~= 0))
+</pre>
+</div>
+
+<hr>
+
+<h2>5. Hexadecimal e cores</h2>
+<p>Escrever bits em decimal é desconfortável, e o binário fica comprido demais. Por isso, quem mexe com bits usa a base <strong>hexadecimal</strong> (base 16): os algarismos vão de 0 a 9 e depois de A (10) a F (15), e cada algarismo hexadecimal corresponde a <strong>4 interruptores</strong> exatos. No Lua, um número hexadecimal começa com <code>0x</code>:</p>
+
+<pre class="file" data-file="hex.lua">print(0xFF, 0x10, 0xff)
+print(0xF0 | 0x0F)
+print(string.format("%x", 0xF0 | 0x0F))
+</pre>
+
+<pre class="term">$ lua hex.lua
+255	16	255
+255
+ff</pre>
+
+<p><code>0xFF</code> (= <code>1111 1111</code>) é 255; maiúsculas ou minúsculas tanto faz. O <code>print</code> mostra sempre em decimal; para ver em hexadecimal, use <code>string.format("%x", …)</code> (aula <a href="string-format.html">string.format</a>). O Lua não tem um jeito de escrever números em binário direto no código: <code>0b101</code> dá <code>malformed number near '0b101'</code>.</p>
+
+<p>As cores de telas e páginas da internet costumam vir como <code>0xRRGGBB</code>: dois algarismos para o vermelho (R, de <em>red</em>), dois para o verde (G, <em>green</em>) e dois para o azul (B, <em>blue</em>), cada parte de 0 a 255. Com <code>&gt;&gt;</code> e <code>&amp;</code>, dá para separar as partes:</p>
+
+<pre class="file" data-file="cor.lua">local laranja = 0xFF8800
+print(laranja)
+local vermelho = (laranja &gt;&gt; 16) &amp; 0xFF
+local verde = (laranja &gt;&gt; 8) &amp; 0xFF
+local azul = laranja &amp; 0xFF
+print(vermelho, verde, azul)
+print(string.format("%X", laranja))
+print(string.format("%x %x %x", vermelho, verde, azul))
+print((255 &lt;&lt; 16) | (136 &lt;&lt; 8) | 0)
+</pre>
+
+<pre class="term">$ lua cor.lua
+16746496
+255	136	0
+FF8800
+ff 88 0
+16746496</pre>
+
+<dl class="anatomy">
+  <dt>(laranja &gt;&gt; 16) &amp; 0xFF</dt><dd>Empurra 16 casas para a direita (some o verde e o azul) e fica só com os 8 interruptores da direita (<code>&amp; 0xFF</code>, a "máscara"). Sobra o <code>FF</code> do vermelho: 255.</dd>
+  <dt>(laranja &gt;&gt; 8) &amp; 0xFF</dt><dd>Empurra 8 casas (some o azul) e corta o resto: o <code>88</code> do verde, 136.</dd>
+  <dt>laranja &amp; 0xFF</dt><dd>Só os 8 da direita: o azul, <code>00</code>.</dd>
+  <dt>(255 &lt;&lt; 16) | (136 &lt;&lt; 8) | 0</dt><dd>O caminho de volta: põe cada parte no seu lugar e junta com <code>|</code>. Deu o mesmo número do começo.</dd>
+</dl>
+
+<hr>
+
+<h2>6. Junto com outros operadores</h2>
+<p>Os operadores de bits vêm <strong>depois</strong> das contas e do <code>..</code>, e <strong>antes</strong> das comparações (<code>==</code>, <code>~=</code>, <code>&lt;</code>…). Na prática:</p>
+
+<pre class="file" data-file="prec2.lua">print((1 | 2) == 3)
+print(1 + 2 &lt;&lt; 1)
+print(1 | 2 &amp; 3)
+</pre>
+
+<pre class="term">$ lua prec2.lua
+true
+6
+3</pre>
+
+<ul>
+  <li><code>1 + 2 &lt;&lt; 1</code>: a soma vem primeiro (3), depois o deslocamento: 6.</li>
+  <li><code>1 | 2 &amp; 3</code>: entre os de bits, o <code>&amp;</code> vem antes do <code>|</code>: <code>2 &amp; 3</code> = 2, e <code>1 | 2</code> = 3.</li>
+  <li>Por isso o <code>ana &amp; LER ~= 0</code> da seção 4 funcionou sem parênteses: o <code>&amp;</code> é feito antes do <code>~=</code>. (Quem vem da linguagem C precisa tomar cuidado: lá é o contrário.)</li>
+</ul>
+<p>Na dúvida, parênteses. E com o <code>..</code>, eles são <strong>obrigatórios</strong>: veja em <a href="#errado">Quando dá errado</a>. A tabela completa fica em <a href="precedencia.html">Precedência dos Operadores</a>.</p>
+
+<hr>
+
+<h2 id="formas">Formas diferentes de fazer a mesma coisa</h2>
+<p>Algumas contas com bits têm uma "irmã" com os operadores de sempre. Saber par ou ímpar, por exemplo:</p>
+
+<pre class="file" data-file="par.lua">print(7 &amp; 1, 10 &amp; 1)
+print(7 % 2, 10 % 2)
+</pre>
+
+<pre class="term">$ lua par.lua
+1	0
+1	0</pre>
+
+<p>O interruptor do 1 está ligado em todo número ímpar, então <code>n &amp; 1</code> dá 1 para ímpar e 0 para par, igual ao resto da divisão por 2 (<code>n % 2</code>; veja <a href="divisao.html">Divisão</a>).</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Para…</th><th>Com bits</th><th>Sem bits (prefira, se não estiver mexendo em bits)</th></tr>
+<tr><td>Par ou ímpar</td><td><code>n &amp; 1</code></td><td><code>n % 2</code></td></tr>
+<tr><td>Multiplicar por 2, 4, 8…</td><td><code>n &lt;&lt; 1</code>, <code>n &lt;&lt; 2</code>…</td><td><code>n * 2</code>, <code>n * 4</code>…</td></tr>
+<tr><td>Dividir por 2, 4, 8… (positivos)</td><td><code>n &gt;&gt; 1</code>, <code>n &gt;&gt; 2</code>…</td><td><code>n // 2</code>, <code>n // 4</code>…</td></tr>
+<tr><td>Várias opções sim/não</td><td>flags num número (<code>|</code>, <code>&amp;</code>, <code>~</code>)</td><td>uma tabela: <code>{ler = true, apagar = false}</code> (veja <a href="dicionarios.html">Dicionários</a>)</td></tr>
+</table>
+</div>
+
+<p>As versões "sem bits" são mais fáceis de ler e funcionam em qualquer versão do Lua. Use os operadores de bits quando o assunto <strong>for</strong> bits: flags, cores, arquivos binários (veja <a href="string-pack.html">Dados Binários</a>), protocolos de rede.</p>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+
+<div class="cenario">
+<strong>Número com casas decimais</strong>
+<pre class="file" data-file="float.lua">print(6.0 &amp; 3)
+print(type(6.0 &amp; 3), math.type(6.0 &amp; 3))
+print(6.5 &amp; 3)
+</pre>
+<pre class="term">$ lua float.lua
+2
+number	integer
+lua: float.lua:3: number has no integer representation
+stack traceback:
+	float.lua:3: in main chunk
+	[C]: in ?</pre>
+<p>Linha por linha:</p>
+<dl class="anatomy">
+  <dt>2 / number integer</dt><dd>As duas primeiras linhas funcionaram: <code>6.0</code> é um float (veja <a href="numeros.html">Números</a>), mas tem valor inteiro, e o Lua o converte para o inteiro 6 antes de mexer nos bits. O resultado é um inteiro.</dd>
+  <dt>lua: float.lua:3:</dt><dd>O erro está na linha 3.</dd>
+  <dt>number has no integer representation</dt><dd>"O número não tem representação inteira". Bits só existem em inteiros, e 6,5 não é inteiro. O Lua não arredonda sozinho: ele para.</dd>
+  <dt>stack traceback: …</dt><dd>O rastro de sempre: linha 3 do programa principal (veja <a href="erros.html">Lendo uma Mensagem de Erro</a>).</dd>
+</dl>
+<p>Esse erro costuma aparecer com o resultado de uma divisão com <code>/</code>, que é sempre float (<code>7 / 2</code> = 3.5). <strong>Como consertar:</strong> use <code>//</code> para dividir, ou arredonde antes com <code>math.floor</code> (veja <a href="math.html">A Biblioteca math</a>).</p>
+</div>
+
+<div class="cenario">
+<strong>Texto no lugar de número</strong>
+<pre class="file" data-file="texto.lua">print("6" &amp; 3)
+</pre>
+<pre class="term">$ lua texto.lua
+lua: texto.lua:1: attempt to perform bitwise operation on a string value (constant '6')
+stack traceback:
+	texto.lua:1: in main chunk
+	[C]: in ?</pre>
+<p>"Tentativa de fazer uma operação de bits com um valor do tipo texto (a constante <code>'6'</code>)". Com <code>+</code>, o Lua converte <code>"6"</code> em número sozinho; com os operadores de bits, <strong>não</strong>. Isso acontece com o que vem do teclado (<code>io.read()</code> devolve texto). <strong>Como consertar:</strong> converta antes com <code>tonumber</code> (veja <a href="conversao.html">Conversão</a>):</p>
+<pre class="file" data-file="texto3.lua">local digitado = "6"
+print(tonumber(digitado) &amp; 3)
+print(math.type("6" + 0))
+</pre>
+<pre class="term">$ lua texto3.lua
+2
+integer</pre>
+<p>Com uma variável, a mensagem diz o nome dela: <code>attempt to perform bitwise operation on a string value (local 'x')</code>. Com <code>nil</code> (variável sem valor): <code>attempt to perform bitwise operation on a nil value (local 'permissoes')</code>; com <code>true</code>: <code>attempt to perform bitwise operation on a boolean value</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Esqueceu os parênteses junto com <code>..</code></strong>
+<pre class="file" data-file="conc.lua">print("6 &amp; 3 = " .. 6 &amp; 3)
+</pre>
+<pre class="term">$ lua conc.lua
+lua: conc.lua:1: attempt to perform bitwise operation on a string value
+stack traceback:
+	conc.lua:1: in main chunk
+	[C]: in ?</pre>
+<p>O <code>..</code> vem <strong>antes</strong> do <code>&amp;</code>. O Lua fez primeiro <code>"6 &amp; 3 = " .. 6</code>, que dá o texto <code>"6 &amp; 3 = 6"</code>, e depois tentou <code>"6 &amp; 3 = 6" &amp; 3</code>: um texto num operador de bits. <strong>Como consertar:</strong> parênteses em volta da conta: <code>"6 &amp; 3 = " .. (6 &amp; 3)</code>, que mostra <code>6 &amp; 3 = 2</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Queria "diferente" e escreveu <code>~</code> ou <code>!=</code></strong>
+<p>No Lua, "diferente" é <code>~=</code>, com o sinal de igual. Sem ele, o <code>~</code> é o ou exclusivo, e o programa não reclama:</p>
+<pre class="file" data-file="dif.lua">local a, b = 5, 3
+print(a ~= b)
+print(a ~ b)
+</pre>
+<pre class="term">$ lua dif.lua
+true
+6</pre>
+<p>A segunda linha deu 6 (<code>0101 ~ 0011</code> = <code>0110</code>), sem erro nenhum, e um <code>if</code> com esse 6 seria sempre verdadeiro. E o <code>!=</code> de outras linguagens não existe no Lua:</p>
+<pre class="file" data-file="exclama.lua">print(5 != 3)
+</pre>
+<pre class="term">$ lua exclama.lua
+lua: exclama.lua:1: ')' expected near '!'</pre>
+<p>"Era esperado um <code>)</code> perto de <code>!</code>": o Lua não conhece o <code>!</code>. <strong>Como consertar:</strong> <code>~=</code>.</p>
+</div>
+
+<h3 id="versoes">Em outras versões</h3>
+<p>No Lua 5.1 e no LuaJIT, os operadores de bits não existem:</p>
+<pre class="term">$ luajit -e 'print(6 &amp; 3)'
+luajit: (command line):1: ')' expected near '&amp;'
+$ lua5.1 -e 'print(6 &amp; 3)'
+lua5.1: (command line):1: ')' expected near '&amp;'</pre>
+<p>O LuaJIT tem, no lugar deles, a biblioteca <code>bit</code>, com funções:</p>
+<pre class="term">$ luajit -e 'print(bit.band(6, 3), bit.bor(6, 3), bit.bxor(6, 3), bit.lshift(1, 3))'
+2	7	5	8</pre>
+<p>No Lua 5.4, tudo funciona como no 5.5 (inclusive o erro <code>number has no integer representation</code>). Mais em <a href="versoes.html">Lua 5.1, LuaJIT, 5.4 e 5.5</a>.</p>
+
+<hr>
+
+<h2>Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Operador</th><th>Nome</th><th>Exemplo</th><th>Resultado</th></tr>
+<tr><td><code>a &amp; b</code></td><td>"e" de bits (AND)</td><td><code>6 &amp; 3</code></td><td><code>2</code></td></tr>
+<tr><td><code>a | b</code></td><td>"ou" de bits (OR)</td><td><code>6 | 3</code></td><td><code>7</code></td></tr>
+<tr><td><code>a ~ b</code></td><td>ou exclusivo (XOR)</td><td><code>6 ~ 3</code></td><td><code>5</code></td></tr>
+<tr><td><code>~a</code></td><td>"não" de bits (NOT)</td><td><code>~0</code></td><td><code>-1</code></td></tr>
+<tr><td><code>a &lt;&lt; n</code></td><td>desloca para a esquerda</td><td><code>1 &lt;&lt; 3</code></td><td><code>8</code></td></tr>
+<tr><td><code>a &gt;&gt; n</code></td><td>desloca para a direita</td><td><code>40 &gt;&gt; 2</code></td><td><code>10</code></td></tr>
+<tr><td><code>0xFF</code></td><td>número em hexadecimal</td><td><code>0xFF</code></td><td><code>255</code></td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Mensagem</th><th>Causa provável</th></tr>
+<tr><td><code>number has no integer representation</code></td><td>Float com casas decimais (resultado de <code>/</code>?): use <code>//</code> ou <code>math.floor</code></td></tr>
+<tr><td><code>attempt to perform bitwise operation on a string value</code></td><td>Texto no lugar de número: <code>tonumber</code>; ou faltaram parênteses junto com <code>..</code></td></tr>
+<tr><td><code>attempt to perform bitwise operation on a nil value</code></td><td>Variável sem valor ou com nome errado</td></tr>
+<tr><td><code>')' expected near '&amp;'</code></td><td>Lua 5.1 ou LuaJIT: lá não há operadores de bits</td></tr>
+<tr><td><code>')' expected near '!'</code></td><td>Usou <code>!=</code>: no Lua, "diferente" é <code>~=</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. Faça as contas</h3>
+<p>Use a tabela de interruptores do começo da aula (5 = <code>0101</code>, 3 = <code>0011</code>).</p>
+<div class="ex-code"><code>5 &amp; 3</code> = <input data-answer="1" aria-label="5 and 3"><br><code>5 | 3</code> = <input data-answer="7" aria-label="5 or 3"><br><code>5 ~ 3</code> = <input data-answer="6" aria-label="5 xor 3"><br><code>3 &lt;&lt; 2</code> = <input data-answer="12" aria-label="3 deslocado 2"></div>
+</div>
+
+<div class="exercise">
+<h3>2. Ligue a permissão</h3>
+<p>Complete para ligar a permissão <code>ESCREVER</code> em <code>x</code>, sem mexer nas outras:</p>
+<div class="ex-code">x = x <input data-answer="\|" aria-label="operador"> ESCREVER</div>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">3. Qual operador quer dizer "diferente" no Lua?</p>
+<label><input type="radio" name="q3"> <code>~</code></label>
+<label><input type="radio" name="q3"> <code>~=</code></label>
+<label><input type="radio" name="q3"> <code>!=</code></label>
+<label><input type="radio" name="q3"> <code>&lt;&gt;</code></label>
+</div>
+
+<div class="mc" data-answer="3">
+<p class="mc-q">4. O que <code>print(7.5 &amp; 1)</code> faz?</p>
+<label><input type="radio" name="q4"> Mostra <code>1</code></label>
+<label><input type="radio" name="q4"> Mostra <code>0</code></label>
+<label><input type="radio" name="q4"> Para com <code>number has no integer representation</code></label>
+<label><input type="radio" name="q4"> Arredonda para 8 e mostra <code>0</code></label>
+</div>
+
+<div class="mc" data-answer="4">
+<p class="mc-q">5. Quanto vale <code>0x10</code>?</p>
+<label><input type="radio" name="q5"> 10</label>
+<label><input type="radio" name="q5"> 2</label>
+<label><input type="radio" name="q5"> 100</label>
+<label><input type="radio" name="q5"> 16</label>
+</div>
+
+<div class="mc" data-answer="1">
+<p class="mc-q">6. Para conferir se a permissão <code>APAGAR</code> está ligada em <code>x</code>, qual expressão serve?</p>
+<label><input type="radio" name="q6"> <code>x &amp; APAGAR ~= 0</code></label>
+<label><input type="radio" name="q6"> <code>x | APAGAR ~= 0</code></label>
+<label><input type="radio" name="q6"> <code>x == APAGAR</code></label>
+<label><input type="radio" name="q6"> <code>x ~ APAGAR</code></label>
+</div>
+
+<h3>Missão final: o verde da cor</h3>
+
+<div class="trylua" data-goal="out:verde: 204;;src:cor\s*&gt;&gt;\s*8">
+<p class="try-task"><strong>Missão:</strong> a cor do logotipo da lojinha é <code>0x33CC99</code>. Calcule a parte verde (os dois algarismos do meio, <code>CC</code>) com <code>&gt;&gt;</code> e <code>&amp; 0xFF</code>, no lugar do <code>0</code>. O programa deve mostrar <code>verde: 204</code>.</p>
+<pre class="script" data-file="main.lua">local cor = 0x33CC99
+local vermelho = (cor &gt;&gt; 16) &amp; 0xFF
+local verde = 0
+print("vermelho: " .. vermelho)
+print("verde: " .. verde)
+</pre>
+<pre class="solucao" data-file="main.lua">local cor = 0x33CC99
+local vermelho = (cor &gt;&gt; 16) &amp; 0xFF
+local verde = (cor &gt;&gt; 8) &amp; 0xFF
+print("vermelho: " .. vermelho)
+print("verde: " .. verde)
+</pre>
+</div>
+
+<p>Confira com <code>string.format("%x", verde)</code>: deve sair <code>cc</code>. E o vermelho, 51, é o <code>0x33</code>.</p>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li>Todo inteiro é uma fileira de 64 <strong>bits</strong> (interruptores 0/1); os operadores de bits comparam dois números interruptor por interruptor.</li>
+  <li><code>&amp;</code>: ligado nos dois. <code>|</code>: ligado em pelo menos um. <code>~</code> entre dois: ligado em só um. <code>~</code> antes de um: inverte todos.</li>
+  <li><code>&lt;&lt;</code> e <code>&gt;&gt;</code> empurram os bits; com positivos, equivalem a multiplicar e dividir por potências de 2.</li>
+  <li>Flags: ligar <code>x | P</code>, desligar <code>x &amp; ~P</code>, trocar <code>x ~ P</code>, conferir <code>x &amp; P ~= 0</code>.</li>
+  <li><code>0xFF</code> é um número em hexadecimal (255); <code>string.format("%x", n)</code> mostra em hexadecimal.</li>
+  <li>Só funcionam com inteiros (floats com valor inteiro são convertidos): <code>6.5 &amp; 3</code> dá <code>number has no integer representation</code>, e texto dá <code>attempt to perform bitwise operation on a string value</code>.</li>
+  <li>"Diferente" é <code>~=</code>; o <code>~</code> sozinho é outra coisa. Não existem no Lua 5.1 nem no LuaJIT.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
