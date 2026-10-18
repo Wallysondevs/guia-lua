@@ -1,0 +1,587 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua depuração — como achar e consertar defeitos num programa | Guia Lua</title>
+<meta name="description" content="Depurar um programa Lua para quem nunca programou: ler a mensagem de erro, o print de depuração, type e %q para ver o que a variável tem, assert para pegar o defeito cedo, debug.traceback, luac -p, lua -i, diminuir o problema, e um roteiro passo a passo com os erros reais do Lua 5.5.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">Depurando</span> um Programa</h1>
+
+<p class="intro">Todo programador escreve programas com defeito. Todo mesmo: o que muda com a experiência é a <strong>rapidez</strong> para achar o defeito. Um defeito num programa se chama <strong>bug</strong> ("inseto", em inglês), e o trabalho de achá-lo e tirá-lo se chama <strong>depurar</strong> (em inglês, <em>debug</em>). Esta aula não apresenta funções novas: ela ensina um <strong>jeito de trabalhar</strong>, com as ferramentas que você já tem no seu computador (o <code>lua</code>, o <code>luac</code>, o <code>print</code>, o <code>assert</code> e a biblioteca <a href="debug.html">debug</a>).</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>Os dois tipos de defeito: o que <strong>dá erro</strong> e o que dá <strong>resultado errado</strong>.</li>
+  <li>Como <strong>ler a mensagem de erro</strong>: arquivo, linha, o que aconteceu, e o rastro.</li>
+  <li>O <strong><code>print</code> de depuração</strong>, e como usar <code>type</code> e <code>%q</code> para ver o que uma variável tem de verdade.</li>
+  <li>O <code>assert</code> para o defeito aparecer <strong>cedo</strong>, perto da causa.</li>
+  <li><code>debug.traceback</code> para saber <strong>quem</strong> chamou, <code>luac -p</code> para conferir a sintaxe e <code>lua -i</code> para olhar o programa por dentro.</li>
+  <li>Diminuir o problema até ele ficar óbvio, e um roteiro para seguir sempre.</li>
+</ul>
+</div>
+
+<p>Os programas desta aula rodaram no <strong>Lua 5.5</strong> da máquina da Ana (usuária <code>ana</code>, computador <code>notebook</code>), com <code>lua arquivo.lua</code>.</p>
+
+<hr>
+
+<h2>A ideia: o detetive e as pistas</h2>
+<p>Quando o bolo da Ana sai solado, ela não joga a receita fora nem começa outra do zero. Ela vira detetive: "o forno estava quente? Pus o fermento? Quanto de farinha?". Ela procura <strong>pistas</strong>, levanta uma <strong>suspeita</strong>, faz um <strong>teste</strong> (outro bolo, mudando só uma coisa) e vê se a suspeita se confirma.</p>
+<p>Depurar é igual. As pistas são a mensagem de erro e o que o programa mostra. A suspeita é "acho que a variável <code>total</code> está errada". O teste é um <code>print</code> no lugar certo, ou um programa menor. E a regra de ouro do detetive vale aqui: <strong>mude uma coisa de cada vez</strong> e rode de novo.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Tipo de defeito</th><th>Como aparece</th><th>Por onde começar</th></tr>
+<tr><td><strong>Erro de sintaxe</strong></td><td>O programa nem começa: <code>lua: arquivo.lua:8: 'end' expected …</code></td><td>A linha da mensagem (e as de cima)</td></tr>
+<tr><td><strong>Erro durante a execução</strong></td><td>O programa para no meio, com mensagem e <code>stack traceback</code></td><td>A primeira linha da mensagem</td></tr>
+<tr><td><strong>Resultado errado</strong></td><td>Nenhuma mensagem: o programa termina, mas a resposta está errada</td><td><code>print</code> dos valores no meio do caminho</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>1. Primeira pista: ler a mensagem de erro</h2>
+<p>A Ana escreveu um programa que calcula a média da turma:</p>
+
+<pre class="file" data-file="media1.lua">local notas = { 7, 8.5, 10, 6 }
+
+local function media(lista)
+  local total = 0
+  for i = 1, #lista do
+    total = total + lista[i]
+  end
+  return totl / #lista
+end
+
+print("Média da turma: " .. media(notas))
+</pre>
+
+<pre class="term">$ lua media1.lua
+lua: media1.lua:8: attempt to perform arithmetic on a nil value (global 'totl')
+stack traceback:
+	media1.lua:8: in local 'media'
+	media1.lua:11: in main chunk
+	[C]: in ?</pre>
+
+<p>Muita gente iniciante olha a mensagem em inglês, se assusta e vai direto para o código. Não faça isso: a mensagem é a <strong>melhor pista</strong> que você vai ter. Leia pedaço por pedaço:</p>
+
+<dl class="anatomy">
+  <dt>lua:</dt><dd>Quem está falando: o programa <code>lua</code>.</dd>
+  <dt>media1.lua:8:</dt><dd><strong>Onde</strong>: no arquivo <code>media1.lua</code>, linha <strong>8</strong>. Abra o arquivo nessa linha antes de qualquer coisa.</dd>
+  <dt>attempt to perform arithmetic on a nil value</dt><dd><strong>O quê</strong>: "tentativa de fazer conta com um valor <code>nil</code>". Alguma coisa da linha 8 que entrou numa conta não tinha valor.</dd>
+  <dt>(global 'totl')</dt><dd><strong>Quem</strong>: a variável <strong>global</strong> <code>totl</code>. Global? A Ana nunca criou uma global com esse nome... Exato: ela digitou <code>totl</code> em vez de <code>total</code>. Para o Lua, um nome que não é <code>local</code> é uma global, e uma global que ninguém criou vale <code>nil</code> (veja <a href="local.html">local × Global</a>).</dd>
+  <dt>stack traceback:</dt><dd><strong>O caminho</strong>: a linha 8 está dentro da função <code>media</code>, que foi chamada na linha 11 do programa principal. Útil quando a mesma função é chamada de vários lugares.</dd>
+</dl>
+
+<p>Quatro informações em duas linhas: onde, o quê, quem e por qual caminho. O conserto é trocar <code>totl</code> por <code>total</code>. A aula <a href="erros.html">Lendo uma Mensagem de Erro</a> explica cada parte com mais calma, e a <a href="ref-erros.html">tabela de mensagens comuns</a> traduz as mais frequentes.</p>
+
+<div class="tip">
+<strong>A linha da mensagem nem sempre é a do defeito</strong>
+<p>A mensagem diz onde o programa <strong>percebeu</strong> o problema, que às vezes é longe de onde ele <strong>nasceu</strong>. Se a linha indicada parece certa, pergunte: "de onde veio esse valor?" e suba pelo código (ou pelo rastro).</p>
+</div>
+
+<hr>
+
+<h2>2. O resultado errado: o <code>print</code> de depuração</h2>
+<p>A Ana consertou o <code>totl</code>, mas fez outra mudança sem perceber, e agora o programa roda sem erro... com a resposta errada:</p>
+
+<pre class="file" data-file="media2.lua">local notas = { 7, 8.5, 10, 6 }
+
+local function media(lista)
+  local total = 0
+  for i = 1, #lista - 1 do
+    total = total + lista[i]
+  end
+  return total / #lista
+end
+
+print("Média da turma: " .. media(notas))
+</pre>
+
+<pre class="term">$ lua media2.lua
+Média da turma: 6.375</pre>
+
+<p>As notas são 7, 8,5, 10 e 6. A média não pode ser 6,375: é menor que quase todas as notas! Sem mensagem de erro, a pista agora é <strong>você</strong> que produz: um <code>print</code> em cada ponto onde quer ver os valores. Escreva uma marca (como <code>[depurar]</code>) para lembrar de tirar depois:</p>
+
+<pre class="file" data-file="media3.lua">local notas = { 7, 8.5, 10, 6 }
+
+local function media(lista)
+  local total = 0
+  for i = 1, #lista - 1 do
+    total = total + lista[i]
+    print("[depurar] i =", i, "nota =", lista[i], "total =", total)
+  end
+  print("[depurar] dividindo", total, "por", #lista)
+  return total / #lista
+end
+
+print("Média da turma: " .. media(notas))
+</pre>
+
+<pre class="term">$ lua media3.lua
+[depurar] i =	1	nota =	7	total =	7
+[depurar] i =	2	nota =	8.5	total =	15.5
+[depurar] i =	3	nota =	10	total =	25.5
+[depurar] dividindo	25.5	por	4
+Média da turma: 6.375</pre>
+
+<p>Pronto, o mistério se resolve sozinho: o laço só deu <strong>3</strong> voltas, e a nota 6 (a quarta) nunca entrou no total. Mas a divisão foi por 4. O culpado é o <code>#lista - 1</code> do <code>for</code>. Sem o <code>print</code>, você ficaria lendo o código e "vendo" o que queria ver; com o <code>print</code>, o programa <strong>conta</strong> o que fez.</p>
+
+<div class="trylua" data-goal="out:Média da turma: 7.875;;semerro">
+<p class="try-task"><strong>Missão:</strong> rode o programa com os <code>print</code> de depuração, ache o defeito pelo que eles mostram e conserte. Depois de consertar, apague as linhas <code>[depurar]</code>. A média certa das notas 7, 8,5, 10 e 6 é 7,875.</p>
+<pre class="script" data-file="main.lua">local notas = { 7, 8.5, 10, 6 }
+
+local function media(lista)
+  local total = 0
+  for i = 1, #lista - 1 do
+    total = total + lista[i]
+    print("[depurar] i =", i, "nota =", lista[i], "total =", total)
+  end
+  print("[depurar] dividindo", total, "por", #lista)
+  return total / #lista
+end
+
+print("Média da turma: " .. media(notas))
+</pre>
+<pre class="solucao" data-file="main.lua">local notas = { 7, 8.5, 10, 6 }
+
+local function media(lista)
+  local total = 0
+  for i = 1, #lista do
+    total = total + lista[i]
+  end
+  return total / #lista
+end
+
+print("Média da turma: " .. media(notas))
+</pre>
+</div>
+
+<h3>O que pôr no <code>print</code></h3>
+<ul>
+  <li><strong>O nome junto com o valor</strong> (<code>"total =", total</code>): com cinco números soltos na tela, você não sabe qual é qual.</li>
+  <li><strong>Dentro dos laços</strong>, para ver cada volta, e <strong>logo antes</strong> da linha suspeita.</li>
+  <li><strong>Na entrada de uma função</strong>, os parâmetros que ela recebeu: metade dos defeitos é "a função recebeu outra coisa".</li>
+</ul>
+
+<hr>
+
+<h2>3. O que a variável tem <em>de verdade</em>: <code>type</code> e <code>%q</code></h2>
+<p>Às vezes o <code>print</code> mostra um valor que <strong>parece</strong> certo. A Ana lê as notas de um arquivo, no formato <code>nome;nota</code>:</p>
+
+<pre class="file" data-file="texto.lua">local linha = "Bia;8,5"
+local nome, nota = linha:match("([^;]+);(.*)")
+if tonumber(nota) &gt;= 7 then
+  print(nome .. " passou")
+end
+</pre>
+
+<pre class="term">$ lua texto.lua
+lua: texto.lua:3: attempt to compare number with nil
+stack traceback:
+	texto.lua:3: in main chunk
+	[C]: in ?</pre>
+
+<p>"Tentativa de comparar número com <code>nil</code>". O único número da linha 3 é o 7, então o <code>nil</code> é o <code>tonumber(nota)</code> (o Lua cita os dois tipos na ordem em que comparou por dentro: ele faz o <code>a &gt;= 7</code> como <code>7 &lt;= a</code>, por isso o número vem primeiro). Por que o <code>tonumber</code> devolveu <code>nil</code>? Um <code>print</code> com <strong><code>type</code></strong> e com o formato <strong><code>%q</code></strong> (que mostra o texto entre aspas, exatamente como ele é; veja <a href="string-format.html">string.format</a>):</p>
+
+<pre class="file" data-file="texto2.lua">local linha = "Bia;8,5"
+local nome, nota = linha:match("([^;]+);(.*)")
+print("[depurar] nota =", nota, type(nota), tonumber(nota))
+print(string.format("[depurar] %q", nota))
+</pre>
+
+<pre class="term">$ lua texto2.lua
+[depurar] nota =	8,5	string	nil
+[depurar] "8,5"</pre>
+
+<p>A nota é o <strong>texto</strong> <code>"8,5"</code>, com <strong>vírgula</strong>. O Lua só entende número com <strong>ponto</strong> (<code>8.5</code>), então o <code>tonumber</code> desiste e devolve <code>nil</code> (veja <a href="conversao.html">Conversão</a>). O <code>%q</code> também revela espaços escondidos e quebras de linha no fim do texto, que um <code>print</code> normal esconde.</p>
+
+<div class="tip">
+<strong>Três perguntas para uma variável suspeita</strong>
+<p>1) <strong>Qual o tipo?</strong> <code>print(type(x))</code> · 2) <strong>Qual o valor exato?</strong> <code>print(string.format("%q", x))</code> para textos · 3) <strong>Ela existe?</strong> Se o <code>type</code> diz <code>nil</code>, procure onde ela deveria ter recebido valor (nome digitado errado? função sem <code>return</code>?).</p>
+</div>
+
+<hr>
+
+<h2>4. Fazer o defeito aparecer cedo: <code>assert</code></h2>
+<p>Um defeito é mais fácil de achar quando o programa para <strong>perto da causa</strong>. Olhe esta média de uma lista vazia:</p>
+
+<pre class="file" data-file="semassert.lua">local function media(lista)
+  local total = 0
+  for _, n in ipairs(lista) do total = total + n end
+  return total / #lista
+end
+
+print(media({ 7, 9 }))
+print(media({}))
+</pre>
+
+<pre class="term">$ lua semassert.lua
+8.0
+-nan</pre>
+
+<p>Nenhum erro: a lista vazia deu <code>0 / 0</code>, que é <code>nan</code> ("não é um número"; o sinal de menos na frente é coisa do sistema). Esse <code>-nan</code> pode viajar pelo programa inteiro e só aparecer muito depois, num boletim, sem pista nenhuma de onde veio. Com <a href="assert.html">assert</a>, a função <strong>confere</strong> o que recebeu e para na hora, com uma mensagem sua:</p>
+
+<pre class="file" data-file="comassert.lua">local function media(lista)
+  assert(type(lista) == "table", "media: esperava uma lista de notas")
+  assert(#lista &gt; 0, "media: a lista de notas está vazia")
+  local total = 0
+  for _, n in ipairs(lista) do total = total + n end
+  return total / #lista
+end
+
+print(media({ 7, 9 }))
+print(media({}))
+</pre>
+
+<pre class="term">$ lua comassert.lua
+8.0
+lua: comassert.lua:3: media: a lista de notas está vazia
+stack traceback:
+	[C]: in global 'assert'
+	comassert.lua:3: in local 'media'
+	comassert.lua:10: in main chunk
+	[C]: in ?</pre>
+
+<p>Agora a mensagem diz, em português, <strong>o que</strong> estava errado, e o rastro diz <strong>quem</strong> mandou a lista vazia (a linha 10). Diferente do <code>print</code> de depuração, os <code>assert</code> podem ficar no programa: eles são a "trava de segurança" de cada função.</p>
+
+<hr>
+
+<h2>5. Quem chamou com o valor errado? <code>debug.traceback</code></h2>
+<p>A função <code>baixar</code> do estoque é chamada de vários lugares. Alguém está mandando uma quantidade negativa. Quem? Um <code>debug.traceback</code> (aula <a href="debug.html">A Biblioteca debug</a>) no ponto suspeito mostra o caminho inteiro, sem parar o programa:</p>
+
+<pre class="file" data-file="quem_chama.lua">local estoque = { pao = 30 }
+
+local function baixar(produto, quantidade)
+  if quantidade &lt; 0 then
+    print(debug.traceback("quantidade negativa: " .. quantidade))
+  end
+  estoque[produto] = estoque[produto] - quantidade
+end
+
+local function devolucao(produto, quantidade)
+  baixar(produto, -quantidade)
+end
+
+baixar("pao", 5)
+devolucao("pao", 2)
+print("Pão:", estoque.pao)
+</pre>
+
+<pre class="term">$ lua quem_chama.lua
+quantidade negativa: -2
+stack traceback:
+	quem_chama.lua:5: in upvalue 'baixar'
+	quem_chama.lua:11: in local 'devolucao'
+	quem_chama.lua:15: in main chunk
+	[C]: in ?
+Pão:	27</pre>
+
+<p>O rastro aponta a linha 11, dentro de <code>devolucao</code>: ela chama <code>baixar</code> com o sinal trocado. (Neste caso, de propósito: devolver 2 pães é "baixar −2". Mas agora a Ana sabe de onde vem o número, e pode decidir se está certo.)</p>
+
+<hr>
+
+<h2>6. Conferir a sintaxe sem rodar: <code>luac -p</code></h2>
+<p>O <code>luac</code> (o compilador do Lua, que vem junto com ele) tem a opção <code>-p</code> ("<em>parse only</em>", só analisar): ele lê o arquivo, procura erros de sintaxe e <strong>não roda nada</strong>. É útil num programa que apaga arquivos ou que demora para chegar à parte nova:</p>
+
+<pre class="file" data-file="sintaxe.lua">local notas = { 7, 8.5, 10, 6 }
+for i = 1, #notas do
+  if notas[i] &gt;= 7 then
+    print(i, "aprovada")
+  else
+    print(i, "reprovada")
+end
+</pre>
+
+<pre class="term">$ luac -p sintaxe.lua
+luac: sintaxe.lua:8: 'end' expected (to close 'for' at line 2) near &lt;eof&gt;
+$ luac -p media2.lua
+$ echo $?
+0</pre>
+
+<p>O arquivo tem 7 linhas, e o erro diz linha 8, perto de <code>&lt;eof&gt;</code> (<em>end of file</em>, "fim do arquivo"): o Lua chegou ao fim procurando um <code>end</code>. O <code>end</code> da linha 7 fechou o <code>if</code>, e o <code>for</code> da linha 2 ficou aberto. Com erro de sintaxe, a linha da mensagem quase sempre é <strong>depois</strong> do defeito: o Lua só percebe que faltou alguma coisa quando já passou do lugar. Quando o arquivo está certo, o <code>luac -p</code> não diz nada (e o código de saída é 0). A indentação certinha (aula <a href="estilo.html">Estilo de Código</a>) faz esse tipo de erro saltar aos olhos.</p>
+
+<hr>
+
+<h2>7. Olhar por dentro depois de rodar: <code>lua -i</code></h2>
+<p><code>lua -i arquivo.lua</code> roda o arquivo e, em vez de sair, abre o <a href="repl.html">modo interativo</a>. Dá para perguntar o valor das variáveis <strong>globais</strong> do jeito que o programa as deixou:</p>
+
+<pre class="file" data-file="turma.lua">alunos = { "Ana", "Bia", "Caio" }
+local notas = { 8, 6, 9 }
+total = 0
+for i = 1, #notas do total = total + notas[i] end
+</pre>
+
+<pre class="term">$ lua -i turma.lua
+Lua 5.5.0  Copyright (C) 1994-2025 Lua.org, PUC-Rio
+&gt; alunos[2]
+Bia
+&gt; total
+23
+&gt; notas
+nil
+&gt; #alunos
+3
+&gt; os.exit()</pre>
+
+<p>As globais <code>alunos</code> e <code>total</code> estão lá. A <code>notas</code>, que é <code>local</code>, não: ela só existia dentro do arquivo. Por isso essa técnica serve para experimentos rápidos; num programa com <code>local</code> em tudo (como deve ser), o <code>print</code> e o <code>assert</code> continuam sendo as ferramentas principais.</p>
+
+<hr>
+
+<h2>8. Diminuir o problema</h2>
+<p>Quando o programa é grande e você não faz ideia de onde está o defeito, <strong>corte</strong>:</p>
+<ol class="passo">
+  <li><strong>Copie</strong> o programa para um arquivo de teste (nunca corte o original).</li>
+  <li><strong>Apague ou comente</strong> metade (veja <a href="comentarios.html">Comentários</a>: <code>--[[ … ]]</code> desliga um trecho inteiro).</li>
+  <li>Rode. O defeito continua? Ele está na metade que sobrou. Sumiu? Está na metade que você tirou.</li>
+  <li>Repita com a metade culpada até sobrarem poucas linhas.</li>
+  <li>Troque as entradas complicadas por valores fixos e pequenos (<code>local notas = { 7, 9 }</code> em vez de ler um arquivo de 500 linhas).</li>
+</ol>
+<p>Um programa de 5 linhas que mostra o defeito quase sempre deixa a causa óbvia. E, se não deixar, é exatamente o que você deve mostrar a alguém quando for pedir ajuda.</p>
+
+<div class="note">
+<strong>Explicar em voz alta</strong>
+<p>Uma técnica antiga e que funciona: explique o programa, linha por linha, em voz alta, para alguém (ou para um patinho de borracha na mesa, o "método do patinho"). No meio da explicação, você mesmo percebe "...e aqui ele soma até <code>#lista - 1</code>... opa". Explicar obriga a ler o que está escrito, e não o que você acha que escreveu.</p>
+</div>
+
+<hr>
+
+<h2 id="formas">Formas diferentes de fazer a mesma coisa</h2>
+<p>O <code>print</code> de depuração tem um problema: ele se mistura com a saída de verdade, e é fácil esquecer um no programa. Uma forma mais organizada é uma função <code>log</code> com um interruptor, que escreve no <strong>canal de erros</strong> (<code>io.stderr</code>) em vez da saída normal:</p>
+
+<pre class="file" data-file="log.lua">local DEPURAR = true
+
+local function log(...)
+  if DEPURAR then
+    io.stderr:write("[depurar] ", table.concat({ ... }, " "), "\n")
+  end
+end
+
+local estoque = { pao = 30, leite = 12 }
+local function vender(produto, quantidade)
+  log("vender", produto, quantidade)
+  estoque[produto] = estoque[produto] - quantidade
+  log("sobrou", estoque[produto])
+end
+
+vender("pao", 6)
+vender("leite", 2)
+print("Pão:", estoque.pao, "Leite:", estoque.leite)
+</pre>
+
+<pre class="term">$ lua log.lua
+[depurar] vender pao 6
+[depurar] sobrou 24
+[depurar] vender leite 2
+[depurar] sobrou 10
+Pão:	24	Leite:	10
+$ lua log.lua 2&gt;/dev/null
+Pão:	24	Leite:	10</pre>
+
+<p>No terminal aparece tudo. Com <code>2&gt;/dev/null</code> (o terminal joga fora o canal de erros), sobra só a saída de verdade. E para desligar todos os <code>log</code> de uma vez, basta <code>local DEPURAR = false</code>.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Situação</th><th>Ferramenta</th></tr>
+<tr><td>Deu erro com mensagem</td><td><strong>Ler a mensagem</strong>: arquivo, linha, o quê, quem, o rastro</td></tr>
+<tr><td>Resultado errado, sem erro</td><td><code>print</code> dos valores no caminho (com o nome junto)</td></tr>
+<tr><td>Um valor parece certo mas não funciona</td><td><code>type(x)</code> e <code>string.format("%q", x)</code></td></tr>
+<tr><td>Uma função recebe coisa errada de algum lugar</td><td><code>assert</code> na entrada da função; <code>debug.traceback</code> para ver quem chamou</td></tr>
+<tr><td>Erro de sintaxe, ou conferir antes de rodar</td><td><code>luac -p arquivo.lua</code></td></tr>
+<tr><td>Ver as globais depois que o programa rodou</td><td><code>lua -i arquivo.lua</code></td></tr>
+<tr><td>Programa grande, sem ideia de onde está</td><td>Copiar e cortar pela metade, até sobrar pouco</td></tr>
+<tr><td>Mensagens de depuração que ficam no programa</td><td>Uma função <code>log</code> com interruptor, no <code>io.stderr</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2 id="errado">Quando dá errado (os defeitos mais comuns)</h2>
+
+<div class="cenario">
+<strong>Função sem <code>return</code></strong>
+<pre class="file" data-file="semreturn.lua">local function media(lista)
+  local total = 0
+  for _, n in ipairs(lista) do total = total + n end
+  local resultado = total / #lista
+end
+
+local m = media({ 7, 9 })
+print("Média: " .. m)
+</pre>
+<pre class="term">$ lua semreturn.lua
+lua: semreturn.lua:8: attempt to concatenate a nil value (local 'm')
+stack traceback:
+	semreturn.lua:8: in main chunk
+	[C]: in ?</pre>
+<p>"Tentativa de juntar (<code>..</code>) um valor <code>nil</code> (a local <code>m</code>)". O erro aparece na linha 8, mas o defeito está na função: ela calcula o <code>resultado</code> e não devolve. Função sem <code>return</code> devolve nada, e a variável que recebe fica <code>nil</code> (veja <a href="return.html">return</a>). <strong>Como consertar:</strong> <code>return total / #lista</code>. É o exemplo perfeito da dica da seção 1: a linha da mensagem é onde o problema foi <strong>percebido</strong>.</p>
+</div>
+
+<div class="cenario">
+<strong>Número com vírgula vindo de um texto</strong>
+<p>O caso da seção 3: <code>tonumber("8,5")</code> dá <code>nil</code>, e o erro aparece só na conta ou na comparação seguinte (<code>attempt to compare number with nil</code>, <code>attempt to perform arithmetic on a nil value</code>). <strong>Como consertar:</strong> troque a vírgula por ponto antes de converter, com parênteses em volta do <code>gsub</code>: <code>tonumber((nota:gsub(",", ".")))</code>. Sem os parênteses extras, o <code>gsub</code> manda <strong>dois</strong> valores para o <code>tonumber</code> (o texto e o número de trocas), e o segundo vira a "base" do número:</p>
+<pre class="term">$ lua compras_gsub.lua
+lua: compras_gsub.lua:1: bad argument #2 to 'tonumber' (base out of range)
+stack traceback:
+	[C]: in global 'tonumber'
+	compras_gsub.lua:1: in main chunk
+	[C]: in ?</pre>
+<p>(O <code>compras_gsub.lua</code> tem uma linha só: <code>print(tonumber(("4,50"):gsub(",", ".")))</code>.)</p>
+</div>
+
+<div class="cenario">
+<strong>Consertar sem entender</strong>
+<p>Não é uma mensagem do Lua, mas é o erro mais caro: mudar coisas ao acaso até "funcionar". O programa até pode passar a mostrar o número certo para aquelas notas, e falhar com outras. Antes de mudar uma linha, você deve conseguir dizer <strong>por que</strong> ela está errada (como "o laço para uma volta antes"). Se não consegue, volte para os <code>print</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Esqueceu os <code>print</code> de depuração no programa</strong>
+<p>O programa funciona, mas continua mostrando <code>[depurar] i = 1 …</code> para quem usa. Por isso a marca <code>[depurar]</code>: procure por ela antes de dar o programa por pronto (ou use a função <code>log</code> com interruptor).</p>
+</div>
+
+<hr>
+
+<h2>Roteiro de depuração</h2>
+<ol class="passo">
+  <li><strong>Reproduza</strong>: rode de novo e confirme que o defeito acontece sempre, com as mesmas entradas.</li>
+  <li><strong>Leia a mensagem inteira</strong> (se houver): arquivo, linha, o quê, quem, o rastro.</li>
+  <li><strong>Vá até a linha</strong> e pergunte de onde vem cada valor que ela usa.</li>
+  <li><strong>Levante uma suspeita</strong> e <strong>teste</strong> com um <code>print</code> (com o nome, o <code>type</code>, o <code>%q</code>).</li>
+  <li><strong>Diminua</strong> o programa se a suspeita não aparecer.</li>
+  <li><strong>Conserte uma coisa só</strong>, sabendo por que ela estava errada, e rode de novo.</li>
+  <li><strong>Limpe</strong> os <code>print</code> de depuração, e pense se um <code>assert</code> teria pegado o defeito antes. Se sim, deixe o <code>assert</code>.</li>
+</ol>
+
+<hr>
+
+<h2>Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Ferramenta</th><th>Para quê</th></tr>
+<tr><td><code>print("x =", x)</code></td><td>Ver um valor num ponto do programa</td></tr>
+<tr><td><code>print(type(x))</code></td><td>Ver o tipo (<code>nil</code>? <code>string</code> no lugar de <code>number</code>?)</td></tr>
+<tr><td><code>string.format("%q", x)</code></td><td>Ver o texto exato, com aspas, espaços e quebras</td></tr>
+<tr><td><code>assert(condição, "mensagem")</code></td><td>Parar cedo, com uma mensagem sua, quando algo não é o esperado</td></tr>
+<tr><td><code>print(debug.traceback("msg"))</code></td><td>Ver o caminho de chamadas até aqui</td></tr>
+<tr><td><code>io.stderr:write(…)</code></td><td>Mensagens de depuração fora da saída normal</td></tr>
+<tr><td><code>luac -p arquivo.lua</code></td><td>Conferir a sintaxe sem rodar</td></tr>
+<tr><td><code>lua -i arquivo.lua</code></td><td>Rodar e ficar no modo interativo, com as globais do programa</td></tr>
+<tr><td><code>--[[ … ]]</code></td><td>Desligar um trecho para diminuir o problema</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. Onde olhar primeiro</h3>
+<p>A mensagem é <code>lua: loja.lua:23: attempt to index a nil value (local 'cliente')</code>. Em que linha você vai olhar primeiro?</p>
+<div class="ex-code">Linha <input data-answer="23" aria-label="linha"></div>
+</div>
+
+<div class="exercise">
+<h3>2. O tipo</h3>
+<p>Complete para mostrar o tipo da variável <code>preco</code>:</p>
+<div class="ex-code">print(<input data-answer="type" aria-label="função">(preco))</div>
+</div>
+
+<div class="exercise">
+<h3>3. Só a sintaxe</h3>
+<p>Complete o comando que confere a sintaxe de <code>jogo.lua</code> sem rodá-lo:</p>
+<div class="ex-code">$ luac <input data-answer="-p" aria-label="opção"> jogo.lua</div>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">4. O programa termina sem erro, mas a resposta está errada. Qual é o melhor primeiro passo?</p>
+<label><input type="radio" name="q4"> Reescrever o programa do zero</label>
+<label><input type="radio" name="q4"> Pôr <code>print</code> dos valores no caminho e ver onde eles deixam de fazer sentido</label>
+<label><input type="radio" name="q4"> Mudar linhas ao acaso até dar certo</label>
+<label><input type="radio" name="q4"> Esperar uma mensagem de erro aparecer</label>
+</div>
+
+<div class="mc" data-answer="3">
+<p class="mc-q">5. <code>print(nota)</code> mostra <code>8,5</code>, mas <code>tonumber(nota)</code> dá <code>nil</code>. Por quê?</p>
+<label><input type="radio" name="q5"> Porque o <code>print</code> está com defeito</label>
+<label><input type="radio" name="q5"> Porque <code>nota</code> é uma tabela</label>
+<label><input type="radio" name="q5"> Porque é o texto <code>"8,5"</code>, com vírgula, e o Lua só entende número com ponto</label>
+<label><input type="radio" name="q5"> Porque o <code>tonumber</code> não existe no Lua 5.5</label>
+</div>
+
+<div class="mc" data-answer="1">
+<p class="mc-q">6. A mensagem aponta a linha 8, mas a linha 8 está certa. O que fazer?</p>
+<label><input type="radio" name="q6"> Perguntar de onde vêm os valores da linha 8 e subir pelo código (ou pelo rastro)</label>
+<label><input type="radio" name="q6"> Apagar a linha 8</label>
+<label><input type="radio" name="q6"> Ignorar: o Lua erra a linha às vezes</label>
+<label><input type="radio" name="q6"> Trocar <code>local</code> por global</label>
+</div>
+
+<h3>Missão final: dois defeitos na lista de compras</h3>
+
+<div class="trylua" data-goal="out:Total da compra: R$ 23.40;;semerro">
+<p class="try-task"><strong>Missão:</strong> este programa soma a lista de compras da Ana, mas tem <strong>dois</strong> defeitos. Rode, leia a mensagem, conserte um, rode de novo e conserte o outro. (Dicas: o primeiro tem a ver com a vírgula dos preços, e a seção "Quando dá errado" mostra o jeito certo; o segundo, a mensagem conta direitinho.) O total certo é R$ 23.40.</p>
+<pre class="script" data-file="main.lua">local compras = { "pão;4,50", "leite;6,90", "café;12,00" }
+local total = 0
+for _, linha in ipairs(compras) do
+  local item, preco = linha:match("([^;]+);(.*)")
+  total = total + tonumber(preco)
+end
+print(string.format("Total da compra: R$ %.2f", totl))
+</pre>
+<pre class="solucao" data-file="main.lua">local compras = { "pão;4,50", "leite;6,90", "café;12,00" }
+local total = 0
+for _, linha in ipairs(compras) do
+  local item, preco = linha:match("([^;]+);(.*)")
+  total = total + tonumber((preco:gsub(",", ".")))
+end
+print(string.format("Total da compra: R$ %.2f", total))
+</pre>
+</div>
+
+<p>No lab, as três rodadas da Ana foram assim (o programa se chamava <code>compras.lua</code>):</p>
+<pre class="term">$ lua compras.lua
+lua: compras.lua:5: attempt to perform arithmetic on a nil value
+stack traceback:
+	compras.lua:5: in main chunk
+	[C]: in ?
+$ lua compras.lua                « depois de consertar a vírgula
+lua: compras.lua:7: bad argument #2 to 'format' (number expected, got nil)
+stack traceback:
+	[C]: in field 'format'
+	compras.lua:7: in main chunk
+	[C]: in ?
+$ lua compras.lua                « depois de consertar o totl
+Total da compra: R$ 23.40</pre>
+<p>Repare que o primeiro erro não diz o nome da variável (o <code>nil</code> veio do <code>tonumber</code>, que não é uma variável), e o segundo diz "argumento nº 2 do <code>format</code>": o valor depois do texto de formato, o <code>totl</code>, que não existe.</p>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li>Depurar é trabalho de detetive: pistas, suspeita, teste, <strong>uma mudança de cada vez</strong>.</li>
+  <li>A mensagem de erro diz <strong>onde</strong> (arquivo e linha), <strong>o quê</strong>, <strong>quem</strong> (a variável) e o <strong>caminho</strong> (o rastro). Leia inteira antes de mexer no código.</li>
+  <li>Sem mensagem, faça o programa contar o que faz: <code>print</code> com o nome, <code>type</code> e <code>%q</code>.</li>
+  <li><code>assert</code> faz o defeito aparecer cedo, perto da causa, e pode ficar no programa.</li>
+  <li><code>debug.traceback</code> mostra quem chamou; <code>luac -p</code> confere a sintaxe; <code>lua -i</code> mostra as globais depois de rodar.</li>
+  <li>Sem pista nenhuma? Copie o programa e corte pela metade até o defeito ficar óbvio.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
