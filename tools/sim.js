@@ -6,8 +6,9 @@
 //   timeout 60 node tools/sim.js -e 'print("oi")' [opções]
 //   timeout 60 node tools/sim.js - [contas.lua…] [opções] < programa.lua   (o programa vem da entrada; vira main.lua)
 //
-// O 1º arquivo é o que roda (lua main.lua); os outros vão para a mesma pasta
-// (/home/ana), com o mesmo nome (sem as pastas do caminho).
+// O 1º arquivo é o que roda (lua main.lua); os outros vão para a mesma pasta (/home/ana),
+// mantendo a subpasta relativa à do 1º: "sim.js a07/main.lua a07/lib/contas.lua" cria
+// lib/contas.lua (como data-file="lib/contas.lua"). Fora da pasta do 1º: só o nome.
 //   --stdin TEXTO     o data-stdin da caixa ("Ana\n30": \n = Enter). O que o io.read() lê.
 //   --digitar TEXTO   o leitor DIGITANDO no terminal da caixa (sem data-stdin): uma linha por \n
 //   --repeticao       com --digitar: força o modo "por repetição" (navegadores sem JSPI)
@@ -53,11 +54,21 @@ if (codigo === null && !arqs.length && !repl) uso(2);
 if (repl && stdin !== null) { console.error("--repl usa --digitar (no modo interativo o leitor digita; --stdin seria \"lua < arquivo\")"); process.exit(2); }
 const arquivos = [];
 if (codigo !== null) arquivos.push({ nome: "main.lua", codigo: codigo.endsWith("\n") ? codigo : codigo + "\n" });
+// o 1º arquivo (o que roda) fica na pasta da Ana com o nome dele; os outros mantêm a pasta
+// relativa à do 1º (como o data-file="lib/contas.lua" da caixa: a subpasta é criada).
+// Arquivo fora da pasta do 1º (ou com "..") vai para a pasta da Ana com o nome dele.
+let base = null;
 for (const p of arqs) {
-  if (p === "-") { arquivos.push({ nome: "main.lua", codigo: fs.readFileSync(0, "utf8") }); continue; }
+  if (p === "-") { arquivos.push({ nome: "main.lua", codigo: fs.readFileSync(0, "utf8") }); if (base === null) base = process.cwd(); continue; }
   if (!fs.existsSync(p)) { console.error("não achei " + p); process.exit(2); }
   const c = fs.readFileSync(p, "utf8");
-  arquivos.push({ nome: path.basename(p), codigo: /\.lua$/i.test(p) || !arquivos.length ? c : LuaSim.comEnter(c) });
+  let nome = path.basename(p);
+  if (base === null) base = path.dirname(path.resolve(p));
+  else {
+    const rel = path.relative(base, path.resolve(p));
+    if (rel && !rel.startsWith("..") && !path.isAbsolute(rel)) nome = rel.split(path.sep).join("/");
+  }
+  arquivos.push({ nome, codigo: /\.lua$/i.test(p) || !arquivos.length ? c : LuaSim.comEnter(c) });
 }
 if (!arquivos.length) arquivos.push({ nome: "main.lua", codigo: "" });
 const soRepl = repl && !arquivos[0].codigo.trim();
