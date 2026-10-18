@@ -1,0 +1,498 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua ipairs — percorrendo uma lista item por item | Guia Lua</title>
+<meta name="description" content="O ipairs do Lua para quem nunca programou: for i, item in ipairs(lista), a posição e o item juntos, o _ quando só o item interessa, somar e procurar numa lista, listas de fichas, por que o ipairs para no primeiro nil, o que ele ignora, a variável de controle constante do Lua 5.5 e os erros reais.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">ipairs</span>: Percorrendo uma Lista</h1>
+
+<p class="intro">Na aula <a href="listas.html">Tabelas como Listas</a>, você percorreu listas com <code>for i = 1, #lista do</code> e pegou cada item com <code>lista[i]</code>. Funciona, mas o Lua tem um jeito feito sob medida para isso: o <code>ipairs</code>. Com ele, o laço entrega <strong>a posição e o item</strong> a cada volta, sem precisar escrever <code>#lista</code> nem <code>lista[i]</code>. O nome vem de <em>i</em> (de índice, a posição) + <em>pairs</em> ("pares"): ele percorre os pares <strong>posição → item</strong>.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>Como escrever <code>for i, item in ipairs(lista) do … end</code> e o que é cada parte.</li>
+  <li>O <code>_</code> quando só o item interessa.</li>
+  <li>Somar, procurar e contar numa lista com <code>ipairs</code>.</li>
+  <li>Percorrer uma lista de <strong>fichas</strong> (tabelas dentro da lista).</li>
+  <li>Por que o <code>ipairs</code> <strong>para no primeiro <code>nil</code></strong>, e o que ele ignora (a posição 0, as chaves de texto).</li>
+  <li>A variável de posição que não pode ser alterada no Lua 5.5, e como mudar os itens da lista.</li>
+  <li>Os erros reais: lista <code>nil</code>, esquecer o <code>ipairs</code>, usar uma variável só.</li>
+</ul>
+</div>
+
+<p>Todos os programas desta aula rodaram no <strong>Lua 5.5</strong> da máquina da Ana (usuária <code>ana</code>, computador <code>notebook</code>), com <code>lua arquivo.lua</code>.</p>
+
+<hr>
+
+<h2>A ideia: a chamada da professora</h2>
+<p>A professora pega a lista da turma e faz a chamada: "número 1, Ana; número 2, Bia; número 3, Caio…". Ela vai em ordem, do primeiro ao último, e a cada nome diz o número e o nome. O <code>ipairs</code> faz o mesmo com uma lista do Lua: a cada volta do laço, ele entrega o <strong>número</strong> (a posição) e o <strong>nome</strong> (o item). Com um detalhe da professora distraída: se uma linha da lista estiver <strong>em branco</strong>, ela acha que a lista acabou e para ali.</p>
+
+<hr>
+
+<h2>1. O primeiro <code>ipairs</code></h2>
+
+<pre class="file" data-file="chamada.lua">local turma = {"Ana", "Bia", "Caio", "Davi"}
+for i, nome in ipairs(turma) do
+  print(i, nome)
+end
+print("fim da chamada")
+</pre>
+
+<dl class="anatomy">
+  <dt>for</dt><dd>O mesmo <code>for</code> dos laços, mas na forma <strong>genérica</strong>: em vez de <code>= início, fim</code>, ele usa <code>in</code> ("em") e uma função que vai entregando os valores.</dd>
+  <dt>i, nome</dt><dd>As <strong>duas</strong> variáveis do laço, criadas pelo próprio <code>for</code> (elas são <code>local</code> do laço e somem depois do <code>end</code>). A primeira recebe a <strong>posição</strong>; a segunda, o <strong>item</strong> daquela posição. Os nomes são você que escolhe: <code>i, nome</code>, <code>pos, aluno</code>, <code>n, preco</code>.</dd>
+  <dt>in ipairs(turma)</dt><dd>"Em <code>ipairs(turma)</code>": percorra a lista <code>turma</code>, da posição 1 em diante.</dd>
+  <dt>do … end</dt><dd>O corpo do laço, que roda uma vez para cada item.</dd>
+</dl>
+
+<pre class="term">$ lua chamada.lua
+1	Ana
+2	Bia
+3	Caio
+4	Davi
+fim da chamada</pre>
+
+<p>O resultado é o mesmo de <code>for i = 1, #turma do print(i, turma[i]) end</code>. A diferença é que, com o <code>ipairs</code>, o item já chega pronto numa variável com um nome que diz o que ele é (<code>nome</code>), e o código fica mais fácil de ler.</p>
+
+<h3>Passo a passo</h3>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Volta</th><th>O <code>ipairs</code> olha</th><th><code>i</code></th><th><code>nome</code></th></tr>
+<tr><td>1ª</td><td><code>turma[1]</code> = <code>"Ana"</code></td><td>1</td><td><code>"Ana"</code></td></tr>
+<tr><td>2ª</td><td><code>turma[2]</code> = <code>"Bia"</code></td><td>2</td><td><code>"Bia"</code></td></tr>
+<tr><td>3ª</td><td><code>turma[3]</code> = <code>"Caio"</code></td><td>3</td><td><code>"Caio"</code></td></tr>
+<tr><td>4ª</td><td><code>turma[4]</code> = <code>"Davi"</code></td><td>4</td><td><code>"Davi"</code></td></tr>
+<tr><td>(fim)</td><td><code>turma[5]</code> = <code>nil</code></td><td colspan="2">Achou <code>nil</code>: o laço termina</td></tr>
+</table>
+</div>
+
+<h3>Lista vazia: zero voltas</h3>
+
+<pre class="file" data-file="vazia_ip.lua">for i, v in ipairs({}) do
+  print("nunca aparece")
+end
+print("lista vazia: zero voltas")
+</pre>
+
+<pre class="term">$ lua vazia_ip.lua
+lista vazia: zero voltas</pre>
+
+<p>Logo de cara, a posição 1 é <code>nil</code>: o corpo não roda nenhuma vez, e isso não é erro.</p>
+
+<hr>
+
+<h2>2. Só o item: o <code>_</code></h2>
+<p>Muitas vezes a posição não interessa, só o item. Mesmo assim, a primeira variável <strong>tem</strong> de existir (é ela que recebe a posição). O costume é chamá-la de <code>_</code> (o sublinhado), que quer dizer "não vou usar":</p>
+
+<pre class="file" data-file="so_item.lua">local compras = {"pão", "leite", "café"}
+for _, item in ipairs(compras) do
+  print("- " .. item)
+end
+</pre>
+
+<pre class="term">$ lua so_item.lua
+- pão
+- leite
+- café</pre>
+
+<p>Para o Lua, <code>_</code> é um nome de variável como outro qualquer; o significado "não vou usar" é uma combinação entre programadores. Quem lê o código entende na hora que a posição foi ignorada de propósito.</p>
+
+<hr>
+
+<h2>3. Somar, procurar e contar</h2>
+
+<h3>Somar</h3>
+<pre class="file" data-file="total.lua">local precos = {4.50, 12.90, 3.25}
+local total = 0
+for _, preco in ipairs(precos) do
+  total = total + preco
+end
+print(string.format("Total: R$ %.2f", total))
+</pre>
+
+<pre class="term">$ lua total.lua
+Total: R$ 20.65</pre>
+
+<div class="trylua" data-goal="out:Total: R$ 27.75;;src:\bipairs\s*\(">
+<p class="try-task"><strong>Missão:</strong> no lugar do comentário, percorra a lista <code>precos</code> com <code>ipairs</code> e some cada preço no <code>total</code>. O total certo é <code>R$ 27.75</code>.</p>
+<pre class="script" data-file="main.lua">local precos = {4.50, 12.90, 3.25, 7.10}
+local total = 0
+-- percorra precos com ipairs e some cada preço no total
+
+print(string.format("Total: R$ %.2f", total))
+</pre>
+<pre class="solucao" data-file="main.lua">local precos = {4.50, 12.90, 3.25, 7.10}
+local total = 0
+for _, preco in ipairs(precos) do
+  total = total + preco
+end
+print(string.format("Total: R$ %.2f", total))
+</pre>
+</div>
+
+<h3>Procurar (e parar quando achar)</h3>
+<p>Para saber <strong>em que posição</strong> está um item, compare cada item com o procurado e guarde a posição. Achou, <a href="break.html">break</a>: não precisa olhar o resto.</p>
+
+<pre class="file" data-file="procurar.lua">local compras = {"pão", "leite", "café", "manteiga"}
+local procurado = "café"
+local posicao = nil
+for i, item in ipairs(compras) do
+  if item == procurado then
+    posicao = i
+    break
+  end
+end
+if posicao then
+  print(procurado .. " está na posição " .. posicao)
+else
+  print(procurado .. " não está na lista")
+end
+</pre>
+
+<pre class="term">$ lua procurar.lua
+café está na posição 3</pre>
+
+<p>A <code>posicao</code> é criada <strong>fora</strong> do laço, porque o <code>i</code> deixa de existir no <code>end</code>. Se nada for achado, ela continua <code>nil</code>, e o <code>if posicao then</code> cai no <code>else</code> (o <code>nil</code> conta como falso; veja <a href="booleanos.html">Booleanos</a>).</p>
+
+<hr>
+
+<h2>4. Uma lista de fichas</h2>
+<p>Os itens de uma lista podem ser <a href="tabelas.html">tabelas</a>. É assim que se guarda o estoque inteiro da padaria: uma lista em que cada item é a ficha de um produto. No laço, a variável do item é a ficha, e os campos se leem com o ponto:</p>
+
+<pre class="file" data-file="fichas.lua">local produtos = {
+  {nome = "Pão", preco = 0.75, estoque = 40},
+  {nome = "Leite", preco = 5.49, estoque = 0},
+  {nome = "Café", preco = 18.90, estoque = 5},
+}
+for i, p in ipairs(produtos) do
+  local situacao = "ok"
+  if p.estoque == 0 then
+    situacao = "ACABOU"
+  end
+  print(i .. ". " .. p.nome .. ": R$ " .. string.format("%.2f", p.preco) .. " (" .. situacao .. ")")
+end
+</pre>
+
+<pre class="term">$ lua fichas.lua
+1. Pão: R$ 0.75 (ok)
+2. Leite: R$ 5.49 (ACABOU)
+3. Café: R$ 18.90 (ok)</pre>
+
+<p>Esse formato, uma lista de fichas, aparece em quase todo programa de verdade: a lista de alunos com nome e notas, a agenda com nome e telefone, as tarefas com título e "feita ou não". Mais em <a href="tabelas-aninhadas.html">Tabelas Aninhadas</a>.</p>
+
+<hr>
+
+<h2>5. O <code>ipairs</code> para no primeiro <code>nil</code></h2>
+<p>O <code>ipairs</code> não olha o <code>#</code>. Ele vai de 1 em 1 e para <strong>na primeira posição vazia</strong>. Numa lista com um buraco no meio, tudo o que vem depois do buraco fica de fora:</p>
+
+<pre class="file" data-file="buraco.lua">local t = {"pão", "leite", "café", "manteiga"}
+t[2] = nil
+print("#t =", #t)
+for i, item in ipairs(t) do
+  print("ipairs:", i, item)
+end
+for i = 1, #t do
+  print("for:", i, t[i])
+end
+</pre>
+
+<pre class="term">$ lua buraco.lua
+#t =	1
+ipairs:	1	pão
+for:	1	pão</pre>
+
+<p>O café e a manteiga continuam na tabela (<code>t[3]</code> e <code>t[4]</code>), mas o <code>ipairs</code> parou no <code>t[2]</code>, que é <code>nil</code>. E o <code>#t</code>? Numa tabela com buraco, o manual do Lua diz que ele pode dar <strong>qualquer</strong> das "bordas" da tabela; aqui deu 1, mas poderia ter dado 4. É por isso que listas com buraco são um problema, e é por isso que para tirar um item do meio se usa <code>table.remove</code>, que fecha o buraco (veja <a href="table-insert-remove.html">table.insert e table.remove</a> e <a href="sequencias.html">Sequências e Buracos</a>).</p>
+
+<h3>O que o <code>ipairs</code> ignora</h3>
+
+<pre class="file" data-file="misto.lua">local t = {[0] = "zero", "um", "dois", nome = "Ana", [5] = "cinco"}
+for i, v in ipairs(t) do
+  print(i, v)
+end
+</pre>
+
+<pre class="term">$ lua misto.lua
+1	um
+2	dois</pre>
+
+<ul>
+  <li>A posição <code>0</code>: o <code>ipairs</code> começa no 1.</li>
+  <li>A chave de texto <code>nome</code>: não é uma posição.</li>
+  <li>O <code>[5]</code>: depois do <code>2</code>, a posição <code>3</code> é <code>nil</code>, e ele parou ali.</li>
+</ul>
+<p>Para passar por <strong>todas</strong> as chaves de uma tabela, inclusive as de texto, existe o <code>pairs</code> (sem o <em>i</em>), assunto de <a href="pairs.html">Percorrendo Chaves (pairs)</a>.</p>
+
+<hr>
+
+<h2>6. Mudando os itens durante o laço</h2>
+<p>No Lua 5.5, a primeira variável do <code>for</code> (a posição) é <strong>constante</strong>: o laço não deixa você mudá-la. <span class="versao">5.5</span></p>
+
+<pre class="file" data-file="const_i.lua">local nomes = {"ana", "bia", "caio", "davi"}
+for i, nome in ipairs(nomes) do
+  print(i, nome)
+  i = i + 1
+end
+</pre>
+
+<pre class="term">$ lua const_i.lua
+lua: const_i.lua:4: attempt to assign to const variable 'i'</pre>
+
+<p>"Tentativa de atribuir a uma variável constante <code>i</code>." É um erro de compilação: o programa nem começa (nenhum nome foi mostrado). Quem tenta isso normalmente quer "pular um item"; para isso existe o <a href="goto.html">goto continue</a>. No <strong>Lua 5.4</strong>, a mesma linha é aceita, mas não muda nada: o <code>lua5.4 const_i.lua</code> do lab mostrou os quatro nomes, de 1 a 4, como se o <code>i = i + 1</code> não existisse. O 5.5 transformou esse engano silencioso num erro (veja <a href="novidades.html">Novidades do Lua 5.5</a>).</p>
+
+<p>A segunda variável (o item) pode ser mudada, mas ela é uma <strong>cópia</strong> do valor: mudar <code>nome</code> não muda a lista. Para mudar a lista, guarde na posição:</p>
+
+<pre class="file" data-file="mudar_lista.lua">local nomes = {"ana", "bia", "caio"}
+for i, nome in ipairs(nomes) do
+  nomes[i] = nome:upper()
+end
+print(nomes[1], nomes[2], nomes[3])
+</pre>
+
+<pre class="term">$ lua mudar_lista.lua
+ANA	BIA	CAIO</pre>
+
+<p>(O <code>nome:upper()</code> devolve o texto em maiúsculas; veja <a href="string-metodos.html">Funções de Texto</a>.) Trocar o item de uma posição durante o laço é seguro. <strong>Acrescentar ou tirar</strong> itens da lista enquanto o <code>ipairs</code> passa por ela, não: as posições mudam debaixo dos pés do laço. A aula <a href="table-insert-remove.html">table.insert e table.remove</a> mostra o que acontece e como fazer certo.</p>
+
+<hr>
+
+<h2 id="formas">Formas diferentes de fazer a mesma coisa</h2>
+
+<pre class="file" data-file="duas_formas.lua">local turma = {"Ana", "Bia", "Caio"}
+
+for i, nome in ipairs(turma) do
+  print(i, nome)
+end
+
+for i = 1, #turma do
+  print(i, turma[i])
+end
+</pre>
+
+<p>Numa lista sem buracos, as duas formas dão o mesmo resultado. Qual escolher:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Situação</th><th>Qual usar</th></tr>
+<tr><td>Passar por todos os itens de uma lista, do primeiro ao último</td><td><code>for i, item in ipairs(t)</code> (o mais comum)</td></tr>
+<tr><td>Só o item interessa</td><td><code>for _, item in ipairs(t)</code></td></tr>
+<tr><td>De trás para frente, de 2 em 2, ou só uma parte da lista</td><td><code>for i = #t, 1, -1</code> / <code>for i = 1, #t, 2</code> / <code>for i = 2, 4</code></td></tr>
+<tr><td>Todas as chaves, inclusive as de texto</td><td><code>for chave, valor in pairs(t)</code> (<a href="pairs.html">aula</a>)</td></tr>
+<tr><td>Juntar todos os itens num texto</td><td><code>table.concat(t, ", ")</code> (<a href="table-concat.html">aula</a>), sem laço nenhum</td></tr>
+</table>
+</div>
+
+<div class="note">
+<strong>Em outras versões</strong>
+<p>O <code>ipairs</code> existe em todas as versões (5.1, LuaJIT, 5.4, 5.5) e funciona igual nas listas sem buraco. Uma diferença aparece quando a lista é <code>nil</code> (veja o primeiro cenário de <a href="#errado">Quando dá errado</a>): no LuaJIT, a mensagem é <code>bad argument #1 to 'ipairs' (table expected, got nil)</code>, com o número da linha. Mais em <a href="versoes.html">As Diferenças entre Versões</a>.</p>
+</div>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+
+<div class="cenario">
+<strong>A lista era <code>nil</code></strong>
+<pre class="file" data-file="ipairs_nil.lua">local compras
+for i, item in ipairs(compras) do
+  print(i, item)
+end
+</pre>
+<pre class="term">$ lua ipairs_nil.lua
+lua: attempt to index a nil value
+stack traceback:
+	[C]: in for iterator 'for iterator'
+	ipairs_nil.lua:2: in main chunk
+	[C]: in ?</pre>
+<p>Esta mensagem é diferente das outras: a primeira linha <strong>não tem</strong> o nome do arquivo nem o número da linha. O motivo é que o erro aconteceu <strong>dentro</strong> do <code>ipairs</code>, que é escrito em C (por isso o <code>[C]</code>), quando ele tentou abrir a posição 1 de algo que é <code>nil</code>. A linha do seu programa aparece só no rastro:</p>
+<dl class="anatomy">
+  <dt>attempt to index a nil value</dt><dd>"Tentativa de indexar um valor nil": abrir uma gaveta de algo que não é tabela.</dd>
+  <dt>[C]: in for iterator 'for iterator'</dt><dd>Onde o erro aconteceu: no "iterador do for", a função em C que o <code>ipairs</code> entrega ao laço.</dd>
+  <dt>ipairs_nil.lua:2: in main chunk</dt><dd>Quem chamou: a <strong>linha 2</strong> do seu programa, o <code>for</code>. É ali que você vai olhar.</dd>
+</dl>
+<p><strong>Como consertar:</strong> a variável da lista não recebeu uma tabela. Confira o nome (um erro de digitação cria uma variável <code>nil</code>) e se ela foi preenchida antes do laço: <code>local compras = {}</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Esqueceu o <code>ipairs</code></strong>
+<pre class="file" data-file="sem_ipairs.lua">local compras = {"pão", "leite"}
+for i, item in compras do
+  print(i, item)
+end
+</pre>
+<pre class="term">$ lua sem_ipairs.lua
+lua: sem_ipairs.lua:2: attempt to call a table value (for iterator 'for iterator')
+stack traceback:
+	sem_ipairs.lua:2: in main chunk
+	[C]: in ?</pre>
+<p>"Tentativa de chamar um valor do tipo tabela." O <code>for … in</code> espera uma <strong>função</strong> que vá entregando os valores (é isso que o <code>ipairs(compras)</code> devolve), e tentou "chamar" a própria tabela. <strong>Como consertar:</strong> <code>for i, item in ipairs(compras) do</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Uma variável só: veio a posição, não o item</strong>
+<pre class="file" data-file="uma_var.lua">local compras = {"pão", "leite", "café"}
+for item in ipairs(compras) do
+  print(item)
+end
+</pre>
+<pre class="term">$ lua uma_var.lua
+1
+2
+3</pre>
+<p>Sem erro, mas apareceram números em vez dos itens. A <strong>primeira</strong> variável do laço sempre recebe a posição, não importa o nome que você deu a ela. <strong>Como consertar:</strong> <code>for _, item in ipairs(compras) do</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Escreveu <code>=</code> no lugar de <code>in</code></strong>
+<pre class="file" data-file="igual.lua">local compras = {"pão", "leite"}
+for i, item = ipairs(compras) do
+  print(i, item)
+end
+</pre>
+<pre class="term">$ lua igual.lua
+lua: igual.lua:2: 'in' expected near '='</pre>
+<p>"Era esperado <code>in</code> perto do <code>=</code>." O <code>=</code> é do <code>for</code> numérico (<code>for i = 1, 10</code>); com <code>ipairs</code>, a palavra é <code>in</code>. Como há duas variáveis (<code>i, item</code>), o Lua sabe que é o <code>for</code> genérico e exige o <code>in</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Mudou a posição dentro do laço</strong>
+<pre class="term">$ lua const_i.lua
+lua: const_i.lua:4: attempt to assign to const variable 'i'</pre>
+<p>Visto na seção 6: no Lua 5.5, a variável de posição do <code>for</code> é constante. <strong>Como consertar:</strong> não mude o <code>i</code>; para pular um item, use <a href="goto.html">goto continue</a>; para mudar o item, use <code>lista[i] = …</code>.</p>
+</div>
+
+<hr>
+
+<h2>Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>O que faz</th></tr>
+<tr><td><code>for i, v in ipairs(t) do … end</code></td><td>Percorre <code>t[1]</code>, <code>t[2]</code>… até o primeiro <code>nil</code>; <code>i</code> é a posição, <code>v</code> o item</td></tr>
+<tr><td><code>for _, v in ipairs(t) do … end</code></td><td>O mesmo, ignorando a posição</td></tr>
+<tr><td><code>t[i] = novo</code> dentro do laço</td><td>Troca o item da lista (seguro)</td></tr>
+<tr><td><code>break</code></td><td>Para o laço (ex.: achou o que procurava)</td></tr>
+<tr><td><code>goto continue</code> … <code>::continue::</code></td><td>Pula para o próximo item</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Sintoma</th><th>Causa provável</th></tr>
+<tr><td><code>lua: attempt to index a nil value</code> com <code>[C]: in for iterator</code></td><td>A lista passada ao <code>ipairs</code> é <code>nil</code></td></tr>
+<tr><td><code>attempt to call a table value (for iterator …)</code></td><td>Faltou o <code>ipairs( )</code> em volta da lista</td></tr>
+<tr><td>Saíram 1, 2, 3 em vez dos itens</td><td>Usou uma variável só no <code>for</code></td></tr>
+<tr><td><code>'in' expected near '='</code></td><td>Escreveu <code>=</code> no lugar de <code>in</code></td></tr>
+<tr><td><code>attempt to assign to const variable 'i'</code></td><td>Mudou a variável de posição (Lua 5.5)</td></tr>
+<tr><td>O laço parou antes do fim</td><td>A lista tem um buraco (<code>nil</code> no meio)</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. Complete o laço</h3>
+<p>Complete para mostrar cada item da lista <code>frutas</code>, sem a posição:</p>
+<div class="ex-code">for <input data-answer="_" aria-label="variável da posição">, fruta in <input data-answer="ipairs" aria-label="função"> (frutas) do<br>&nbsp;&nbsp;print(fruta)<br>end</div>
+</div>
+
+<div class="exercise">
+<h3>2. Quantas voltas?</h3>
+<p>Quantas vezes o corpo deste laço roda?</p>
+<pre class="file" data-file="ex2.lua">local t = {"a", "b", nil, "d"}
+for i, v in ipairs(t) do
+  print(v)
+end
+</pre>
+<div class="ex-code">Roda <input data-answer="2" aria-label="voltas"> vezes.</div>
+</div>
+
+<div class="mc" data-answer="3">
+<p class="mc-q">3. Em <code>for x, y in ipairs(lista) do</code>, o que é <code>x</code>?</p>
+<label><input type="radio" name="q3"> O item</label>
+<label><input type="radio" name="q3"> O tamanho da lista</label>
+<label><input type="radio" name="q3"> A posição do item (1, 2, 3…)</label>
+<label><input type="radio" name="q3"> A lista inteira</label>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">4. A tabela <code>{nome = "Ana", "pão", "leite"}</code> é percorrida com <code>ipairs</code>. Quais itens aparecem?</p>
+<label><input type="radio" name="q4"> <code>"Ana"</code>, <code>"pão"</code> e <code>"leite"</code></label>
+<label><input type="radio" name="q4"> Só <code>"pão"</code> e <code>"leite"</code></label>
+<label><input type="radio" name="q4"> Só <code>"Ana"</code></label>
+<label><input type="radio" name="q4"> Nenhum: dá erro</label>
+</div>
+
+<div class="mc" data-answer="1">
+<p class="mc-q">5. Dentro de <code>for i, nome in ipairs(nomes)</code>, como se troca o item da lista por outro?</p>
+<label><input type="radio" name="q5"> <code>nomes[i] = "novo"</code></label>
+<label><input type="radio" name="q5"> <code>nome = "novo"</code></label>
+<label><input type="radio" name="q5"> <code>i = "novo"</code></label>
+<label><input type="radio" name="q5"> Não dá: a lista não pode mudar durante o laço</label>
+</div>
+
+<h3>Missão final: o que acabou no estoque?</h3>
+
+<div class="trylua" data-goal="out:Acabaram: 2;;out:Faltando: Leite;;out:Faltando: Queijo;;src:\bipairs\b">
+<p class="try-task"><strong>Missão:</strong> percorra a lista <code>produtos</code> com <code>ipairs</code>. Para cada produto com <code>estoque</code> igual a 0, mostre <code>Faltando: </code> e o nome, e some 1 em <code>acabaram</code>. No fim, deve aparecer <code>Acabaram: 2</code>.</p>
+<pre class="script" data-file="main.lua">local produtos = {
+  {nome = "Pão", estoque = 40},
+  {nome = "Leite", estoque = 0},
+  {nome = "Café", estoque = 5},
+  {nome = "Queijo", estoque = 0},
+}
+local acabaram = 0
+-- percorra os produtos aqui
+
+print("Acabaram: " .. acabaram)
+</pre>
+<pre class="solucao" data-file="main.lua">local produtos = {
+  {nome = "Pão", estoque = 40},
+  {nome = "Leite", estoque = 0},
+  {nome = "Café", estoque = 5},
+  {nome = "Queijo", estoque = 0},
+}
+local acabaram = 0
+for _, p in ipairs(produtos) do
+  if p.estoque == 0 then
+    print("Faltando: " .. p.nome)
+    acabaram = acabaram + 1
+  end
+end
+print("Acabaram: " .. acabaram)
+</pre>
+</div>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li><code>for i, item in ipairs(lista) do … end</code> percorre a lista do item 1 em diante. A primeira variável é a <strong>posição</strong>; a segunda, o <strong>item</strong>.</li>
+  <li>Use <code>_</code> no lugar da posição quando ela não interessa.</li>
+  <li>O <code>ipairs</code> para no <strong>primeiro <code>nil</code></strong>: buracos cortam o laço. Ele ignora a posição 0 e as chaves de texto (para essas, <a href="pairs.html">pairs</a>).</li>
+  <li>Com uma lista de fichas, a variável do item é a ficha inteira: <code>p.nome</code>, <code>p.preco</code>.</li>
+  <li>No Lua 5.5, a variável de posição é constante. Para mudar a lista, use <code>lista[i] = novo</code>.</li>
+  <li><code>ipairs(nil)</code> dá <code>attempt to index a nil value</code> sem número de linha: procure a linha do seu programa no <code>stack traceback</code>.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
