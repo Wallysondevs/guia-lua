@@ -129,6 +129,10 @@ nil
 
 <p>Repare na última: a Ana pediu <code>idade</code>, que nunca foi criada, e o Lua <strong>não reclamou</strong>. Respondeu <code>nil</code>, o "nada" do Lua: todo nome que ninguém criou vale <code>nil</code>. (É por isso que as mensagens de erro do Lua falam tanto em <code>nil value</code>; o valor tem aula própria: <a href="nil.html">O Valor nil</a>.)</p>
 
+<div class="trylua" data-repl data-digitar="2 + 3\n10 / 4\nnome = &quot;Ana&quot;\nnome\nidade\n&quot;Olá, &quot; .. nome">
+<p class="try-task"><strong>Experimente:</strong> esta caixa é um modo interativo de verdade, no seu navegador. Clique em <strong>Abrir o lua</strong> e, depois do <code>&gt;</code>, digite contas e textos: <code>2 + 3</code>, <code>10 / 4</code>, <code>nome = "Ana"</code>, <code>nome</code>, <code>idade</code>, <code>"Olá, " .. nome</code>. Aperte <kbd>Enter</kbd> depois de cada linha. Para sair, <kbd>Ctrl</kbd>+<kbd>D</kbd>.</p>
+</div>
+
 <h3>Num arquivo, um valor solto é erro</h3>
 <p>Essa "resposta sozinha" é <strong>só do modo interativo</strong>. Num programa em arquivo, o Lua não aceita uma expressão sozinha na linha: ele quer instruções. A Ana gravou a conta num arquivo:</p>
 
@@ -192,6 +196,10 @@ Lua 5.5.0  Copyright (C) 1994-2025 Lua.org, PUC-Rio
 </pre>
 
 <p>Enquanto o Lua estiver aberto, a função <code>dobro</code> fica lembrada, como as variáveis. O <code>*</code> é a multiplicação.</p>
+
+<div class="trylua" data-repl data-digitar="for i = 1, 3 do\nprint(&quot;volta &quot; .. i)\nend\nfunction dobro(x)\nreturn x * 2\nend\ndobro(21)">
+<p class="try-task"><strong>Experimente:</strong> abra o <code>lua</code> e digite um bloco de várias linhas, uma por vez, apertando <kbd>Enter</kbd> no fim de cada uma: <code>for i = 1, 3 do</code>, depois <code>print("volta " .. i)</code>, depois <code>end</code>. Repare no <code>&gt;&gt;</code> enquanto o <code>end</code> não chega. Depois, crie a função <code>dobro</code> e use: <code>dobro(21)</code>.</p>
+</div>
 
 <div class="note">
 <strong>E se eu não fechar?</strong>
@@ -322,6 +330,17 @@ nil
   <dt>preco_pao = 0.80</dt><dd>Dá para mudar os valores e testar de novo: agora 10 pães dão <code>8.0</code>.</dd>
 </dl>
 
+<div class="trylua" data-repl data-digitar="total(10)\npreco_pao\nsegredo\npreco_pao = 0.80\ntotal(10)">
+<p class="try-task"><strong>Experimente:</strong> esta caixa faz o <code>lua -i main.lua</code>: ao clicar em Rodar, o arquivo roda e o <code>&gt;</code> aparece. Teste <code>total(10)</code>, <code>segredo</code>, mude o <code>preco_pao</code> e teste de novo. Você também pode mudar o arquivo antes de rodar.</p>
+<pre class="script" data-file="main.lua">preco_pao = 0.75
+local segredo = "receita da vó"
+function total(quantidade)
+  return quantidade * preco_pao
+end
+print("Padaria carregada!")
+</pre>
+</div>
+
 <div class="note">
 <strong>Por que este arquivo usa nomes sem <code>local</code>?</strong>
 <p>Só para o <code>lua -i</code> enxergar a função e o preço. Nos programas de verdade, o guia usa <code>local</code> sempre; a aula <a href="local.html">local × Global</a> explica o porquê. Para testar um módulo inteiro no <code>&gt;</code>, o jeito certo é o <code>require</code>, que você vai conhecer em <a href="modulos.html">Módulos e require</a>.</p>
@@ -378,13 +397,14 @@ stdin:1: unexpected symbol near '='                « o 5.5 não aceita mais o =
 
 <hr>
 
-<h2>9. O editor do guia não é um <code>&gt;</code></h2>
-<p>As caixas Experimente rodam o código como um <strong>arquivo</strong>, do começo ao fim, a cada clique em Rodar (como <code>lua main.lua</code>). Por isso, lá:</p>
+<h2>9. O modo interativo e o editor do guia</h2>
+<p>O guia tem dois tipos de caixa Experimente. A maioria, com o botão <strong>▶ Rodar</strong>, roda o código como um <strong>arquivo</strong>, do começo ao fim (como <code>lua main.lua</code>). Por isso, nelas:</p>
 <ul>
   <li>valores soltos <strong>não</strong> aparecem sozinhos (e uma expressão sozinha na linha é erro): use <code>print</code>;</li>
   <li>o <code>local</code> funciona normalmente, porque o arquivo inteiro é um pedaço só;</li>
   <li>cada Rodar começa do zero: as variáveis da execução anterior não existem mais.</li>
 </ul>
+<p>Algumas caixas, como as desta aula, têm o botão <strong>▶ Abrir o lua</strong>: elas abrem o modo interativo de verdade, com o <code>&gt;</code>, o <code>&gt;&gt;</code>, o aviso do <code>local</code> e as mensagens <code>stdin:1:</code>, iguais às do terminal. A única diferença é que lá não há setas nem histórico: para repetir uma linha, digite de novo. Saia com <kbd>Ctrl</kbd>+<kbd>D</kbd> (ou o botão ■ Parar). A aula <a href="simulador.html">O Editor do Guia</a> mostra tudo o que as caixas fazem.</p>
 
 <div class="trylua" data-goal="out:Total: 7.5;;semerro;;src:\blocal\b">
 <p class="try-task"><strong>Missão:</strong> no editor, o <code>local</code> funciona. Complete o programa: crie, com <code>local</code>, uma variável <code>quantidade</code> valendo <code>10</code>, antes do <code>print</code>. A saída deve ser <code>Total: 7.5</code>.</p>
