@@ -363,7 +363,7 @@ x10.lua:3: attempt to index a nil value (local 't')
 stack traceback:
 	x10.lua:5: in main chunk
 	[C]: in ?</pre>
-<p>O rastro diz linha 5 (onde está o <code>debug.traceback</code>), e a <code>f</code> sumiu. É o aviso da seção 2:depois que o <code>pcall</code> volta, o caminho do erro já foi desmontado. <strong>Como consertar:</strong> passe a <code>debug.traceback</code> como tratadora de um <code>xpcall</code>.</p>
+<p>O rastro diz linha 5 (onde está o <code>debug.traceback</code>), e a <code>f</code> sumiu. É o aviso da seção 2: depois que o <code>pcall</code> volta, o caminho do erro já foi desmontado. <strong>Como consertar:</strong> passe a <code>debug.traceback</code> como tratadora de um <code>xpcall</code>.</p>
 </div>
 
 <div class="cenario">
