@@ -410,7 +410,7 @@ stack traceback:
 </div>
 
 <div class="trylua" data-stdin="os.exit(3)" data-goal="out:attempt to index a nil value (global 'os');;exit:0;;src:\{\s*math\s*=\s*math\s*\}">
-<p class="try-task"><strong>Missão:</strong> a calculadora roda qualquer coisa, e a caixa vai "digitar" <code>os.exit(3)</code>: o programa fecha na hora, sem mostrar nada (o código de saída vira 3). Proteja a calculadora: passe ao <code>load</code> o modo <code>"t"</code> e um ambiente que só tenha a biblioteca de matemática, <code>{ math = math }</code>. Aí o visitante recebe um erro em vez de fechar o programa.</p>
+<p class="try-task"><strong>Missão:</strong> a calculadora roda qualquer coisa, e a caixa vai "digitar" <code>os.exit(3)</code>: o programa fecha na hora, sem mostrar resultado nenhum (o código de saída vira 3). Proteja a calculadora: passe ao <code>load</code> o modo <code>"t"</code> e um ambiente que só tenha a biblioteca de matemática, <code>{ math = math }</code>. Aí o visitante recebe um erro em vez de fechar o programa.</p>
 <pre class="script" data-file="main.lua">io.write("Conta: ")
 local conta = io.read()
 local f, erro = load("return " .. conta, "=conta")
