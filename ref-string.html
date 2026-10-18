@@ -1,0 +1,322 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua Biblioteca string — referência das 17 funções do Lua 5.5 | Guia Lua</title>
+<meta name="description" content="Referência rápida das 17 funções da biblioteca string do Lua 5.5 (len, upper, lower, rep, reverse, sub, byte, char, find, match, gmatch, gsub, format, pack, unpack, packsize, dump) e da biblioteca utf8, com exemplo curto, resultado real e o link para a aula de cada uma.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">Biblioteca string</span></h1>
+
+<p class="intro">Esta é a página de consulta rápida da biblioteca <code>string</code>: as 17 funções que o Lua 5.5 traz para trabalhar com textos (em inglês, <em>strings</em>). Todas ficam dentro da tabela <code>string</code> (<code>string.upper</code>, <code>string.format</code>…) e também podem ser chamadas com o <strong>dois-pontos</strong>, direto no texto: <code>nome:upper()</code> é o mesmo que <code>string.upper(nome)</code>. No fim da página está a biblioteca <code>utf8</code>, que conta letras com acento do jeito certo.</p>
+
+<div class="note">
+<strong>Como ler as tabelas</strong>
+<ul>
+  <li><strong>Exemplo</strong> é o que você digitaria depois do <code>&gt;</code> do <a href="repl.html">modo interativo</a>.</li>
+  <li><strong>Resultado</strong> é o que o Lua 5.5.0 respondeu no computador da Ana. O modo interativo mostra os textos <strong>sem aspas</strong>. Espaços que importam aparecem marcados com <code>|</code> no próprio exemplo.</li>
+  <li>Vários valores devolvidos aparecem separados por vírgula: <code>3</code>, <code>4</code> (no terminal, o Lua separa com TAB).</li>
+  <li>Quando o exemplo dá erro, o resultado mostra a primeira linha da mensagem (em inglês).</li>
+  <li>As posições começam em <strong>1</strong> (não em 0), e número negativo conta do fim: <code>-1</code> é o último caractere.</li>
+</ul>
+</div>
+
+<p>Assim fica no terminal da Ana. Repare nas duas formas de chamar, e no erro da última linha:</p>
+
+<pre class="term">$ lua
+Lua 5.5.0  Copyright (C) 1994-2025 Lua.org, PUC-Rio
+&gt; nome = "Ana Lima"
+&gt; nome:upper()
+ANA LIMA
+&gt; string.upper(nome)
+ANA LIMA
+&gt; nome:sub(1, 3), #nome
+Ana	8
+&gt; string.format("R$ %.2f", 7.5)
+R$ 7.50
+&gt; "Ana":upper()
+stdin:1: unexpected symbol near '"Ana"'
+&gt; os.exit()
+</pre>
+
+<p>O <code>"Ana":upper()</code> deu erro de sintaxe (<em>unexpected symbol</em> = "símbolo inesperado"): para chamar um método direto num texto entre aspas, ponha parênteses em volta: <code>("Ana"):upper()</code> dá <code>ANA</code>. Numa variável (<code>nome:upper()</code>) não precisa.</p>
+
+<p>Pule direto para o grupo que você procura:</p>
+<ul>
+  <li><a href="#tamanho">Tamanho, maiúsculas e repetição</a>: <code>len</code>, <code>upper</code>, <code>lower</code>, <code>rep</code>, <code>reverse</code></li>
+  <li><a href="#pedacos">Pedaços e códigos</a>: <code>sub</code>, <code>byte</code>, <code>char</code></li>
+  <li><a href="#procurar">Procurar e substituir</a>: <code>find</code>, <code>match</code>, <code>gmatch</code>, <code>gsub</code></li>
+  <li><a href="#format">Formatar</a>: <code>format</code> e todos os seus <code>%</code></li>
+  <li><a href="#binario">Dados binários</a>: <code>pack</code>, <code>unpack</code>, <code>packsize</code>, <code>dump</code></li>
+  <li><a href="#utf8">A biblioteca utf8</a>: <code>len</code>, <code>char</code>, <code>codepoint</code>, <code>codes</code>, <code>offset</code>, <code>charpattern</code></li>
+  <li><a href="#az">Todas de A a Z</a></li>
+</ul>
+
+<hr>
+
+<h2 id="tamanho">Tamanho, maiúsculas e repetição</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Função</th><th>O que faz</th><th>Exemplo</th><th>Resultado</th><th>Aula</th></tr>
+<tr><td><code>string.len(s)</code></td><td>O tamanho do texto, em <strong>bytes</strong>. É o mesmo que <code>#s</code>. Letra com acento ocupa 2 bytes em UTF-8.</td><td><code>string.len("Ana"), #"Ana", ("ação"):len()</code></td><td><code>3</code>, <code>3</code>, <code>6</code></td><td><a href="operador-tamanho.html">O Operador de Tamanho</a></td></tr>
+<tr><td><code>string.upper(s)</code></td><td>Cópia do texto em MAIÚSCULAS (<em>upper case</em>).</td><td><code>string.upper("Pão de Queijo")</code></td><td><code>PãO DE QUEIJO</code> (o <code>ã</code> não muda!)</td><td><a href="string-metodos.html">Funções de Texto</a></td></tr>
+<tr><td></td><td>nem com o idioma do sistema ligado: a biblioteca <code>string</code> trabalha byte por byte</td><td><code>os.setlocale("pt_BR.UTF-8")</code>, depois <code>string.upper("ação")</code></td><td><code>AçãO</code></td><td><a href="utf8.html">Acentos e utf8</a></td></tr>
+<tr><td><code>string.lower(s)</code></td><td>Cópia em minúsculas (<em>lower case</em>). Também não mexe nas letras acentuadas.</td><td><code>string.lower("ANA LIMA")</code></td><td><code>ana lima</code></td><td><a href="string-metodos.html">Funções de Texto</a></td></tr>
+<tr><td><code>string.rep(s, n)</code></td><td>O texto repetido <code>n</code> vezes (<em>repeat</em>).</td><td><code>string.rep("ab", 3)</code></td><td><code>ababab</code></td><td><a href="string-metodos.html">Funções de Texto</a></td></tr>
+<tr><td></td><td>bom para linhas de separação</td><td><code>string.rep("-", 10)</code></td><td><code>----------</code></td><td></td></tr>
+<tr><td><code>string.rep(s, n, sep)</code></td><td>Com um separador entre as cópias.</td><td><code>string.rep("Ana", 3, ", ")</code></td><td><code>Ana, Ana, Ana</code></td><td></td></tr>
+<tr><td></td><td><code>n</code> zero ou negativo: texto vazio</td><td><code>string.rep("x", 0)</code></td><td>(texto vazio: linha em branco)</td><td></td></tr>
+<tr><td><code>string.reverse(s)</code></td><td>O texto de trás para a frente.</td><td><code>string.reverse("Lua")</code></td><td><code>auL</code></td><td><a href="string-metodos.html">Funções de Texto</a></td></tr>
+<tr><td></td><td>com acento, os 2 bytes da letra ficam invertidos e o texto estraga</td><td><code>string.reverse("pão")</code></td><td><code>o��p</code></td><td><a href="utf8.html">Acentos e utf8</a></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2 id="pedacos">Pedaços e códigos</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Função</th><th>O que faz</th><th>Exemplo</th><th>Resultado</th><th>Aula</th></tr>
+<tr><td><code>string.sub(s, i, j)</code></td><td>O pedaço do texto da posição <code>i</code> até a <code>j</code> (<em>substring</em>).</td><td><code>string.sub("Ana Lima", 1, 3)</code></td><td><code>Ana</code></td><td><a href="string-sub.html">Pedaços de Texto</a></td></tr>
+<tr><td></td><td>sem <code>j</code>: até o fim</td><td><code>string.sub("Ana Lima", 5)</code></td><td><code>Lima</code></td><td></td></tr>
+<tr><td></td><td>negativo conta do fim: os 4 últimos</td><td><code>string.sub("Ana Lima", -4)</code></td><td><code>Lima</code></td><td></td></tr>
+<tr><td></td><td></td><td><code>string.sub("Ana Lima", -4, -2)</code></td><td><code>Lim</code></td><td></td></tr>
+<tr><td></td><td>passou do fim: o Lua corrige, sem erro</td><td><code>string.sub("Ana", 2, 100)</code></td><td><code>na</code></td><td></td></tr>
+<tr><td></td><td><code>i</code> depois de <code>j</code>: texto vazio</td><td><code>string.sub("Ana", 3, 2)</code></td><td>(texto vazio)</td><td></td></tr>
+<tr><td></td><td>sem a posição é erro</td><td><code>string.sub("Ana")</code></td><td><code>stdin:1: bad argument #2 to 'sub' (number expected, got no value)</code></td><td></td></tr>
+<tr><td><code>string.byte(s, i, j)</code></td><td>O código numérico de cada byte (sem <code>i</code>: o primeiro).</td><td><code>string.byte("A")</code></td><td><code>65</code></td><td><a href="string-sub.html">Pedaços de Texto</a></td></tr>
+<tr><td></td><td></td><td><code>string.byte("ABC", 1, 3)</code></td><td><code>65</code>, <code>66</code>, <code>67</code></td><td></td></tr>
+<tr><td></td><td></td><td><code>string.byte("ABC", -1)</code></td><td><code>67</code></td><td></td></tr>
+<tr><td></td><td>o <code>ç</code> são dois bytes</td><td><code>string.byte("ç", 1, -1)</code></td><td><code>195</code>, <code>167</code></td><td><a href="utf8.html">Acentos e utf8</a></td></tr>
+<tr><td><code>string.char(…)</code></td><td>O contrário: monta um texto com os códigos dados (<em>character</em>).</td><td><code>string.char(65, 110, 97)</code></td><td><code>Ana</code></td><td><a href="string-sub.html">Pedaços de Texto</a></td></tr>
+<tr><td></td><td>os dois bytes do <code>ç</code> juntos</td><td><code>string.char(195, 167)</code></td><td><code>ç</code></td><td></td></tr>
+<tr><td></td><td>cada código vai de 0 a 255</td><td><code>string.char(256)</code></td><td><code>stdin:1: bad argument #1 to 'char' (value out of range)</code></td><td></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2 id="procurar">Procurar e substituir</h2>
+
+<p>Estas quatro funções usam <strong>padrões</strong> (<em>patterns</em>): <code>%d</code> é "um dígito", <code>%a</code> "uma letra", <code>+</code> "um ou mais"… A lista completa está em <a href="ref-padroes.html">Padrões (%d, %a, %s…)</a>.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Função</th><th>O que faz</th><th>Exemplo</th><th>Resultado</th><th>Aula</th></tr>
+<tr><td><code>string.find(s, padrão)</code></td><td>Onde o padrão aparece pela primeira vez: a posição do começo e a do fim.</td><td><code>string.find("banana", "na")</code></td><td><code>3</code>, <code>4</code></td><td><a href="string-find.html">Procurando no Texto</a></td></tr>
+<tr><td><code>string.find(s, padrão, início)</code></td><td>Começa a procurar na posição <code>início</code>.</td><td><code>string.find("banana", "na", 4)</code></td><td><code>5</code>, <code>6</code></td><td></td></tr>
+<tr><td></td><td>não achou</td><td><code>string.find("banana", "xa")</code></td><td><code>nil</code></td><td></td></tr>
+<tr><td></td><td>com padrão</td><td><code>string.find("R$ 10.50", "%d+")</code></td><td><code>4</code>, <code>5</code></td><td></td></tr>
+<tr><td></td><td>com capturas <code>( )</code>, devolve também o que foi capturado</td><td><code>string.find("nome=Ana", "(%w+)=(%w+)")</code></td><td><code>1</code>, <code>8</code>, <code>nome</code>, <code>Ana</code></td><td></td></tr>
+<tr><td><code>string.find(s, texto, 1, true)</code></td><td>O 4º argumento <code>true</code> desliga os padrões: procura o texto "puro". Aqui, o ponto de verdade (como padrão, <code>.</code> é "qualquer caractere").</td><td><code>string.find("R$ 10.50", ".", 1, true)</code></td><td><code>6</code>, <code>6</code></td><td></td></tr>
+<tr><td><code>string.match(s, padrão)</code></td><td>O <strong>pedaço</strong> que casou com o padrão (ou as capturas).</td><td><code>string.match("R$ 10.50", "%d+%.%d+")</code></td><td><code>10.50</code> (um texto)</td><td><a href="string-find.html">Procurando no Texto</a></td></tr>
+<tr><td></td><td>uma captura para cada <code>( )</code></td><td><code>string.match("2026-10-18", "(%d+)-(%d+)-(%d+)")</code></td><td><code>2026</code>, <code>10</code>, <code>18</code> (textos)</td><td></td></tr>
+<tr><td></td><td>não achou</td><td><code>string.match("Ana", "%d")</code></td><td><code>nil</code></td><td></td></tr>
+<tr><td></td><td>a receita para tirar os espaços das pontas (<em>trim</em>)</td><td><code>string.match("  oi  ", "^%s*(.-)%s*$")</code></td><td><code>oi</code></td><td><a href="padroes.html">Padrões</a></td></tr>
+<tr><td><code>string.gmatch(s, padrão)</code></td><td>Um iterador para o <code>for</code>: entrega <strong>cada</strong> pedaço que casa, um por volta.</td><td><code>for p in string.gmatch("pão leite café", "%S+") do print(p) end</code></td><td><code>pão</code><br><code>leite</code><br><code>café</code></td><td><a href="gmatch.html">Percorrendo Achados</a></td></tr>
+<tr><td></td><td>com capturas, cada volta recebe todas</td><td><code>for k, v in string.gmatch("a=1, b=2", "(%w+)=(%w+)") do print(k, v) end</code></td><td><code>a	1</code><br><code>b	2</code></td><td></td></tr>
+<tr><td><code>string.gsub(s, padrão, troca)</code></td><td>Cópia do texto com <strong>todas</strong> as ocorrências trocadas (<em>global substitution</em>), e quantas foram.</td><td><code>string.gsub("banana", "a", "o")</code></td><td><code>bonono</code>, <code>3</code></td><td><a href="gsub.html">Substituindo</a></td></tr>
+<tr><td><code>string.gsub(s, padrão, troca, n)</code></td><td>Só as <code>n</code> primeiras.</td><td><code>string.gsub("banana", "a", "o", 2)</code></td><td><code>bonona</code>, <code>2</code></td><td></td></tr>
+<tr><td></td><td>na troca, <code>%1</code>, <code>%2</code>… são as capturas (<code>%0</code> é o pedaço inteiro, <code>%%</code> é um <code>%</code>)</td><td><code>string.gsub("Ana Lima", "(%w+) (%w+)", "%2, %1")</code></td><td><code>Lima, Ana</code>, <code>1</code></td><td></td></tr>
+<tr><td></td><td>a troca pode ser uma <strong>tabela</strong>: a captura é a chave</td><td><code>string.gsub("preço: $p", "%$(%w+)", {p = "10"})</code></td><td><code>preço: 10</code>, <code>1</code></td><td></td></tr>
+<tr><td></td><td>…ou uma <strong>função</strong>: o que ela devolver entra no lugar</td><td><code>string.gsub("1 2 3", "%d", function(d) return d * 2 end)</code></td><td><code>2 4 6</code>, <code>3</code></td><td></td></tr>
+<tr><td></td><td>padrão vazio casa entre cada caractere</td><td><code>string.gsub("abc", "", "-")</code></td><td><code>-a-b-c-</code>, <code>4</code></td><td></td></tr>
+</table>
+</div>
+
+<div class="tip">
+<strong>O segundo valor do <code>gsub</code></strong>
+<p><code>print(string.gsub("banana", "a", "o"))</code> mostra <code>bonono	3</code>: o <code>3</code> é a contagem. Se você quer só o texto, guarde numa variável (<code>local novo = texto:gsub("a", "o")</code>) ou ponha parênteses em volta: <code>print((texto:gsub("a", "o")))</code>. Veja <a href="retornos-multiplos.html">Vários Retornos</a>.</p>
+</div>
+
+<hr>
+
+<h2 id="format">Formatar: <code>string.format</code></h2>
+
+<p><code>string.format(modelo, valores…)</code> devolve o <code>modelo</code> com cada <code>%</code> trocado por um valor, na ordem. Entre o <code>%</code> e a letra podem vir: uma <strong>largura</strong> (<code>%5d</code>: ocupa 5 posições), uma <strong>precisão</strong> (<code>%.2f</code>: 2 casas) e as opções <code>-</code> (encosta à esquerda), <code>0</code> (completa com zeros), <code>+</code> (sempre mostra o sinal), espaço e <code>#</code>. Largura e precisão vão até 2 dígitos (99).</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Código</th><th>O que faz</th><th>Exemplo</th><th>Resultado</th><th>Aula</th></tr>
+<tr><td><code>%d</code>, <code>%i</code></td><td>Número inteiro (<em>decimal</em>, <em>integer</em>).</td><td><code>string.format("%d itens", 3)</code></td><td><code>3 itens</code></td><td><a href="string-format.html">string.format</a></td></tr>
+<tr><td></td><td>largura, à esquerda, com zeros (o <code>|</code> é só para ver os espaços)</td><td><code>string.format("%5d|%-5d|%05d", 42, 42, 42)</code></td><td><code>&nbsp;&nbsp;&nbsp;42|42&nbsp;&nbsp;&nbsp;|00042</code></td><td></td></tr>
+<tr><td></td><td>float sem parte decimal serve…</td><td><code>string.format("%d", 7.0)</code></td><td><code>7</code></td><td></td></tr>
+<tr><td></td><td>…com parte decimal, não</td><td><code>string.format("%d", 7.5)</code></td><td><code>stdin:1: bad argument #2 to 'format' (number has no integer representation)</code></td><td><a href="ref-erros.html">Mensagens de Erro</a></td></tr>
+<tr><td></td><td>sinal sempre (<code>+</code>) ou espaço no lugar do <code>+</code></td><td><code>string.format("%+d % d", 5, 5)</code></td><td><code>+5&nbsp;&nbsp;5</code></td><td></td></tr>
+<tr><td><code>%u</code></td><td>Inteiro (sem sinal).</td><td><code>string.format("%u", 42)</code></td><td><code>42</code></td><td></td></tr>
+<tr><td><code>%f</code></td><td>Número com casas decimais (<em>float</em>). O padrão é 6 casas; <code>%.2f</code> arredonda para 2.</td><td><code>string.format("R$ %.2f", 7.5)</code></td><td><code>R$ 7.50</code></td><td><a href="string-format.html">string.format</a></td></tr>
+<tr><td></td><td>largura 8 com 2 casas</td><td><code>string.format("%8.2f|", 3.14159)</code></td><td><code>&nbsp;&nbsp;&nbsp;&nbsp;3.14|</code></td><td></td></tr>
+<tr><td><code>%e</code>, <code>%E</code></td><td>Notação científica.</td><td><code>string.format("%e", 12345.678)</code></td><td><code>1.234568e+04</code></td><td><a href="numeros.html">Números</a></td></tr>
+<tr><td><code>%g</code>, <code>%G</code></td><td>Escolhe o mais curto entre <code>%f</code> e <code>%e</code>.</td><td><code>string.format("%g %g", 0.0001, 100000000)</code></td><td><code>0.0001 1e+08</code></td><td></td></tr>
+<tr><td><code>%x</code>, <code>%X</code>, <code>%o</code></td><td>Inteiro em hexadecimal (minúsculo, maiúsculo) e em octal.</td><td><code>string.format("%x %X %o", 255, 255, 8)</code></td><td><code>ff FF 10</code></td><td><a href="operadores-bits.html">Operadores de Bits</a></td></tr>
+<tr><td></td><td><code>#</code> põe o <code>0x</code></td><td><code>string.format("%#x", 255)</code></td><td><code>0xff</code></td><td></td></tr>
+<tr><td><code>%a</code>, <code>%A</code></td><td>Float em hexadecimal (exato, sem arredondar).</td><td><code>string.format("%a", 1.0)</code></td><td><code>0x1p+0</code></td><td></td></tr>
+<tr><td><code>%c</code></td><td>O caractere daquele código.</td><td><code>string.format("%c%c", 76, 117)</code></td><td><code>Lu</code></td><td></td></tr>
+<tr><td><code>%s</code></td><td>Texto. Outro valor passa pelo <code>tostring</code>.</td><td><code>string.format("%s e %s", "Ana", 42)</code></td><td><code>Ana e 42</code></td><td><a href="string-format.html">string.format</a></td></tr>
+<tr><td></td><td>largura: à direita, ou à esquerda com <code>-</code> (bom para tabelas na tela)</td><td><code>string.format("%10s|%-10s|", "Ana", "Bia")</code></td><td><code>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Ana|Bia&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|</code></td><td></td></tr>
+<tr><td></td><td>precisão corta o texto</td><td><code>string.format("%.2s", "Ana")</code></td><td><code>An</code></td><td></td></tr>
+<tr><td><code>%q</code></td><td>O valor escrito <strong>como código Lua</strong> (texto com aspas e escapes): bom para salvar dados num arquivo <code>.lua</code>.</td><td><code>string.format("%q", 'diz "oi"\n')</code></td><td><code>"diz \"oi\"\</code><br><code>"</code> (a quebra de linha vira <code>\</code> + quebra)</td><td><a href="strings-escape.html">Caracteres de Escape</a></td></tr>
+<tr><td></td><td>float sai em hexadecimal, para não perder precisão</td><td><code>string.format("%q", 1/3)</code></td><td><code>0x1.5555555555555p-2</code></td><td></td></tr>
+<tr><td><code>%p</code></td><td>O endereço de memória de uma tabela, função… (muda a cada execução). Para número, <code>(null)</code>.</td><td><code>string.format("%p", 1)</code></td><td><code>(null)</code></td><td></td></tr>
+<tr><td><code>%%</code></td><td>Um <code>%</code> de verdade.</td><td><code>string.format("100%%")</code></td><td><code>100%</code></td><td></td></tr>
+<tr><td>erros</td><td>código que não existe</td><td><code>string.format("%z", 1)</code></td><td><code>stdin:1: invalid conversion '%z' to 'format'</code></td><td></td></tr>
+<tr><td></td><td>faltou valor</td><td><code>string.format("%s")</code></td><td><code>stdin:1: bad argument #2 to 'format' (no value)</code></td><td></td></tr>
+<tr><td></td><td>texto onde se espera número</td><td><code>string.format("%d", "abc")</code></td><td><code>stdin:1: bad argument #2 to 'format' (number expected, got string)</code></td><td></td></tr>
+<tr><td></td><td>valor sobrando é ignorado (sem erro)</td><td><code>string.format("%5.2f", 1, 2)</code></td><td><code>&nbsp;1.00</code></td><td></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2 id="binario">Dados binários</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Função</th><th>O que faz</th><th>Exemplo</th><th>Resultado</th><th>Aula</th></tr>
+<tr><td><code>string.pack(formato, …)</code></td><td>Transforma valores em bytes "de máquina" (para arquivos binários e redes). <code>"i4"</code> = inteiro de 4 bytes.</td><td><code>string.pack("i4", 100):len()</code></td><td><code>4</code></td><td><a href="string-pack.html">Dados Binários</a></td></tr>
+<tr><td></td><td><code>&gt;</code> = o byte mais importante primeiro (<em>big endian</em>); 258 = 1×256 + 2</td><td><code>string.pack("&gt;I2", 258):byte(1, -1)</code></td><td><code>1</code>, <code>2</code></td><td></td></tr>
+<tr><td></td><td><code>"s1"</code>: texto com o tamanho na frente, em 1 byte</td><td><code>string.pack("s1", "Ana"):byte(1, -1)</code></td><td><code>3</code>, <code>65</code>, <code>110</code>, <code>97</code></td><td></td></tr>
+<tr><td><code>string.unpack(formato, s, pos)</code></td><td>O contrário: lê os valores e devolve também a posição do próximo byte a ler.</td><td><code>string.unpack("i4", string.pack("i4", 100))</code></td><td><code>100</code>, <code>5</code></td><td><a href="string-pack.html">Dados Binários</a></td></tr>
+<tr><td></td><td><code>"z"</code>: texto que termina num byte zero</td><td><code>string.unpack("z", "Ana\0resto")</code></td><td><code>Ana</code>, <code>5</code></td><td></td></tr>
+<tr><td><code>string.packsize(formato)</code></td><td>Quantos bytes o formato ocupa (só formatos de tamanho fixo).</td><td><code>string.packsize("i4i8")</code></td><td><code>12</code></td><td></td></tr>
+<tr><td><code>string.dump(f)</code></td><td>A função <code>f</code> (escrita em Lua) pré-compilada, como texto binário. O <code>load</code> transforma de volta em função.</td><td><code>load(string.dump(function() return 42 end))()</code></td><td><code>42</code></td><td><a href="load.html">load, loadfile e dofile</a></td></tr>
+<tr><td></td><td>função feita em C (como o <code>print</code>) não serve</td><td><code>string.dump(print)</code></td><td><code>stdin:1: bad argument #1 to 'dump' (Lua function expected)</code></td><td></td></tr>
+</table>
+</div>
+
+<p>As letras de formato mais usadas no <code>pack</code>/<code>unpack</code>:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Letra</th><th>O que é</th><th>Letra</th><th>O que é</th></tr>
+<tr><td><code>b</code> / <code>B</code></td><td>1 byte com sinal / sem sinal</td><td><code>&lt;</code> / <code>&gt;</code> / <code>=</code></td><td>ordem dos bytes: menos importante primeiro / mais importante primeiro / a da máquina</td></tr>
+<tr><td><code>h</code> / <code>H</code></td><td><em>short</em> (2 bytes no PC) com / sem sinal</td><td><code>i</code><em>n</em> / <code>I</code><em>n</em></td><td>inteiro de <em>n</em> bytes (1 a 16) com / sem sinal</td></tr>
+<tr><td><code>l</code> / <code>L</code></td><td><em>long</em> com / sem sinal</td><td><code>j</code> / <code>J</code></td><td>o inteiro do Lua (8 bytes) com / sem sinal</td></tr>
+<tr><td><code>f</code> / <code>d</code> / <code>n</code></td><td><em>float</em> (4 bytes) / <em>double</em> (8) / o número do Lua</td><td><code>T</code></td><td><em>size_t</em> (tamanho, 8 bytes no PC)</td></tr>
+<tr><td><code>c</code><em>n</em></td><td>texto de exatamente <em>n</em> bytes</td><td><code>z</code></td><td>texto terminado em byte zero</td></tr>
+<tr><td><code>s</code><em>n</em></td><td>texto com o tamanho na frente, em <em>n</em> bytes</td><td><code>x</code> / <code>X</code><em>op</em> / <code>!</code><em>n</em></td><td>1 byte de enchimento / alinhar como <em>op</em> / alinhamento máximo <em>n</em></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2 id="utf8">A biblioteca <code>utf8</code></h2>
+
+<p>A biblioteca <code>string</code> enxerga <strong>bytes</strong>. Num texto em português, letras como <code>ã</code> e <code>ç</code> ocupam 2 bytes (no padrão UTF-8). A biblioteca <code>utf8</code> enxerga <strong>caracteres</strong>. A explicação completa está em <a href="utf8.html">Acentos e a Biblioteca utf8</a>.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Função</th><th>O que faz</th><th>Exemplo</th><th>Resultado</th></tr>
+<tr><td><code>utf8.len(s)</code></td><td>Quantos <strong>caracteres</strong> o texto tem (o <code>#</code> conta bytes).</td><td><code>#"ação", utf8.len("ação")</code></td><td><code>6</code>, <code>4</code></td></tr>
+<tr><td></td><td>texto que não é UTF-8 válido: <code>nil</code> e a posição do byte ruim</td><td><code>utf8.len("\xff")</code></td><td><code>nil</code>, <code>1</code></td></tr>
+<tr><td><code>utf8.char(…)</code></td><td>Monta um texto com os códigos Unicode dados.</td><td><code>utf8.char(65, 231, 227)</code></td><td><code>Açã</code></td></tr>
+<tr><td></td><td></td><td><code>utf8.char(9731)</code></td><td><code>☃</code></td></tr>
+<tr><td><code>utf8.codepoint(s, i, j)</code></td><td>O código Unicode de cada caractere entre os bytes <code>i</code> e <code>j</code>.</td><td><code>utf8.codepoint("ação", 1, -1)</code></td><td><code>97</code>, <code>231</code>, <code>227</code>, <code>111</code></td></tr>
+<tr><td></td><td>byte que não é UTF-8</td><td><code>utf8.codepoint("\xff")</code></td><td><code>stdin:1: invalid UTF-8 code</code></td></tr>
+<tr><td><code>utf8.codes(s)</code></td><td>Iterador para o <code>for</code>: a posição (em bytes) e o código de cada caractere.</td><td><code>for p, c in utf8.codes("pão") do print(p, c) end</code></td><td><code>1	112</code><br><code>2	227</code><br><code>4	111</code></td></tr>
+<tr><td><code>utf8.offset(s, n)</code></td><td>Em que byte começa o caractere número <code>n</code>. <span class="versao">5.5</span> Devolve também onde ele termina.</td><td><code>utf8.offset("ação", 3)</code></td><td><code>4</code>, <code>5</code></td></tr>
+<tr><td></td><td>negativo conta do fim</td><td><code>utf8.offset("pão", -1)</code></td><td><code>4</code>, <code>4</code></td></tr>
+<tr><td><code>utf8.charpattern</code></td><td>Não é função: é um padrão que casa com exatamente um caractere UTF-8 (para usar no <code>gmatch</code>).</td><td><code>for c in ("pão"):gmatch(utf8.charpattern) do print(c) end</code></td><td><code>p</code><br><code>ã</code><br><code>o</code></td></tr>
+</table>
+</div>
+
+<div class="note">
+<strong><code>utf8.offset</code> no 5.4</strong> <span class="versao">5.5</span>
+<p>No lab, <code>utf8.offset("ação", 3)</code> deu <code>4</code> no <code>lua5.4</code> e <code>4	5</code> no <code>lua</code> (5.5): o segundo valor, a posição do último byte do caractere, é novidade do 5.5. Quem usa só o primeiro valor não nota diferença. O LuaJIT e o Lua 5.1 <strong>não têm</strong> a biblioteca <code>utf8</code> (ela chegou no 5.3). Veja <a href="versoes.html">As Diferenças entre Versões</a>.</p>
+</div>
+
+<hr>
+
+<h2 id="az">Todas de A a Z</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Função</th><th>Em uma frase</th><th>Grupo</th></tr>
+<tr><td><code>string.byte</code></td><td>códigos dos bytes</td><td><a href="#pedacos">Pedaços e códigos</a></td></tr>
+<tr><td><code>string.char</code></td><td>texto a partir de códigos</td><td><a href="#pedacos">Pedaços e códigos</a></td></tr>
+<tr><td><code>string.dump</code></td><td>função pré-compilada</td><td><a href="#binario">Dados binários</a></td></tr>
+<tr><td><code>string.find</code></td><td>onde está</td><td><a href="#procurar">Procurar e substituir</a></td></tr>
+<tr><td><code>string.format</code></td><td>monta um texto com <code>%</code></td><td><a href="#format">Formatar</a></td></tr>
+<tr><td><code>string.gmatch</code></td><td>cada achado, num <code>for</code></td><td><a href="#procurar">Procurar e substituir</a></td></tr>
+<tr><td><code>string.gsub</code></td><td>troca todos</td><td><a href="#procurar">Procurar e substituir</a></td></tr>
+<tr><td><code>string.len</code></td><td>tamanho em bytes</td><td><a href="#tamanho">Tamanho</a></td></tr>
+<tr><td><code>string.lower</code></td><td>minúsculas</td><td><a href="#tamanho">Tamanho</a></td></tr>
+<tr><td><code>string.match</code></td><td>o pedaço que casou</td><td><a href="#procurar">Procurar e substituir</a></td></tr>
+<tr><td><code>string.pack</code></td><td>valores em bytes</td><td><a href="#binario">Dados binários</a></td></tr>
+<tr><td><code>string.packsize</code></td><td>tamanho de um formato</td><td><a href="#binario">Dados binários</a></td></tr>
+<tr><td><code>string.rep</code></td><td>repete</td><td><a href="#tamanho">Tamanho</a></td></tr>
+<tr><td><code>string.reverse</code></td><td>de trás para a frente</td><td><a href="#tamanho">Tamanho</a></td></tr>
+<tr><td><code>string.sub</code></td><td>pedaço por posição</td><td><a href="#pedacos">Pedaços e códigos</a></td></tr>
+<tr><td><code>string.unpack</code></td><td>bytes em valores</td><td><a href="#binario">Dados binários</a></td></tr>
+<tr><td><code>string.upper</code></td><td>maiúsculas</td><td><a href="#tamanho">Tamanho</a></td></tr>
+</table>
+</div>
+
+<p>O operador <code>..</code> (juntar textos) não é uma função da biblioteca: veja <a href="concatenacao.html">Juntando Textos</a> e, para juntar muitos pedaços de uma vez, <code>table.concat</code> em <a href="ref-table.html">A Biblioteca table</a>.</p>
+
+<hr>
+
+<h2>Experimente</h2>
+
+<div class="trylua" data-goal="out:QUEIJO MINAS - R$ 32.90;;src:format">
+<p class="try-task"><strong>Missão:</strong> a Ana quer a etiqueta do produto assim: <code>QUEIJO MINAS - R$ 32.90</code>. Do jeito que está, sai com os espaços das pontas, em minúsculas e com <code>32.9</code>. Use <code>produto:match("^%s*(.-)%s*$")</code> para tirar os espaços, <code>:upper()</code> para as maiúsculas e <code>string.format</code> com <code>%.2f</code> para o preço.</p>
+<pre class="script" data-file="main.lua">local produto = "  queijo minas  "
+local preco = 32.9
+
+local limpo = produto
+print(limpo .. " - R$ " .. preco)
+</pre>
+<pre class="solucao" data-file="main.lua">local produto = "  queijo minas  "
+local preco = 32.9
+
+local limpo = produto:match("^%s*(.-)%s*$")
+print(string.format("%s - R$ %.2f", limpo:upper(), preco))
+</pre>
+</div>
+
+<div class="trylua">
+<p class="try-task"><strong>Livre:</strong> teste as funções desta página. Troque a lista de compras, o padrão do <code>gmatch</code>, o modelo do <code>format</code>.</p>
+<pre class="script" data-file="main.lua">local lista = "pão, leite, café, açúcar"
+
+for item in lista:gmatch("[^, ]+") do
+  print(string.format("%-8s|%2d bytes|%2d letras", item, #item, utf8.len(item)))
+end
+
+print((lista:gsub(", ", " + ")))
+print(lista:find("café"), lista:sub(-6))
+print(string.rep("=", 20))
+</pre>
+</div>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li>São 17 funções na tabela <code>string</code>. Todas também funcionam com dois-pontos: <code>s:upper()</code>, <code>s:sub(1, 3)</code>, <code>("Ana"):rep(2)</code>.</li>
+  <li>Posições começam em 1; negativas contam do fim (<code>-1</code> é o último).</li>
+  <li><code>len</code>, <code>#</code>, <code>sub</code>, <code>byte</code>, <code>upper</code>, <code>lower</code> e <code>reverse</code> trabalham com <strong>bytes</strong>: acentos atrapalham. Para contar letras, <code>utf8.len</code>.</li>
+  <li>Procurar: <code>find</code> (posições), <code>match</code> (o pedaço), <code>gmatch</code> (todos, num <code>for</code>), <code>gsub</code> (trocar; devolve também a contagem).</li>
+  <li><code>string.format</code>: <code>%d</code> inteiro, <code>%.2f</code> duas casas, <code>%s</code> texto, <code>%5d</code>/<code>%-10s</code> largura, <code>%q</code> como código Lua, <code>%%</code> o próprio <code>%</code>.</li>
+  <li><span class="versao">5.5</span> <code>utf8.offset</code> devolve também a posição final do caractere.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
