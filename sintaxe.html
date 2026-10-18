@@ -1,0 +1,593 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua Sintaxe e Blocos — do, then e end | Guia Lua</title>
+<meta name="description" content="A sintaxe do Lua para quem nunca programou: instruções e linhas, blocos que começam com do, then ou function e terminam com end, blocos dentro de blocos, a indentação de 2 espaços (que o Lua ignora, mas você não), maiúsculas e minúsculas, as 23 palavras reservadas do Lua 5.5 e os erros reais ('end' expected, 'then' expected, <eof> expected) explicados em português.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">Sintaxe e Blocos (do … end)</span></h1>
+
+<p class="intro"><strong>Sintaxe</strong> é a gramática de uma linguagem: as regras de como escrever para ser entendido. A do Lua é pequena, e quase toda ela cabe numa ideia: um <strong>bloco</strong> de instruções começa com uma palavra (<code>then</code>, <code>do</code>, <code>function</code>…) e termina com <code>end</code> ("fim"). Nesta aula você vai ver como o Lua separa as instruções, como os blocos se abrem e se fecham, por que o recuo (a indentação) é para você e não para o Lua, e as mensagens de erro que aparecem quando um <code>end</code> falta ou sobra.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O que é uma <strong>instrução</strong>, e que o Lua não liga para quebras de linha nem para o <code>;</code>.</li>
+  <li>O que é um <strong>bloco</strong>, e as palavras que o abrem (<code>then</code>, <code>do</code>, <code>function</code>, <code>repeat</code>) e o fecham (<code>end</code>, <code>until</code>).</li>
+  <li>Como cada <code>end</code> fecha o bloco aberto mais recente, nos blocos dentro de blocos.</li>
+  <li>Por que indentar com <strong>2 espaços</strong>, se o Lua ignora o recuo.</li>
+  <li>Que maiúsculas e minúsculas são diferentes, e quais são as 23 palavras reservadas.</li>
+  <li>Os erros de sintaxe mais comuns, com as mensagens reais do Lua 5.5.</li>
+</ul>
+</div>
+
+<p>Esta aula usa o <code>if</code> ("se") e o <code>for</code> ("para") como exemplos de blocos, só o suficiente para mostrar a forma. Eles têm aulas próprias no Nível 1 (<a href="if.html">if … then</a> e <a href="for-numerico.html">for Numérico</a>). Todos os programas foram rodados no computador da Ana, na pasta <code>~/programas</code>.</p>
+
+<hr>
+
+<h2>A ideia: parênteses de palavras</h2>
+<p>Na matemática, os parênteses agrupam: em <code>2 × (3 + 4)</code>, o <code>(</code> abre um grupo e o <code>)</code> fecha. Todo parêntese que abre precisa fechar, e o último que abriu é o primeiro que fecha.</p>
+
+<p>No Lua, os <strong>blocos</strong> funcionam igual, só que com palavras. Um bloco é um grupo de instruções que andam juntas: "se a nota for boa, <em>faça isto e isto</em>"; "para cada dia, <em>faça isto</em>". Uma palavra abre o grupo e o <code>end</code> fecha:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Na matemática</th><th>No Lua</th></tr>
+<tr><td><code>(</code></td><td><code>then</code>, <code>do</code>, <code>function (…)</code></td></tr>
+<tr><td>o que fica dentro</td><td>as instruções do bloco</td></tr>
+<tr><td><code>)</code></td><td><code>end</code></td></tr>
+<tr><td>parêntese esquecido: a conta não faz sentido</td><td><code>end</code> esquecido: <code>'end' expected</code> (erro de sintaxe, nada roda)</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>1. Instruções</h2>
+<p>Uma <strong>instrução</strong> é uma ordem completa: "mostre isto" (<code>print("oi")</code>), "guarde isto" (<code>local nota = 8</code>). O jeito normal é escrever uma por linha. Mas, para o Lua, a quebra de linha não tem nada de especial: ele sabe onde uma instrução termina pela forma dela. Por isso, estas formas também funcionam:</p>
+
+<pre class="file" data-file="mesmalinha.lua">print("um") print("dois"); print("três")
+print ( "com espaços" )
+</pre>
+
+<pre class="term" data-cwd="~/programas">$ lua mesmalinha.lua
+um
+dois
+três
+com espaços
+</pre>
+
+<dl class="anatomy">
+  <dt>print("um") print("dois")</dt><dd>Duas instruções na mesma linha, separadas só por um espaço. O Lua percebe que <code>print("um")</code> já está completo.</dd>
+  <dt>;</dt><dd>O ponto e vírgula é <strong>opcional</strong>: separa instruções, se você quiser. A comunidade Lua quase não usa.</dd>
+  <dt>print ( "com espaços" )</dt><dd>Espaços em volta dos parênteses não mudam nada. Dentro das aspas, sim: lá eles fazem parte do texto.</dd>
+</dl>
+
+<p>Poder não quer dizer dever: <strong>uma instrução por linha</strong> é muito mais fácil de ler, e é o que o guia faz. E lembre da aula <a href="repl.html">O Modo Interativo</a>: num arquivo, uma expressão sozinha (como <code>2 + 3</code>) não é uma instrução, e dá erro.</p>
+
+<hr>
+
+<h2>2. Blocos: abrir e fechar</h2>
+<p>Veja um bloco de verdade. O boletim da Ana mostra duas mensagens <strong>só se</strong> a nota for 7 ou mais:</p>
+
+<pre class="file" data-file="blocos.lua">local nota = 8
+if nota &gt;= 7 then
+  print("Aprovada!")
+  print("Parabéns, Ana.")
+end
+print("Fim do boletim.")
+</pre>
+
+<pre class="term" data-cwd="~/programas">$ lua blocos.lua
+Aprovada!
+Parabéns, Ana.
+Fim do boletim.
+</pre>
+
+<dl class="anatomy">
+  <dt>if nota &gt;= 7</dt><dd>"Se a nota for maior ou igual a 7". É a condição.</dd>
+  <dt>then</dt><dd>"Então". <strong>Abre</strong> o bloco: o que vem a seguir só acontece se a condição for verdadeira.</dd>
+  <dt>print("Aprovada!") / print("Parabéns, Ana.")</dt><dd>As duas instruções <strong>de dentro</strong> do bloco.</dd>
+  <dt>end</dt><dd>"Fim". <strong>Fecha</strong> o bloco. O que vem depois dele já não depende da nota.</dd>
+  <dt>print("Fim do boletim.")</dt><dd>Fora do bloco: roda sempre.</dd>
+</dl>
+
+<p>Com nota 5 (o mesmo programa, trocando <code>8</code> por <code>5</code>), o bloco inteiro é pulado, e só a linha de fora roda:</p>
+
+<pre class="term" data-cwd="~/programas">$ lua nota5.lua
+Fim do boletim.
+</pre>
+
+<p>Um bloco de repetição tem a mesma forma, com <code>do</code> ("faça") no lugar de <code>then</code>:</p>
+
+<pre class="file" data-file="repeticao.lua">for dia = 1, 3 do
+  print("Dia " .. dia .. ": abrir a padaria")
+end
+print("Fim da semana curta.")
+</pre>
+
+<pre class="term" data-cwd="~/programas">$ lua repeticao.lua
+Dia 1: abrir a padaria
+Dia 2: abrir a padaria
+Dia 3: abrir a padaria
+Fim da semana curta.
+</pre>
+
+<p>"Para <code>dia</code> de 1 a 3, faça… fim". O que está entre o <code>do</code> e o <code>end</code> se repete três vezes; o <code>print</code> de depois do <code>end</code> roda uma vez só.</p>
+
+<h3>Todas as formas de bloco</h3>
+<p>Estas são todas as construções do Lua que têm um bloco. Não precisa decorar: cada uma tem a sua aula. Repare só no padrão: sempre uma palavra que abre e o <code>end</code> que fecha (com uma exceção, o <code>repeat</code>).</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Construção</th><th>Abre com</th><th>Fecha com</th><th>Aula</th></tr>
+<tr><td><code>if <em>condição</em> then … end</code></td><td><code>then</code></td><td><code>end</code></td><td><a href="if.html">if … then</a></td></tr>
+<tr><td><code>if … then … else … end</code></td><td><code>then</code> (o <code>else</code> divide o bloco em dois)</td><td><code>end</code></td><td><a href="if-else.html">if e else</a></td></tr>
+<tr><td><code>while <em>condição</em> do … end</code></td><td><code>do</code></td><td><code>end</code></td><td><a href="while.html">while</a></td></tr>
+<tr><td><code>for … do … end</code></td><td><code>do</code></td><td><code>end</code></td><td><a href="for-numerico.html">for Numérico</a></td></tr>
+<tr><td><code>function <em>nome</em>(…) … end</code></td><td>o <code>)</code> da lista de parâmetros</td><td><code>end</code></td><td><a href="funcoes.html">Funções</a></td></tr>
+<tr><td><code>do … end</code></td><td><code>do</code></td><td><code>end</code></td><td><a href="escopo.html">Escopo e Blocos</a></td></tr>
+<tr><td><code>repeat … until <em>condição</em></code></td><td><code>repeat</code></td><td><code>until</code> (não leva <code>end</code>)</td><td><a href="repeat.html">repeat … until</a></td></tr>
+</table>
+</div>
+
+<p>O <code>do … end</code> sozinho é o bloco mais simples de todos: ele não repete nem decide nada, só agrupa. Serve para limitar onde uma variável <code>local</code> existe (aula <a href="escopo.html">Escopo e Blocos</a>):</p>
+
+<pre class="file" data-file="do.lua">do
+  print("dentro do bloco")
+end
+print("fora do bloco")
+</pre>
+
+<pre class="term" data-cwd="~/programas">$ lua do.lua
+dentro do bloco
+fora do bloco
+</pre>
+
+<div class="trylua" data-goal="out:Pode levar o bolo!;;out:Volte sempre.;;semerro">
+<p class="try-task"><strong>Missão:</strong> o programa não roda: falta fechar o bloco do <code>if</code>. Rode, leia a mensagem (<code>'end' expected</code>), e acrescente o <code>end</code> no lugar certo: <strong>depois</strong> das duas linhas de dentro e <strong>antes</strong> do <code>Volte sempre.</code>, que deve aparecer sempre.</p>
+<pre class="script" data-file="main.lua">local dinheiro = 30
+if dinheiro &gt;= 25 then
+  print("Pode levar o bolo!")
+  print("Custa 25 reais.")
+print("Volte sempre.")
+</pre>
+<pre class="solucao" data-file="main.lua">local dinheiro = 30
+if dinheiro &gt;= 25 then
+  print("Pode levar o bolo!")
+  print("Custa 25 reais.")
+end
+print("Volte sempre.")
+</pre>
+</div>
+
+<hr>
+
+<h2>3. Blocos dentro de blocos</h2>
+<p>Um bloco pode ter outro bloco dentro (isso se chama <strong>aninhar</strong>, como as bonecas russas, uma dentro da outra). A Ana quer anunciar o bolo de fubá só no dia 2:</p>
+
+<pre class="file" data-file="aninhado.lua">for dia = 1, 3 do
+  print("Dia " .. dia)
+  if dia == 2 then
+    print("  hoje tem bolo de fubá")
+  end
+end
+print("Pronto.")
+</pre>
+
+<pre class="term" data-cwd="~/programas">$ lua aninhado.lua
+Dia 1
+Dia 2
+  hoje tem bolo de fubá
+Dia 3
+Pronto.
+</pre>
+
+<p>A regra é a dos parênteses: <strong>cada <code>end</code> fecha o bloco aberto mais recente</strong> que ainda não foi fechado.</p>
+<ul>
+  <li>Linha 1: o <code>do</code> abre o bloco do <code>for</code>.</li>
+  <li>Linha 3: o <code>then</code> abre o bloco do <code>if</code>, <strong>dentro</strong> do <code>for</code>.</li>
+  <li>Linha 5: o primeiro <code>end</code> fecha o mais recente, o do <code>if</code>.</li>
+  <li>Linha 6: o segundo <code>end</code> fecha o que sobrou, o do <code>for</code>.</li>
+</ul>
+
+<p>(O <code>==</code>, com dois sinais de igual, é a pergunta "é igual a?": aula <a href="operadores-comparacao.html">Comparações</a>.) Repare também nos dois espaços dentro do texto <code>"  hoje tem bolo de fubá"</code>: esses estão <strong>dentro das aspas</strong>, então aparecem na tela.</p>
+
+<hr>
+
+<h2>4. A indentação: para você, não para o Lua</h2>
+<p><strong>Indentar</strong> é recuar as linhas de dentro de um bloco, com espaços no começo. Nos exemplos acima, as linhas de dentro do <code>if</code> e do <code>for</code> têm 2 espaços; as de dentro do bloco de dentro, 4. Mas atenção: para o Lua, <strong>o recuo não significa nada</strong>. Quem diz onde o bloco acaba é o <code>end</code>. O mesmo boletim, escrito numa linha só, ou todo torto, roda igual:</p>
+
+<pre class="file" data-file="feio.lua">local nota = 8 if nota &gt;= 7 then print("Aprovada!") print("Parabéns, Ana.") end print("Fim do boletim.")
+</pre>
+
+<pre class="file" data-file="torto.lua">local nota = 8
+if nota &gt;= 7 then
+print("Aprovada!")
+      print("Parabéns, Ana.")
+    end
+  print("Fim do boletim.")
+</pre>
+
+<pre class="term" data-cwd="~/programas">$ lua feio.lua
+Aprovada!
+Parabéns, Ana.
+Fim do boletim.
+$ lua torto.lua
+Aprovada!
+Parabéns, Ana.
+Fim do boletim.
+</pre>
+
+<p>Os três arquivos (o bonito, o de uma linha e o torto) fazem exatamente a mesma coisa. Então por que indentar? Porque quem lê o programa é <strong>gente</strong>: você amanhã, ou outra pessoa. Com o recuo certo, dá para ver de longe o que está dentro de quê. No <code>torto.lua</code>, parece que o "Fim do boletim." está dentro de alguma coisa, e não está.</p>
+
+<div class="warning">
+<strong>O recuo errado engana você, não o Lua</strong>
+<p>No Python, o recuo muda o programa; no Lua, não. Isso tem um lado ruim: se você esquecer um <code>end</code> e o recuo "parecer" certo, o seu olho acredita no recuo e o Lua acredita nos <code>end</code>. O cenário "Um <code>end</code> que fecha o bloco errado", em <a href="#errado">Quando dá errado</a>, mostra isso acontecendo.</p>
+</div>
+
+<h3>Quantos espaços?</h3>
+<p>O guia usa <strong>2 espaços</strong> por nível, que é o mais comum em Lua. Você vai encontrar código com 3 ou 4 espaços, ou com a tecla <kbd>Tab</kbd>; tudo funciona, porque o Lua não liga. O importante é <strong>ser constante</strong> dentro de um mesmo programa. A aula <a href="estilo.html">Estilo de Código</a> volta ao assunto. Configure o seu editor para a tecla <kbd>Tab</kbd> inserir 2 espaços.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Onde</th><th>Recuo</th></tr>
+<tr><td>Fora de qualquer bloco</td><td>nenhum</td></tr>
+<tr><td>Dentro de um bloco</td><td>2 espaços</td></tr>
+<tr><td>Dentro de um bloco que está dentro de outro</td><td>4 espaços</td></tr>
+<tr><td>A linha do <code>end</code></td><td>o mesmo recuo da linha que abriu o bloco</td></tr>
+</table>
+</div>
+
+<div class="trylua" data-goal="out:Dia 3;;outre:Pronto\.\n$;;src:^  if dia == 3 then$;;src:^    print;;semerro">
+<p class="try-task"><strong>Missão:</strong> o programa funciona, mas está todo sem recuo, difícil de ler. Indente: 2 espaços nas linhas de dentro do <code>for</code> (inclusive o <code>if</code> e o <code>end</code> dele) e 4 espaços na linha de dentro do <code>if</code>. A saída não muda; o testador confere o recuo do <code>if</code> e do <code>print</code> de dentro.</p>
+<pre class="script" data-file="main.lua">for dia = 1, 3 do
+print("Dia " .. dia)
+if dia == 3 then
+print("  sábado: abre só de manhã")
+end
+end
+print("Pronto.")
+</pre>
+<pre class="solucao" data-file="main.lua">for dia = 1, 3 do
+  print("Dia " .. dia)
+  if dia == 3 then
+    print("  sábado: abre só de manhã")
+  end
+end
+print("Pronto.")
+</pre>
+</div>
+
+<hr>
+
+<h2>5. Maiúsculas e minúsculas são diferentes</h2>
+<p>Para o Lua, <code>print</code>, <code>Print</code> e <code>PRINT</code> são três nomes diferentes. O mesmo vale para as palavras da linguagem: <code>if</code>, <code>then</code> e <code>end</code> só existem em minúsculas. Veja o que acontece com um <code>If</code> maiúsculo:</p>
+
+<pre class="file" data-file="s7.lua">local nota = 8
+If nota &gt;= 7 then
+  print("Aprovada!")
+end
+</pre>
+
+<pre class="term" data-cwd="~/programas">$ lua s7.lua
+lua: s7.lua:2: syntax error near 'nota'
+</pre>
+
+<p>Para o Lua, <code>If</code> não é a palavra "se": é um nome qualquer, como <code>nota</code>. E dois nomes lado a lado (<code>If nota</code>) não formam nenhuma instrução: "erro de sintaxe perto de <code>nota</code>". A mensagem não fala em <code>If</code>, então a pista é a linha: confira as maiúsculas na linha 2.</p>
+
+<hr>
+
+<h2>6. Palavras reservadas</h2>
+<p>Algumas palavras são da própria linguagem e não podem ser usadas como nomes de variáveis. No Lua 5.5, o manual lista 23:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><td><code>and</code></td><td><code>break</code></td><td><code>do</code></td><td><code>else</code></td><td><code>elseif</code></td><td><code>end</code></td></tr>
+<tr><td><code>false</code></td><td><code>for</code></td><td><code>function</code></td><td><code>global</code> <span class="versao">5.5</span></td><td><code>goto</code></td><td><code>if</code></td></tr>
+<tr><td><code>in</code></td><td><code>local</code></td><td><code>nil</code></td><td><code>not</code></td><td><code>or</code></td><td><code>repeat</code></td></tr>
+<tr><td><code>return</code></td><td><code>then</code></td><td><code>true</code></td><td><code>until</code></td><td><code>while</code></td><td></td></tr>
+</table>
+</div>
+
+<p>Todas em minúsculas, todas em inglês. Você não precisa decorar: ao longo do guia, cada uma ganha a sua aula, e a lista completa com o significado de cada uma está em <a href="ref-palavras-chave.html">Palavras Reservadas</a>. Se você tentar usar uma delas como nome, o Lua reclama. A Ana quis guardar o horário de fechamento numa variável chamada <code>end</code>:</p>
+
+<pre class="file" data-file="s9.lua">local end = 10
+</pre>
+
+<pre class="term" data-cwd="~/programas">$ lua s9.lua
+lua: s9.lua:1: &lt;name&gt; expected near 'end'
+</pre>
+
+<p>"Era esperado um <code>&lt;name&gt;</code> (um nome) perto de <code>end</code>". Depois de <code>local</code>, o Lua esperava o nome da variável, e <code>end</code> não pode ser nome. Use um nome em português, que nunca vai bater com uma palavra reservada: <code>local fim = 10</code> funciona.</p>
+
+<div class="note">
+<strong>O caso do <code>global</code> <span class="versao">5.5</span></strong>
+<p>A palavra <code>global</code> é a novidade do Lua 5.5 (aula <a href="global.html">A Declaração global</a>), e o manual avisa: <em>"Do not use it as a regular name"</em> ("não use como nome comum"). Por compatibilidade com programas antigos, o Lua 5.5.0 do Ubuntu (e o do editor do guia) ainda aceitaram <code>local global = 1</code>; o manual diz que essas opções de compatibilidade vão sumir no futuro. No 5.4 e nos anteriores, <code>global</code> era uma palavra comum. Simplesmente não use esse nome.</p>
+</div>
+
+<hr>
+
+<h2>Formas diferentes de escrever o mesmo bloco</h2>
+<p>Os três jeitos abaixo fazem a mesma coisa. Todos funcionam; só um é o recomendado:</p>
+
+<pre class="file" data-file="forma1.lua">if nota &gt;= 7 then
+  print("Aprovada!")
+end
+</pre>
+
+<pre class="file" data-file="forma2.lua">if nota &gt;= 7 then print("Aprovada!") end
+</pre>
+
+<pre class="file" data-file="forma3.lua">if nota &gt;= 7 then
+    print("Aprovada!")
+end
+</pre>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Forma</th><th>Quando usar</th></tr>
+<tr><td>Bloco em várias linhas, 2 espaços (<code>forma1.lua</code>)</td><td><strong>Sempre que possível.</strong> É o padrão do guia e o mais comum na comunidade</td></tr>
+<tr><td>Bloco numa linha só (<code>forma2.lua</code>)</td><td>Às vezes, para uma única instrução bem curta. Com mais de uma instrução, fica difícil de ler</td></tr>
+<tr><td>Recuo de 4 espaços (ou Tab) (<code>forma3.lua</code>)</td><td>Se o projeto em que você está trabalhando já usa assim. O importante é não misturar</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+<p>Quase todos os erros desta aula são de <strong>sintaxe</strong>: o Lua os encontra ao conferir o arquivo, antes de rodar, então <strong>nenhuma</strong> linha do programa roda e não aparece <code>stack traceback</code> (aula <a href="executar.html">Rodando um Programa</a>).</p>
+
+<div class="cenario">
+<strong>Faltou o <code>end</code></strong>
+<pre class="file" data-file="s1.lua">local nota = 8
+if nota &gt;= 7 then
+  print("Aprovada!")
+print("Fim do boletim.")
+</pre>
+<pre class="term" data-cwd="~/programas">$ lua s1.lua
+lua: s1.lua:5: 'end' expected (to close 'if' at line 2) near &lt;eof&gt;
+</pre>
+<dl class="anatomy">
+  <dt>s1.lua:5:</dt><dd>Onde o Lua <strong>percebeu</strong>: na linha 5, que nem existe no arquivo. É o fim do arquivo (o arquivo tem 4 linhas; depois da última quebra de linha, o Lua já está na 5).</dd>
+  <dt>'end' expected</dt><dd>"Era esperado um <code>end</code>".</dd>
+  <dt>(to close 'if' at line 2)</dt><dd>"Para fechar o <code>if</code> da linha 2". Esta é a pista boa: <strong>qual</strong> bloco ficou aberto, e em que linha ele começou.</dd>
+  <dt>near &lt;eof&gt;</dt><dd>"Perto do fim do arquivo" (<em>end of file</em>). O Lua chegou ao fim ainda esperando o <code>end</code>.</dd>
+</dl>
+<p><strong>Como resolver:</strong> vá à linha que a mensagem indica (<code>at line 2</code>) e encontre onde o bloco devia terminar. Aqui, o <code>end</code> vai antes do <code>print("Fim do boletim.")</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Sobrou um <code>end</code></strong>
+<pre class="file" data-file="s2.lua">local nota = 8
+if nota &gt;= 7 then
+  print("Aprovada!")
+end
+end
+print("Fim do boletim.")
+</pre>
+<pre class="term" data-cwd="~/programas">$ lua s2.lua
+lua: s2.lua:5: &lt;eof&gt; expected near 'end'
+</pre>
+<p><strong>O que aconteceu:</strong> "era esperado o fim do arquivo perto de <code>end</code>". O <code>end</code> da linha 4 fechou o <code>if</code>; depois disso, não havia mais nenhum bloco aberto, e o <code>end</code> da linha 5 não tinha o que fechar. Fora de qualquer bloco, um <code>end</code> só faria sentido se fosse o fim de tudo, e não é. <strong>Como resolver:</strong> apague o <code>end</code> que sobrou (o da linha 5).</p>
+</div>
+
+<div class="cenario">
+<strong>Um <code>end</code> que fecha o bloco errado</strong>
+<pre class="file" data-file="s11.lua">for dia = 1, 3 do
+  print("Dia " .. dia)
+  if dia == 2 then
+    print("  hoje tem bolo de fubá")
+end
+print("Pronto.")
+</pre>
+<pre class="term" data-cwd="~/programas">$ lua s11.lua
+lua: s11.lua:7: 'end' expected (to close 'for' at line 1) near &lt;eof&gt;
+</pre>
+<p><strong>O que aconteceu:</strong> a Ana recuou o <code>end</code> da linha 5 como se ele fechasse o <code>for</code>. Mas o Lua não olha o recuo: o <code>end</code> fecha o bloco aberto <strong>mais recente</strong>, que é o do <code>if</code>. O <code>for</code> ficou aberto até o fim: "era esperado um <code>end</code> para fechar o <code>for</code> da linha 1". <strong>Como resolver:</strong> conte os blocos: cada <code>then</code> e cada <code>do</code> precisam do seu <code>end</code>. Aqui são dois blocos, então são dois <code>end</code>, um em cada nível de recuo.</p>
+</div>
+
+<div class="cenario">
+<strong>Esqueceu o <code>then</code> ou o <code>do</code></strong>
+<pre class="file" data-file="s3.lua">local nota = 8
+if nota &gt;= 7
+  print("Aprovada!")
+end
+</pre>
+<pre class="term" data-cwd="~/programas">$ lua s3.lua
+lua: s3.lua:3: 'then' expected near 'print'
+</pre>
+<pre class="file" data-file="s4.lua">for dia = 1, 3
+  print(dia)
+end
+</pre>
+<pre class="term" data-cwd="~/programas">$ lua s4.lua
+lua: s4.lua:2: 'do' expected near 'print'
+</pre>
+<p><strong>O que aconteceu:</strong> depois da condição do <code>if</code>, o Lua precisa do <code>then</code>; depois do <code>for</code>, do <code>do</code>. Sem eles, ele dá de cara com o <code>print</code> da linha de baixo: "era esperado um <code>then</code> (ou <code>do</code>) perto de <code>print</code>". O erro de verdade está no fim da linha <strong>anterior</strong> à que a mensagem indica. <strong>Como resolver:</strong> <code>if nota &gt;= 7 then</code> e <code>for dia = 1, 3 do</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Chaves e dois-pontos de outras linguagens</strong>
+<p>Quem já viu um pouco de C, JavaScript ou Python costuma trazer o costume de lá:</p>
+<pre class="file" data-file="s5.lua">local nota = 8
+if nota &gt;= 7 {
+  print("Aprovada!")
+}
+</pre>
+<pre class="term" data-cwd="~/programas">$ lua s5.lua
+lua: s5.lua:2: 'then' expected near '{'
+</pre>
+<pre class="file" data-file="s6.lua">local nota = 8
+if nota &gt;= 7:
+  print("Aprovada!")
+</pre>
+<pre class="term" data-cwd="~/programas">$ lua s6.lua
+lua: s6.lua:2: 'then' expected near ':'
+</pre>
+<p><strong>O que aconteceu:</strong> no Lua, as chaves <code>{ }</code> não agrupam instruções (elas criam <a href="tabelas.html">tabelas</a>), e os dois-pontos não abrem bloco (eles têm outro trabalho, nos <a href="metodos.html">métodos</a>). O Lua esperava o <code>then</code> e achou outra coisa. <strong>Como resolver:</strong> <code>if nota &gt;= 7 then</code> … <code>end</code>.</p>
+</div>
+
+<div class="cenario">
+<strong><code>END</code> maiúsculo, <code>endif</code> e outros "fins" inventados</strong>
+<pre class="file" data-file="s8.lua">local nota = 8
+if nota &gt;= 7 then
+  print("Aprovada!")
+END
+</pre>
+<pre class="term" data-cwd="~/programas">$ lua s8.lua
+lua: s8.lua:5: syntax error near &lt;eof&gt;
+</pre>
+<p><strong>O que aconteceu:</strong> o único "fim" que o Lua conhece é <code>end</code>, em minúsculas. <code>END</code> (ou <code>endif</code>, <code>fi</code>, <code>End</code>) é só um nome qualquer, e o Lua ficou esperando o resto de uma instrução que começava com esse nome, até o arquivo acabar: "erro de sintaxe perto do fim do arquivo". Com <code>endif</code> no lugar de <code>END</code>, a mensagem foi a mesma. <strong>Como resolver:</strong> <code>end</code>, minúsculo, sempre.</p>
+</div>
+
+<div class="cenario">
+<strong>Um <code>=</code> só na condição</strong>
+<pre class="file" data-file="s10.lua">local nota = 8
+if nota = 8 then
+  print("Nota oito")
+end
+</pre>
+<pre class="term" data-cwd="~/programas">$ lua s10.lua
+lua: s10.lua:2: 'then' expected near '='
+</pre>
+<p><strong>O que aconteceu:</strong> um <code>=</code> sozinho é "guarde" (atribuição), e não "é igual?". Depois de <code>if nota</code>, o Lua esperava o <code>then</code> (ou uma comparação), e veio um <code>=</code>. <strong>Como resolver:</strong> para perguntar "é igual?", use dois: <code>if nota == 8 then</code> (aula <a href="operadores-comparacao.html">Comparações</a>).</p>
+</div>
+
+<h3>Missão final: o aviso da padaria</h3>
+
+<div class="trylua" data-goal="outre:^Dia 1\nDia 2\n  pão de queijo saindo!\nDia 3\nAté amanhã\.\n$;;semerro">
+<p class="try-task"><strong>Missão:</strong> o programa da padaria tem <strong>três</strong> problemas de sintaxe: falta um <code>do</code>, falta um <code>then</code> e falta um <code>end</code>. Rode, leia cada mensagem, conserte um de cada vez. No fim, o aviso do pão de queijo deve aparecer só no dia 2, e o <code>Até amanhã.</code> uma vez só, no fim.</p>
+<pre class="script" data-file="main.lua">for dia = 1, 3
+  print("Dia " .. dia)
+  if dia == 2
+    print("  pão de queijo saindo!")
+  end
+print("Até amanhã.")
+</pre>
+<pre class="solucao" data-file="main.lua">for dia = 1, 3 do
+  print("Dia " .. dia)
+  if dia == 2 then
+    print("  pão de queijo saindo!")
+  end
+end
+print("Até amanhã.")
+</pre>
+</div>
+
+<hr>
+
+<h2>Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Regra</th><th>Exemplo</th></tr>
+<tr><td>Uma instrução por linha (recomendado); <code>;</code> opcional</td><td><code>print("um")</code></td></tr>
+<tr><td>Bloco: palavra que abre … <code>end</code></td><td><code>if x &gt; 0 then</code> … <code>end</code></td></tr>
+<tr><td><code>then</code> abre o bloco do <code>if</code>; <code>do</code> abre o do <code>for</code>, do <code>while</code> e o bloco simples</td><td><code>for i = 1, 3 do</code> … <code>end</code></td></tr>
+<tr><td><code>repeat</code> fecha com <code>until</code>, sem <code>end</code></td><td><code>repeat</code> … <code>until x &gt; 10</code></td></tr>
+<tr><td>Cada <code>end</code> fecha o bloco aberto mais recente</td><td>dois blocos aninhados = dois <code>end</code></td></tr>
+<tr><td>O recuo não muda nada para o Lua; use 2 espaços por nível</td><td><code>  print("dentro")</code></td></tr>
+<tr><td>Maiúsculas importam; palavras da linguagem são minúsculas</td><td><code>if</code>, nunca <code>If</code></td></tr>
+<tr><td>Palavras reservadas não podem ser nomes</td><td><code>local fim = 10</code>, nunca <code>local end = 10</code></td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Mensagem</th><th>Causa provável</th></tr>
+<tr><td><code>'end' expected (to close 'if' at line N) near &lt;eof&gt;</code></td><td>Faltou o <code>end</code> do bloco que começou na linha N</td></tr>
+<tr><td><code>&lt;eof&gt; expected near 'end'</code></td><td>Sobrou um <code>end</code></td></tr>
+<tr><td><code>'then' expected near …</code></td><td>Faltou o <code>then</code> (ou usou <code>{</code>, <code>:</code> ou <code>=</code> no lugar)</td></tr>
+<tr><td><code>'do' expected near …</code></td><td>Faltou o <code>do</code> do <code>for</code> ou do <code>while</code></td></tr>
+<tr><td><code>syntax error near 'nota'</code></td><td>Palavra da linguagem com maiúscula (<code>If</code>)</td></tr>
+<tr><td><code>syntax error near &lt;eof&gt;</code></td><td>Um "fim" inventado (<code>END</code>, <code>endif</code>) no lugar de <code>end</code></td></tr>
+<tr><td><code>&lt;name&gt; expected near 'end'</code></td><td>Palavra reservada usada como nome de variável</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. A palavra que fecha</h3>
+<p>Complete o bloco:</p>
+<div class="ex-code">if nota &gt;= 7 then<br>&nbsp;&nbsp;print("Aprovada!")<br><input data-answer="end" aria-label="palavra"></div>
+</div>
+
+<div class="exercise">
+<h3>2. A palavra que abre</h3>
+<p>Complete a primeira linha do <code>for</code>:</p>
+<div class="ex-code">for dia = 1, 7 <input data-answer="do" aria-label="palavra"></div>
+</div>
+
+<div class="exercise">
+<h3>3. O recuo do guia</h3>
+<p>Quantos espaços o guia usa para recuar as linhas de dentro de um bloco?</p>
+<div class="ex-code"><input data-answer="2|dois" aria-label="número"> espaços</div>
+</div>
+
+<div class="mc" data-answer="3">
+<p class="mc-q">4. Um programa tem um <code>for</code> e, dentro dele, um <code>if</code>. Quantos <code>end</code> ele precisa?</p>
+<label><input type="radio" name="q4"> Um, no fim de tudo.</label>
+<label><input type="radio" name="q4"> Nenhum, se o recuo estiver certo.</label>
+<label><input type="radio" name="q4"> Dois: um para o <code>if</code> e um para o <code>for</code>.</label>
+<label><input type="radio" name="q4"> Três: um para cada linha de dentro.</label>
+</div>
+
+<div class="mc" data-answer="1">
+<p class="mc-q">5. O que o Lua faz com o recuo (os espaços no começo das linhas)?</p>
+<label><input type="radio" name="q5"> Nada: ele ignora. Quem marca o fim do bloco é o <code>end</code>; o recuo é para as pessoas lerem.</label>
+<label><input type="radio" name="q5"> Usa para saber o que está dentro do bloco, como o Python.</label>
+<label><input type="radio" name="q5"> Dá erro se não forem exatamente 2 espaços.</label>
+<label><input type="radio" name="q5"> Mostra os espaços na tela.</label>
+</div>
+
+<div class="mc" data-answer="4">
+<p class="mc-q">6. A mensagem foi <code>lua: festa.lua:12: 'end' expected (to close 'function' at line 3) near &lt;eof&gt;</code>. Onde está o problema?</p>
+<label><input type="radio" name="q6"> Na linha 12, que tem um <code>end</code> a mais.</label>
+<label><input type="radio" name="q6"> No nome do arquivo.</label>
+<label><input type="radio" name="q6"> Na linha 3, que tem um erro de digitação.</label>
+<label><input type="radio" name="q6"> Na função que começa na linha 3: falta o <code>end</code> que a fecha.</label>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">7. Qual destes nomes de variável dá erro de sintaxe?</p>
+<label><input type="radio" name="q7"> <code>local fim = 10</code></label>
+<label><input type="radio" name="q7"> <code>local then = 10</code></label>
+<label><input type="radio" name="q7"> <code>local entao = 10</code></label>
+<label><input type="radio" name="q7"> <code>local End = 10</code></label>
+</div>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li><strong>Sintaxe</strong> é a gramática da linguagem. Erros de sintaxe impedem o programa inteiro de rodar.</li>
+  <li>Uma <strong>instrução</strong> é uma ordem completa. O Lua não depende das quebras de linha nem do <code>;</code>, mas o recomendado é uma instrução por linha.</li>
+  <li>Um <strong>bloco</strong> é um grupo de instruções: abre com <code>then</code> (no <code>if</code>), <code>do</code> (no <code>for</code>, no <code>while</code> e no <code>do … end</code>) ou com a <code>function</code>, e fecha com <code>end</code>. O <code>repeat</code> fecha com <code>until</code>.</li>
+  <li>Cada <code>end</code> fecha o bloco aberto <strong>mais recente</strong>, como os parênteses.</li>
+  <li>O recuo não muda nada para o Lua, mas é essencial para as pessoas: <strong>2 espaços</strong> por nível, o <code>end</code> alinhado com a linha que abriu.</li>
+  <li>Maiúsculas e minúsculas são diferentes; as 23 palavras reservadas (<code>if</code>, <code>end</code>, <code>local</code>…) são minúsculas e não podem ser nomes.</li>
+  <li>As mensagens dizem qual bloco ficou aberto e onde: <code>'end' expected (to close 'if' at line 2)</code>. Um <code>end</code> a mais dá <code>&lt;eof&gt; expected near 'end'</code>.</li>
+  <li>Próximo passo: deixar recados para você mesmo dentro do código, em <a href="comentarios.html">Comentários</a>.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
