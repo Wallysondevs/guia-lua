@@ -1,0 +1,640 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua debug — traceback, getinfo, getlocal e sethook | Guia Lua</title>
+<meta name="description" content="A biblioteca debug do Lua para quem nunca programou: debug.traceback (o caminho das chamadas), debug.getinfo (linha, nome e arquivo de uma função), debug.getlocal (as variáveis locais), debug.sethook (um gancho que roda a cada linha ou chamada) e os erros reais do Lua 5.5.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">debug</span></h1>
+
+<p class="intro">Quando um programa faz alguma coisa estranha, a primeira pergunta é sempre: <strong>onde</strong> ele estava e <strong>o que</strong> ele tinha na mão naquela hora? A biblioteca <code>debug</code> ("depuração", o trabalho de achar e tirar defeitos de um programa) deixa o próprio programa responder: ela mostra o caminho das chamadas até a linha atual, diz o nome e a linha de cada função, lista as variáveis locais e até pendura um "gancho" que roda a cada linha. Esta aula apresenta as quatro funções mais úteis dela. As técnicas de procurar defeito ficam na próxima aula, <a href="depuracao.html">Depurando um Programa</a>.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li><code>debug.traceback</code>: o "rastro" das chamadas, o mesmo que aparece embaixo de uma mensagem de erro.</li>
+  <li><code>debug.getinfo</code>: a linha atual, o nome da função e o arquivo, de você mesmo ou de quem chamou.</li>
+  <li><code>debug.getlocal</code>: os nomes e os valores das variáveis locais de uma função.</li>
+  <li><code>debug.sethook</code>: um gancho chamado a cada linha, a cada chamada de função ou a cada tantas instruções.</li>
+  <li>Os <strong>níveis</strong> da pilha (1, 2, 3…), a ideia que todas essas funções usam.</li>
+  <li>Por que a biblioteca <code>debug</code> é para depurar, e não para a lógica do programa.</li>
+</ul>
+</div>
+
+<p>Os programas desta aula rodaram no <strong>Lua 5.5</strong> da máquina da Ana (usuária <code>ana</code>, computador <code>notebook</code>), com <code>lua arquivo.lua</code>. Vale conhecer antes <a href="funcoes.html">Funções</a>, <a href="erros.html">Lendo uma Mensagem de Erro</a> e <a href="xpcall.html">xpcall e debug.traceback</a>.</p>
+
+<hr>
+
+<h2>A ideia: a pilha de pratos</h2>
+<p>Na cozinha da padaria, cada pedido vira um prato na pilha. O padeiro está fazendo um bolo (prato de baixo). No meio, precisa de cobertura: põe o prato "cobertura" em cima e vai fazer a cobertura. Para a cobertura, precisa derreter chocolate: mais um prato em cima. Quando o chocolate fica pronto, o prato de cima sai e ele volta para a cobertura; quando a cobertura fica pronta, volta para o bolo.</p>
+<p>Um programa faz igual com as funções: o programa principal chama <code>boletim</code>, que chama <code>calcular_media</code>. Cada chamada que ainda não terminou é um prato na <strong>pilha de chamadas</strong> (em inglês, <em>call stack</em>). A biblioteca <code>debug</code> conta os pratos de cima para baixo, por <strong>nível</strong>:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Nível</th><th>Quem é</th></tr>
+<tr><td>0</td><td>a própria função do <code>debug</code> que você chamou (<code>getinfo</code>, por exemplo)</td></tr>
+<tr><td>1</td><td>a função onde está a linha que chamou o <code>debug</code>: "eu"</td></tr>
+<tr><td>2</td><td>quem chamou essa função: "quem me chamou"</td></tr>
+<tr><td>3, 4…</td><td>e assim por diante, até o programa principal (o <em>main chunk</em>)</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>1. O caminho até aqui: <code>debug.traceback</code></h2>
+<p><code>debug.traceback(mensagem)</code> devolve um <strong>texto</strong> com a mensagem e, embaixo, a pilha de chamadas naquele momento. É o mesmo <code>stack traceback:</code> que o Lua mostra quando dá erro, só que sem erro nenhum: o programa continua.</p>
+
+<pre class="file" data-file="rastro.lua">local function calcular_media(notas)
+  print(debug.traceback("Onde estou?"))
+  local soma = 0
+  for _, nota in ipairs(notas) do soma = soma + nota end
+  return soma / #notas
+end
+
+local function boletim(aluno)
+  local media = calcular_media(aluno.notas)
+  print(aluno.nome .. ": média " .. media)
+end
+
+boletim({ nome = "Ana", notas = { 8, 9 } })
+</pre>
+
+<pre class="term">$ lua rastro.lua
+Onde estou?
+stack traceback:
+	rastro.lua:2: in upvalue 'calcular_media'
+	rastro.lua:9: in local 'boletim'
+	rastro.lua:13: in main chunk
+	[C]: in ?
+Ana: média 8.5</pre>
+
+<p>Leia de cima para baixo: é a pilha de pratos, do de cima (o mais recente) para o de baixo.</p>
+<dl class="anatomy">
+  <dt>Onde estou?</dt><dd>A mensagem que você passou, na primeira linha.</dd>
+  <dt>stack traceback:</dt><dd>"Rastro da pilha": daqui para baixo vem a lista de chamadas.</dd>
+  <dt>rastro.lua:2: in upvalue 'calcular_media'</dt><dd>Agora o programa está na <strong>linha 2</strong>, dentro de <code>calcular_media</code>. O <code>upvalue</code> diz como o Lua achou esse nome: <code>boletim</code> usa a variável local <code>calcular_media</code>, que foi criada <strong>fora</strong> dela (uma variável "de fora" usada dentro de uma função é um <em>upvalue</em>; veja <a href="closures.html">Closures</a>).</dd>
+  <dt>rastro.lua:9: in local 'boletim'</dt><dd>Quem chamou foi a função <code>boletim</code>, na linha 9 (<code>local media = calcular_media(…)</code>). <code>local</code>: o nome veio de uma variável local do programa principal.</dd>
+  <dt>rastro.lua:13: in main chunk</dt><dd>E quem chamou <code>boletim</code> foi o programa principal (o "pedaço principal"), na linha 13.</dd>
+  <dt>[C]: in ?</dt><dd>O prato de baixo de todos: o programa <code>lua</code>, escrito em C, que começou tudo.</dd>
+  <dt>Ana: média 8.5</dt><dd>Depois do rastro, o programa seguiu normalmente.</dd>
+</dl>
+
+<p>Outras palavras que aparecem no lugar de <code>upvalue</code> e <code>local</code>: <code>global</code> (uma função global, como <code>print</code>), <code>field</code> (um campo de tabela, como <code>string.pack</code>), <code>method</code> (chamada com <code>:</code>) e <code>function &lt;rastro.lua:1&gt;</code> quando o Lua não sabe o nome e só mostra onde a função começa.</p>
+
+<h3>O nível de onde começar</h3>
+<p>Um segundo argumento diz <strong>de qual nível</strong> o rastro começa. Com <code>2</code>, ele pula a função atual e começa em quem a chamou, útil numa função "de verificação" que quer apontar o culpado:</p>
+
+<pre class="file" data-file="nivel.lua">local function verificar(nota)
+  if nota &gt; 10 then
+    print(debug.traceback("nota inválida: " .. nota, 2))
+  end
+end
+
+local function lancar(nota)
+  verificar(nota)
+end
+
+lancar(12)
+</pre>
+
+<pre class="term">$ lua nivel.lua
+nota inválida: 12
+stack traceback:
+	nivel.lua:8: in local 'lancar'
+	nivel.lua:11: in main chunk
+	[C]: in ?</pre>
+
+<p>A linha de <code>verificar</code> não aparece: o rastro começa em <code>lancar</code>, linha 8, que foi quem mandou a nota errada.</p>
+
+<div class="tip">
+<strong>O uso mais comum: junto com o <code>xpcall</code></strong>
+<p>Quando você captura um erro com <code>pcall</code>, a mensagem chega sem o rastro. Com <code>xpcall(funcao, debug.traceback)</code>, o Lua chama o <code>debug.traceback</code> <strong>na hora do erro</strong>, e você recebe a mensagem com o rastro completo, sem o programa parar. Isso tem aula própria: <a href="xpcall.html">xpcall e debug.traceback</a>.</p>
+</div>
+
+<div class="cenario">
+<strong>Curiosidade: o prato que some (chamada de cauda)</strong>
+<p>Troque o <code>boletim</code> por uma versão que faz <code>return calcular_media(aluno.notas)</code>:</p>
+<pre class="file" data-file="cauda.lua">local function calcular_media(notas)
+  print(debug.traceback("Onde estou?"))
+  return 0
+end
+
+local function boletim(aluno)
+  return calcular_media(aluno.notas)
+end
+
+boletim({ nome = "Ana", notas = { 8, 9 } })
+</pre>
+<pre class="term">$ lua cauda.lua
+Onde estou?
+stack traceback:
+	cauda.lua:2: in function &lt;cauda.lua:1&gt;
+	(...tail calls...)
+	cauda.lua:10: in main chunk
+	[C]: in ?</pre>
+<p>O <code>boletim</code> sumiu do rastro, e no lugar dele aparece <code>(...tail calls...)</code> ("chamadas de cauda"). Um <code>return f(…)</code> é uma <a href="chamada-cauda.html">chamada de cauda</a>: o Lua tira o prato de <code>boletim</code> da pilha antes de chamar <code>calcular_media</code>, porque não há mais nada para fazer nele. Sem o prato, ele também perde o nome (por isso <code>function &lt;cauda.lua:1&gt;</code>). Não é defeito; só não se assuste quando vir isso num rastro.</p>
+</div>
+
+<hr>
+
+<h2>2. Quem sou eu, onde estou: <code>debug.getinfo</code></h2>
+<p><code>debug.getinfo(nivel)</code> devolve uma <strong>tabela</strong> com informações sobre a função daquele nível:</p>
+
+<pre class="file" data-file="info.lua">local function quem_sou_eu()
+  local info = debug.getinfo(1)
+  print("linha atual:", info.currentline)
+  print("nome:", info.name)
+  print("arquivo:", info.short_src)
+  print("source:", info.source)
+  print("começa na linha:", info.linedefined)
+  print("termina na linha:", info.lastlinedefined)
+  print("tipo:", info.what)
+  print("namewhat:", info.namewhat)
+  print("nparams:", info.nparams)
+end
+
+quem_sou_eu()
+</pre>
+
+<pre class="term">$ lua info.lua
+linha atual:	2
+nome:	quem_sou_eu
+arquivo:	info.lua
+source:	@info.lua
+começa na linha:	1
+termina na linha:	12
+tipo:	Lua
+namewhat:	local
+nparams:	0</pre>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Campo</th><th>O que é</th><th>Aqui</th></tr>
+<tr><td><code>currentline</code></td><td>a linha que está rodando agora nessa função</td><td>2 (a do <code>getinfo</code>)</td></tr>
+<tr><td><code>name</code></td><td>o nome pelo qual a função foi chamada (pode ser <code>nil</code>)</td><td><code>quem_sou_eu</code></td></tr>
+<tr><td><code>namewhat</code></td><td>que tipo de nome é: <code>"global"</code>, <code>"local"</code>, <code>"field"</code>, <code>"method"</code>, <code>"upvalue"</code> ou <code>""</code></td><td><code>local</code></td></tr>
+<tr><td><code>short_src</code></td><td>o nome do arquivo, curto, bom para mostrar</td><td><code>info.lua</code></td></tr>
+<tr><td><code>source</code></td><td>de onde veio o código; <code>@</code> na frente quer dizer "de um arquivo"</td><td><code>@info.lua</code></td></tr>
+<tr><td><code>linedefined</code> / <code>lastlinedefined</code></td><td>a linha do <code>function</code> e a do <code>end</code></td><td>1 e 12</td></tr>
+<tr><td><code>what</code></td><td><code>"Lua"</code> (função em Lua), <code>"C"</code> (função da biblioteca, escrita em C) ou <code>"main"</code> (o programa principal)</td><td><code>Lua</code></td></tr>
+<tr><td><code>nparams</code></td><td>quantos parâmetros a função tem</td><td>0</td></tr>
+</table>
+</div>
+
+<h3>Pedindo só uma parte</h3>
+<p>Um segundo argumento escolhe <strong>quais</strong> campos preencher, com letras: <code>"l"</code> = a linha atual, <code>"n"</code> = o nome, <code>"S"</code> = a fonte (arquivo, linhas, <code>what</code>), <code>"u"</code> = parâmetros. Pedir só o que precisa é mais rápido.</p>
+
+<h3>Quem me chamou? Nível 2</h3>
+<p>O uso mais prático do <code>getinfo</code>: uma função de "registro" (um <em>log</em>) que mostra de que linha ela foi chamada. Para isso, ela pergunta pelo nível <strong>2</strong>, quem a chamou:</p>
+
+<pre class="file" data-file="quem.lua">local function registrar(mensagem)
+  local info = debug.getinfo(2, "Sl")
+  print(string.format("[%s:%d] %s", info.short_src, info.currentline, mensagem))
+end
+
+local function vender(produto, quantidade)
+  registrar("vendendo " .. quantidade .. " " .. produto)
+end
+
+registrar("começou")
+vender("pão", 6)
+registrar("terminou")
+</pre>
+
+<pre class="term">$ lua quem.lua
+[quem.lua:10] começou
+[quem.lua:7] vendendo 6 pão
+[quem.lua:12] terminou</pre>
+
+<p>Cada mensagem saiu com o arquivo e a linha de <strong>quem chamou</strong> o <code>registrar</code>: as linhas 10 e 12 (programa principal) e a 7 (dentro de <code>vender</code>). Num programa grande, isso diz na hora de onde veio cada mensagem.</p>
+
+<div class="trylua" data-goal="outre:\[main\.lua:(?!2\])\d+\] vendendo 6 pão;;semerro">
+<p class="try-task"><strong>Missão:</strong> aqui o <code>registrar</code> pergunta pelo nível <strong>1</strong> e, por isso, toda mensagem sai com a linha 2 (a dele mesmo). Faça cada mensagem mostrar a linha de <strong>quem chamou</strong>.</p>
+<pre class="script" data-file="main.lua">local function registrar(mensagem)
+  local info = debug.getinfo(1, "Sl")
+  print(string.format("[%s:%d] %s", info.short_src, info.currentline, mensagem))
+end
+
+local function vender(produto, quantidade)
+  registrar("vendendo " .. quantidade .. " " .. produto)
+end
+
+registrar("começou")
+vender("pão", 6)
+registrar("terminou")
+</pre>
+<pre class="solucao" data-file="main.lua">local function registrar(mensagem)
+  local info = debug.getinfo(2, "Sl")
+  print(string.format("[%s:%d] %s", info.short_src, info.currentline, mensagem))
+end
+
+local function vender(produto, quantidade)
+  registrar("vendendo " .. quantidade .. " " .. produto)
+end
+
+registrar("começou")
+vender("pão", 6)
+registrar("terminou")
+</pre>
+</div>
+
+<h3>Informação sobre uma função qualquer</h3>
+<p>No lugar do nível, dá para passar a <strong>própria função</strong>:</p>
+
+<pre class="file" data-file="infofunc.lua">local function dobro(x)
+  return x * 2
+end
+local info = debug.getinfo(dobro)
+print(info.what, info.short_src, info.linedefined, info.lastlinedefined, info.nparams)
+local p = debug.getinfo(print)
+print(p.what, p.short_src, p.linedefined)
+print(debug.getinfo(50))
+</pre>
+
+<pre class="term">$ lua infofunc.lua
+Lua	infofunc.lua	1	3	1
+C	[C]	-1
+nil</pre>
+
+<p>A <code>dobro</code> é uma função Lua das linhas 1 a 3, com 1 parâmetro. O <code>print</code> é uma função em C: não tem arquivo (<code>[C]</code>) nem linha (<code>-1</code>). E um nível que não existe (não há 50 pratos na pilha) dá <code>nil</code>.</p>
+
+<hr>
+
+<h2>3. As variáveis locais: <code>debug.getlocal</code></h2>
+<p><code>debug.getlocal(nivel, i)</code> devolve o <strong>nome</strong> e o <strong>valor</strong> da variável local número <code>i</code> da função daquele nível (as variáveis contam na ordem em que foram declaradas, começando pelos parâmetros). Quando não há mais variáveis, devolve <code>nil</code>. Com um laço, dá para listar todas:</p>
+
+<pre class="file" data-file="locais.lua">local function conta(preco, quantidade)
+  local total = preco * quantidade
+  local i = 1
+  while true do
+    local nome, valor = debug.getlocal(1, i)
+    if not nome then break end
+    print(i, nome, valor)
+    i = i + 1
+  end
+  return total
+end
+
+conta(4.5, 3)
+</pre>
+
+<pre class="term">$ lua locais.lua
+1	preco	4.5
+2	quantidade	3
+3	total	13.5
+4	i	4</pre>
+
+<p>Os dois parâmetros vêm primeiro, depois <code>total</code> e o próprio <code>i</code> do laço. Repare que o <code>i</code> mostrou <code>4</code>: na hora em que o <code>getlocal</code> leu a variável número 4, o <code>i</code> já valia 4. As variáveis <code>nome</code> e <code>valor</code> não aparecem porque são declaradas <strong>depois</strong>, dentro do laço, e o <code>getlocal</code> só conta as que já existem naquele ponto do código.</p>
+
+<div class="warning">
+<strong>Isso fura a regra do <code>local</code></strong>
+<p>Uma variável <code>local</code> deveria ser invisível fora da função. O <code>getlocal</code> (e o <code>debug.setlocal</code>, que até <strong>muda</strong> o valor) passa por cima dessa regra. O manual do Lua avisa: várias funções do <code>debug</code> violam garantias básicas da linguagem e algumas são lentas. Use para investigar um defeito, nunca como parte normal do programa.</p>
+</div>
+
+<hr>
+
+<h2>4. O gancho: <code>debug.sethook</code></h2>
+<p><code>debug.sethook(funcao, mascara)</code> pendura um <strong>gancho</strong> (em inglês, <em>hook</em>): uma função sua que o Lua chama sozinho em certos momentos. A <strong>máscara</strong> diz quando:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Máscara</th><th>O gancho é chamado…</th><th>O evento recebido</th></tr>
+<tr><td><code>"l"</code></td><td>a cada <strong>linha</strong> nova de código</td><td><code>"line"</code>, e o número da linha</td></tr>
+<tr><td><code>"c"</code></td><td>a cada <strong>chamada</strong> de função</td><td><code>"call"</code> ou <code>"tail call"</code></td></tr>
+<tr><td><code>"r"</code></td><td>a cada <strong>retorno</strong> de função</td><td><code>"return"</code></td></tr>
+<tr><td><code>""</code> e um número <code>n</code></td><td>a cada <code>n</code> instruções da máquina do Lua</td><td><code>"count"</code></td></tr>
+</table>
+</div>
+
+<p>Para tirar o gancho, chame <code>debug.sethook()</code> sem nada.</p>
+
+<h3>A cada linha</h3>
+<pre class="file" data-file="gancho.lua">local function contar_linhas(evento, linha)
+  print("  rodando a linha " .. linha)
+end
+
+local function soma(a, b)
+  local s = a + b
+  return s
+end
+
+debug.sethook(contar_linhas, "l")
+local r = soma(2, 3)
+print("resultado:", r)
+debug.sethook()
+print("gancho desligado")
+</pre>
+
+<pre class="term">$ lua gancho.lua
+  rodando a linha 11
+  rodando a linha 6
+  rodando a linha 7
+  rodando a linha 12
+resultado:	5
+  rodando a linha 13
+gancho desligado</pre>
+
+<p>Dá para seguir o programa passo a passo: linha 11 (chama <code>soma</code>), linhas 6 e 7 (dentro de <code>soma</code>), linha 12 (o <code>print</code>), linha 13 (o <code>debug.sethook()</code> que desliga). O gancho é chamado <strong>antes</strong> de a linha rodar: por isso "rodando a linha 12" aparece antes de <code>resultado: 5</code>. Depois de desligado, a linha 14 rodou sem aviso.</p>
+
+<h3>A cada chamada</h3>
+<p>Dentro do gancho, o nível <strong>2</strong> do <code>getinfo</code> é a função que acabou de ser chamada (o nível 1 é o próprio gancho):</p>
+
+<pre class="file" data-file="chamadas.lua">local function ao_chamar(evento)
+  local info = debug.getinfo(2, "nS")
+  if info.what == "Lua" then
+    print(evento, info.name or "?", "linha " .. info.linedefined)
+  end
+end
+
+local function quadrado(x) return x * x end
+local function soma_quadrados(a, b) return quadrado(a) + quadrado(b) end
+
+debug.sethook(ao_chamar, "c")
+print(soma_quadrados(3, 4))
+debug.sethook()
+</pre>
+
+<pre class="term">$ lua chamadas.lua
+call	soma_quadrados	linha 9
+call	quadrado	linha 8
+call	quadrado	linha 8
+25</pre>
+
+<p>O <code>if info.what == "Lua"</code> deixa de fora as funções em C (o <code>print</code> e o próprio <code>debug.sethook</code>, que também são chamadas). Sobram as três chamadas das funções do programa.</p>
+
+<h3>A cada tantas instruções: um freio de segurança</h3>
+<p>Com a máscara vazia e um número, o gancho roda a cada tantas <strong>instruções</strong> (os passinhos da máquina do Lua; uma linha pode ter vários). Um uso clássico é um "freio": parar um programa que está demorando demais, levantando um erro de dentro do gancho:</p>
+
+<pre class="file" data-file="freio.lua">local limite = os.clock() + 1
+debug.sethook(function ()
+  if os.clock() &gt; limite then
+    error("demorou demais!")
+  end
+end, "", 100000)
+
+local n = 0
+while true do n = n + 1 end
+</pre>
+
+<pre class="term">$ lua freio.lua
+lua: freio.lua:4: demorou demais!
+stack traceback:
+	[C]: in global 'error'
+	freio.lua:4: in hook '?'
+	freio.lua:9: in main chunk
+	[C]: in ?</pre>
+
+<p>O <code>while true</code> da linha 9 nunca terminaria. A cada 100 000 instruções, o gancho olha o relógio (<code>os.clock</code>, o tempo de processador gasto; veja <a href="os-funcoes.html">os.getenv, os.clock e os.exit</a>) e, depois de 1 segundo, levanta o erro. No rastro aparece <code>in hook '?'</code>: o erro nasceu dentro de um gancho. É assim que programas que rodam código de outras pessoas (o Lua dentro de um jogo, por exemplo) se protegem de laços infinitos.</p>
+
+<hr>
+
+<h2 id="formas">Formas diferentes de fazer a mesma coisa</h2>
+<p>"De que linha veio esta mensagem?" tem várias respostas:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Situação</th><th>Qual usar</th></tr>
+<tr><td>Ver o caminho inteiro de chamadas até aqui</td><td><code>print(debug.traceback("mensagem"))</code></td></tr>
+<tr><td>Um erro capturado, com o rastro</td><td><code>xpcall(f, debug.traceback)</code> (<a href="xpcall.html">xpcall</a>)</td></tr>
+<tr><td>Só a linha e o arquivo de quem chamou (um <em>log</em>)</td><td><code>debug.getinfo(2, "Sl")</code></td></tr>
+<tr><td>Parar o programa com a linha de quem errou</td><td><code>error("mensagem", 2)</code> (<a href="error.html">error</a>), sem precisar do <code>debug</code></td></tr>
+<tr><td>Olhar as variáveis num ponto do programa</td><td>Um <code>print</code> das variáveis (o mais simples) ou <code>debug.getlocal</code></td></tr>
+<tr><td>Seguir linha por linha, contar chamadas, pôr um limite de tempo</td><td><code>debug.sethook</code></td></tr>
+</table>
+</div>
+
+<div class="note">
+<strong>Outras versões</strong>
+<p>A biblioteca <code>debug</code> existe em todas as versões. Os detalhes mudam: no Lua 5.1 e no LuaJIT, o rastro escreve <code>in function 'calcular_media'</code> em vez de <code>in upvalue 'calcular_media'</code>, e a última linha é <code>[C]: ?</code> (5.1) ou <code>[C]: at 0x…</code> (LuaJIT, com um endereço). O campo <code>nparams</code> do <code>getinfo</code> não existe no 5.1 (lá ele dá <code>nil</code>; o LuaJIT tem). Veja <a href="versoes.html">as diferenças entre as versões</a>.</p>
+</div>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+
+<div class="cenario">
+<strong>Nível que não existe, e o <code>nil</code> que vem depois</strong>
+<pre class="file" data-file="nivel_nil.lua">local function onde()
+  local info = debug.getinfo(5, "l")
+  return info.currentline
+end
+print(onde())
+</pre>
+<pre class="term">$ lua nivel_nil.lua
+lua: nivel_nil.lua:3: attempt to index a nil value (local 'info')
+stack traceback:
+	nivel_nil.lua:3: in local 'onde'
+	nivel_nil.lua:5: in main chunk
+	[C]: in ?</pre>
+<dl class="anatomy">
+  <dt>nivel_nil.lua:3:</dt><dd>O erro estourou na linha 3, não na 2.</dd>
+  <dt>attempt to index a nil value (local 'info')</dt><dd>"Tentativa de indexar um valor nil (a variável local <code>info</code>)": o <code>info.currentline</code> tentou pegar um campo de <code>nil</code>. Na linha 2, o <code>getinfo(5)</code> não achou o nível 5 (só há 3 pratos na pilha) e devolveu <code>nil</code>, sem erro.</dd>
+</dl>
+<p><strong>Como consertar:</strong> use o nível certo (1 = eu, 2 = quem me chamou) ou teste antes: <code>if info then … end</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Nível que não existe no <code>getlocal</code></strong>
+<pre class="term">$ lua -e 'debug.getlocal(50, 1)'
+lua: (command line):1: bad argument #1 to 'getlocal' (level out of range)
+stack traceback:
+	[C]: in field 'getlocal'
+	(command line):1: in main chunk
+	[C]: in ?</pre>
+<p>Diferente do <code>getinfo</code>, o <code>getlocal</code> dá <strong>erro</strong> com um nível que não existe: "argumento nº 1 ruim para <code>getlocal</code> (nível fora da faixa)". Já um <strong>número de variável</strong> que não existe (<code>debug.getlocal(1, 99)</code>) só devolve <code>nil</code>, como no laço da seção 3.</p>
+</div>
+
+<div class="cenario">
+<strong>Letra errada no <code>getinfo</code></strong>
+<pre class="file" data-file="erros_dbg.lua">print(pcall(debug.getinfo, 1, "q"))
+print(pcall(debug.getlocal, 50, 1))
+print(debug.getlocal(1, 99))
+</pre>
+<pre class="term">$ lua erros_dbg.lua
+false	bad argument #2 to 'debug.getinfo' (invalid option)
+false	bad argument #1 to 'debug.getlocal' (level out of range)
+nil</pre>
+<p>A letra <code>"q"</code> não é uma opção do <code>getinfo</code> ("opção inválida"). As letras válidas são <code>n</code>, <code>S</code>, <code>l</code>, <code>u</code>, <code>t</code>, <code>r</code>, <code>f</code> e <code>L</code>; maiúscula e minúscula são diferentes (<code>"s"</code> minúsculo também é inválido).</p>
+</div>
+
+<div class="cenario">
+<strong>Esqueceu de desligar o gancho</strong>
+<pre class="file" data-file="esqueci.lua">debug.sethook(function (evento, linha)
+  print("  linha " .. linha)
+end, "l")
+local total = 2 + 3
+print("total:", total)
+print("fim")
+</pre>
+<pre class="term">$ lua esqueci.lua
+  linha 4
+  linha 5
+total:	5
+  linha 6
+fim</pre>
+<p>Não é erro do Lua, mas o gancho continua até o fim do programa, misturando avisos com a saída de verdade (e deixando tudo mais lento). Num programa grande, são milhares de linhas. <strong>Como consertar:</strong> sempre um <code>debug.sethook()</code> quando terminar de investigar.</p>
+</div>
+
+<div class="cenario">
+<strong>"O nome saiu <code>nil</code>"</strong>
+<p>O <code>name</code> do <code>getinfo</code> é o nome <strong>pelo qual</strong> a função foi chamada, não um nome guardado nela. No programa principal ele é <code>nil</code>; numa chamada de cauda também; e a mesma função chamada por duas variáveis diferentes mostra dois nomes:</p>
+<pre class="file" data-file="nomenil.lua">local info = debug.getinfo(1, "n")
+print(info.name)
+local t = {}
+function t.salvar()
+  print(debug.getinfo(1, "n").name, debug.getinfo(1, "n").namewhat)
+end
+t.salvar()
+local f = t.salvar
+f()
+</pre>
+<pre class="term">$ lua nomenil.lua
+nil
+salvar	field
+f	local</pre>
+<p>Para mostrar um nome, use <code>info.name or "?"</code>, como no exemplo das chamadas.</p>
+</div>
+
+<hr>
+
+<h2>Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Chamada</th><th>O que faz</th></tr>
+<tr><td><code>debug.traceback([msg [, nivel]])</code></td><td>Devolve a mensagem + o rastro da pilha (a partir do nível, padrão 1)</td></tr>
+<tr><td><code>debug.getinfo(nivel [, letras])</code></td><td>Tabela sobre a função daquele nível (<code>nil</code> se o nível não existe)</td></tr>
+<tr><td><code>debug.getinfo(funcao [, letras])</code></td><td>Tabela sobre uma função qualquer</td></tr>
+<tr><td>letras: <code>"n"</code> <code>"S"</code> <code>"l"</code> <code>"u"</code></td><td>nome · fonte e linhas · linha atual · parâmetros</td></tr>
+<tr><td><code>debug.getlocal(nivel, i)</code></td><td>Nome e valor da variável local nº <code>i</code> (<code>nil</code> quando acabam)</td></tr>
+<tr><td><code>debug.setlocal(nivel, i, valor)</code></td><td>Muda o valor da variável local nº <code>i</code></td></tr>
+<tr><td><code>debug.sethook(f, "l"/"c"/"r" [, n])</code></td><td>Pendura um gancho: a cada linha / chamada / retorno / <code>n</code> instruções</td></tr>
+<tr><td><code>debug.sethook()</code></td><td>Tira o gancho</td></tr>
+<tr><td><code>debug.gethook()</code></td><td>Diz qual gancho está pendurado</td></tr>
+<tr><td><code>debug.debug()</code></td><td>Um modo interativo simples para digitar comandos no meio do programa (termina com <code>cont</code>)</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. Complete</h3>
+<p>Complete para mostrar o rastro de chamadas com a mensagem "aqui":</p>
+<div class="ex-code">print(debug.<input data-answer="traceback" aria-label="função">("aqui"))</div>
+</div>
+
+<div class="exercise">
+<h3>2. O nível de quem chamou</h3>
+<p>Dentro de uma função, qual nível do <code>debug.getinfo</code> é <strong>quem chamou</strong> essa função?</p>
+<div class="ex-code">debug.getinfo(<input data-answer="2" aria-label="nível">, "l")</div>
+</div>
+
+<div class="exercise">
+<h3>3. Desligar</h3>
+<p>Complete para tirar o gancho:</p>
+<div class="ex-code">debug.<input data-answer="sethook" aria-label="função">()</div>
+</div>
+
+<div class="mc" data-answer="3">
+<p class="mc-q">4. O que <code>debug.getinfo(1, "l").currentline</code> devolve?</p>
+<label><input type="radio" name="q4"> A linha onde o programa começa</label>
+<label><input type="radio" name="q4"> O número de linhas do arquivo</label>
+<label><input type="radio" name="q4"> A linha que está rodando agora na função atual</label>
+<label><input type="radio" name="q4"> A linha do <code>end</code> da função</label>
+</div>
+
+<div class="mc" data-answer="1">
+<p class="mc-q">5. Num rastro aparece <code>(...tail calls...)</code>. O que aconteceu?</p>
+<label><input type="radio" name="q5"> Uma função fez <code>return outra(…)</code> e saiu da pilha antes de a outra rodar</label>
+<label><input type="radio" name="q5"> O programa travou</label>
+<label><input type="radio" name="q5"> Faltou um <code>end</code></label>
+<label><input type="radio" name="q5"> O <code>traceback</code> está com defeito</label>
+</div>
+
+<div class="mc" data-answer="4">
+<p class="mc-q">6. Por que não usar a biblioteca <code>debug</code> na lógica normal do programa?</p>
+<label><input type="radio" name="q6"> Porque ela só funciona no editor</label>
+<label><input type="radio" name="q6"> Porque ela não existe no Lua 5.5</label>
+<label><input type="radio" name="q6"> Porque ela apaga as variáveis locais</label>
+<label><input type="radio" name="q6"> Porque algumas funções são lentas e furam regras da linguagem (como a do <code>local</code>)</label>
+</div>
+
+<h3>Missão final: quantas vezes a função foi chamada?</h3>
+
+<div class="trylua" data-goal="out:fib foi chamada 177 vezes;;src:sethook">
+<p class="try-task"><strong>Missão:</strong> a função <code>fib</code> chama a si mesma (veja <a href="recursao.html">Recursão</a>), e a Ana quer saber <strong>quantas vezes</strong> ela é chamada para calcular <code>fib(10)</code>. O gancho de chamadas já está pendurado, mas não conta nada. Dentro dele, pegue o nome da função chamada com <code>debug.getinfo(2, "n")</code> e, se o nome for <code>"fib"</code>, some 1 em <code>chamadas</code>.</p>
+<pre class="script" data-file="main.lua">local chamadas = 0
+
+local function fib(n)
+  if n &lt; 2 then return n end
+  return fib(n - 1) + fib(n - 2)
+end
+
+debug.sethook(function (evento)
+  -- conte aqui as chamadas da fib
+end, "c")
+local resultado = fib(10)
+debug.sethook()
+
+print("fib(10) =", resultado)
+print("fib foi chamada " .. chamadas .. " vezes")
+</pre>
+<pre class="solucao" data-file="main.lua">local chamadas = 0
+
+local function fib(n)
+  if n &lt; 2 then return n end
+  return fib(n - 1) + fib(n - 2)
+end
+
+debug.sethook(function (evento)
+  local info = debug.getinfo(2, "n")
+  if info.name == "fib" then
+    chamadas = chamadas + 1
+  end
+end, "c")
+local resultado = fib(10)
+debug.sethook()
+
+print("fib(10) =", resultado)
+print("fib foi chamada " .. chamadas .. " vezes")
+</pre>
+</div>
+
+<p>No lab, a solução mostrou:</p>
+<pre class="term">$ lua fib.lua
+fib(10) =	55
+fib foi chamada 177 vezes</pre>
+<p>177 chamadas para um resultado de 55: é por isso que essa <code>fib</code> fica lentíssima com números maiores. Medir com um gancho é o primeiro passo para descobrir onde um programa gasta o tempo.</p>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li>As funções do <code>debug</code> contam a pilha de chamadas por <strong>nível</strong>: 1 = a função atual, 2 = quem a chamou, e assim por diante.</li>
+  <li><code>debug.traceback(msg)</code> devolve o rastro da pilha como texto, sem parar o programa; com <code>xpcall</code>, mostra o rastro de um erro.</li>
+  <li><code>debug.getinfo(nivel, "Sl")</code> dá arquivo (<code>short_src</code>), linha (<code>currentline</code>), nome (<code>name</code>) e mais; com um nível que não existe, devolve <code>nil</code>.</li>
+  <li><code>debug.getlocal(nivel, i)</code> lista as variáveis locais, na ordem em que foram declaradas.</li>
+  <li><code>debug.sethook(f, "l")</code>, <code>"c"</code>, <code>"r"</code> ou <code>("", n)</code> pendura um gancho; <code>debug.sethook()</code> tira.</li>
+  <li>É uma biblioteca para <strong>investigar</strong>: lenta em partes e capaz de furar regras da linguagem. Na lógica do programa, não.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
