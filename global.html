@@ -1,0 +1,500 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua global — a declaração de variáveis globais do Lua 5.5 | Guia Lua</title>
+<meta name="description" content="A declaração global, novidade do Lua 5.5, para quem está começando: global nome, global nome = valor, global function, global * e global&lt;const&gt; *, por que depois de um global todo nome precisa ser declarado (até o print), o erro real variable 'x' not declared, global 'x' already defined, e a comparação com o Lua 5.4 e o LuaJIT.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">global</span> <span class="versao">5.5</span></h1>
+
+<p class="intro">Desde o começo do guia, você viu que no Lua uma variável sem <code>local</code> vira <strong>global</strong> sozinha, e que isso é perigoso: um erro de digitação (<code>totl</code> no lugar de <code>total</code>) cria uma variável nova em silêncio, e o programa dá a resposta errada sem reclamar. O <strong>Lua 5.5</strong> trouxe uma ferramenta nova contra isso: a declaração <code>global</code>. Com ela você diz ao Lua <strong>quais</strong> globais existem, e a partir daí qualquer outro nome solto vira <strong>erro</strong>, antes mesmo de o programa rodar.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>Como o Lua sempre tratou os nomes soltos (o "global por padrão") e o que muda com <code>global</code>.</li>
+  <li>As formas da declaração: <code>global nome</code>, <code>global nome = valor</code>, <code>global function</code>, <code>global *</code> e <code>global&lt;const&gt; *</code>.</li>
+  <li>Por que, depois de um <code>global</code>, até o <code>print</code> precisa ser declarado, e como fazer isso.</li>
+  <li>Como o <code>global</code> pega erros de digitação, e até onde vale uma declaração (o bloco).</li>
+  <li>As mensagens reais: <code>variable 'x' not declared</code>, <code>global 'x' already defined</code> e a do Lua 5.4.</li>
+</ul>
+</div>
+
+<p>Todos os programas desta aula rodaram no <strong>Lua 5.5</strong> da máquina da Ana (usuária <code>ana</code>, computador <code>notebook</code>), salvos na pasta pessoal dela e executados com <code>lua arquivo.lua</code>. As comparações com versões antigas rodaram no <code>lua5.4</code> e no <code>luajit</code> da mesma máquina. Antes desta aula, veja <a href="local.html">local</a> e <a href="const.html">&lt;const&gt;</a>.</p>
+
+<hr>
+
+<h2>A ideia: a lista de convidados</h2>
+<p>Imagine a festa de aniversário da Ana. Existem dois jeitos de cuidar da porta:</p>
+<ul>
+  <li><strong>Festa aberta</strong>: entra quem chegar. É prático, mas se alguém chega com o nome errado no crachá, ninguém percebe.</li>
+  <li><strong>Festa com lista</strong>: o porteiro tem uma lista de convidados. Chegou alguém que não está na lista? Ele <strong>barra na porta</strong>, e avisa o nome.</li>
+</ul>
+<p>Um programa Lua sem nenhuma declaração <code>global</code> é a festa aberta: todo nome que não é <code>local</code> entra como global. Quando você escreve um <code>global</code>, o Lua vira o porteiro com lista: dali para a frente, <strong>só passam os nomes declarados</strong> (locais ou globais). O resto é barrado, com o nome na mensagem.</p>
+
+<hr>
+
+<h2>1. Como sempre foi: global por padrão</h2>
+<p>O manual do Lua 5.5 explica assim: todo arquivo começa com uma declaração <strong>invisível</strong>, <code>global *</code>, que quer dizer "todos os nomes soltos são globais". É por isso que este programa, com um erro de digitação, roda sem reclamar:</p>
+
+<pre class="file" data-file="soma.lua">total = 0
+local precos = { 4.50, 12.90, 3.25 }
+for i = 1, #precos do
+  totl = total + precos[i]
+end
+print(string.format("Total: R$ %.2f", total))
+</pre>
+
+<pre class="term">$ lua soma.lua
+Total: R$ 0.00</pre>
+
+<p>O certo era R$ 20.65. A linha 4 escreveu em <code>totl</code>, uma global nova criada sem querer, e o <code>total</code> ficou em zero. Num programa de 500 linhas, achar esse erro leva tempo.</p>
+
+<hr>
+
+<h2>2. A primeira declaração</h2>
+<p>Agora o mesmo tipo de programa, com uma declaração no topo:</p>
+
+<pre class="file" data-file="g1.lua">global total = 10
+print(total)
+</pre>
+
+<pre class="term">$ lua g1.lua
+lua: g1.lua:2: variable 'print' not declared</pre>
+
+<p>Surpresa: o erro é no <code>print</code>! "Variável 'print' não declarada". Linha por linha:</p>
+<dl class="anatomy">
+  <dt>global total = 10</dt><dd>Declara a global <code>total</code> e dá a ela o valor 10. Mas, ao mesmo tempo, essa linha <strong>desliga</strong> a declaração invisível <code>global *</code>. A partir dela, o Lua só aceita nomes declarados.</dd>
+  <dt>print(total)</dt><dd><code>total</code> está declarado. <code>print</code>, não. E o <code>print</code> também é uma global (é uma função guardada na tabela das globais; veja <a href="env.html">_G e _ENV</a>).</dd>
+  <dt>lua: g1.lua:2: variable 'print' not declared</dt><dd>O erro aponta a <strong>linha 2</strong> e o nome barrado. Não há <code>stack traceback</code>: como o erro do <code>&lt;const&gt;</code>, este é descoberto na <strong>compilação</strong>, quando o Lua lê o arquivo antes de rodar. Nada do programa chegou a rodar.</dd>
+</dl>
+
+<p>Para consertar, declare também o <code>print</code>. Uma declaração aceita vários nomes, separados por vírgula, e pode ser escrita em várias linhas:</p>
+
+<pre class="file" data-file="g2.lua">global print
+global total = 10
+print(total)
+</pre>
+
+<pre class="term">$ lua g2.lua
+10</pre>
+
+<div class="trylua" data-goal="out:Total: 10;;semerro">
+<p class="try-task"><strong>Missão:</strong> rode e veja o erro <code>variable 'print' not declared</code>. Conserte <strong>sem apagar</strong> a declaração do <code>total</code>: declare as globais que faltam. (Dica: são duas, e uma delas não é o <code>print</code>. Rode de novo e leia a mensagem.)</p>
+<pre class="script" data-file="main.lua">global total = 10
+print(string.format("Total: %d", total))
+</pre>
+<pre class="solucao" data-file="main.lua">global print, string
+global total = 10
+print(string.format("Total: %d", total))
+</pre>
+</div>
+
+<p>A segunda que faltava é a <code>string</code>: a biblioteca <code>string</code> também é uma global (uma tabela com as funções de texto). Depois de um <code>global</code>, <strong>tudo</strong> o que vem das globais precisa estar declarado: <code>print</code>, <code>string</code>, <code>math</code>, <code>io</code>, <code>table</code>, <code>ipairs</code>, <code>tostring</code>…</p>
+
+<hr>
+
+<h2>3. O porteiro pegando o erro de digitação</h2>
+<p>Agora volte ao programa da seção 1, com as declarações no topo:</p>
+
+<pre class="file" data-file="g3.lua">global print, string
+global total = 0
+local precos = { 4.50, 12.90, 3.25 }
+for i = 1, #precos do
+  totl = total + precos[i]
+end
+print(string.format("Total: R$ %.2f", total))
+</pre>
+
+<pre class="term">$ lua g3.lua
+lua: g3.lua:5: variable 'totl' not declared</pre>
+
+<p>Pronto: em vez de uma resposta errada, o Lua mostra <strong>a linha e o nome</strong> do erro de digitação. E como é um erro de compilação, ele aparece mesmo que essa linha fique dentro de um <code>if</code> que quase nunca roda. Dá até para conferir sem rodar, com o <code>luac -p</code>:</p>
+
+<pre class="term">$ luac -p g3.lua
+luac: g3.lua:5: variable 'totl' not declared</pre>
+
+<p>Repare que <code>precos</code> e <code>i</code> não precisaram de nada: eles são <strong>locais</strong>, e variáveis locais (inclusive as do <code>for</code> e os parâmetros de função) já são "declaradas" por natureza. A lista do porteiro só vale para os nomes que <strong>não</strong> são locais. O mesmo vale dentro de funções:</p>
+
+<pre class="file" data-file="g16.lua">global print
+local function soma(a, b)
+  local r = a + b
+  return resultado
+end
+print(soma(1, 2))
+</pre>
+
+<pre class="term">$ lua g16.lua
+lua: g16.lua:4: variable 'resultado' not declared</pre>
+
+<p>Sem o <code>global print</code> da linha 1, esse programa rodaria e mostraria <code>nil</code> (a global <code>resultado</code> não existe). Com ele, o Lua achou que o certo era <code>return r</code>.</p>
+
+<hr>
+
+<h2>4. As formas da declaração</h2>
+
+<h3><code>global nome</code>: só declarar</h3>
+<p>Diz que o nome é uma global, <strong>sem mudar</strong> o valor dela. Se ela não existia, continua <code>nil</code> até alguém dar um valor:</p>
+
+<pre class="file" data-file="g20.lua">global print
+global total
+print(total)
+total = 3
+print(total)
+</pre>
+
+<pre class="term">$ lua g20.lua
+nil
+3</pre>
+
+<p>(Diferente do <code>local x</code>, que sempre começa em <code>nil</code>: o <code>global x</code> deixa a global com o valor que ela já tinha.)</p>
+
+<h3><code>global nome = valor</code>: declarar e criar</h3>
+<p>Declara e dá o valor inicial. Mas atenção: o manual diz que essa forma dá <strong>erro</strong> se a global <strong>já existir</strong> (já tiver um valor diferente de <code>nil</code>). É uma proteção: você está dizendo "esta global é nova", e o Lua confere:</p>
+
+<pre class="file" data-file="g8.lua">contador = 5
+global print
+global contador = 1
+print(contador)
+</pre>
+
+<pre class="term">$ lua g8.lua
+lua: g8.lua:3: global 'contador' already defined
+stack traceback:
+	g8.lua:3: in main chunk
+	[C]: in ?</pre>
+
+<p>"Global 'contador' já definida". Este erro <strong>tem</strong> <code>stack traceback</code>: ele é de execução. Na compilação, o Lua não tem como saber se a global já existe; só descobre ao rodar a linha 3. Se você só quer mudar o valor de uma global que já existe, declare com <code>global contador</code> e depois atribua com <code>contador = 1</code>.</p>
+
+<h3><code>global function</code>: declarar uma função global</h3>
+
+<pre class="file" data-file="g10.lua">global print
+global function dobro(x)
+  return 2 * x
+end
+print(dobro(21))
+</pre>
+
+<pre class="term">$ lua g10.lua
+42</pre>
+
+<p>É o par do <code>local function</code>. Ela também conta como "global nova": se já existisse uma global <code>dobro</code>, daria <code>global 'dobro' already defined</code> (no lab, com um <code>function dobro(x) … end</code> antes, deu exatamente isso, na linha do <code>global function</code>).</p>
+
+<h3><code>global &lt;const&gt;</code>: globais que não mudam</h3>
+<p>O atributo <code>&lt;const&gt;</code> da aula <a href="const.html">&lt;const&gt;</a> também funciona com globais, depois do nome ou antes da lista:</p>
+
+<pre class="file" data-file="g18.lua">global print, tostring
+global &lt;const&gt; PI_APROX, NOME_LOJA = 3.14, "Padaria"
+print(PI_APROX, NOME_LOJA)
+</pre>
+
+<pre class="term">$ lua g18.lua
+3.14	Padaria</pre>
+
+<p>E tentar mudar dá o erro de sempre, na compilação: com <code>global VERSAO &lt;const&gt; = "1.0"</code> e depois <code>VERSAO = "2.0"</code>, o lab mostrou <code>lua: g15.lua:2: attempt to assign to const variable 'VERSAO'</code>. (O <code>&lt;close&gt;</code>, ao contrário, <strong>não</strong> vale para globais: veja a aula <a href="close.html">&lt;close&gt;</a>.)</p>
+
+<h3><code>global *</code> e <code>global&lt;const&gt; *</code>: todos os outros</h3>
+<p>O asterisco quer dizer "todos os nomes que eu ainda não declarei". <code>global *</code> devolve o comportamento antigo (tudo é global). Mais útil é <code>global&lt;const&gt; *</code>: <strong>todos os outros nomes são globais só para leitura</strong>. Você pode usar <code>print</code>, <code>math</code> e companhia à vontade, mas só pode <strong>escrever</strong> nas globais que declarou. É o exemplo do próprio manual:</p>
+
+<pre class="file" data-file="g6.lua">global X
+global&lt;const&gt; *
+print(math.pi)
+X = 1
+Y = 1
+</pre>
+
+<pre class="term">$ lua g6.lua
+lua: g6.lua:5: attempt to assign to const variable 'Y'</pre>
+
+<p>Linha 3: <code>print</code> e <code>math</code> são lidos, e pode. Linha 4: <code>X</code> foi declarado sem <code>&lt;const&gt;</code>, e pode receber valor. Linha 5: <code>Y</code> caiu no <code>*</code>, que é só leitura: erro (de compilação, por isso nem o <code>math.pi</code> chegou a aparecer). É uma ótima primeira linha para um programa novo: não precisa listar <code>print</code>, <code>string</code>, <code>io</code>… e nenhuma linha consegue criar uma global por engano, nem estragar uma de verdade (com <code>global&lt;const&gt; *</code>, <code>print = nil</code> dá <code>attempt to assign to const variable 'print'</code>).</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>O que declara</th></tr>
+<tr><td><code>global a, b</code></td><td><code>a</code> e <code>b</code> são globais (o valor não muda)</td></tr>
+<tr><td><code>global a = 1</code></td><td>declara e cria; erro se <code>a</code> já tiver valor</td></tr>
+<tr><td><code>global function f() … end</code></td><td>declara e cria a função global <code>f</code></td></tr>
+<tr><td><code>global a &lt;const&gt; = 1</code> / <code>global &lt;const&gt; a, b = 1, 2</code></td><td>globais só para leitura</td></tr>
+<tr><td><code>global *</code></td><td>todo nome não declarado é global (o padrão de sempre)</td></tr>
+<tr><td><code>global&lt;const&gt; *</code></td><td>todo nome não declarado é global <strong>só para leitura</strong></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>5. Até onde vale uma declaração: o bloco</h2>
+<p>Uma declaração <code>global</code> vale do ponto onde foi escrita até o fim do <strong>bloco</strong> onde está (como um <code>local</code>; veja <a href="escopo.html">Escopo e Blocos</a>). Fora do bloco, o Lua volta ao que valia antes. O manual traz este exemplo:</p>
+
+<pre class="file" data-file="g4.lua">X = 1
+do
+  global Y
+  Y = 1
+  X = 1
+end
+X = 2
+</pre>
+
+<pre class="term">$ lua g4.lua
+lua: g4.lua:5: variable 'X' not declared</pre>
+
+<p>Na linha 1, ainda vale o <code>global *</code> invisível: <code>X = 1</code> pode. Dentro do <code>do … end</code>, o <code>global Y</code> ligou o porteiro: <code>Y</code> pode, <code>X</code> não (linha 5). Tirando a linha 5, o programa roda, e a linha 7 (<code>X = 2</code>), já fora do bloco, volta a poder:</p>
+
+<pre class="file" data-file="g5.lua">X = 1
+do
+  global Y
+  Y = 1
+end
+X = 2
+print(X, Y)
+</pre>
+
+<pre class="term">$ lua g5.lua
+2	1</pre>
+
+<p>O contrário também acontece: uma declaração feita <strong>dentro</strong> de um bloco não vale fora dele:</p>
+
+<pre class="file" data-file="g25.lua">global print
+if true then
+  global x = 1
+end
+print(x)
+</pre>
+
+<pre class="term">$ lua g25.lua
+lua: g25.lua:5: variable 'x' not declared</pre>
+
+<p>A global <code>x</code> até foi criada (o <code>= 1</code> rodaria), mas o <strong>nome</strong> só foi declarado dentro do <code>if</code>. Por isso, ponha as declarações <code>global</code> no <strong>topo do arquivo</strong>. Com <code>global print, x</code> na linha 1 e só <code>x = 1</code> dentro do <code>if</code>, o lab mostrou <code>1</code>.</p>
+
+<div class="note">
+<strong>No modo interativo</strong>
+<p>No <code>&gt;</code> do Lua, cada linha que você digita é compilada separada (como um arquivo pequeno). Uma declaração vale só para a própria linha:</p>
+<pre class="term">$ lua
+Lua 5.5.0  Copyright (C) 1994-2025 Lua.org, PUC-Rio
+&gt; global x = 1
+&gt; x
+1
+&gt; print(x)
+1
+&gt; global print; global y = 2; print(y)
+2</pre>
+<p>Na linha do <code>print(x)</code>, o porteiro já tinha ido embora (ela é outro pedaço), e o <code>print</code> funcionou sem declarar.</p>
+</div>
+
+<hr>
+
+<h2>6. Um exemplo completo</h2>
+<p>Um programa curto da padaria, com tudo declarado no topo: as bibliotecas que ele usa, uma constante e um contador global:</p>
+
+<pre class="file" data-file="g27.lua">global print, tostring, string
+global &lt;const&gt; TAXA = 0.1
+global pedidos = 0
+local function registrar(valor)
+  pedidos = pedidos + 1
+  return valor * (1 + TAXA)
+end
+print(string.format("%.2f", registrar(20)))
+print(pedidos)
+</pre>
+
+<pre class="term">$ lua g27.lua
+22.00
+1</pre>
+
+<p>Quem lê as três primeiras linhas já sabe tudo o que o programa usa "de fora" e tudo o que ele cria de global. Esse é o outro ganho do <code>global</code>, além de pegar erros: o código se <strong>documenta</strong>.</p>
+
+<div class="tip">
+<strong><code>global</code> não substitui o <code>local</code></strong>
+<p>A regra do guia continua a mesma: <strong><code>local</code> sempre</strong> que der. Uma global é vista pelo programa inteiro (e pelos módulos que ele carrega), e qualquer parte pode mudá-la. O <code>global</code> serve para deixar <strong>explícitas</strong> as poucas globais de que você realmente precisa, e para pegar os nomes errados.</p>
+</div>
+
+<hr>
+
+<h2 id="formas">Formas diferentes de fazer a mesma coisa</h2>
+<p>Três jeitos de começar um programa no Lua 5.5:</p>
+
+<pre class="file" data-file="formas.lua">-- 1) sem nada: tudo o que não é local é global, para ler e escrever
+-- 2) global&lt;const&gt; *: lê qualquer global, escreve só nas declaradas
+global contador
+global&lt;const&gt; *
+-- 3) lista fechada: só passam os nomes da lista
+-- global print, string, contador
+</pre>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Situação</th><th>Qual usar</th></tr>
+<tr><td>Programa que precisa rodar também no Lua 5.4, 5.1 ou LuaJIT</td><td>Nenhuma declaração (e <code>local</code> sempre)</td></tr>
+<tr><td>Programa novo, só para o 5.5, e você quer pegar erros de digitação sem listar tudo</td><td><code>global&lt;const&gt; *</code> no topo, com as suas globais declaradas antes</td></tr>
+<tr><td>Um módulo ou programa em que você quer saber exatamente o que vem de fora</td><td><code>global print, string, …</code> (a lista fechada)</td></tr>
+<tr><td>Uma global que ninguém pode trocar</td><td><code>global NOME &lt;const&gt; = valor</code></td></tr>
+</table>
+</div>
+
+<div class="note">
+<strong><code>global</code> só muda o que o compilador aceita</strong>
+<p>O manual avisa: a declaração <code>global</code> é só <strong>sintática</strong> (fora o <code>= valor</code>, ela não faz nada ao rodar). Ela não protege as globais de verdade: outro arquivo, ou um acesso pela tabela das globais, ainda pode mudá-las. Com <code>global print, _G</code> e <code>global VERSAO &lt;const&gt; = "1.0"</code>, a linha <code>_G.VERSAO = "2.0"</code> funcionou no lab, e o segundo <code>print(VERSAO)</code> mostrou <code>2.0</code>. A tabela <code>_G</code> é assunto da próxima aula: <a href="env.html">_G e _ENV</a>.</p>
+</div>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+
+<div class="cenario">
+<strong>Esqueceu de declarar uma biblioteca</strong>
+<pre class="file" data-file="g21.lua">global print
+local nome = io.read()
+print("Olá, " .. nome)
+</pre>
+<p>Resultado: <code>variable 'io' not declared</code> na linha 2. Toda biblioteca padrão (<code>io</code>, <code>os</code>, <code>string</code>, <code>table</code>, <code>math</code>, <code>utf8</code>, <code>coroutine</code>) e toda função solta (<code>print</code>, <code>type</code>, <code>tostring</code>, <code>tonumber</code>, <code>pairs</code>, <code>ipairs</code>, <code>pcall</code>, <code>error</code>, <code>setmetatable</code>…) é global. <strong>Como consertar:</strong> <code>global print, io</code>. Com isso, <code>echo Ana | lua g21.lua</code> mostrou <code>Olá, Ana</code>. Se a lista ficar comprida, use <code>global&lt;const&gt; *</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Criou com <code>=</code> uma global que já existia</strong>
+<pre class="term">$ lua g8.lua
+lua: g8.lua:3: global 'contador' already defined
+stack traceback:
+	g8.lua:3: in main chunk
+	[C]: in ?</pre>
+<p>Veja a seção 4. <code>global x = valor</code> é para globais <strong>novas</strong>. Para mudar uma que já existe: <code>global x</code> e, em outra linha, <code>x = valor</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Declarou o <code>_ENV</code> como global</strong>
+<pre class="file" data-file="g14.lua">global print, _ENV
+global VERSAO &lt;const&gt; = "1.0"
+print(VERSAO)
+</pre>
+<pre class="term">$ lua g14.lua
+lua: g14.lua:2: _ENV is global when accessing variable 'VERSAO'</pre>
+<p>"_ENV é global ao acessar a variável 'VERSAO'". O <code>_ENV</code> é especial: ele é a tabela onde moram as globais (aula <a href="env.html">_G e _ENV</a>), e por isso ele mesmo não pode ser uma global. Nunca ponha <code>_ENV</code> numa declaração <code>global</code>; se precisar da tabela das globais, declare o <code>_G</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Rodou o programa num Lua antigo</strong>
+<pre class="term">$ lua5.4 g2.lua
+lua5.4: g2.lua:1: syntax error near 'print'
+$ luajit g2.lua
+luajit: g2.lua:1: '=' expected near 'print'</pre>
+<p>No Lua 5.4 e no LuaJIT, <code>global</code> é um nome comum, como <code>total</code>. Eles leem <code>global print</code> como "a variável <code>global</code> seguida da variável <code>print</code>", o que não faz sentido: "erro de sintaxe perto de 'print'" (5.4), "era esperado '=' perto de 'print'" (LuaJIT). Programas com <code>global</code> só rodam no Lua 5.5 ou mais novo. Veja <a href="versoes.html">as diferenças entre as versões</a>.</p>
+</div>
+
+<div class="cenario">
+<strong>Um programa antigo usa <code>global</code> como nome</strong>
+<p>O manual do 5.5 diz que <code>global</code> é uma <strong>palavra reservada</strong> (como <code>if</code> e <code>end</code>), com uma opção de compilação, <code>LUA_COMPAT_GLOBAL</code>, que a deixa ser um nome comum. No Lua 5.5.0 essa opção vem <strong>ligada</strong>: está no <code>luaconf.h</code> da distribuição oficial, e no do Ubuntu também. Por isso, no lab, programas antigos com uma variável chamada <code>global</code> continuaram rodando:</p>
+<pre class="term">$ cat g17.lua
+local global = 1
+print(global)
+$ lua g17.lua
+1</pre>
+<p>Funciona porque o Lua só entende <code>global</code> como declaração quando ele vem seguido de um nome, de <code>&lt;</code>, de <code>*</code> ou de <code>function</code>. Mesmo assim, <strong>não use <code>global</code> como nome</strong> em código novo: o manual avisa que essas opções de compatibilidade vão sumir, e num Lua compilado sem ela essa linha é erro.</p>
+</div>
+
+<hr>
+
+<h2>Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Mensagem</th><th>Quando aparece</th><th>Causa</th></tr>
+<tr><td><code>variable 'x' not declared</code></td><td>compilação</td><td>Dentro de um bloco com <code>global</code>, um nome que não é local nem foi declarado</td></tr>
+<tr><td><code>attempt to assign to const variable 'x'</code></td><td>compilação</td><td>Escreveu numa global <code>&lt;const&gt;</code> ou caída no <code>global&lt;const&gt; *</code></td></tr>
+<tr><td><code>global 'x' already defined</code></td><td>execução</td><td><code>global x = …</code> (ou <code>global function x</code>) com <code>x</code> já existindo</td></tr>
+<tr><td><code>global variables cannot be to-be-closed</code></td><td>compilação</td><td><code>global x &lt;close&gt;</code></td></tr>
+<tr><td><code>_ENV is global when accessing variable 'x'</code></td><td>compilação</td><td><code>_ENV</code> numa declaração <code>global</code></td></tr>
+<tr><td><code>syntax error near …</code> (5.4) / <code>'=' expected near …</code> (LuaJIT)</td><td>compilação</td><td>Versão sem a declaração <code>global</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. Complete a declaração</h3>
+<p>Complete para o programa rodar mostrando <code>5</code>:</p>
+<div class="ex-code"><input data-answer="global" aria-label="palavra-chave"> print<br>global quantidade = 5<br><input data-answer="print" aria-label="função">(quantidade)</div>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">2. O arquivo tem só <code>global x = 1</code> e <code>print(x)</code>. O que acontece?</p>
+<label><input type="radio" name="q2"> Mostra <code>1</code></label>
+<label><input type="radio" name="q2"> <code>variable 'print' not declared</code>, e nada roda</label>
+<label><input type="radio" name="q2"> Mostra <code>nil</code></label>
+<label><input type="radio" name="q2"> <code>global 'x' already defined</code></label>
+</div>
+
+<div class="mc" data-answer="3">
+<p class="mc-q">3. Qual primeira linha deixa ler <code>print</code>, <code>math</code> etc. sem listá-los, mas proíbe criar globais não declaradas?</p>
+<label><input type="radio" name="q3"> <code>global *</code></label>
+<label><input type="radio" name="q3"> <code>local *</code></label>
+<label><input type="radio" name="q3"> <code>global&lt;const&gt; *</code></label>
+<label><input type="radio" name="q3"> <code>global none</code></label>
+</div>
+
+<div class="mc" data-answer="1">
+<p class="mc-q">4. Num arquivo com <code>global print</code> no topo, você escreveu <code>local r = 5</code> e, depois, <code>print(r)</code>. Precisa declarar <code>r</code> com <code>global</code>?</p>
+<label><input type="radio" name="q4"> Não: variáveis locais já são declaradas</label>
+<label><input type="radio" name="q4"> Sim: depois de um <code>global</code>, todo nome precisa de <code>global</code></label>
+<label><input type="radio" name="q4"> Só se ela for usada dentro de uma função</label>
+<label><input type="radio" name="q4"> Só no modo interativo</label>
+</div>
+
+<div class="mc" data-answer="4">
+<p class="mc-q">5. Em qual versão <code>global print</code> é uma declaração válida?</p>
+<label><input type="radio" name="q5"> Lua 5.1</label>
+<label><input type="radio" name="q5"> LuaJIT</label>
+<label><input type="radio" name="q5"> Lua 5.4</label>
+<label><input type="radio" name="q5"> Lua 5.5</label>
+</div>
+
+<h3>Missão final: o porteiro acha o erro</h3>
+
+<div class="trylua" data-goal="out:Total: R$ 20.65;;semerro;;src:^global\b">
+<p class="try-task"><strong>Missão:</strong> este é o programa da seção 1, que mostra <code>Total: R$ 0.00</code> por causa de um erro de digitação. Ponha na <strong>primeira linha</strong> uma declaração <code>global</code> com os nomes que o programa usa de verdade (<code>print</code>, <code>string</code> e <code>total</code>). Rode: o Lua vai dizer a linha do nome errado. Conserte e chegue a <code>Total: R$ 20.65</code>.</p>
+<pre class="script" data-file="main.lua">total = 0
+local precos = { 4.50, 12.90, 3.25 }
+for i = 1, #precos do
+  totl = total + precos[i]
+end
+print(string.format("Total: R$ %.2f", total))
+</pre>
+<pre class="solucao" data-file="main.lua">global print, string, total
+total = 0
+local precos = { 4.50, 12.90, 3.25 }
+for i = 1, #precos do
+  total = total + precos[i]
+end
+print(string.format("Total: R$ %.2f", total))
+</pre>
+</div>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li><span class="versao">5.5</span> Todo arquivo começa com um <code>global *</code> invisível: nome solto é global. Qualquer outra declaração <code>global</code> <strong>desliga</strong> isso até o fim do bloco.</li>
+  <li>Dentro do alcance de um <code>global</code>, todo nome tem de ser local ou declarado, <strong>inclusive</strong> <code>print</code>, <code>string</code>, <code>io</code>… Senão: <code>variable 'x' not declared</code>, na compilação.</li>
+  <li><code>global x</code> só declara; <code>global x = v</code> e <code>global function x</code> também criam, e dão <code>global 'x' already defined</code> se ela já existir.</li>
+  <li><code>global&lt;const&gt; *</code> deixa ler qualquer global e escrever só nas declaradas: uma ótima primeira linha para programas novos.</li>
+  <li>A declaração vale até o fim do bloco: ponha-a no topo do arquivo. É só uma regra do compilador; ela não tranca as globais de verdade.</li>
+  <li>O 5.4, o 5.1 e o LuaJIT não conhecem <code>global</code>. E continue usando <code>local</code> sempre que puder.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
