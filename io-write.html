@@ -243,7 +243,7 @@ file (0x7fe99ba13580)
 oifile (0x7fe99ba13580)
 &gt; os.exit()
 </pre>
-<p>O número entre parênteses é um endereço de memória e muda a cada vez que você abre o <code>lua</code>. No segundo caso, sem <code>\n</code>, o <code>file</code> até grudou no <code>oi</code>. Num programa em arquivo, isso não aparece.</p>
+<p>O número entre parênteses é um endereço de memória e muda a cada vez que você abre o <code>lua</code> (no modo interativo do editor do guia ele sai mais curto, como <code>file (0x808570)</code>). No segundo caso, sem <code>\n</code>, o <code>file</code> até grudou no <code>oi</code>. Num programa em arquivo, isso não aparece.</p>
 </div>
 
 <hr>
@@ -267,7 +267,7 @@ Cliente: ana@notebook:~$
   <dt>bad argument #2 to 'write'</dt><dd>"Argumento ruim, o número 2, para o <code>write</code>". Os argumentos são contados da esquerda para a direita: o 1º é <code>"Cliente: "</code>, o 2º é o <code>nil</code>.</dd>
   <dt>(string expected, got nil)</dt><dd>"Esperava uma string, recebeu nil". O <code>io.write</code> só aceita textos e números; o <code>print</code> aceitaria o <code>nil</code>.</dd>
   <dt>[C]: in field 'write'</dt><dd>O erro aconteceu dentro do <code>write</code>, que é um <strong>campo</strong> do <code>io</code> e foi escrito em linguagem C (por isso o <code>[C]</code>).</dd>
-  <dt>Cliente: ana@notebook:~$</dt><dd>Olhe o fim: o <code>"Cliente: "</code> <strong>foi</strong> escrito, mas apareceu <strong>depois</strong> da mensagem de erro, grudado no prompt. O <code>io.write</code> escreveu o 1º argumento antes de tropeçar no 2º; só que a saída normal espera numa "fila" até completar uma linha (o <code>\n</code> nunca chegou), enquanto a mensagem de erro sai na hora. A fila só foi descarregada quando o programa terminou.</dd>
+  <dt>Cliente: ana@notebook:~$</dt><dd>Olhe o fim: o <code>"Cliente: "</code> <strong>foi</strong> escrito, mas apareceu <strong>depois</strong> da mensagem de erro, grudado no prompt. O <code>io.write</code> escreveu o 1º argumento antes de tropeçar no 2º; só que a saída normal espera numa "fila" até completar uma linha (o <code>\n</code> nunca chegou), enquanto a mensagem de erro sai na hora. A fila só foi descarregada quando o programa terminou. No editor do guia acontece o mesmo: o <code>Cliente: </code> aparece depois da mensagem de erro.</dd>
 </dl>
 <p>Na vida real, ninguém escreve <code>nil</code> de propósito: ele chega dentro de uma variável que ficou sem valor (um nome escrito errado, uma resposta que não veio). A aula <a href="local.html">local × Global</a> mostra como isso acontece. <strong>Como consertar:</strong> descubra por que o valor é <code>nil</code>. Se você quer mesmo escrever a palavra "nil", converta com <code>tostring</code> (aula <a href="conversao.html">Conversão</a>).</p>
 </div>
