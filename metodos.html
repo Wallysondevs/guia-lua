@@ -1,0 +1,529 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua Métodos e o Dois-Pontos (:) — self e obj:metodo() | Guia Lua</title>
+<meta name="description" content="Métodos no Lua para quem nunca programou: funções guardadas numa tabela (a conta bancária da Ana), o problema da função presa ao nome, o parâmetro self, o dois-pontos (obj:metodo() é obj.metodo(obj)), métodos de texto como nome:upper(), encadear chamadas, e os erros reais do Lua 5.5 de trocar o ponto pelo dois-pontos.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">Métodos e o Dois-Pontos (:)</span></h1>
+
+<p class="intro">Uma tabela pode guardar não só dados (o titular e o saldo de uma conta), mas também <strong>funções</strong> que trabalham com esses dados (depositar, sacar, mostrar o extrato). Uma função assim, que pertence a uma tabela e mexe nela, se chama <strong>método</strong>. Nesta aula você vai entender o <code>self</code> ("si mesmo") e o <strong>dois-pontos</strong> do <code>conta:depositar(50)</code>, que é só um jeito curto de escrever <code>conta.depositar(conta, 50)</code>. Essa é a peça que falta para as <a href="classes.html">classes</a>.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>Como guardar funções numa tabela, e por que uma função "presa" ao nome da tabela dá problema.</li>
+  <li>O parâmetro <code>self</code>: passar a tabela para a função trabalhar nela.</li>
+  <li>O dois-pontos: <code>obj:metodo(x)</code> é <code>obj.metodo(obj, x)</code>, e <code>function obj:metodo(x)</code> é <code>function obj.metodo(self, x)</code>.</li>
+  <li>Os métodos que os textos já têm: <code>nome:upper()</code>.</li>
+  <li>Encadear chamadas devolvendo <code>self</code>.</li>
+  <li>Os erros reais de trocar o ponto pelo dois-pontos (e vice-versa), e de chamar um método que não existe.</li>
+</ul>
+</div>
+
+<p>Todos os programas rodaram no <strong>Lua 5.5</strong> da máquina da Ana (usuária <code>ana</code>, computador <code>notebook</code>) com <code>lua arquivo.lua</code>. Você precisa conhecer <a href="funcoes.html">funções</a>, <a href="parametros.html">parâmetros</a> e <a href="funcoes-valores.html">Funções São Valores</a> (uma função pode ser guardada numa tabela como qualquer valor).</p>
+
+<hr>
+
+<h2>A ideia: o formulário com o número da conta</h2>
+<p>No banco, o caixa tem um carimbo "DEPÓSITO". O carimbo é o mesmo para todos os clientes. Para ele saber <strong>em qual conta</strong> pôr o dinheiro, o cliente entrega um formulário com o número da conta dele. Sem o formulário, o carimbo não sabe onde depositar.</p>
+<ul>
+  <li>O carimbo é a <strong>função</strong> <code>depositar</code>: uma só, para todas as contas.</li>
+  <li>O formulário com o número da conta é o <strong><code>self</code></strong>: o parâmetro que diz "trabalhe <strong>nesta</strong> conta".</li>
+  <li>O <strong>dois-pontos</strong> é o atendente que preenche o formulário por você: <code>conta_ana:depositar(50)</code> entrega a <code>conta_ana</code> como formulário automaticamente.</li>
+</ul>
+
+<hr>
+
+<h2>1. Uma função dentro da tabela</h2>
+<p>A conta da Ana é uma tabela com o titular e o saldo. A função de depósito fica num campo da própria tabela:</p>
+
+<pre class="file" data-file="conta1.lua">local conta = { titular = "Ana", saldo = 100 }
+
+conta.depositar = function (valor)
+  conta.saldo = conta.saldo + valor
+end
+
+conta.depositar(50)
+print(conta.titular, conta.saldo)
+</pre>
+
+<pre class="term">$ lua conta1.lua
+Ana	150</pre>
+
+<p>Funciona: <code>conta.depositar</code> é uma função guardada no campo <code>depositar</code>, e <code>conta.depositar(50)</code> a chama. Mas repare que, lá dentro, ela escreve <code>conta.saldo</code>: ela está <strong>presa</strong> à variável <code>conta</code>. Veja o que acontece quando a Bia usa a mesma função na conta dela:</p>
+
+<pre class="file" data-file="conta2.lua">local conta = { titular = "Ana", saldo = 100 }
+
+conta.depositar = function (valor)
+  conta.saldo = conta.saldo + valor
+end
+
+local conta_bia = { titular = "Bia", saldo = 20, depositar = conta.depositar }
+conta_bia.depositar(30)
+print(conta.titular, conta.saldo)
+print(conta_bia.titular, conta_bia.saldo)
+</pre>
+
+<pre class="term">$ lua conta2.lua
+Ana	130
+Bia	20</pre>
+
+<p>A Bia depositou 30, e o dinheiro foi parar na conta da <strong>Ana</strong> (que foi de 100 para 130); a da Bia continuou com 20. Nenhum erro, nenhum aviso: só o resultado errado. A função não tinha como saber de quem era o depósito, porque só conhecia a variável <code>conta</code>. É o carimbo sem formulário.</p>
+
+<hr>
+
+<h2>2. O formulário: o parâmetro <code>self</code></h2>
+<p>O conserto é passar a conta como <strong>primeiro parâmetro</strong>. Assim a função trabalha em qualquer conta que receber. Por tradição, esse parâmetro se chama <code>self</code>:</p>
+
+<pre class="file" data-file="conta3.lua">local function depositar(self, valor)
+  self.saldo = self.saldo + valor
+end
+
+local conta_ana = { titular = "Ana", saldo = 100, depositar = depositar }
+local conta_bia = { titular = "Bia", saldo = 20, depositar = depositar }
+
+conta_ana.depositar(conta_ana, 50)
+conta_bia.depositar(conta_bia, 30)
+print(conta_ana.titular, conta_ana.saldo)
+print(conta_bia.titular, conta_bia.saldo)
+</pre>
+
+<pre class="term">$ lua conta3.lua
+Ana	150
+Bia	50</pre>
+
+<dl class="anatomy">
+  <dt>local function depositar(self, valor)</dt><dd>Uma função só, com dois parâmetros: <code>self</code> (a conta onde depositar) e <code>valor</code>. Ela não fala de nenhuma conta pelo nome.</dd>
+  <dt>self.saldo = self.saldo + valor</dt><dd>"Some o valor ao saldo <strong>da conta que eu recebi</strong>".</dd>
+  <dt>depositar = depositar</dt><dd>As duas contas guardam <strong>a mesma</strong> função no campo <code>depositar</code> (o primeiro <code>depositar</code> é o nome do campo; o segundo, a função local).</dd>
+  <dt>conta_bia.depositar(conta_bia, 30)</dt><dd>A Bia entrega o "formulário": a própria <code>conta_bia</code>. Dentro da função, <code>self</code> é a <code>conta_bia</code>, e o dinheiro cai no lugar certo.</dd>
+</dl>
+
+<p>O nome <code>self</code> não é obrigatório nem mágico: é um parâmetro como outro qualquer. Mas todo programador Lua usa esse nome, e o dois-pontos (a seguir) também usa.</p>
+
+<hr>
+
+<h2>3. O dois-pontos <code>:</code></h2>
+<p>Escrever <code>conta_bia.depositar(conta_bia, 30)</code> é repetitivo: o nome da conta aparece duas vezes. O dois-pontos faz isso por você:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Você escreve</th><th>O Lua entende</th></tr>
+<tr><td><code>conta:depositar(50)</code></td><td><code>conta.depositar(conta, 50)</code></td></tr>
+<tr><td><code>function conta:depositar(valor) … end</code></td><td><code>function conta.depositar(self, valor) … end</code></td></tr>
+</table>
+</div>
+
+<p>Nas duas linhas, o dois-pontos é um <strong>atalho de escrita</strong>: na <strong>chamada</strong>, ele passa a tabela como primeiro argumento; na <strong>definição</strong>, ele cria o parâmetro <code>self</code> escondido, antes dos outros.</p>
+
+<pre class="file" data-file="conta4.lua">local conta = { titular = "Ana", saldo = 100 }
+
+function conta:depositar(valor)
+  self.saldo = self.saldo + valor
+end
+
+function conta:extrato()
+  print(string.format("%s: R$ %.2f", self.titular, self.saldo))
+end
+
+conta:depositar(50)
+conta:extrato()
+conta.depositar(conta, 25)
+conta.extrato(conta)
+</pre>
+
+<pre class="term">$ lua conta4.lua
+Ana: R$ 150.00
+Ana: R$ 175.00</pre>
+
+<dl class="anatomy">
+  <dt>function conta:depositar(valor)</dt><dd>Define o método. Você escreve só <code>valor</code> nos parênteses, mas a função tem <strong>dois</strong> parâmetros: <code>self</code> (escondido, criado pelo dois-pontos) e <code>valor</code>.</dd>
+  <dt>function conta:extrato()</dt><dd>Um método sem parâmetros visíveis. Ele ainda recebe o <code>self</code>, e é com ele que lê o titular e o saldo. O <code>%.2f</code> mostra 2 casas decimais (veja <a href="string-format.html">string.format</a>).</dd>
+  <dt>conta:depositar(50)</dt><dd>A chamada com dois-pontos: o Lua passa <code>conta</code> como <code>self</code> e <code>50</code> como <code>valor</code>.</dd>
+  <dt>conta.depositar(conta, 25)</dt><dd>A mesma coisa, escrita por extenso, com ponto. Funcionou igual: o saldo foi a 175. Prova de que o dois-pontos é só um atalho.</dd>
+</dl>
+
+<p>E o <code>self</code> é sempre a tabela que veio <strong>antes</strong> do dois-pontos na chamada, mesmo quando o método foi escrito para outra:</p>
+
+<pre class="file" data-file="ver_self.lua">local conta = { titular = "Ana" }
+function conta:quem()
+  return self == conta, self.titular
+end
+print(conta:quem())
+local outra = { titular = "Bia", quem = conta.quem }
+print(outra:quem())
+</pre>
+
+<pre class="term">$ lua ver_self.lua
+true	Ana
+false	Bia</pre>
+
+<p>O método <code>quem</code> foi escrito em <code>conta</code>, mas chamado como <code>outra:quem()</code>, o <code>self</code> foi a <code>outra</code>. Compare com o <code>conta2.lua</code> da seção 1: com <code>self</code>, emprestar a função para a Bia funciona.</p>
+
+<div class="tip">
+<strong>A regra de bolso</strong>
+<p>Definiu com <code>:</code>, chame com <code>:</code>. Definiu com <code>.</code>, chame com <code>.</code>. Misturar os dois é o erro mais comum desta aula, e a seção <a href="#errado">Quando dá errado</a> mostra as mensagens reais de cada mistura.</p>
+</div>
+
+<div class="trylua" data-goal="out:Saldo: 150;;semerro">
+<p class="try-task"><strong>Missão:</strong> os métodos foram definidos com dois-pontos, mas as chamadas usam ponto, e o programa para com <code>attempt to index a number value (local 'self')</code>. Troque o <code>.</code> por <code>:</code> nas duas chamadas.</p>
+<pre class="script" data-file="main.lua">local conta = { titular = "Ana", saldo = 100 }
+
+function conta:depositar(valor)
+  self.saldo = self.saldo + valor
+end
+
+function conta:mostrar_saldo()
+  print("Saldo: " .. self.saldo)
+end
+
+conta.depositar(50)
+conta.mostrar_saldo()
+</pre>
+<pre class="solucao" data-file="main.lua">local conta = { titular = "Ana", saldo = 100 }
+
+function conta:depositar(valor)
+  self.saldo = self.saldo + valor
+end
+
+function conta:mostrar_saldo()
+  print("Saldo: " .. self.saldo)
+end
+
+conta:depositar(50)
+conta:mostrar_saldo()
+</pre>
+</div>
+
+<hr>
+
+<h2>4. Métodos que você já usou: os dos textos</h2>
+<p>Se você fez a aula <a href="string-metodos.html">Funções de Texto</a>, já escreveu <code>nome:upper()</code>. É o mesmo dois-pontos: <code>nome:upper()</code> é <code>nome.upper(nome)</code>, e o Lua acha o <code>upper</code> na biblioteca <code>string</code>, graças à metatabela que todo texto tem (veja <a href="metatabelas.html">Metatabelas</a>).</p>
+
+<pre class="file" data-file="texto.lua">local nome = "ana lima"
+print(nome:upper())
+print(string.upper(nome))
+print(nome:sub(1, 3), nome:rep(2, "-"))
+print(("%d itens"):format(3))
+</pre>
+
+<pre class="term">$ lua texto.lua
+ANA LIMA
+ANA LIMA
+ana	ana lima-ana lima
+3 itens</pre>
+
+<p>Num texto escrito direto no código, os parênteses em volta são obrigatórios: <code>("%d itens"):format(3)</code>. Sem eles, <code>print("ana":upper())</code> deu erro de sintaxe no lab: <code>')' expected near ':'</code> ("era esperado <code>)</code> perto do <code>:</code>").</p>
+
+<hr>
+
+<h2>5. Métodos que mexem em dados mais complexos: o estoque</h2>
+<p>O <code>self</code> dá acesso a tudo o que a tabela guarda, inclusive outras tabelas dentro dela. O estoque da padaria com dois métodos, entrada e saída:</p>
+
+<pre class="file" data-file="dados_self.lua">local estoque = { produtos = {} }
+
+function estoque:entrada(produto, quantidade)
+  self.produtos[produto] = (self.produtos[produto] or 0) + quantidade
+end
+
+function estoque:saida(produto, quantidade)
+  local tem = self.produtos[produto] or 0
+  if quantidade &gt; tem then
+    return false, "só temos " .. tem .. " de " .. produto
+  end
+  self.produtos[produto] = tem - quantidade
+  return true
+end
+
+estoque:entrada("pao", 40)
+estoque:entrada("pao", 10)
+print(estoque:saida("pao", 12))
+print(estoque:saida("pao", 100))
+print(estoque.produtos.pao)
+</pre>
+
+<pre class="term">$ lua dados_self.lua
+true
+false	só temos 38 de pao
+38</pre>
+
+<dl class="anatomy">
+  <dt>self.produtos[produto]</dt><dd>Dentro do método, <code>self.produtos</code> é a tabela de produtos do estoque; <code>[produto]</code> é a quantidade daquele produto (veja <a href="tabelas-aninhadas.html">Tabelas Aninhadas</a>).</dd>
+  <dt>(self.produtos[produto] or 0)</dt><dd>Se o produto ainda não existe, começa do 0.</dd>
+  <dt>return false, "só temos …"</dt><dd>Um método pode devolver valores, como qualquer função. Aqui, <code>false</code> e o motivo, quando falta produto (veja <a href="retornos-multiplos.html">Vários Retornos</a>).</dd>
+</dl>
+
+<h3>Encadear: devolver o <code>self</code></h3>
+<p>Se um método devolve o próprio <code>self</code>, dá para chamar outro método logo em seguida, na mesma linha:</p>
+
+<pre class="file" data-file="encadear.lua">local conta = { titular = "Ana", saldo = 0 }
+
+function conta:depositar(valor)
+  self.saldo = self.saldo + valor
+  return self
+end
+
+conta:depositar(10):depositar(20):depositar(5)
+print(conta.saldo)
+</pre>
+
+<pre class="term">$ lua encadear.lua
+35</pre>
+
+<p><code>conta:depositar(10)</code> devolveu a <code>conta</code>, e o <code>:depositar(20)</code> foi chamado nela, e assim por diante. É um estilo que algumas bibliotecas usam; não é obrigatório.</p>
+
+<hr>
+
+<h2 id="formas">Formas diferentes de fazer a mesma coisa</h2>
+<p>As quatro formas abaixo definem o <strong>mesmo</strong> método:</p>
+
+<pre class="file" data-file="formas.lua">-- 1) dois-pontos (a mais comum)
+function conta:depositar(valor) self.saldo = self.saldo + valor end
+
+-- 2) ponto, com o self escrito
+function conta.depositar(self, valor) self.saldo = self.saldo + valor end
+
+-- 3) campo recebendo uma função
+conta.depositar = function (self, valor) self.saldo = self.saldo + valor end
+
+-- 4) dentro das chaves, na criação da tabela
+local conta = {
+  titular = "Ana",
+  saldo = 100,
+  depositar = function (self, valor) self.saldo = self.saldo + valor end,
+}
+</pre>
+
+<p>E qualquer uma delas pode ser chamada de duas formas: <code>conta:depositar(50)</code> ou <code>conta.depositar(conta, 50)</code>.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Situação</th><th>Qual usar</th></tr>
+<tr><td>Função que trabalha nos dados da tabela (um método)</td><td>Defina com <code>function t:metodo(…)</code> e chame com <code>t:metodo(…)</code></td></tr>
+<tr><td>Função que só mora na tabela, sem usar os dados dela (como <code>math.floor</code>, <code>string.format</code>)</td><td>Ponto nos dois lados: <code>function util.dobro(x)</code> e <code>util.dobro(5)</code></td></tr>
+<tr><td>Método criado dentro das chaves (forma 4)</td><td>Escreva o <code>self</code> à mão: dentro das chaves não dá para usar o dois-pontos</td></tr>
+<tr><td>Chamar o método de uma tabela passando <strong>outra</strong> como <code>self</code></td><td>Ponto, com o <code>self</code> explícito: <code>Conta.depositar(outra, 50)</code> (é o que a <a href="heranca.html">herança</a> faz)</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+
+<div class="cenario">
+<strong>Definiu com <code>:</code> e chamou com <code>.</code></strong>
+<pre class="file" data-file="ponto_errado.lua">local conta = { titular = "Ana", saldo = 100 }
+
+function conta:depositar(valor)
+  self.saldo = self.saldo + valor
+end
+
+conta.depositar(50)
+</pre>
+<pre class="term">$ lua ponto_errado.lua
+lua: ponto_errado.lua:4: attempt to index a number value (local 'self')
+stack traceback:
+	ponto_errado.lua:4: in field 'depositar'
+	ponto_errado.lua:7: in main chunk
+	[C]: in ?</pre>
+<p>Linha por linha:</p>
+<dl class="anatomy">
+  <dt>ponto_errado.lua:4:</dt><dd>O erro aconteceu dentro do método, na linha do <code>self.saldo</code>.</dd>
+  <dt>attempt to index a number value (local 'self')</dt><dd>"Tentativa de indexar um valor número, a variável local <code>self</code>". Com o ponto, ninguém passou a conta: o primeiro argumento, <code>50</code>, foi parar no <code>self</code>. E <code>50.saldo</code> não existe. (O <code>valor</code> ficou <code>nil</code>.)</dd>
+  <dt>in field 'depositar'</dt><dd>O rastro conta <strong>como</strong> a função foi chamada: como um <em>campo</em> (<code>conta.depositar</code>), com ponto. Se fosse com dois-pontos, diria <code>in method 'depositar'</code>.</dd>
+  <dt>ponto_errado.lua:7</dt><dd>A linha da chamada errada. É lá que está o conserto.</dd>
+</dl>
+<p><strong>Como consertar:</strong> <code>conta:depositar(50)</code>. Toda vez que aparecer <code>(local 'self')</code> numa mensagem com <code>number</code>, <code>string</code> ou <code>nil</code>, procure uma chamada com ponto que devia ser com dois-pontos.</p>
+</div>
+
+<div class="cenario">
+<strong>Definiu com <code>.</code> e chamou com <code>:</code></strong>
+<pre class="file" data-file="dois_pontos_errado.lua">local conta = { titular = "Ana", saldo = 100 }
+
+function conta.depositar(valor)
+  conta.saldo = conta.saldo + valor
+end
+
+conta:depositar(50)
+</pre>
+<pre class="term">$ lua dois_pontos_errado.lua
+lua: dois_pontos_errado.lua:4: attempt to perform arithmetic on a table value (local 'valor')
+stack traceback:
+	dois_pontos_errado.lua:4: in method 'depositar'
+	dois_pontos_errado.lua:7: in main chunk
+	[C]: in ?</pre>
+<p>O contrário: a função não tem <code>self</code>, só <code>valor</code>. O dois-pontos passou a <code>conta</code> como primeiro argumento, que caiu em <code>valor</code>, e a conta <code>conta.saldo + valor</code> virou "número + tabela": <code>attempt to perform arithmetic on a table value (local 'valor')</code>. O <code>50</code> foi ignorado (não havia parâmetro para ele). Agora o rastro diz <code>in method 'depositar'</code>: foi chamado como método. <strong>Como consertar:</strong> defina com <code>function conta:depositar(valor)</code> e use <code>self</code> lá dentro.</p>
+</div>
+
+<div class="cenario">
+<strong>Usou <code>self</code> numa função definida com ponto</strong>
+<pre class="file" data-file="self_fora.lua">local conta = { titular = "Ana", saldo = 100 }
+
+function conta.depositar(valor)
+  self.saldo = self.saldo + valor
+end
+
+conta.depositar(50)
+</pre>
+<pre class="term">$ lua self_fora.lua
+lua: self_fora.lua:4: attempt to index a nil value (global 'self')
+stack traceback:
+	self_fora.lua:4: in field 'depositar'
+	self_fora.lua:7: in main chunk
+	[C]: in ?</pre>
+<p>Com ponto e sem <code>self</code> nos parâmetros, não existe nenhuma variável <code>self</code> na função. O Lua procura uma <strong>global</strong> com esse nome, não acha, e ela vale <code>nil</code>: <code>(global 'self')</code>. <strong>Como consertar:</strong> <code>function conta:depositar(valor)</code> (o dois-pontos cria o <code>self</code>).</p>
+</div>
+
+<div class="cenario">
+<strong>Chamou um método que não existe</strong>
+<pre class="file" data-file="sem_metodo.lua">local conta = { titular = "Ana", saldo = 100 }
+
+function conta:depositar(valor)
+  self.saldo = self.saldo + valor
+end
+
+conta:sacar(30)
+</pre>
+<pre class="term">$ lua sem_metodo.lua
+lua: sem_metodo.lua:7: attempt to call a nil value (method 'sacar')
+stack traceback:
+	sem_metodo.lua:7: in main chunk
+	[C]: in ?</pre>
+<p>"Tentativa de chamar um valor <code>nil</code> (o método <code>sacar</code>)". A tabela não tem campo <code>sacar</code>: ou ele não foi escrito, ou o nome está diferente (<code>saca</code>, <code>Sacar</code>). <strong>Como consertar:</strong> escreva o <code>function conta:sacar(valor)</code>, ou corrija o nome. Na aula <a href="classes.html">Classes</a>, esse mesmo erro aparece quando falta a linha <code>Classe.__index = Classe</code>.</p>
+</div>
+
+<hr>
+
+<h2>Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>É o mesmo que</th></tr>
+<tr><td><code>obj:metodo(a, b)</code></td><td><code>obj.metodo(obj, a, b)</code></td></tr>
+<tr><td><code>function obj:metodo(a, b) … end</code></td><td><code>function obj.metodo(self, a, b) … end</code></td></tr>
+<tr><td><code>texto:upper()</code></td><td><code>string.upper(texto)</code></td></tr>
+<tr><td><code>return self</code> no fim do método</td><td>Permite encadear: <code>obj:a():b()</code></td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Mensagem</th><th>Causa provável</th></tr>
+<tr><td><code>attempt to index a number value (local 'self')</code></td><td>Método definido com <code>:</code> e chamado com <code>.</code></td></tr>
+<tr><td><code>attempt to perform arithmetic on a table value (local 'valor')</code></td><td>Função definida com <code>.</code> e chamada com <code>:</code> (a tabela caiu no primeiro parâmetro)</td></tr>
+<tr><td><code>attempt to index a nil value (global 'self')</code></td><td>Usou <code>self</code> numa função definida com <code>.</code></td></tr>
+<tr><td><code>attempt to call a nil value (method '…')</code></td><td>O método não existe na tabela (nome errado?)</td></tr>
+<tr><td><code>in field '…'</code> / <code>in method '…'</code> no rastro</td><td>Mostra se a chamada foi com <code>.</code> ou com <code>:</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. Reescreva por extenso</h3>
+<p><code>conta:depositar(50)</code> é o mesmo que:</p>
+<div class="ex-code">conta.depositar(<input data-answer="conta" aria-label="primeiro argumento">, 50)</div>
+</div>
+
+<div class="exercise">
+<h3>2. O parâmetro escondido</h3>
+<p>Qual é o nome do parâmetro que o dois-pontos cria em <code>function conta:extrato()</code>?</p>
+<div class="ex-code"><input data-answer="self" aria-label="nome do parâmetro"></div>
+</div>
+
+<div class="mc" data-answer="3">
+<p class="mc-q">3. O método foi definido como <code>function conta:sacar(valor)</code>. Qual chamada está certa?</p>
+<label><input type="radio" name="q3"> <code>conta.sacar(30)</code></label>
+<label><input type="radio" name="q3"> <code>sacar(conta, 30)</code></label>
+<label><input type="radio" name="q3"> <code>conta:sacar(30)</code></label>
+<label><input type="radio" name="q3"> <code>conta:sacar(conta, 30)</code></label>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">4. A mensagem foi <code>attempt to index a number value (local 'self')</code>. O que é mais provável?</p>
+<label><input type="radio" name="q4"> O saldo não é um número</label>
+<label><input type="radio" name="q4"> Uma chamada usou <code>.</code> em vez de <code>:</code></label>
+<label><input type="radio" name="q4"> Faltou o <code>end</code></label>
+<label><input type="radio" name="q4"> O método não existe</label>
+</div>
+
+<div class="mc" data-answer="1">
+<p class="mc-q">5. Em <code>outra:quem()</code>, com <code>quem</code> escrito originalmente para a tabela <code>conta</code>, quem é o <code>self</code>?</p>
+<label><input type="radio" name="q5"> A tabela <code>outra</code></label>
+<label><input type="radio" name="q5"> A tabela <code>conta</code></label>
+<label><input type="radio" name="q5"> <code>nil</code></label>
+<label><input type="radio" name="q5"> A função <code>quem</code></label>
+</div>
+
+<h3>Missão final: o saque</h3>
+
+<div class="trylua" data-goal="out:Saque de R$ 30: ok;;out:Saldo insuficiente para R$ 500;;out:Saldo: 70;;src:function\s+conta:sacar">
+<p class="try-task"><strong>Missão:</strong> escreva o método <code>function conta:sacar(valor)</code> no lugar do comentário. Se <code>valor</code> for maior que <code>self.saldo</code>, ele mostra <code>"Saldo insuficiente para R$ " .. valor</code> e não mexe no saldo; senão, tira o valor do saldo e mostra <code>"Saque de R$ " .. valor .. ": ok"</code>.</p>
+<pre class="script" data-file="main.lua">local conta = { titular = "Ana", saldo = 100 }
+
+function conta:mostrar_saldo()
+  print("Saldo: " .. self.saldo)
+end
+
+-- escreva aqui o function conta:sacar(valor)
+
+conta:sacar(30)
+conta:sacar(500)
+conta:mostrar_saldo()
+</pre>
+<pre class="solucao" data-file="main.lua">local conta = { titular = "Ana", saldo = 100 }
+
+function conta:mostrar_saldo()
+  print("Saldo: " .. self.saldo)
+end
+
+function conta:sacar(valor)
+  if valor &gt; self.saldo then
+    print("Saldo insuficiente para R$ " .. valor)
+  else
+    self.saldo = self.saldo - valor
+    print("Saque de R$ " .. valor .. ": ok")
+  end
+end
+
+conta:sacar(30)
+conta:sacar(500)
+conta:mostrar_saldo()
+</pre>
+</div>
+
+<p>Antes da sua resposta, o programa para na linha 9 com <code>attempt to call a nil value (method 'sacar')</code>, o erro da seção <a href="#errado">Quando dá errado</a>.</p>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li>Um <strong>método</strong> é uma função guardada numa tabela que trabalha nos dados dessa tabela.</li>
+  <li>Uma função presa ao nome da tabela (<code>conta.saldo</code> lá dentro) não serve para outras tabelas. O conserto é receber a tabela como primeiro parâmetro: o <code>self</code>.</li>
+  <li><code>obj:metodo(x)</code> é <code>obj.metodo(obj, x)</code>; <code>function obj:metodo(x)</code> é <code>function obj.metodo(self, x)</code>. O dois-pontos é só um atalho.</li>
+  <li>Definiu com <code>:</code>, chame com <code>:</code>. Trocar dá <code>attempt to index a number value (local 'self')</code> ou <code>attempt to perform arithmetic on a table value (local 'valor')</code>.</li>
+  <li>Os textos já têm métodos: <code>nome:upper()</code>, graças à metatabela deles.</li>
+  <li>Próximo passo: muitas contas com os mesmos métodos, sem copiar função por função, em <a href="classes.html">Classes com Metatabelas</a>.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
