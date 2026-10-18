@@ -1,0 +1,487 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua arg — argumentos da linha de comando | Guia Lua</title>
+<meta name="description" content="A tabela arg do Lua 5.5 para quem nunca programou: lua programa.lua Ana 42, arg[1], arg[2], #arg, arg[0] (o programa) e arg[-1] (o lua), aspas para textos com espaço, argumentos são sempre texto (tonumber), o ... no arquivo principal, mensagem de uso com os.exit(1), opções como -m, o #! para rodar com ./, e os erros reais do Lua.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">arg</span></h1>
+
+<p class="intro">Até aqui, para o programa saber um nome ou um número, ou ele já vinha escrito no código, ou o programa perguntava com <a href="io-read.html">io.read()</a> e esperava alguém digitar. Existe um terceiro jeito, o preferido dos programas de terminal: passar a informação <strong>junto com o comando</strong>, na mesma linha: <code>lua saudacao.lua Ana</code>. Essas palavras extras se chamam <strong>argumentos da linha de comando</strong>, e o Lua as entrega ao programa numa tabela chamada <code>arg</code>.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>Como os argumentos chegam: <code>arg[1]</code>, <code>arg[2]</code>…, e quantos são, com <code>#arg</code>.</li>
+  <li>O que são o <code>arg[0]</code> (o nome do programa) e o <code>arg[-1]</code> (o <code>lua</code>).</li>
+  <li>Por que um nome com espaço precisa de aspas.</li>
+  <li>Que todo argumento é <strong>texto</strong>, e como transformar em número com <code>tonumber</code>.</li>
+  <li>O outro jeito de pegar os argumentos: os três pontinhos (<code>...</code>) no arquivo principal.</li>
+  <li>Como escrever a mensagem de "uso" quando faltam argumentos, aceitar opções como <code>-m</code>, e rodar o programa com <code>./programa.lua</code>.</li>
+</ul>
+</div>
+
+<p>Todos os programas desta aula rodaram no <strong>Lua 5.5</strong> da máquina da Ana (usuária <code>ana</code>, computador <code>notebook</code>), em <code>/home/ana</code>. No editor do guia, as caixas desta aula têm um campo <strong>Argumentos</strong>, já preenchido, que você pode mudar; a caixa mostra a linha de comando (como <code>lua main.lua Ana</code>) quando roda.</p>
+
+<hr>
+
+<h2>A ideia: o pedido no balcão</h2>
+<p>Na padaria, o atendente pode trabalhar de dois jeitos. No primeiro, o cliente chega e o atendente pergunta: "O que vai ser?", "Quantos?". No segundo, o cliente já chega falando tudo de uma vez: "<strong>Seis pães e um litro de leite</strong>". O atendente não pergunta nada; só anota e entrega.</p>
+<p>O <code>io.read()</code> é o primeiro jeito: o programa pergunta. Os argumentos são o segundo: quem roda o programa já diz tudo na linha do comando. Isso tem uma grande vantagem: o programa pode ser chamado por <strong>outros programas</strong> e por scripts, que não sabem responder perguntas, e o comando inteiro pode ser repetido com a seta para cima do terminal.</p>
+
+<hr>
+
+<h2>1. A tabela <code>arg</code></h2>
+
+<pre class="file" data-file="args.lua">print("programa:", arg[0])
+print("quantos:", #arg)
+for i = -1, #arg do
+  print(i, arg[i])
+end
+</pre>
+
+<pre class="term">$ lua args.lua Ana "Bia Lima" 42
+programa:	args.lua
+quantos:	3
+-1	lua
+0	args.lua
+1	Ana
+2	Bia Lima
+3	42</pre>
+
+<p>O terminal separou a linha <code>lua args.lua Ana "Bia Lima" 42</code> em pedaços, nos espaços, e o Lua montou a tabela <code>arg</code> com eles:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Posição</th><th>Valor</th><th>O que é</th></tr>
+<tr><td><code>arg[-1]</code></td><td><code>lua</code></td><td>O comando que rodou o programa (o próprio interpretador)</td></tr>
+<tr><td><code>arg[0]</code></td><td><code>args.lua</code></td><td>O nome do programa, do jeito que foi escrito no comando</td></tr>
+<tr><td><code>arg[1]</code></td><td><code>Ana</code></td><td>O primeiro argumento</td></tr>
+<tr><td><code>arg[2]</code></td><td><code>Bia Lima</code></td><td>O segundo: com as aspas, o espaço ficou <strong>dentro</strong> do argumento</td></tr>
+<tr><td><code>arg[3]</code></td><td><code>42</code></td><td>O terceiro</td></tr>
+<tr><td><code>#arg</code></td><td><code>3</code></td><td>Quantos argumentos há (o <code>#</code> conta a partir do 1; o 0 e o -1 ficam de fora)</td></tr>
+</table>
+</div>
+
+<p>Os argumentos de verdade começam no <strong>1</strong>, como toda lista do Lua (veja <a href="listas.html">Tabelas como Listas</a>). As posições 0 e −1 são um extra, para o programa saber como foi chamado. Sem nenhum argumento, a lista fica vazia:</p>
+
+<pre class="term">$ lua args.lua
+programa:	args.lua
+quantos:	0
+-1	lua
+0	args.lua</pre>
+
+<hr>
+
+<h2>2. Usando um argumento</h2>
+
+<pre class="file" data-file="ola.lua">local nome = arg[1]
+print("Olá, " .. nome .. "!")
+</pre>
+
+<pre class="term">$ lua ola.lua Ana
+Olá, Ana!
+$ lua ola.lua Bia Lima
+Olá, Bia!
+$ lua ola.lua "Bia Lima"
+Olá, Bia Lima!</pre>
+
+<p>Sem aspas, <code>Bia Lima</code> virou <strong>dois</strong> argumentos (<code>arg[1]</code> = <code>Bia</code>, <code>arg[2]</code> = <code>Lima</code>), e o programa só usa o primeiro. Com aspas, é um argumento só. Quem separa nos espaços e entende as aspas é o <strong>terminal</strong>, antes de o Lua começar: o programa recebe os pedaços já separados, sem as aspas.</p>
+
+<div class="trylua" data-args="Ana" data-goal="out:Olá, Ana!;;src:arg\[1\]">
+<p class="try-task"><strong>Missão:</strong> esta caixa roda <code>lua main.lua Ana</code>. O programa ignora o argumento e cumprimenta sempre o "mundo". Use o <code>arg[1]</code> para ele dizer <code>Olá, Ana!</code></p>
+<pre class="script" data-file="main.lua">local nome = "mundo"
+print("Olá, " .. nome .. "!")
+</pre>
+<pre class="solucao" data-file="main.lua">local nome = arg[1]
+print("Olá, " .. nome .. "!")
+</pre>
+</div>
+
+<hr>
+
+<h2>3. Todo argumento é texto</h2>
+<p>O <code>42</code> da linha de comando chega ao programa como o <strong>texto</strong> <code>"42"</code>, não como o número 42. O terminal só conhece texto:</p>
+
+<pre class="file" data-file="tipos.lua">print(arg[1], type(arg[1]))
+print(arg[1] + 1)
+print(tonumber(arg[1]), math.type(tonumber(arg[1])))
+print(arg[1] == 10, tonumber(arg[1]) == 10)
+</pre>
+
+<pre class="term">$ lua tipos.lua 10
+10	string
+11
+10	integer
+false	true</pre>
+
+<dl class="anatomy">
+  <dt>type(arg[1]) → string</dt><dd>O <code>10</code> é um texto.</dd>
+  <dt>arg[1] + 1 → 11</dt><dd>Numa conta, o Lua converte o texto em número sozinho (veja <a href="conversao.html">Conversão</a>). Por isso a soma funcionou.</dd>
+  <dt>tonumber(arg[1]) → 10, integer</dt><dd>O <code>tonumber</code> converte de propósito, e devolve <code>nil</code> se o texto não for um número. É o jeito certo.</dd>
+  <dt>arg[1] == 10 → false</dt><dd>Na <strong>comparação</strong>, o Lua <strong>não</strong> converte: o texto <code>"10"</code> e o número <code>10</code> são diferentes. Só o <code>tonumber(arg[1]) == 10</code> dá <code>true</code>.</dd>
+</dl>
+
+<p>A conversão automática das contas parece prática, mas engana: ela some nas comparações (e com <code>&lt;</code> e <code>&gt;</code> dá erro, como você vai ver em <a href="#errado">Quando dá errado</a>), e não avisa quando o argumento não é número. Por isso, converta sempre com <code>tonumber</code>, logo no começo, e confira se deu <code>nil</code>.</p>
+
+<h3>Somando todos os argumentos</h3>
+<p>Como <code>arg</code> é uma lista, dá para percorrê-la com <a href="ipairs.html">ipairs</a> (que começa no 1 e ignora o 0 e o −1):</p>
+
+<pre class="file" data-file="soma.lua">local soma = 0
+for i, texto in ipairs(arg) do
+  local n = tonumber(texto)
+  if n then
+    soma = soma + n
+  else
+    print("Ignorei o argumento " .. i .. ": " .. texto)
+  end
+end
+print("Soma: " .. soma)
+</pre>
+
+<pre class="term">$ lua soma.lua 10 20 12.5
+Soma: 42.5
+$ lua soma.lua 10 vinte 30
+Ignorei o argumento 2: vinte
+Soma: 40
+$ lua soma.lua
+Soma: 0</pre>
+
+<div class="trylua" data-args="10 20 12.5" data-goal="out:Soma: 42.5;;src:ipairs\(arg\)|#arg">
+<p class="try-task"><strong>Missão:</strong> a caixa roda <code>lua main.lua 10 20 12.5</code>, mas o programa só soma o primeiro argumento (<code>Soma: 10</code>). Faça um laço por <strong>todos</strong> (com <code>ipairs(arg)</code> ou <code>for i = 1, #arg</code>), até aparecer <code>Soma: 42.5</code>.</p>
+<pre class="script" data-file="main.lua">local soma = 0
+soma = soma + tonumber(arg[1])
+print("Soma: " .. soma)
+</pre>
+<pre class="solucao" data-file="main.lua">local soma = 0
+for _, texto in ipairs(arg) do
+  soma = soma + tonumber(texto)
+end
+print("Soma: " .. soma)
+</pre>
+</div>
+
+<hr>
+
+<h2>4. O outro jeito: os três pontinhos (<code>...</code>)</h2>
+<p>O arquivo principal de um programa Lua funciona como uma função, e os argumentos da linha de comando também chegam nele como os <strong>argumentos dessa função</strong>: os <code>...</code> (veja <a href="varargs.html">Funções Variádicas</a>). Isso permite pegar vários de uma vez, com nome:</p>
+
+<pre class="file" data-file="pontos.lua">local item, quantidade = ...
+print("item:", item)
+print("quantidade:", quantidade)
+print("total de argumentos:", select("#", ...))
+local todos = {...}
+print("o último:", todos[#todos])
+</pre>
+
+<pre class="term">$ lua pontos.lua pão 6 extra
+item:	pão
+quantidade:	6
+total de argumentos:	3
+o último:	extra</pre>
+
+<dl class="anatomy">
+  <dt>local item, quantidade = ...</dt><dd>Os dois primeiros argumentos, cada um na sua variável, numa linha só (veja <a href="atribuicao-multipla.html">Atribuição Múltipla</a>). O terceiro, <code>extra</code>, ficou de fora dessas variáveis.</dd>
+  <dt>select("#", ...)</dt><dd>Quantos argumentos vieram (veja <a href="select.html">select</a>).</dd>
+  <dt>{...}</dt><dd>Uma tabela nova com todos eles: o mesmo que <code>arg[1]</code>, <code>arg[2]</code>…, sem o 0 e o −1.</dd>
+</dl>
+
+<p>O <code>...</code> só existe no nível de fora do arquivo. <strong>Dentro de uma função</strong> sua, o <code>...</code> seria o dos argumentos <strong>daquela função</strong>, e a função precisa ter <code>...</code> nos parênteses para usar:</p>
+
+<pre class="file" data-file="funcao_pontos.lua">local function mostrar()
+  print(...)
+end
+mostrar()
+</pre>
+
+<pre class="term">$ lua funcao_pontos.lua a b
+lua: funcao_pontos.lua:2: cannot use '...' outside a vararg function near '...'</pre>
+
+<p>"Não dá para usar <code>...</code> fora de uma função variádica". É um erro de <strong>sintaxe</strong>: o programa nem começou (não há <code>stack traceback</code>). Dentro de funções, use a tabela <code>arg</code>, que vale no arquivo inteiro, ou passe os valores como parâmetros.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th></th><th><code>arg</code></th><th><code>...</code></th></tr>
+<tr><td>O que é</td><td>Uma tabela global</td><td>Os argumentos do arquivo principal</td></tr>
+<tr><td>Tem o nome do programa?</td><td>Sim: <code>arg[0]</code> (e <code>arg[-1]</code>)</td><td>Não</td></tr>
+<tr><td>Funciona dentro de uma função?</td><td>Sim</td><td>Não (dá erro de sintaxe)</td></tr>
+<tr><td>Melhor para</td><td>Percorrer, contar com <code>#arg</code>, olhar uma posição</td><td>Dar nome aos primeiros: <code>local item, qtd = ...</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>5. Faltou argumento: a mensagem de uso</h2>
+<p>Quem esquece o argumento não deve ver um <code>stack traceback</code>. O costume dos programas de terminal é responder com uma mensagem de <strong>uso</strong>: como o programa deve ser chamado, com um exemplo. E sair com código 1 (veja <a href="os-funcoes.html">os.exit</a>):</p>
+
+<pre class="file" data-file="uso.lua">if #arg &lt; 2 then
+  io.stderr:write("Uso: lua uso.lua ITEM QUANTIDADE\n")
+  io.stderr:write("Exemplo: lua uso.lua pão 6\n")
+  os.exit(1)
+end
+local item = arg[1]
+local quantidade = tonumber(arg[2])
+if not quantidade then
+  io.stderr:write("A quantidade precisa ser um número: " .. arg[2] .. "\n")
+  os.exit(1)
+end
+print(string.format("Anotado: %d x %s", quantidade, item))
+</pre>
+
+<pre class="term">$ lua uso.lua
+Uso: lua uso.lua ITEM QUANTIDADE
+Exemplo: lua uso.lua pão 6
+$ echo $?
+1
+$ lua uso.lua pão seis
+A quantidade precisa ser um número: seis
+$ lua uso.lua pão 6
+Anotado: 6 x pão</pre>
+
+<p>Os nomes em MAIÚSCULAS na linha de uso (<code>ITEM</code>, <code>QUANTIDADE</code>) são um costume: "troque isto pelo seu valor". As mensagens vão para o <code>io.stderr</code>, o canal de erros. Duas conferências: primeiro <strong>se vieram</strong> os argumentos (<code>#arg &lt; 2</code>), depois <strong>se prestam</strong> (o <code>tonumber</code> deu <code>nil</code>?).</p>
+
+<div class="tip">
+<strong>Use o <code>arg[0]</code> na mensagem</strong>
+<p>Se alguém renomear o programa, a mensagem <code>Uso: lua uso.lua …</code> fica errada. Com <code>"Uso: lua " .. arg[0] .. " ITEM QUANTIDADE\n"</code>, ela sempre mostra o nome com que o programa foi chamado.</p>
+</div>
+
+<hr>
+
+<h2>6. Opções: <code>-m</code> e <code>--maiusculas</code></h2>
+<p>Muitos comandos aceitam <strong>opções</strong>, argumentos que começam com <code>-</code> e mudam o comportamento (como o <code>-l</code> do <code>ls -l</code>). O costume é ter uma forma curta (<code>-m</code>) e uma longa (<code>--maiusculas</code>). Separar opções de dados é só um laço com <code>if</code>:</p>
+
+<pre class="file" data-file="opcoes.lua">local maiusculas = false
+local nomes = {}
+for _, a in ipairs(arg) do
+  if a == "-m" or a == "--maiusculas" then
+    maiusculas = true
+  else
+    nomes[#nomes + 1] = a
+  end
+end
+for _, nome in ipairs(nomes) do
+  print(maiusculas and nome:upper() or nome)
+end
+</pre>
+
+<pre class="term">$ lua opcoes.lua ana bia
+ana
+bia
+$ lua opcoes.lua -m ana bia
+ANA
+BIA
+$ lua opcoes.lua ana --maiusculas bia
+ANA
+BIA</pre>
+
+<p>A opção pode vir em qualquer posição. O <code>nome:upper()</code> põe em maiúsculas (veja <a href="string-metodos.html">Funções de Texto</a>). Para programas com muitas opções existem bibliotecas prontas (como a <code>argparse</code>, instalável pelo <a href="luarocks.html">LuaRocks</a>), mas a ideia por trás é esta.</p>
+
+<hr>
+
+<h2 id="formas">Formas diferentes de chamar o programa</h2>
+
+<h3>Com <code>lua -e</code> antes: as posições negativas</h3>
+<p>Tudo o que vem <strong>antes</strong> do nome do programa vai para as posições negativas. O <code>-e</code> do <code>lua</code> roda um pedaço de código antes do programa:</p>
+
+<pre class="file" data-file="negativos.lua">for i = -3, #arg do
+  print(i, arg[i])
+end
+</pre>
+
+<pre class="term">$ lua -e 'x = 1' negativos.lua oi
+-3	lua
+-2	-e
+-1	x = 1
+0	negativos.lua
+1	oi</pre>
+
+<p>O programa é sempre o <code>arg[0]</code>, os argumentos dele começam no 1, e o que é do <code>lua</code> fica do 0 para trás. O <code>#arg</code> e o <code>ipairs(arg)</code> continuam olhando só os argumentos do programa.</p>
+
+<h3>Como um comando: <code>#!</code> e <code>./</code></h3>
+<p>No Linux (e no macOS), um programa Lua pode virar um comando, rodado sem escrever <code>lua</code>. A primeira linha começa com <code>#!</code> (chamado <em>shebang</em>) e diz ao sistema quem vai rodar o arquivo; o <code>chmod +x</code> dá permissão de execução:</p>
+
+<pre class="file" data-file="executavel.lua">#!/usr/bin/env lua
+print("Sou o " .. arg[0] .. " e recebi " .. #arg .. " argumento(s).")
+</pre>
+
+<pre class="term">$ chmod +x executavel.lua
+$ ./executavel.lua um dois
+Sou o ./executavel.lua e recebi 2 argumento(s).
+$ lua executavel.lua um
+Sou o executavel.lua e recebi 1 argumento(s).</pre>
+
+<p>O <code>/usr/bin/env lua</code> quer dizer "procure o <code>lua</code> no <code>PATH</code> e use-o". O Lua ignora a primeira linha quando ela começa com <code>#</code>, então o mesmo arquivo roda dos dois jeitos. E repare no <code>arg[0]</code>: ele é <strong>do jeito que foi escrito</strong> no comando (<code>./executavel.lua</code> ou <code>executavel.lua</code>), não o caminho completo. Com <code>lua Documentos/../args.lua</code>, o <code>arg[0]</code> seria <code>Documentos/../args.lua</code>.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Forma</th><th>Quando usar</th></tr>
+<tr><td><code>lua programa.lua a b</code></td><td>O jeito normal, em qualquer sistema</td></tr>
+<tr><td><code>./programa.lua a b</code> (com <code>#!</code> e <code>chmod +x</code>)</td><td>Ferramentas suas que você usa sempre no Linux/macOS</td></tr>
+<tr><td><code>lua -e 'código' programa.lua a b</code></td><td>Ajustar algo antes de o programa rodar (raro)</td></tr>
+<tr><td>Perguntar com <code>io.read()</code></td><td>Programas conversados, em que a próxima pergunta depende da resposta</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+
+<div class="cenario">
+<strong>Rodou sem o argumento</strong>
+<pre class="term">$ lua ola.lua
+lua: ola.lua:2: attempt to concatenate a nil value (local 'nome')
+stack traceback:
+	ola.lua:2: in main chunk
+	[C]: in ?</pre>
+<p>Sem argumento, <code>arg[1]</code> é <code>nil</code>, o <code>nome</code> ficou <code>nil</code>, e o <code>..</code> não junta com <code>nil</code>. Numa conta, o mesmo esquecimento dá <code>attempt to perform arithmetic on a nil value</code>:</p>
+<pre class="file" data-file="nil_conta.lua">local preco = arg[1]
+print("Com desconto: " .. preco * 0.9)
+</pre>
+<pre class="term">$ lua nil_conta.lua 50
+Com desconto: 45.0
+$ lua nil_conta.lua
+lua: nil_conta.lua:2: attempt to perform arithmetic on a nil value (local 'preco')
+stack traceback:
+	nil_conta.lua:2: in main chunk
+	[C]: in ?</pre>
+<p><strong>Como consertar:</strong> confira o <code>#arg</code> no começo e mostre a mensagem de uso (seção 5), ou dê um padrão: <code>local nome = arg[1] or "visitante"</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Comparou o argumento com um número</strong>
+<pre class="file" data-file="compara.lua">if arg[1] &gt; 5 then
+  print("maior que 5")
+end
+</pre>
+<pre class="term">$ lua compara.lua 10
+lua: compara.lua:1: attempt to compare number with string
+stack traceback:
+	compara.lua:1: in main chunk
+	[C]: in ?</pre>
+<p>"Tentativa de comparar número com string". O <code>arg[1]</code> é o texto <code>"10"</code>, e o <code>&gt;</code> não compara texto com número (a conta converte, a comparação não). A ordem da mensagem ("number with string") é porque, por dentro, o Lua transforma <code>a &gt; b</code> em <code>b &lt; a</code>. <strong>Como consertar:</strong> <code>tonumber(arg[1]) &gt; 5</code>, de preferência numa variável convertida logo no começo.</p>
+</div>
+
+<div class="cenario">
+<strong>Contou errado por causa do espaço</strong>
+<p>Sem aspas, <code>lua ola.lua Bia Lima</code> mostrou <code>Olá, Bia!</code>. Não há mensagem de erro; o <code>Lima</code> virou o <code>arg[2]</code>, que o programa não usa. <strong>Como consertar:</strong> textos com espaço vão entre aspas no terminal: <code>lua ola.lua "Bia Lima"</code>. No editor do guia, o <code>data-args</code> das caixas segue a mesma regra.</p>
+</div>
+
+<hr>
+
+<h2>Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>O que é</th></tr>
+<tr><td><code>arg[1]</code>, <code>arg[2]</code>…</td><td>Os argumentos, sempre como texto (ou <code>nil</code>, se não vieram)</td></tr>
+<tr><td><code>#arg</code></td><td>Quantos argumentos</td></tr>
+<tr><td><code>arg[0]</code></td><td>O nome do programa, como foi escrito no comando</td></tr>
+<tr><td><code>arg[-1]</code>, <code>arg[-2]</code>…</td><td>O que veio antes do programa (<code>lua</code>, opções do <code>lua</code>)</td></tr>
+<tr><td><code>for i, a in ipairs(arg) do</code></td><td>Percorre os argumentos, do 1 em diante</td></tr>
+<tr><td><code>local a, b = ...</code></td><td>Os primeiros argumentos com nome (só no arquivo principal)</td></tr>
+<tr><td><code>select("#", ...)</code> / <code>{...}</code></td><td>Quantos / todos numa tabela</td></tr>
+<tr><td><code>tonumber(arg[1])</code></td><td>O argumento como número, ou <code>nil</code></td></tr>
+<tr><td><code>#!/usr/bin/env lua</code></td><td>Primeira linha para rodar com <code>./programa.lua</code> (depois de <code>chmod +x</code>)</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Sintoma</th><th>Causa provável</th></tr>
+<tr><td><code>attempt to concatenate a nil value (local 'nome')</code></td><td>Faltou o argumento</td></tr>
+<tr><td><code>attempt to perform arithmetic on a nil value</code></td><td>Faltou o argumento (numa conta)</td></tr>
+<tr><td><code>attempt to compare number with string</code></td><td>Comparou o texto do argumento com um número: <code>tonumber</code></td></tr>
+<tr><td><code>arg[1] == 10</code> dá <code>false</code> com <code>10</code> no comando</td><td>Texto × número: <code>tonumber(arg[1]) == 10</code></td></tr>
+<tr><td><code>cannot use '...' outside a vararg function</code></td><td><code>...</code> dentro de uma função que não tem <code>...</code> nos parênteses</td></tr>
+<tr><td>Um nome com espaço chegou cortado</td><td>Faltaram as aspas no terminal</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. Quanto vale?</h3>
+<p>Com o comando <code>lua notas.lua Ana 9 7</code>, o que é <code>#arg</code>?</p>
+<div class="ex-code"><code>#arg</code> é <input data-answer="3" aria-label="quantidade">.</div>
+</div>
+
+<div class="exercise">
+<h3>2. O nome do programa</h3>
+<p>No mesmo comando, o que é <code>arg[0]</code>?</p>
+<div class="ex-code"><code>arg[0]</code> é <input data-answer="notas.lua" aria-label="nome do programa">.</div>
+</div>
+
+<div class="exercise">
+<h3>3. O tipo</h3>
+<p>Com <code>lua prog.lua 42</code>, o que <code>type(arg[1])</code> devolve?</p>
+<div class="ex-code"><input data-answer="string" aria-label="tipo"></div>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">4. Como passar o nome <code>Ana Paula</code> como <strong>um</strong> argumento só?</p>
+<label><input type="radio" name="q4"> <code>lua prog.lua Ana Paula</code></label>
+<label><input type="radio" name="q4"> <code>lua prog.lua "Ana Paula"</code></label>
+<label><input type="radio" name="q4"> <code>lua prog.lua Ana,Paula</code></label>
+<label><input type="radio" name="q4"> Não dá: argumentos não podem ter espaço</label>
+</div>
+
+<div class="mc" data-answer="3">
+<p class="mc-q">5. Onde os <code>...</code> do arquivo principal <strong>não</strong> funcionam?</p>
+<label><input type="radio" name="q5"> Na primeira linha do arquivo</label>
+<label><input type="radio" name="q5"> Dentro de um <code>if</code> no arquivo principal</label>
+<label><input type="radio" name="q5"> Dentro de uma função que não tem <code>...</code> nos parênteses</label>
+<label><input type="radio" name="q5"> Dentro de um <code>for</code> no arquivo principal</label>
+</div>
+
+<h3>Missão final: a mensagem de uso</h3>
+
+<div class="trylua" data-args="pão" data-goal="exit:1;;out:Uso: lua main.lua ITEM QUANTIDADE">
+<p class="try-task"><strong>Missão:</strong> a caixa roda <code>lua main.lua pão</code>, esquecendo a quantidade, e o programa quebra com <code>attempt to perform arithmetic on a nil value</code>. No começo, se vierem <strong>menos de 2</strong> argumentos, mostre <code>Uso: lua main.lua ITEM QUANTIDADE</code> e saia com <code>os.exit(1)</code>. (Dica: use o <code>arg[0]</code> para o nome do programa.)</p>
+<pre class="script" data-file="main.lua">local item = arg[1]
+local quantidade = arg[2]
+print("Anotado: " .. quantidade * 1 .. " x " .. item)
+</pre>
+<pre class="solucao" data-file="main.lua">if #arg &lt; 2 then
+  io.stderr:write("Uso: lua " .. arg[0] .. " ITEM QUANTIDADE\n")
+  os.exit(1)
+end
+local item = arg[1]
+local quantidade = arg[2]
+print("Anotado: " .. quantidade * 1 .. " x " .. item)
+</pre>
+</div>
+
+<p>Depois que funcionar, troque o que está no campo <strong>Argumentos</strong> da caixa por <code>pão 6</code> e rode de novo: o programa anota <code>6 x pão</code>. E, para ir além, troque o <code>quantidade * 1</code> por um <code>tonumber</code> com conferência, como no <code>uso.lua</code> da seção 5.</p>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li><code>lua programa.lua a b c</code>: o Lua entrega <code>a</code>, <code>b</code> e <code>c</code> em <code>arg[1]</code>, <code>arg[2]</code>, <code>arg[3]</code>; <code>#arg</code> é quantos são.</li>
+  <li><code>arg[0]</code> é o nome do programa (como foi escrito) e <code>arg[-1]</code> é o <code>lua</code>; o que vem antes do programa fica nas posições negativas.</li>
+  <li>Quem separa os argumentos é o terminal, nos espaços; aspas juntam: <code>"Bia Lima"</code>.</li>
+  <li>Argumentos são sempre <strong>texto</strong>: converta com <code>tonumber</code> e confira o <code>nil</code>. A comparação não converte sozinha.</li>
+  <li>No arquivo principal, <code>local a, b = ...</code> dá nome aos primeiros; dentro de funções, use <code>arg</code>.</li>
+  <li>Faltou argumento? Mostre a mensagem de uso no <code>io.stderr</code> e saia com <code>os.exit(1)</code>.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
