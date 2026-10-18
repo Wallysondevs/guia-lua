@@ -1,0 +1,708 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua Lendo uma Mensagem de Erro — lua: arquivo:linha: mensagem e o stack traceback | Guia Lua</title>
+<meta name="description" content="Como ler uma mensagem de erro do Lua 5.5, parte por parte: lua: main.lua:7: attempt to …, as dicas (global 'x'), (local 'z'), (field 'y'), (upvalue 'w'), (method 'm'), o stack traceback linha a linha ([C]: in ?, in main chunk, in local 'f', in function <arquivo:linha>, in field 'sort'), erro de sintaxe × erro de execução e as mensagens reais mais comuns.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">Lendo uma Mensagem de Erro</span></h1>
+
+<p class="intro">Todo mundo que programa vê mensagens de erro, todos os dias, inclusive quem programa há trinta anos. A diferença entre quem está começando e quem tem experiência não é errar menos: é <strong>ler a mensagem</strong> e saber, em segundos, onde olhar. A mensagem do Lua parece um bloco de inglês assustador, mas ela tem sempre o mesmo formato, e cada pedaço responde uma pergunta: <strong>onde</strong> foi, <strong>o que</strong> aconteceu, <strong>com quem</strong> e <strong>por qual caminho</strong> o programa chegou lá. Esta aula ensina a ler cada pedaço.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>A primeira linha, parte por parte: <code>lua: notas.lua:7: attempt to perform arithmetic on a nil value (global 'totl')</code>.</li>
+  <li>As <strong>dicas entre parênteses</strong>: <code>(global 'x')</code>, <code>(local 'x')</code>, <code>(field 'x')</code>, <code>(upvalue 'x')</code>, <code>(method 'x')</code>, e o que cada uma conta.</li>
+  <li>O <code>stack traceback</code>, linha a linha: <code>in main chunk</code>, <code>[C]: in ?</code>, <code>in local 'f'</code>, <code>in function &lt;arquivo:linha&gt;</code>, <code>in field 'sort'</code>…</li>
+  <li>A diferença entre <strong>erro de sintaxe</strong> (o programa nem começa) e <strong>erro de execução</strong> (ele para no meio).</li>
+  <li>As mensagens mais comuns, traduzidas, e um roteiro de 5 passos para qualquer erro.</li>
+</ul>
+</div>
+
+<p>Todas as mensagens desta aula são <strong>reais</strong>: saíram do Lua 5.5 da máquina da Ana (usuária <code>ana</code>, computador <code>notebook</code>) com <code>lua arquivo.lua</code>. As mensagens do Lua são sempre em inglês; aqui cada uma vem traduzida e explicada. No editor do guia, o arquivo se chama <code>main.lua</code>, então lá as mensagens dizem <code>main.lua:7:</code> no lugar do nome do arquivo; o resto é igual.</p>
+
+<hr>
+
+<h2>A ideia: o bilhete do entregador</h2>
+<p>O entregador não conseguiu entregar a encomenda da Ana e deixou um bilhete na porta: <em>"Rua das Flores, 7: ninguém atendeu (campainha quebrada). Passei pela portaria, pelo bloco B e pelo 3º andar."</em> Sem conhecer o entregador, a Ana sabe tudo: <strong>onde</strong> foi (rua das Flores, 7), <strong>o que</strong> deu errado (ninguém atendeu), a <strong>pista</strong> (a campainha) e o <strong>caminho</strong> que ele fez até chegar lá.</p>
+<p>A mensagem de erro do Lua é esse bilhete. A primeira linha diz o arquivo, a linha, o que aconteceu e a pista. O <code>stack traceback</code>, embaixo, é o caminho. Vamos ler um bilhete de verdade.</p>
+
+<hr>
+
+<h2>1. A primeira linha: onde e o quê</h2>
+<p>A professora da Ana calcula a média de três notas. Na linha 7, ela errou o nome da variável: escreveu <code>totl</code> em vez de <code>total</code>.</p>
+
+<pre class="file" data-file="notas.lua">local notas = {7, 9, 6}
+local total = 0
+for _, n in ipairs(notas) do
+  total = total + n
+end
+print("Soma das notas:", total)
+print("Média:", totl / #notas)
+print("Fim do programa")
+</pre>
+
+<pre class="term">$ lua notas.lua
+Soma das notas:	22
+lua: notas.lua:7: attempt to perform arithmetic on a nil value (global 'totl')
+stack traceback:
+	notas.lua:7: in main chunk
+	[C]: in ?
+$ echo $?
+1</pre>
+
+<p>Antes de tudo, repare: a linha 6 <strong>rodou</strong> (<code>Soma das notas: 22</code> apareceu). O Lua executa o programa de cima para baixo e só para quando chega ao problema. Tudo o que estava antes do erro já foi feito; tudo o que estava depois (o <code>Fim do programa</code>) não acontece.</p>
+
+<p>Agora, a primeira linha da mensagem, pedaço por pedaço:</p>
+
+<dl class="anatomy">
+  <dt>lua:</dt><dd><strong>Quem</strong> está reclamando: o programa <code>lua</code>, o interpretador. (Se você rodasse com <code>lua5.4</code>, apareceria <code>lua5.4:</code>.)</dd>
+  <dt>notas.lua:</dt><dd><strong>Em que arquivo.</strong> Em programas com vários arquivos (módulos), isso diz qual deles.</dd>
+  <dt>7:</dt><dd><strong>Em que linha.</strong> É para lá que você vai primeiro. Quase todo editor de texto mostra o número de cada linha na margem.</dd>
+  <dt>attempt to perform arithmetic on a nil value</dt><dd><strong>O que aconteceu</strong>: "tentativa de fazer conta com um valor <code>nil</code>". Alguma coisa na linha 7 valia <code>nil</code> (nada) e entrou numa conta.</dd>
+  <dt>(global 'totl')</dt><dd><strong>A pista</strong>: o <code>nil</code> era a variável <strong>global</strong> chamada <code>totl</code>. Global, porque não existe nenhuma local com esse nome; e <code>nil</code>, porque ninguém nunca guardou nada nela. Na prática, <code>(global 'nome')</code> com um nome que você não reconhece quase sempre é <strong>erro de digitação</strong>.</dd>
+</dl>
+
+<p>Com a primeira linha, o problema está resolvido: vá à linha 7, ache o <code>totl</code>, troque por <code>total</code>. A saída fica:</p>
+
+<pre class="term">$ lua notas.lua
+Soma das notas:	22
+Média:	7.333333333333333
+Fim do programa</pre>
+
+<p>E o <code>echo $?</code> (que mostra o <strong>código de saída</strong> do último programa) deu <code>1</code> na versão com erro: é o jeito de o <code>lua</code> avisar ao sistema "terminei mal". Sem erro, é <code>0</code>.</p>
+
+<div class="trylua" data-goal="out:Média:;;semerro">
+<p class="try-task"><strong>Missão:</strong> rode, leia a mensagem (aqui ela diz <code>main.lua:7:</code>) e conserte a linha que ela aponta, para o programa mostrar a média e o <code>Fim do programa</code>.</p>
+<pre class="script" data-file="main.lua">local notas = {7, 9, 6}
+local total = 0
+for _, n in ipairs(notas) do
+  total = total + n
+end
+print("Soma das notas:", total)
+print("Média:", totl / #notas)
+print("Fim do programa")
+</pre>
+<pre class="solucao" data-file="main.lua">local notas = {7, 9, 6}
+local total = 0
+for _, n in ipairs(notas) do
+  total = total + n
+end
+print("Soma das notas:", total)
+print("Média:", total / #notas)
+print("Fim do programa")
+</pre>
+</div>
+
+<hr>
+
+<h2>2. As dicas entre parênteses</h2>
+<p>O fim da primeira linha diz <strong>que tipo de nome</strong> tinha o valor problemático. Cada tipo aponta para um lugar diferente do código:</p>
+
+<h3><code>(local 'aluno')</code>: uma variável local</h3>
+<pre class="file" data-file="h_local.lua">local aluno
+print(aluno.nome)
+</pre>
+<pre class="term">$ lua h_local.lua
+lua: h_local.lua:2: attempt to index a nil value (local 'aluno')
+stack traceback:
+	h_local.lua:2: in main chunk
+	[C]: in ?</pre>
+<p>"Tentativa de <strong>indexar</strong> um valor <code>nil</code> (local <code>'aluno'</code>)". <em>Indexar</em> é usar o ponto ou os colchetes: <code>aluno.nome</code>, <code>aluno["nome"]</code>. A local <code>aluno</code> existe, mas vale <code>nil</code>: ninguém pôs uma tabela nela. Procure onde ela deveria ter recebido valor.</p>
+
+<h3><code>(field 'endereco')</code>: um campo de tabela</h3>
+<pre class="file" data-file="h_field.lua">local aluno = { nome = "Ana", notas = {7, 9} }
+print(aluno.nome)
+print(aluno.endereco.rua)
+</pre>
+<pre class="term">$ lua h_field.lua
+Ana
+lua: h_field.lua:3: attempt to index a nil value (field 'endereco')
+stack traceback:
+	h_field.lua:3: in main chunk
+	[C]: in ?</pre>
+<p><em>Field</em> é "campo": o <code>nil</code> era o campo <code>endereco</code> de uma tabela. O <code>aluno</code> existe, mas não tem <code>endereco</code>; então <code>aluno.endereco</code> é <code>nil</code>, e o <code>.rua</code> em cima desse <code>nil</code> é o que dá erro. Repare que o Lua aponta o <strong>último pedaço que existia</strong> antes do problema: em <code>a.b.c.d</code>, a dica diz qual dos pedaços era <code>nil</code>.</p>
+
+<h3><code>(upvalue 'desconto')</code>: uma local de fora da função</h3>
+<pre class="file" data-file="h_upvalue.lua">local desconto
+local function preco_final(p)
+  return p - desconto
+end
+print(preco_final(10))
+</pre>
+<pre class="term">$ lua h_upvalue.lua
+lua: h_upvalue.lua:3: attempt to perform arithmetic on a nil value (upvalue 'desconto')
+stack traceback:
+	h_upvalue.lua:3: in local 'preco_final'
+	h_upvalue.lua:5: in main chunk
+	[C]: in ?</pre>
+<p><em>Upvalue</em> é o nome técnico de uma <strong>local de fora</strong> que a função enxerga (veja <a href="closures.html">Closures</a>). O <code>desconto</code> foi declarado na linha 1, fora da função, sem valor. A pista diz: o problema não está dentro da função; está onde o <code>desconto</code> deveria ter recebido um número.</p>
+
+<h3><code>(method 'sacar')</code>: um método chamado com <code>:</code></h3>
+<pre class="file" data-file="h_method.lua">local conta = { saldo = 100 }
+conta:sacar(30)
+</pre>
+<pre class="term">$ lua h_method.lua
+lua: h_method.lua:2: attempt to call a nil value (method 'sacar')
+stack traceback:
+	h_method.lua:2: in main chunk
+	[C]: in ?</pre>
+<p>"Tentativa de <strong>chamar</strong> um valor <code>nil</code> (método <code>'sacar'</code>)". Chamar é usar os parênteses: <code>sacar(30)</code>. A tabela <code>conta</code> não tem nenhuma função <code>sacar</code> (veja <a href="metodos.html">Métodos e o Dois-Pontos</a>): ou o nome está errado, ou a função nunca foi criada.</p>
+
+<h3><code>(global 'cliente')</code>: uma global (ou um nome que não existe)</h3>
+<pre class="file" data-file="h_global_idx.lua">print(cliente.nome)
+</pre>
+<pre class="term">$ lua h_global_idx.lua
+lua: h_global_idx.lua:1: attempt to index a nil value (global 'cliente')
+stack traceback:
+	h_global_idx.lua:1: in main chunk
+	[C]: in ?</pre>
+<p>A mais comum de todas. As três causas típicas: erro de digitação (<code>totl</code>, <code>pirnt</code>), a variável foi criada como <code>local</code> dentro de um bloco que já fechou (veja <a href="escopo.html">Escopo e Blocos</a>), ou ela nunca foi criada.</p>
+
+<h3>Sem dica nenhuma</h3>
+<p>Quando o valor problemático não tem nome (é o resultado de uma conta, ou uma comparação), não há parênteses. Você só sabe a linha e o tipo dos valores:</p>
+<pre class="file" data-file="h_cmp.lua">local nota
+if nota &gt;= 7 then print("aprovada") end
+</pre>
+<pre class="term">$ lua h_cmp.lua
+lua: h_cmp.lua:2: attempt to compare number with nil
+stack traceback:
+	h_cmp.lua:2: in main chunk
+	[C]: in ?</pre>
+<p>"Tentativa de comparar número com <code>nil</code>". O Lua não diz qual lado era o <code>nil</code>, mas, na linha 2, só há duas coisas sendo comparadas: o <code>7</code> e a <code>nota</code>. Curiosidade: o Lua escreveu "number with nil", embora no código o <code>nil</code> (a <code>nota</code>) esteja à esquerda. A ordem dos tipos na mensagem nem sempre é a do código; não confie na ordem, confie na linha.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Dica</th><th>O valor problemático era…</th><th>Onde procurar</th></tr>
+<tr><td><code>(global 'x')</code></td><td>uma variável global (ou um nome que não existe)</td><td>Erro de digitação? Local fora do escopo? Faltou criar?</td></tr>
+<tr><td><code>(local 'x')</code></td><td>uma local desta função</td><td>Onde ela recebe valor, acima nesta função</td></tr>
+<tr><td><code>(upvalue 'x')</code></td><td>uma local de fora, vista de dentro da função</td><td>Onde ela foi declarada, fora da função</td></tr>
+<tr><td><code>(field 'x')</code></td><td>o campo <code>x</code> de uma tabela</td><td>A tabela tem mesmo esse campo? Nome certo?</td></tr>
+<tr><td><code>(method 'x')</code></td><td>um método chamado com <code>:</code></td><td>A tabela (ou a classe) tem essa função?</td></tr>
+<tr><td>(nenhuma)</td><td>o resultado de uma expressão, sem nome</td><td>Olhe cada valor da linha indicada</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>3. O que aconteceu: as mensagens mais comuns</h2>
+<p>O miolo da mensagem diz <strong>a operação</strong> que falhou. São poucas, e você vai encontrá-las o tempo todo:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Mensagem (real)</th><th>Em português</th><th>Causa típica</th></tr>
+<tr><td><code>attempt to call a nil value (global 'pirnt')</code></td><td>tentativa de chamar (com <code>()</code>) um <code>nil</code></td><td>Nome da função digitado errado, ou função que não existe</td></tr>
+<tr><td><code>attempt to call a number value (local 'idade')</code></td><td>tentativa de chamar um número</td><td>Parênteses depois de algo que não é função: <code>idade()</code></td></tr>
+<tr><td><code>attempt to index a nil value (field 'endereco')</code></td><td>tentativa de indexar (com <code>.</code> ou <code>[ ]</code>) um <code>nil</code></td><td>A tabela (ou o campo do meio) não existe</td></tr>
+<tr><td><code>attempt to perform arithmetic on a nil value (global 'totl')</code></td><td>tentativa de fazer conta com <code>nil</code></td><td>Variável sem valor numa conta</td></tr>
+<tr><td><code>attempt to add a 'string' with a 'number'</code></td><td>tentativa de somar um texto com um número</td><td>Um texto que não é número (<code>"dez" + 1</code>); <code>"10" + 1</code> funciona e dá 11</td></tr>
+<tr><td><code>attempt to concatenate a table value (local 'itens')</code></td><td>tentativa de juntar (<code>..</code>) uma tabela</td><td>Usar <code>..</code> com tabela ou <code>nil</code>; para listas, use <a href="table-concat.html">table.concat</a></td></tr>
+<tr><td><code>attempt to compare number with nil</code></td><td>tentativa de comparar número com <code>nil</code></td><td>Um lado do <code>&lt;</code>, <code>&gt;=</code>… sem valor</td></tr>
+<tr><td><code>attempt to get length of a nil value (global 'nota')</code></td><td>tentativa de pegar o tamanho (<code>#</code>) de <code>nil</code></td><td><code>#</code> numa variável que não existe</td></tr>
+<tr><td><code>bad argument #1 to 'insert' (table expected, got nil)</code></td><td>argumento ruim nº 1 para <code>insert</code> (esperava tabela, veio <code>nil</code>)</td><td>Passou o valor errado para uma função pronta</td></tr>
+<tr><td><code>bad argument #2 to 'rep' (number expected, got no value)</code></td><td>…nº 2 para <code>rep</code> (esperava número, não veio nada)</td><td>Faltou um argumento: <code>string.rep("ab")</code></td></tr>
+<tr><td><code>stack overflow</code></td><td>estouro da pilha</td><td>Recursão sem fim (veja <a href="recursao.html">Recursão</a>)</td></tr>
+</table>
+</div>
+
+<p>Duas dessas merecem um olho no <code>stack traceback</code>, que é o assunto da próxima seção:</p>
+
+<pre class="term">$ lua h_str.lua
+lua: h_str.lua:2: attempt to add a 'string' with a 'number'
+stack traceback:
+	[C]: in metamethod 'add'
+	h_str.lua:2: in main chunk
+	[C]: in ?
+$ lua h_bad.lua
+lua: h_bad.lua:2: bad argument #1 to 'insert' (table expected, got nil)
+stack traceback:
+	[C]: in field 'insert'
+	h_bad.lua:2: in main chunk
+	[C]: in ?</pre>
+
+<p>(O <code>h_str.lua</code> tem <code>local preco = "dez"</code> e <code>print(preco + 1)</code>; o <code>h_bad.lua</code>, <code>local lista</code> e <code>table.insert(lista, "pão")</code>.) Nos dois, o rastro começa com uma linha <code>[C]</code>: o erro foi detectado <strong>dentro</strong> de uma parte do Lua escrita em C (a soma de textos, o <code>table.insert</code>). A culpa, porém, é da linha logo abaixo, que é a <strong>sua</strong>: ela passou o valor errado. No <code>bad argument</code>, o número depois do <code>#</code> diz <strong>qual</strong> argumento: <code>#1</code> é o primeiro de dentro dos parênteses.</p>
+
+<hr>
+
+<h2>4. O <code>stack traceback</code>: o caminho até o erro</h2>
+<p><em>Stack traceback</em> quer dizer "rastro da pilha". A <strong>pilha</strong> é a lista das funções que estavam em andamento quando o erro aconteceu: quem chamou quem. O rastro mostra essa lista <strong>da mais recente (em cima) para a mais antiga (embaixo)</strong>. Leia de cima para baixo como "o erro aconteceu aqui, que foi chamado dali, que foi chamado dali…".</p>
+
+<h3>O rastro mais curto</h3>
+<pre class="term">stack traceback:
+	notas.lua:7: in main chunk
+	[C]: in ?</pre>
+<dl class="anatomy">
+  <dt>notas.lua:7: in main chunk</dt><dd>O programa estava na linha 7, no <strong>main chunk</strong>, o "pedaço principal": o corpo do arquivo, fora de qualquer função.</dd>
+  <dt>[C]: in ?</dt><dd>E quem rodou o pedaço principal? O próprio programa <code>lua</code>, que é escrito na linguagem C. Por isso <code>[C]</code>; e o <code>?</code> quer dizer que essa "função" não tem nome. Essa linha aparece no fim de <strong>todo</strong> rastro de um programa rodado com <code>lua arquivo.lua</code>. Pode ignorá-la.</dd>
+</dl>
+
+<h3>Um rastro com funções</h3>
+<p>O boletim da escola chama uma função <code>boletim</code>, que chama <code>media</code>. A segunda aluna tem uma nota digitada como texto:</p>
+
+<pre class="file" data-file="cadeia.lua">local function media(notas)
+  local soma = 0
+  for _, n in ipairs(notas) do
+    soma = soma + n
+  end
+  return soma / #notas
+end
+
+local function boletim(aluno)
+  local m = media(aluno.notas)
+  print(aluno.nome .. ": " .. m)
+end
+
+boletim({ nome = "Ana", notas = {7, 9} })
+boletim({ nome = "Bia", notas = {8, "dez"} })
+</pre>
+
+<pre class="term">$ lua cadeia.lua
+Ana: 8.0
+lua: cadeia.lua:4: attempt to add a 'number' with a 'string'
+stack traceback:
+	[C]: in metamethod 'add'
+	cadeia.lua:4: in upvalue 'media'
+	cadeia.lua:10: in local 'boletim'
+	cadeia.lua:15: in main chunk
+	[C]: in ?</pre>
+
+<p>Linha por linha, de cima para baixo:</p>
+<dl class="anatomy">
+  <dt>[C]: in metamethod 'add'</dt><dd>O erro foi detectado na soma (<code>add</code>), feita pelo próprio Lua (C). Um <em>metamethod</em> é a função que o Lua procura quando a soma não é entre dois números (veja <a href="metametodos-aritmeticos.html">Metamétodos</a>). Para você: "a soma falhou".</dd>
+  <dt>cadeia.lua:4: in upvalue 'media'</dt><dd>A soma estava na <strong>linha 4</strong>, dentro da função <code>media</code>. (De dentro do <code>boletim</code>, a <code>media</code> é uma local de fora, um <em>upvalue</em>; por isso a palavra.)</dd>
+  <dt>cadeia.lua:10: in local 'boletim'</dt><dd>Quem chamou a <code>media</code>: a linha 10, dentro da função <code>boletim</code>.</dd>
+  <dt>cadeia.lua:15: in main chunk</dt><dd>Quem chamou o <code>boletim</code>: a <strong>linha 15</strong> do programa principal. Essa linha é ouro: ela diz que o problema foi na chamada da <strong>Bia</strong> (a linha 14, da Ana, funcionou e até imprimiu <code>Ana: 8.0</code>).</dd>
+  <dt>[C]: in ?</dt><dd>O <code>lua</code>, que começou tudo.</dd>
+</dl>
+
+<p>Repare na estratégia: a primeira linha da mensagem diz <strong>onde</strong> quebrou (linha 4, uma soma). O rastro diz <strong>por que caminho</strong>: veio da linha 15. A soma da linha 4 está certa; o defeito está no <strong>dado</strong> que a linha 15 mandou (o <code>"dez"</code>). Muitas vezes o conserto não é na linha do erro, e sim mais embaixo no rastro.</p>
+
+<div class="trylua" data-goal="out:Bia: 9.0;;semerro">
+<p class="try-task"><strong>Missão:</strong> rode e use o rastro para descobrir <strong>qual chamada</strong> do <code>boletim</code> leva ao erro. Conserte o dado (não a função!) trocando o texto por um número, para a Bia ficar com média <code>9.0</code> (as notas dela são 8 e 10).</p>
+<pre class="script" data-file="main.lua">local function media(notas)
+  local soma = 0
+  for _, n in ipairs(notas) do
+    soma = soma + n
+  end
+  return soma / #notas
+end
+
+local function boletim(aluno)
+  local m = media(aluno.notas)
+  print(aluno.nome .. ": " .. m)
+end
+
+boletim({ nome = "Ana", notas = {7, 9} })
+boletim({ nome = "Bia", notas = {8, "dez"} })
+</pre>
+<pre class="solucao" data-file="main.lua">local function media(notas)
+  local soma = 0
+  for _, n in ipairs(notas) do
+    soma = soma + n
+  end
+  return soma / #notas
+end
+
+local function boletim(aluno)
+  local m = media(aluno.notas)
+  print(aluno.nome .. ": " .. m)
+end
+
+boletim({ nome = "Ana", notas = {7, 9} })
+boletim({ nome = "Bia", notas = {8, 10} })
+</pre>
+</div>
+
+<h3>Todos os "in …" que aparecem no rastro</h3>
+<p>Depois do <code>in</code>, o Lua diz <strong>como</strong> a função foi chamada, isto é, por qual nome quem chamou a encontrou. Este programa (de propósito, cheio de voltas) junta quase todos os tipos num rastro só:</p>
+
+<pre class="file" data-file="nomes_tb.lua">function saudacao(nome)
+  error("deu ruim dentro de saudacao")
+end
+
+local loja = {}
+function loja.abrir()
+  saudacao("Ana")
+end
+
+function loja:fechar()
+  loja.abrir()
+end
+
+local lista = {3, 1, 2}
+table.sort(lista, function (a, b)
+  loja:fechar()
+  return a &lt; b
+end)
+</pre>
+
+<pre class="term">$ lua nomes_tb.lua
+lua: nomes_tb.lua:2: deu ruim dentro de saudacao
+stack traceback:
+	[C]: in global 'error'
+	nomes_tb.lua:2: in global 'saudacao'
+	nomes_tb.lua:7: in field 'abrir'
+	nomes_tb.lua:11: in method 'fechar'
+	nomes_tb.lua:16: in function &lt;nomes_tb.lua:15&gt;
+	[C]: in field 'sort'
+	nomes_tb.lua:15: in main chunk
+	[C]: in ?</pre>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Linha do rastro</th><th>Quer dizer</th></tr>
+<tr><td><code>[C]: in global 'error'</code></td><td>A função pronta <code>error</code> (escrita em C), chamada pelo nome global. Foi ela que "lançou" o erro de propósito (veja <a href="error.html">error</a>).</td></tr>
+<tr><td><code>nomes_tb.lua:2: in global 'saudacao'</code></td><td>Uma função sua, guardada numa <strong>global</strong> (<code>function saudacao</code> sem <code>local</code>), parada na linha 2.</td></tr>
+<tr><td><code>nomes_tb.lua:7: in field 'abrir'</code></td><td>Uma função guardada num <strong>campo</strong> de tabela, chamada como <code>loja.abrir()</code>.</td></tr>
+<tr><td><code>nomes_tb.lua:11: in method 'fechar'</code></td><td>Um <strong>método</strong>, chamado com dois-pontos: <code>loja:fechar()</code>.</td></tr>
+<tr><td><code>nomes_tb.lua:16: in function &lt;nomes_tb.lua:15&gt;</code></td><td>Uma função <strong>sem nome</strong> (anônima), a que foi passada para o <code>table.sort</code>. Sem nome para mostrar, o Lua diz onde ela foi <strong>escrita</strong>: a partir da linha 15.</td></tr>
+<tr><td><code>[C]: in field 'sort'</code></td><td>O <code>table.sort</code> (o campo <code>sort</code> da tabela <code>table</code>), escrito em C, que chamou a sua função anônima para comparar os itens.</td></tr>
+<tr><td><code>in local 'f'</code> / <code>in upvalue 'f'</code></td><td>(do exemplo anterior) uma função guardada numa <strong>local</strong>, ou numa local de fora (<em>upvalue</em>).</td></tr>
+<tr><td><code>(...tail calls...)</code></td><td>Funções que passaram a vez com <code>return f()</code> e não estão mais na pilha (veja <a href="chamada-cauda.html">Chamada de Cauda</a>).</td></tr>
+<tr><td><code>...	(skipping 499974 levels)</code></td><td>"Pulando 499974 níveis": o rastro era comprido demais (recursão), e o Lua mostra só o começo e o fim (veja <a href="recursao.html">Recursão</a>).</td></tr>
+<tr><td><code>[C]: in ?</code></td><td>O programa <code>lua</code>, que começou tudo. Sempre a última linha.</td></tr>
+</table>
+</div>
+
+<div class="note">
+<strong>Linhas <code>[C]</code> no topo do rastro</strong>
+<p>Quando a primeira linha do rastro é <code>[C]: in …</code> (<code>error</code>, <code>insert</code>, <code>sort</code>, <code>metamethod 'add'</code>), o erro foi detectado dentro de uma função pronta do Lua. Pule essa linha: a primeira linha <strong>com nome de arquivo</strong> logo abaixo é o seu código que a chamou, e é lá que você vai olhar.</p>
+</div>
+
+<hr>
+
+<h2>5. Erro de sintaxe × erro de execução</h2>
+<p>Existem dois momentos em que o Lua pode reclamar, e eles produzem mensagens bem diferentes:</p>
+<ol class="passo">
+  <li><strong>Lendo o arquivo</strong> (antes de rodar qualquer linha): o Lua confere se o texto é Lua válido, se cada <code>if</code> tem <code>then</code> e <code>end</code>, se os parênteses fecham. Um problema aqui é um <strong>erro de sintaxe</strong> (a "gramática" do código).</li>
+  <li><strong>Rodando</strong>: o texto é válido, mas, no meio do caminho, uma operação não dá para fazer (somar <code>nil</code>, chamar o que não é função). É um <strong>erro de execução</strong>.</li>
+</ol>
+
+<pre class="file" data-file="s_end.lua">print("começou")
+local function dobro(x)
+  return x * 2
+
+print(dobro(21))
+</pre>
+
+<pre class="term">$ lua s_end.lua
+lua: s_end.lua:5: 'end' expected (to close 'function' at line 2) near 'print'
+$ echo $?
+1</pre>
+
+<p>Três diferenças para reconhecer um erro de sintaxe de longe:</p>
+<ul>
+  <li><strong>Nada rodou</strong>: o <code>print("começou")</code> da linha 1 não apareceu. O Lua leu o arquivo inteiro antes e desistiu antes de começar.</li>
+  <li><strong>Não há <code>stack traceback</code></strong>: não havia nenhuma função rodando, então não há caminho para mostrar.</li>
+  <li>A mensagem fala de <strong>palavras e símbolos</strong> (<code>'end' expected</code>, <code>near 'print'</code>), não de valores.</li>
+</ul>
+
+<dl class="anatomy">
+  <dt>s_end.lua:5:</dt><dd>A linha onde o Lua <strong>percebeu</strong> o problema. Atenção: não é necessariamente onde ele <strong>está</strong>.</dd>
+  <dt>'end' expected</dt><dd>"Era esperado um <code>end</code>."</dd>
+  <dt>(to close 'function' at line 2)</dt><dd>"…para fechar o <code>function</code> da linha 2." Essa parte diz qual bloco ficou aberto. O <code>end</code> que falta deveria estar depois da linha 3.</dd>
+  <dt>near 'print'</dt><dd>"Perto de <code>print</code>": a palavra que o Lua estava lendo quando desistiu. Depois de um <code>return</code>, o Lua exige o fim do bloco; ao encontrar um <code>print</code> na linha 5, soube que algo estava errado.</dd>
+</dl>
+
+<p>Esse é o grande segredo dos erros de sintaxe: <strong>o Lua aponta onde percebeu, e o erro costuma estar antes</strong>. Um <code>end</code> esquecido, uma vírgula que falta, uma aspa que não fechou: o Lua só nota quando encontra a próxima coisa que não faz sentido. Olhe a linha indicada e <strong>as de cima</strong>.</p>
+
+<h3>As mensagens de sintaxe mais comuns</h3>
+<p>Todas colhidas no lab, uma por arquivo:</p>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Código errado</th><th>Mensagem real</th><th>O que falta</th></tr>
+<tr><td><code>if nota &gt;= 7</code> (e o <code>print</code> na linha de baixo)</td><td><code>s_then.lua:3: 'then' expected near 'print'</code></td><td>O <code>then</code> no fim da linha 2</td></tr>
+<tr><td><code>if nota = 10 then</code></td><td><code>s_igual.lua:2: 'then' expected near '='</code></td><td>Comparar é <code>==</code>; um <code>=</code> só é guardar</td></tr>
+<tr><td><code>if nota != 10 then</code></td><td><code>s_diferente.lua:2: 'then' expected near '!'</code></td><td>No Lua, "diferente" é <code>~=</code></td></tr>
+<tr><td><code>local nome = "Ana</code></td><td><code>s_string.lua:1: unfinished string near '"Ana'</code></td><td>A aspa de fechamento ("texto não terminado")</td></tr>
+<tr><td><code>nome = "Ana"</code> sem vírgula, e <code>idade = 30,</code> na linha de baixo, numa tabela</td><td><code>s_virgula.lua:3: '}' expected (to close '{' at line 1) near 'idade'</code></td><td>A vírgula no fim da linha 2</td></tr>
+<tr><td><code>print("total:", (2 + 3)</code></td><td><code>s_paren.lua:2: ')' expected (to close '(' at line 1) near &lt;eof&gt;</code></td><td>Um <code>)</code>. O <code>&lt;eof&gt;</code> (<em>end of file</em>) quer dizer que o arquivo acabou antes</td></tr>
+<tr><td>Um <code>end</code> a mais depois do <code>for</code></td><td><code>s_endextra.lua:4: &lt;eof&gt; expected near 'end'</code></td><td>Nada: sobrou um <code>end</code> ("era esperado o fim do arquivo")</td></tr>
+<tr><td><code>local preco 10</code></td><td><code>s_local.lua:1: unexpected symbol near '10'</code></td><td>O <code>=</code> ("símbolo inesperado perto de 10")</td></tr>
+<tr><td><code>x += 1</code></td><td><code>s_mais.lua:2: syntax error near '+'</code></td><td>O Lua não tem <code>+=</code>: escreva <code>x = x + 1</code></td></tr>
+</table>
+</div>
+
+<div class="tip">
+<strong>Conferir a sintaxe sem rodar: <code>luac -p</code></strong>
+<p>O <code>luac</code> (o "compilador" que vem com o Lua) com a opção <code>-p</code> só lê o arquivo e avisa se há erro de sintaxe, sem executar nada. Útil para programas que apagam arquivos ou mandam mensagens: você confere antes.</p>
+<pre class="term">$ luac -p s_end.lua
+luac: s_end.lua:5: 'end' expected (to close 'function' at line 2) near 'print'</pre>
+<p>Se o arquivo estiver certo, o <code>luac -p</code> não mostra nada. Silêncio, aqui, é boa notícia.</p>
+</div>
+
+<hr>
+
+<h2>6. O nome antes da linha: nem sempre é um arquivo</h2>
+<p>O pedaço antes do número da linha é o <strong>nome do pedaço de código</strong> (o <em>chunk</em>). Quase sempre é o nome do arquivo, mas há outros casos:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Você rodou</th><th>A mensagem começa com</th></tr>
+<tr><td><code>lua notas.lua</code></td><td><code>lua: notas.lua:7:</code></td></tr>
+<tr><td>No editor do guia</td><td><code>lua: main.lua:7:</code></td></tr>
+<tr><td>Um <a href="modulos-proprios.html">módulo seu</a>, carregado com <code>require("contas")</code></td><td><code>lua: ./contas.lua:6:</code> (o nome do arquivo do módulo; o <code>./</code> é "nesta pasta")</td></tr>
+<tr><td><code>lua -e 'print(10 + nada)'</code></td><td><code>lua: (command line):1:</code> ("linha de comando")</td></tr>
+<tr><td>O modo interativo (<code>&gt;</code>)</td><td><code>stdin:1:</code>, sem o <code>lua:</code></td></tr>
+</table>
+</div>
+
+<p>No modo interativo (veja <a href="repl.html">O Modo Interativo</a>), cada linha que você digita é um pedaço chamado <code>stdin</code> ("entrada padrão"), sempre na linha 1. E o Lua não fecha: mostra o erro e espera a próxima linha.</p>
+
+<pre class="term">$ lua
+Lua 5.5.0  Copyright (C) 1994-2025 Lua.org, PUC-Rio
+&gt; pirnt("oi")
+stdin:1: attempt to call a nil value (global 'pirnt')
+stack traceback:
+        stdin:1: in main chunk
+        [C]: in ?
+&gt; if x = 1 then
+stdin:1: 'then' expected near '='
+&gt; os.exit()</pre>
+
+<h3>O erro sem linha nenhuma</h3>
+<p>Raro, mas acontece: o erro nasce dentro de uma função pronta, num ponto em que o Lua não tem uma linha sua para mostrar. Aí a primeira linha fica sem arquivo e sem número, e <strong>só o rastro</strong> salva:</p>
+
+<pre class="file" data-file="contas.lua">local contas = {}
+
+function contas.total(precos)
+  local soma = 0
+  for _, p in ipairs(precos) do
+    soma = soma + p
+  end
+  return soma
+end
+
+return contas
+</pre>
+<pre class="file" data-file="caixa.lua">local contas = require("contas")
+print(contas.total({4, 6}))
+print(contas.total({4, nil, 6}))
+print(contas.total())
+</pre>
+
+<pre class="term">$ lua caixa.lua
+10
+4
+lua: attempt to index a nil value
+stack traceback:
+	[C]: in for iterator 'for iterator'
+	./contas.lua:5: in field 'total'
+	caixa.lua:4: in main chunk
+	[C]: in ?</pre>
+
+<p>O <code>lua: attempt to index a nil value</code> não diz onde. O rastro diz: o erro nasceu no "iterador do <code>for</code>" (o <code>ipairs</code>, escrito em C), que estava na linha 5 do módulo <code>contas.lua</code>, chamado pela linha 4 do <code>caixa.lua</code>: o <code>contas.total()</code> <strong>sem a lista</strong>. O <code>precos</code> chegou <code>nil</code>, e o <code>ipairs</code> tentou indexá-lo. (E repare no <code>4</code> da segunda linha: o <code>ipairs</code> para no primeiro buraco da lista, sem erro; veja <a href="sequencias.html">Sequências e Buracos</a>.)</p>
+
+<hr>
+
+<h2 id="formas">Um roteiro para qualquer mensagem de erro</h2>
+<ol class="passo">
+  <li><strong>Leia a primeira linha inteira</strong>, devagar, até o fim. Não pule a parte em inglês: a tabela da seção 3 traduz as mais comuns.</li>
+  <li><strong>Tem <code>stack traceback</code>?</strong> Não: é erro de sintaxe, nada rodou; olhe a linha indicada e as de cima. Sim: é erro de execução; siga em frente.</li>
+  <li><strong>Vá à linha</strong> que a mensagem aponta (<code>arquivo:linha:</code>).</li>
+  <li><strong>Leia a dica</strong> entre parênteses: qual variável ou campo tinha o valor errado. Pergunte-se: "por que esse nome vale <code>nil</code> (ou um texto, ou uma tabela) aqui?".</li>
+  <li><strong>Desça pelo rastro</strong> se a linha parecer certa: quem chamou com o dado errado? Pule as linhas <code>[C]</code>; procure a primeira linha <strong>sua</strong> que explica o valor.</li>
+</ol>
+
+<p>E se, mesmo assim, não ficar claro? Ponha um <code>print</code> logo antes da linha do erro para ver os valores de verdade (<code>print("nota =", nota, type(nota))</code>), rode de novo e compare com o que você esperava. A aula <a href="depuracao.html">Depurando um Programa</a> mostra outras técnicas.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Para</th><th>Use</th></tr>
+<tr><td>Conferir só a sintaxe, sem rodar</td><td><code>luac -p arquivo.lua</code></td></tr>
+<tr><td>Ver um valor no meio do programa</td><td><code>print("x =", x, type(x))</code> antes da linha do erro</td></tr>
+<tr><td>Testar uma linha solta rapidinho</td><td>O modo interativo, <code>lua</code> (mensagens com <code>stdin:1:</code>)</td></tr>
+<tr><td>Fazer o programa continuar mesmo com erro</td><td><a href="pcall.html">pcall</a></td></tr>
+<tr><td>Ganhar o rastro dentro do seu próprio programa</td><td><a href="xpcall.html">xpcall e debug.traceback</a></td></tr>
+<tr><td>Gerar um erro de propósito, com a sua mensagem</td><td><a href="error.html">error</a> e <a href="assert.html">assert</a></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2 id="errado">Quando dá errado (lendo o erro)</h2>
+
+<div class="cenario">
+<strong>"Mas a linha que ele aponta está certa!"</strong>
+<p>Duas situações. Na de sintaxe, o erro está <strong>antes</strong>: um <code>end</code>, uma vírgula ou uma aspa que faltou lá em cima (seção 5). Na de execução, a linha está certa e o <strong>dado</strong> está errado: desça pelo rastro até a linha que mandou o dado (o <code>cadeia.lua:15</code> da seção 4).</p>
+</div>
+
+<div class="cenario">
+<strong>"Ele diz global, mas eu escrevi local!"</strong>
+<p>A local foi criada num bloco que já fechou (um <code>if</code>, um <code>for</code>, uma função), ou foi declarada <strong>depois</strong> da linha que a usa, ou o nome está escrito diferente (<code>Turma</code> × <code>turma</code>: o Lua diferencia maiúsculas de minúsculas). Veja <a href="escopo.html">Escopo e Blocos</a>.</p>
+</div>
+
+<div class="cenario">
+<strong>Consertei um erro e apareceu outro</strong>
+<p>É normal, e é progresso. O Lua para no <strong>primeiro</strong> problema que encontra. Corrigido esse, ele vai mais longe e encontra o próximo. Programadores experientes fazem isso o tempo todo: rodar, ler, consertar, rodar de novo. A missão final é exatamente isso.</p>
+</div>
+
+<div class="cenario">
+<strong>O erro some e volta "do nada"</strong>
+<p>Se o erro depende do que o usuário digita ou do conteúdo de um arquivo, ele só aparece com certos dados (como a nota <code>"dez"</code> da Bia). A linha do <code>main chunk</code> no fim do rastro, e um <code>print</code> dos dados antes da linha do erro, mostram qual entrada causou o problema.</p>
+</div>
+
+<hr>
+
+<h2>Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Parte da mensagem</th><th>Exemplo</th><th>Responde</th></tr>
+<tr><td>Programa</td><td><code>lua:</code></td><td>Quem reclamou</td></tr>
+<tr><td>Pedaço (arquivo)</td><td><code>notas.lua:</code>, <code>main.lua:</code>, <code>stdin:</code>, <code>(command line):</code></td><td>Em que arquivo</td></tr>
+<tr><td>Linha</td><td><code>7:</code></td><td>Em que linha (onde o Lua percebeu)</td></tr>
+<tr><td>Mensagem</td><td><code>attempt to perform arithmetic on a nil value</code></td><td>O que aconteceu</td></tr>
+<tr><td>Dica</td><td><code>(global 'totl')</code></td><td>Com qual nome</td></tr>
+<tr><td><code>stack traceback:</code></td><td>Uma linha por função em andamento</td><td>Por qual caminho (só nos erros de execução)</td></tr>
+<tr><td><code>arquivo:N: in main chunk</code></td><td><code>cadeia.lua:15: in main chunk</code></td><td>A linha do programa principal que começou o caminho</td></tr>
+<tr><td><code>[C]: in ?</code></td><td>Sempre a última linha</td><td>O próprio <code>lua</code></td></tr>
+<tr><td>Código de saída</td><td><code>echo $?</code> → <code>1</code></td><td>Terminou com erro (sem erro: <code>0</code>)</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. Em que linha?</h3>
+<p>A mensagem foi <code>lua: compras.lua:12: attempt to call a nil value (global 'pirnt')</code>. Em que linha está o problema, e qual nome está errado?</p>
+<div class="ex-code">Linha <input data-answer="12" aria-label="número da linha">, o nome <input data-answer="pirnt" aria-label="nome errado"></div>
+</div>
+
+<div class="exercise">
+<h3>2. Que tipo de nome?</h3>
+<p>Em <code>attempt to index a nil value (field 'endereco')</code>, o <code>nil</code> era um <input data-answer="campo|field" aria-label="tipo do nome"> de uma tabela.</p>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">3. A mensagem não tem <code>stack traceback</code>, e o <code>print</code> da primeira linha do programa não apareceu. Que tipo de erro é?</p>
+<label><input type="radio" name="q3"> Erro de execução</label>
+<label><input type="radio" name="q3"> Erro de sintaxe: o Lua desistiu antes de rodar</label>
+<label><input type="radio" name="q3"> <code>stack overflow</code></label>
+<label><input type="radio" name="q3"> Não é erro, é um aviso</label>
+</div>
+
+<div class="mc" data-answer="4">
+<p class="mc-q">4. Num <code>stack traceback</code>, qual linha mostra o ponto <strong>mais recente</strong>, onde o erro aconteceu?</p>
+<label><input type="radio" name="q4"> A última (<code>[C]: in ?</code>)</label>
+<label><input type="radio" name="q4"> A do <code>main chunk</code></label>
+<label><input type="radio" name="q4"> Tanto faz, a ordem é aleatória</label>
+<label><input type="radio" name="q4"> A primeira, logo abaixo de <code>stack traceback:</code></label>
+</div>
+
+<div class="mc" data-answer="1">
+<p class="mc-q">5. <code>lua: s.lua:9: 'end' expected (to close 'if' at line 4) near &lt;eof&gt;</code>. Onde o <code>end</code> está faltando?</p>
+<label><input type="radio" name="q5"> Depois do bloco do <code>if</code> que começa na linha 4</label>
+<label><input type="radio" name="q5"> Na linha 9, exatamente</label>
+<label><input type="radio" name="q5"> Antes da linha 4</label>
+<label><input type="radio" name="q5"> Em lugar nenhum: <code>&lt;eof&gt;</code> quer dizer que está tudo certo</label>
+</div>
+
+<div class="mc" data-answer="3">
+<p class="mc-q">6. O rastro começa com <code>[C]: in field 'insert'</code> e a linha seguinte é <code>estoque.lua:8: in main chunk</code>. Onde você vai olhar?</p>
+<label><input type="radio" name="q6"> No código-fonte do Lua, em C</label>
+<label><input type="radio" name="q6"> Na linha 1 do <code>estoque.lua</code></label>
+<label><input type="radio" name="q6"> Na linha 8 do <code>estoque.lua</code>, que chamou o <code>table.insert</code> com um argumento errado</label>
+<label><input type="radio" name="q6"> Em lugar nenhum: erros em C não têm conserto</label>
+</div>
+
+<h3>Missão final: três erros, um de cada vez</h3>
+
+<div class="trylua" data-goal="out:Turma: 5º A;;out:Caio: 9.0;;semerro">
+<p class="try-task"><strong>Missão:</strong> o boletim da turma tem <strong>três</strong> erros: um de sintaxe e dois de execução. Rode, leia a mensagem, conserte só o que ela aponta e rode de novo, até o programa mostrar a turma e a média dos três alunos. (Dica: no primeiro, o Lua aponta a linha 5, mas o problema está no fim da linha 4.)</p>
+<pre class="script" data-file="main.lua">local turma = "5º A"
+local alunos = {
+  { nome = "Ana", notas = {7, 9, 8} },
+  { nome = "Bia", notas = {6, 5, 10} }
+  { nome = "Caio", notas = {9, 9, 9} },
+}
+
+local function media(notas)
+  local soma = 0
+  for _, n in ipairs(notas) do
+    soma = soma + n
+  end
+  return soma / #nota
+end
+
+print("Turma: " .. Turma)
+for _, a in ipairs(alunos) do
+  print(a.nome .. ": " .. string.format("%.1f", media(a.notas)))
+end
+</pre>
+<pre class="solucao" data-file="main.lua">local turma = "5º A"
+local alunos = {
+  { nome = "Ana", notas = {7, 9, 8} },
+  { nome = "Bia", notas = {6, 5, 10} },
+  { nome = "Caio", notas = {9, 9, 9} },
+}
+
+local function media(notas)
+  local soma = 0
+  for _, n in ipairs(notas) do
+    soma = soma + n
+  end
+  return soma / #notas
+end
+
+print("Turma: " .. turma)
+for _, a in ipairs(alunos) do
+  print(a.nome .. ": " .. string.format("%.1f", media(a.notas)))
+end
+</pre>
+</div>
+
+<p>No lab, as três mensagens, na ordem em que apareceram, foram:</p>
+<pre class="term">$ lua boletim.lua
+lua: boletim.lua:5: '}' expected (to close '{' at line 2) near '{'
+$ lua boletim.lua                     « depois de pôr a vírgula no fim da linha 4
+lua: boletim.lua:16: attempt to concatenate a nil value (global 'Turma')
+stack traceback:
+	boletim.lua:16: in main chunk
+	[C]: in ?
+$ lua boletim.lua                     « depois de trocar Turma por turma
+Turma: 5º A
+lua: boletim.lua:13: attempt to get length of a nil value (global 'nota')
+stack traceback:
+	boletim.lua:13: in local 'media'
+	boletim.lua:18: in main chunk
+	[C]: in ?
+$ lua boletim.lua                     « depois de trocar #nota por #notas
+Turma: 5º A
+Ana: 8.0
+Bia: 7.0
+Caio: 9.0</pre>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li>A primeira linha tem sempre o formato <code>lua: arquivo:linha: mensagem (dica)</code>: quem, onde, o quê e com qual nome.</li>
+  <li>A dica entre parênteses diz o tipo do nome: <code>global</code>, <code>local</code>, <code>upvalue</code> (local de fora), <code>field</code> (campo de tabela) ou <code>method</code>.</li>
+  <li>O <code>stack traceback</code> lista as funções em andamento, da mais recente (em cima) à mais antiga (embaixo). <code>in main chunk</code> é o programa principal; <code>[C]: in ?</code> é o próprio <code>lua</code>; <code>in function &lt;arquivo:N&gt;</code> é uma função anônima escrita na linha N.</li>
+  <li>Linhas <code>[C]</code> no topo do rastro são funções prontas do Lua; o culpado é a primeira linha sua logo abaixo.</li>
+  <li>Erro de sintaxe: nada roda, não há rastro, e o problema costuma estar <strong>antes</strong> da linha apontada. Erro de execução: o que estava antes rodou, e há rastro.</li>
+  <li>O código de saída de um programa que terminou com erro é 1.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
