@@ -1,0 +1,293 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua Biblioteca math — referência das 25 funções e 4 constantes do Lua 5.5 | Guia Lua</title>
+<meta name="description" content="Referência rápida da biblioteca math do Lua 5.5: as 25 funções (floor, ceil, abs, max, min, sqrt, random, randomseed, tointeger, type, fmod, modf, log, exp, sin, cos…) e as constantes pi, huge, maxinteger e mininteger, com exemplo curto, resultado real e o link para a aula de cada uma.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">Biblioteca math</span></h1>
+
+<p class="intro">Esta é a página de consulta rápida da biblioteca <code>math</code> ("matemática"): as 25 funções e as 4 constantes que o Lua 5.5 traz para fazer contas, arredondar, sortear números e lidar com inteiros e floats. Todas ficam dentro da tabela <code>math</code>: <code>math.floor(3.7)</code>, <code>math.pi</code>. As contas básicas (<code>+</code>, <code>-</code>, <code>*</code>, <code>/</code>, <code>//</code>, <code>%</code>, <code>^</code>) não são funções: são operadores (veja <a href="ref-operadores.html">Operadores</a>).</p>
+
+<div class="note">
+<strong>Como ler as tabelas</strong>
+<ul>
+  <li><strong>Exemplo</strong> é o que você digitaria depois do <code>&gt;</code> do <a href="repl.html">modo interativo</a>.</li>
+  <li><strong>Resultado</strong> é o que o Lua 5.5.0 respondeu no computador da Ana. Vários valores aparecem separados por vírgula; no terminal, o Lua separa com TAB.</li>
+  <li>Preste atenção no <code>.0</code>: <code>4</code> é um <strong>inteiro</strong> e <code>4.0</code> é um <strong>float</strong>. Muitas funções desta página devolvem um ou outro conforme o que receberam. A diferença está em <a href="numeros.html">Números (inteiro e float)</a>.</li>
+  <li>O Lua 5.5 escreve os floats com todos os dígitos necessários: <code>math.pi</code> aparece como <code>3.1415926535897931</code>. Para mostrar bonito, use <code>string.format("%.2f", x)</code>.</li>
+</ul>
+</div>
+
+<p>Assim fica no terminal da Ana:</p>
+
+<pre class="term">$ lua
+Lua 5.5.0  Copyright (C) 1994-2025 Lua.org, PUC-Rio
+&gt; math.floor(3.7), math.ceil(3.2)
+3	4
+&gt; math.max(4, 9, 2)
+9
+&gt; math.pi
+3.1415926535897931
+&gt; math.sqrt(-1)
+-nan
+&gt; 3 // 0
+stdin:1: attempt to divide by zero
+stack traceback:
+        stdin:1: in main chunk
+        [C]: in ?
+&gt; os.exit()
+</pre>
+
+<p>O <code>math.sqrt(-1)</code> não deu erro: deu <code>-nan</code>, o float especial "não é um número" (<em>not a number</em>). Já a divisão inteira <code>3 // 0</code> dá erro (<em>attempt to divide by zero</em> = "tentativa de dividir por zero"), porque não existe inteiro que represente o resultado.</p>
+
+<p>Pule direto para o grupo que você procura:</p>
+<ul>
+  <li><a href="#arredondar">Arredondar e partes do número</a>: <code>floor</code>, <code>ceil</code>, <code>modf</code>, <code>fmod</code>, <code>abs</code></li>
+  <li><a href="#maior">Maior e menor</a>: <code>max</code>, <code>min</code></li>
+  <li><a href="#potencias">Raiz, potência e logaritmo</a>: <code>sqrt</code>, <code>exp</code>, <code>log</code>, <code>frexp</code>, <code>ldexp</code></li>
+  <li><a href="#trigonometria">Ângulos</a>: <code>sin</code>, <code>cos</code>, <code>tan</code>, <code>asin</code>, <code>acos</code>, <code>atan</code>, <code>deg</code>, <code>rad</code></li>
+  <li><a href="#inteiros">Inteiros e floats</a>: <code>type</code>, <code>tointeger</code>, <code>ult</code>, <code>maxinteger</code>, <code>mininteger</code>, <code>huge</code></li>
+  <li><a href="#aleatorios">Números aleatórios</a>: <code>random</code>, <code>randomseed</code></li>
+  <li><a href="#constantes">Constantes</a>: <code>pi</code>, <code>huge</code>, <code>maxinteger</code>, <code>mininteger</code></li>
+  <li><a href="#az">Todas de A a Z</a></li>
+</ul>
+
+<hr>
+
+<h2 id="arredondar">Arredondar e partes do número</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Função</th><th>O que faz</th><th>Exemplo</th><th>Resultado</th><th>Aula</th></tr>
+<tr><td><code>math.floor(x)</code></td><td>Arredonda <strong>para baixo</strong> (<em>floor</em> = "chão"): o maior inteiro que não passa de <code>x</code>.</td><td><code>math.floor(3.7), math.floor(-3.7), math.floor(5)</code></td><td><code>3</code>, <code>-4</code>, <code>5</code></td><td><a href="math.html">A Biblioteca math</a></td></tr>
+<tr><td></td><td>devolve um <strong>inteiro</strong> (o <code>// 1</code> devolve float)</td><td><code>math.type(math.floor(3.7)), math.type(3.7 // 1)</code></td><td><code>integer</code>, <code>float</code></td><td><a href="divisao.html">Divisão: /, // e %</a></td></tr>
+<tr><td></td><td>número grande demais para inteiro: continua float</td><td><code>math.floor(2^70)</code></td><td><code>1.1805916207174113e+21</code></td><td></td></tr>
+<tr><td><code>math.ceil(x)</code></td><td>Arredonda <strong>para cima</strong> (<em>ceiling</em> = "teto").</td><td><code>math.ceil(3.2), math.ceil(-3.2)</code></td><td><code>4</code>, <code>-3</code></td><td><a href="math.html">A Biblioteca math</a></td></tr>
+<tr><td>arredondar "normal"</td><td>Não existe <code>math.round</code>. A receita: somar 0.5 e arredondar para baixo.</td><td><code>math.floor(7.5 + 0.5), math.floor(8.5 + 0.5)</code></td><td><code>8</code>, <code>9</code></td><td></td></tr>
+<tr><td></td><td>para mostrar com casas decimais, o <code>string.format</code> arredonda</td><td><code>string.format("%.2f", 2/3)</code></td><td><code>0.67</code></td><td><a href="string-format.html">string.format</a></td></tr>
+<tr><td><code>math.modf(x)</code></td><td>Separa a parte inteira e a parte decimal. A segunda é sempre float.</td><td><code>math.modf(3.7)</code></td><td><code>3</code>, <code>0.70000000000000018</code></td><td><a href="numeros.html">Números</a></td></tr>
+<tr><td></td><td>negativo: as duas partes negativas</td><td><code>math.modf(-3.7)</code></td><td><code>-3</code>, <code>-0.70000000000000018</code></td><td></td></tr>
+<tr><td></td><td></td><td><code>math.modf(5)</code></td><td><code>5</code>, <code>0.0</code></td><td></td></tr>
+<tr><td><code>math.fmod(x, y)</code></td><td>Resto da divisão, com o sinal de <code>x</code>. O operador <code>%</code> usa o sinal de <code>y</code>.</td><td><code>math.fmod(7, 3), math.fmod(-7, 3), -7 % 3</code></td><td><code>1</code>, <code>-1</code>, <code>2</code></td><td><a href="divisao.html">Divisão: /, // e %</a></td></tr>
+<tr><td></td><td>funciona com float</td><td><code>math.fmod(7.5, 2)</code></td><td><code>1.5</code></td><td></td></tr>
+<tr><td></td><td>inteiro por zero é erro…</td><td><code>math.fmod(7, 0)</code></td><td><code>stdin:1: bad argument #2 to 'fmod' (zero)</code></td><td></td></tr>
+<tr><td></td><td>…float por zero dá <code>nan</code></td><td><code>math.fmod(7.0, 0)</code></td><td><code>-nan</code></td><td></td></tr>
+<tr><td><code>math.abs(x)</code></td><td>Valor absoluto: o número sem o sinal.</td><td><code>math.abs(-7), math.abs(-2.5), math.abs(3)</code></td><td><code>7</code>, <code>2.5</code>, <code>3</code></td><td><a href="math.html">A Biblioteca math</a></td></tr>
+<tr><td></td><td>o único caso estranho: o menor inteiro não tem positivo correspondente e "dá a volta"</td><td><code>math.abs(math.mininteger)</code></td><td><code>-9223372036854775808</code></td><td></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2 id="maior">Maior e menor</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Função</th><th>O que faz</th><th>Exemplo</th><th>Resultado</th><th>Aula</th></tr>
+<tr><td><code>math.max(x, …)</code><br><code>math.min(x, …)</code></td><td>O maior / o menor dos valores.</td><td><code>math.max(4, 9, 2), math.min(4, 9, 2)</code></td><td><code>9</code>, <code>2</code></td><td><a href="math.html">A Biblioteca math</a></td></tr>
+<tr><td></td><td>mistura inteiro e float sem problema</td><td><code>math.max(1, 2.5)</code></td><td><code>2.5</code></td><td></td></tr>
+<tr><td></td><td>numa lista: com <code>table.unpack</code></td><td><code>math.max(table.unpack({4, 9, 2}))</code></td><td><code>9</code></td><td><a href="table-unpack.html">table.unpack</a></td></tr>
+<tr><td></td><td>sem nada é erro</td><td><code>math.max()</code></td><td><code>stdin:1: bad argument #1 to 'max' (value expected)</code></td><td></td></tr>
+<tr><td></td><td>cuidado: com <strong>textos</strong>, compara como texto (o <code>"9"</code> vem depois do <code>"1"</code>)</td><td><code>math.max("10", "9")</code></td><td><code>9</code> (o texto <code>"9"</code>)</td><td><a href="operadores-comparacao.html">Comparações</a></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2 id="potencias">Raiz, potência e logaritmo</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Função</th><th>O que faz</th><th>Exemplo</th><th>Resultado</th><th>Aula</th></tr>
+<tr><td><code>math.sqrt(x)</code></td><td>Raiz quadrada (<em>square root</em>). Sempre float.</td><td><code>math.sqrt(16), math.sqrt(2)</code></td><td><code>4.0</code>, <code>1.4142135623730951</code></td><td><a href="math.html">A Biblioteca math</a></td></tr>
+<tr><td></td><td>de número negativo: "não é número"</td><td><code>math.sqrt(-1)</code></td><td><code>-nan</code></td><td></td></tr>
+<tr><td>potência</td><td>Não há <code>math.pow</code> no 5.5: use o operador <code>^</code> (sempre dá float). <code>x ^ 0.5</code> também é raiz.</td><td><code>16 ^ 0.5, 2 ^ 10</code></td><td><code>4.0</code>, <code>1024.0</code></td><td><a href="operadores-aritmeticos.html">Operadores Aritméticos</a></td></tr>
+<tr><td><code>math.exp(x)</code></td><td><em>e</em> elevado a <code>x</code> (<em>e</em> ≈ 2,718).</td><td><code>math.exp(1)</code></td><td><code>2.7182818284590451</code></td><td></td></tr>
+<tr><td><code>math.log(x)</code></td><td>Logaritmo natural (base <em>e</em>).</td><td><code>math.log(1)</code></td><td><code>0.0</code></td><td></td></tr>
+<tr><td><code>math.log(x, base)</code></td><td>Logaritmo em outra base.</td><td><code>math.log(100, 10), math.log(8, 2)</code></td><td><code>2.0</code>, <code>3.0</code></td><td></td></tr>
+<tr><td></td><td>de zero: menos infinito</td><td><code>math.log(0)</code></td><td><code>-inf</code></td><td></td></tr>
+<tr><td><code>math.frexp(x)</code></td><td>Separa <code>x</code> em <code>m</code> e <code>e</code> com <code>x = m × 2^e</code> (uso raro).</td><td><code>math.frexp(8)</code></td><td><code>0.5</code>, <code>4</code></td><td></td></tr>
+<tr><td><code>math.ldexp(m, e)</code></td><td>O contrário: <code>m × 2^e</code>.</td><td><code>math.ldexp(0.5, 4)</code></td><td><code>8.0</code></td><td></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2 id="trigonometria">Ângulos (trigonometria)</h2>
+
+<p>As funções de ângulo usam <strong>radianos</strong>, não graus. Uma volta inteira (360°) são <code>2 * math.pi</code> radianos. Converta com <code>math.rad</code> (graus → radianos) e <code>math.deg</code> (radianos → graus).</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Função</th><th>O que faz</th><th>Exemplo</th><th>Resultado</th></tr>
+<tr><td><code>math.sin(x)</code>, <code>math.cos(x)</code>, <code>math.tan(x)</code></td><td>Seno, cosseno e tangente.</td><td><code>math.sin(math.pi / 2), math.cos(0), math.tan(0)</code></td><td><code>1.0</code>, <code>1.0</code>, <code>0.0</code></td></tr>
+<tr><td></td><td>o seno de π "deveria" ser 0: o float chega a um número minúsculo</td><td><code>math.sin(math.pi)</code></td><td><code>1.2246467991473532e-16</code></td></tr>
+<tr><td><code>math.asin(x)</code>, <code>math.acos(x)</code>, <code>math.atan(x)</code></td><td>Arco seno, arco cosseno, arco tangente (o ângulo, em radianos).</td><td><code>math.asin(1), math.acos(1), math.atan(1)</code></td><td><code>1.5707963267948966</code>, <code>0.0</code>, <code>0.78539816339744828</code></td></tr>
+<tr><td><code>math.atan(y, x)</code></td><td>O ângulo do ponto <code>(x, y)</code>, olhando os sinais dos dois (acerta o quadrante).</td><td><code>math.atan(1, -1)</code></td><td><code>2.3561944901923448</code> (135°)</td></tr>
+<tr><td><code>math.deg(x)</code>, <code>math.rad(x)</code></td><td>Radianos → graus e graus → radianos.</td><td><code>math.deg(math.pi), math.rad(180)</code></td><td><code>180.0</code>, <code>3.1415926535897931</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2 id="inteiros">Inteiros e floats</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Função</th><th>O que faz</th><th>Exemplo</th><th>Resultado</th><th>Aula</th></tr>
+<tr><td><code>math.type(x)</code></td><td>Diz se o número é <code>"integer"</code> (inteiro) ou <code>"float"</code>. Se não for número, <code>nil</code>.</td><td><code>math.type(1), math.type(1.0), math.type("1")</code></td><td><code>integer</code>, <code>float</code>, <code>nil</code></td><td><a href="numeros.html">Números</a></td></tr>
+<tr><td><code>math.tointeger(x)</code></td><td>Converte para inteiro, se der sem perder nada. Se não der, <code>nil</code>.</td><td><code>math.tointeger(5.0), math.tointeger(5.5), math.tointeger("8")</code></td><td><code>5</code>, <code>nil</code>, <code>8</code></td><td><a href="conversao.html">Conversão</a></td></tr>
+<tr><td></td><td></td><td><code>math.tointeger("x")</code></td><td><code>nil</code></td><td></td></tr>
+<tr><td><code>math.ult(m, n)</code></td><td>Compara dois inteiros como se não tivessem sinal (<em>unsigned less than</em>). Uso raro, em bits.</td><td><code>math.ult(1, -1), 1 &lt; -1</code></td><td><code>true</code>, <code>false</code></td><td><a href="operadores-bits.html">Operadores de Bits</a></td></tr>
+<tr><td><code>math.maxinteger</code>, <code>math.mininteger</code></td><td>O maior e o menor inteiro que o Lua guarda (64 bits).</td><td><code>math.maxinteger, math.mininteger</code></td><td><code>9223372036854775807</code>, <code>-9223372036854775808</code></td><td><a href="numeros.html">Números</a></td></tr>
+<tr><td></td><td>passou do maior: "dá a volta" para o menor, sem aviso</td><td><code>math.maxinteger + 1 == math.mininteger</code></td><td><code>true</code></td><td></td></tr>
+<tr><td></td><td>com float não dá a volta (mas perde precisão)</td><td><code>math.maxinteger + 1.0</code></td><td><code>9.2233720368547758e+18</code></td><td></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2 id="aleatorios">Números aleatórios</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Função</th><th>O que faz</th><th>Exemplo</th><th>Resultado</th><th>Aula</th></tr>
+<tr><td><code>math.random()</code></td><td>Um float sorteado de 0 até 1 (o 1 nunca sai).</td><td><code>r = math.random(); print(r &gt;= 0 and r &lt; 1)</code></td><td><code>true</code> (o <code>r</code> muda a cada vez)</td><td><a href="math-random.html">Números Aleatórios</a></td></tr>
+<tr><td><code>math.random(m, n)</code></td><td>Um inteiro sorteado de <code>m</code> a <code>n</code>, incluindo os dois. Um dado: <code>math.random(1, 6)</code>.</td><td><code>math.randomseed(42); print(math.random(1, 6), math.random(1, 6), math.random(1, 6))</code></td><td><code>6</code>, <code>2</code>, <code>4</code> (com a semente 42)</td><td><a href="math-random.html">Números Aleatórios</a></td></tr>
+<tr><td><code>math.random(n)</code></td><td>O mesmo que <code>math.random(1, n)</code>.</td><td><code>math.randomseed(42); print(math.random(10))</code></td><td><code>6</code></td><td></td></tr>
+<tr><td><code>math.random(0)</code></td><td>Um inteiro com todos os 64 bits sorteados (pode ser negativo).</td><td><code>math.randomseed(42); print(math.random(0))</code></td><td><code>-1276290044721465627</code></td><td></td></tr>
+<tr><td></td><td>intervalo ao contrário</td><td><code>math.random(7, 1)</code></td><td><code>stdin:1: bad argument #1 to 'random' (interval is empty)</code></td><td></td></tr>
+<tr><td></td><td>limite tem de ser inteiro</td><td><code>math.random(1.5)</code></td><td><code>stdin:1: bad argument #1 to 'random' (number has no integer representation)</code></td><td></td></tr>
+<tr><td><code>math.randomseed(x)</code></td><td>Escolhe a <strong>semente</strong> do sorteio. A mesma semente dá sempre a mesma sequência (ótimo para testar). Devolve as duas partes da semente usada.</td><td><code>math.randomseed(42)</code></td><td><code>42</code>, <code>0</code></td><td><a href="math-random.html">Números Aleatórios</a></td></tr>
+<tr><td><code>math.randomseed()</code></td><td>Sem argumento: uma semente nova, "bagunçada". O Lua já faz isso sozinho ao começar.</td><td><code>math.randomseed()</code></td><td>dois números que mudam a cada vez</td><td></td></tr>
+</table>
+</div>
+
+<div class="note">
+<strong>Lua mais antigo: precisava de <code>math.randomseed(os.time())</code></strong>
+<p>Desde o 5.4, o Lua sorteia uma semente nova sozinho a cada vez que o programa começa (o manual do 5.5 diz: "<code>math.random</code> should generate different sequences of results each time the program runs"). No Lua 5.1 e no LuaJIT, quem esquece o <code>math.randomseed(os.time())</code> pode ver os mesmos números toda vez (ilustrativo: não comparamos aqui). Os números sorteados com a semente 42 desta página são os do 5.5; outra versão pode dar outros.</p>
+</div>
+
+<hr>
+
+<h2 id="constantes">Constantes</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Nome</th><th>O que é</th><th>Exemplo</th><th>Resultado</th></tr>
+<tr><td><code>math.pi</code></td><td>O número π (pi), a razão entre a volta e o diâmetro do círculo.</td><td><code>math.pi</code></td><td><code>3.1415926535897931</code></td></tr>
+<tr><td><code>math.huge</code></td><td>O "infinito": um float maior que qualquer número. Bom como valor inicial ao procurar o menor.</td><td><code>math.huge, -math.huge</code></td><td><code>inf</code>, <code>-inf</code></td></tr>
+<tr><td></td><td></td><td><code>math.huge &gt; 10^308</code></td><td><code>true</code></td></tr>
+<tr><td></td><td>dividir float por zero também dá infinito (não é erro)</td><td><code>1 / 0, -1 / 0</code></td><td><code>inf</code>, <code>-inf</code></td></tr>
+<tr><td></td><td>e zero por zero, "não é número"</td><td><code>0 / 0</code></td><td><code>-nan</code></td></tr>
+<tr><td><code>math.maxinteger</code></td><td>O maior inteiro.</td><td><code>math.maxinteger</code></td><td><code>9223372036854775807</code></td></tr>
+<tr><td><code>math.mininteger</code></td><td>O menor inteiro.</td><td><code>math.mininteger</code></td><td><code>-9223372036854775808</code></td></tr>
+</table>
+</div>
+
+<div class="tip">
+<strong>Como saber se um valor é <code>nan</code>?</strong>
+<p>O <code>nan</code> é o único valor que é diferente de si mesmo: <code>x ~= x</code> só dá <code>true</code> quando <code>x</code> é <code>nan</code>. No lab ele aparece como <code>-nan</code> (com o sinal); em outros computadores pode aparecer <code>nan</code>. Não compare o texto: use <code>x ~= x</code>.</p>
+</div>
+
+<hr>
+
+<h2 id="az">Todas de A a Z</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Nome</th><th>Em uma frase</th><th>Grupo</th></tr>
+<tr><td><code>math.abs</code></td><td>sem o sinal</td><td><a href="#arredondar">Arredondar</a></td></tr>
+<tr><td><code>math.acos</code>, <code>math.asin</code>, <code>math.atan</code></td><td>arco cosseno, arco seno, arco tangente</td><td><a href="#trigonometria">Ângulos</a></td></tr>
+<tr><td><code>math.ceil</code></td><td>arredonda para cima</td><td><a href="#arredondar">Arredondar</a></td></tr>
+<tr><td><code>math.cos</code>, <code>math.sin</code>, <code>math.tan</code></td><td>cosseno, seno, tangente</td><td><a href="#trigonometria">Ângulos</a></td></tr>
+<tr><td><code>math.deg</code>, <code>math.rad</code></td><td>radianos ↔ graus</td><td><a href="#trigonometria">Ângulos</a></td></tr>
+<tr><td><code>math.exp</code>, <code>math.log</code></td><td>exponencial e logaritmo</td><td><a href="#potencias">Raiz, potência e logaritmo</a></td></tr>
+<tr><td><code>math.floor</code></td><td>arredonda para baixo</td><td><a href="#arredondar">Arredondar</a></td></tr>
+<tr><td><code>math.fmod</code></td><td>resto com o sinal do dividendo</td><td><a href="#arredondar">Arredondar</a></td></tr>
+<tr><td><code>math.frexp</code>, <code>math.ldexp</code></td><td>mantissa e expoente</td><td><a href="#potencias">Raiz, potência e logaritmo</a></td></tr>
+<tr><td><code>math.huge</code></td><td>infinito</td><td><a href="#constantes">Constantes</a></td></tr>
+<tr><td><code>math.max</code>, <code>math.min</code></td><td>o maior, o menor</td><td><a href="#maior">Maior e menor</a></td></tr>
+<tr><td><code>math.maxinteger</code>, <code>math.mininteger</code></td><td>os limites dos inteiros</td><td><a href="#inteiros">Inteiros e floats</a></td></tr>
+<tr><td><code>math.modf</code></td><td>parte inteira e parte decimal</td><td><a href="#arredondar">Arredondar</a></td></tr>
+<tr><td><code>math.pi</code></td><td>π</td><td><a href="#constantes">Constantes</a></td></tr>
+<tr><td><code>math.random</code>, <code>math.randomseed</code></td><td>sortear, escolher a semente</td><td><a href="#aleatorios">Números aleatórios</a></td></tr>
+<tr><td><code>math.sqrt</code></td><td>raiz quadrada</td><td><a href="#potencias">Raiz, potência e logaritmo</a></td></tr>
+<tr><td><code>math.tointeger</code>, <code>math.type</code></td><td>converter para inteiro, ver o tipo do número</td><td><a href="#inteiros">Inteiros e floats</a></td></tr>
+<tr><td><code>math.ult</code></td><td>compara sem sinal</td><td><a href="#inteiros">Inteiros e floats</a></td></tr>
+</table>
+</div>
+
+<div class="note">
+<strong>Funções que sumiram</strong>
+<p>Se você copiou código de um Lua antigo: <code>math.pow</code>, <code>math.cosh</code>, <code>math.sinh</code>, <code>math.tanh</code>, <code>math.log10</code> e <code>math.atan2</code> não existem no 5.5 (no lab, todas deram <code>nil</code> no <code>lua</code> e existem no <code>lua5.1</code>). Use <code>x ^ y</code> no lugar de <code>math.pow(x, y)</code>, <code>math.log(x, 10)</code> no lugar de <code>math.log10(x)</code> e <code>math.atan(y, x)</code> no lugar de <code>math.atan2(y, x)</code>. Veja <a href="versoes.html">As Diferenças entre Versões</a>.</p>
+</div>
+
+<hr>
+
+<h2>Experimente</h2>
+
+<div class="trylua" data-goal="out:cada um paga R$ 29.17;;src:math\.ceil">
+<p class="try-task"><strong>Missão:</strong> a pizza da Ana custou R$ 87,50 e vai ser dividida entre 3 amigos. A divisão dá <code>29.166666666666668</code>, e ninguém paga dízima. Arredonde <strong>para cima</strong>, nos centavos, para ninguém pagar a menos: multiplique por 100, use <code>math.ceil</code> e divida por 100. Mostre com <code>string.format("%.2f", …)</code>. O resultado certo é <code>cada um paga R$ 29.17</code>.</p>
+<pre class="script" data-file="main.lua">local total = 87.50
+local pessoas = 3
+
+local parte = total / pessoas
+print("cada um paga R$ " .. parte)
+</pre>
+<pre class="solucao" data-file="main.lua">local total = 87.50
+local pessoas = 3
+
+local parte = math.ceil(total / pessoas * 100) / 100
+print("cada um paga R$ " .. string.format("%.2f", parte))
+</pre>
+</div>
+
+<div class="trylua">
+<p class="try-task"><strong>Livre:</strong> teste as funções desta página. Com <code>math.randomseed(42)</code> os sorteios se repetem a cada Rodar; apague essa linha e veja os números mudarem.</p>
+<pre class="script" data-file="main.lua">print(math.floor(3.7), math.ceil(3.2), math.abs(-5))
+print(math.max(4, 9, 2), math.min(4, 9, 2))
+print(math.sqrt(2), 2 ^ 0.5)
+print(math.type(10), math.type(10 / 2), math.tointeger(10 / 2))
+print(string.format("pi com 4 casas: %.4f", math.pi))
+
+math.randomseed(42)
+for i = 1, 5 do
+  io.write(math.random(1, 6), " ")
+end
+print()
+</pre>
+</div>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li>A tabela <code>math</code> tem 25 funções e 4 constantes (<code>pi</code>, <code>huge</code>, <code>maxinteger</code>, <code>mininteger</code>).</li>
+  <li>Arredondar: <code>floor</code> (para baixo), <code>ceil</code> (para cima), <code>math.floor(x + 0.5)</code> (normal); para mostrar, <code>string.format("%.2f", x)</code>.</li>
+  <li><code>max</code>/<code>min</code> com vários valores; numa lista, <code>math.max(table.unpack(lista))</code>.</li>
+  <li><code>sqrt</code> e o operador <code>^</code> no lugar do antigo <code>math.pow</code>; ângulos em radianos.</li>
+  <li><code>math.type</code> diz se é inteiro ou float; <code>math.tointeger</code> converte quando não perde nada.</li>
+  <li><code>math.random(1, 6)</code> sorteia um dado; <code>math.randomseed(42)</code> repete a sequência.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
