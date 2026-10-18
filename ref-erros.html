@@ -1,0 +1,305 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua Mensagens de Erro Comuns — o que significam e como resolver (Lua 5.5) | Guia Lua</title>
+<meta name="description" content="As mensagens de erro mais comuns do Lua 5.5, cada uma colhida de verdade: attempt to call a nil value, attempt to index a nil value, attempt to perform arithmetic, attempt to concatenate, attempt to compare, 'end' expected, unexpected symbol, stack overflow, module not found… com o código que a produz, o que significa e como resolver.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">Mensagens de Erro Comuns</span></h1>
+
+<p class="intro">Esta é a página de consulta das <strong>mensagens de erro</strong> que mais aparecem para quem está começando no Lua 5.5. O Lua escreve as mensagens em inglês. Para cada uma, aqui estão: um programa curto que a produz, a mensagem <strong>exata</strong> que o Lua escreveu, o que ela quer dizer em português e como resolver. Todas foram colhidas rodando cada programa como <code>main.lua</code> no computador da Ana (<code>lua main.lua</code>). A aula que ensina a ler uma mensagem passo a passo é <a href="erros.html">Lendo uma Mensagem de Erro</a>.</p>
+
+<h2 id="anatomia">As partes de uma mensagem</h2>
+
+<pre class="file" data-file="main.lua">local nomes = {"Ana", "Bia"}
+pirnt(nomes[1])
+</pre>
+
+<pre class="term">$ lua main.lua
+lua: main.lua:2: attempt to call a nil value (global 'pirnt')
+stack traceback:
+	main.lua:2: in main chunk
+	[C]: in ?
+$ echo $?
+1
+</pre>
+
+<dl class="anatomy">
+  <dt><code>lua:</code></dt><dd>Quem está falando: o programa <code>lua</code>.</dd>
+  <dt><code>main.lua:2:</code></dt><dd><strong>Onde</strong>: o arquivo e a linha (aqui, a linha 2). Comece sempre por aqui.</dd>
+  <dt><code>attempt to call a nil value</code></dt><dd><strong>O quê</strong>: "tentativa de chamar um valor nil". O programa tentou usar como função algo que não existe.</dd>
+  <dt><code>(global 'pirnt')</code></dt><dd><strong>Qual nome</strong>: a variável global <code>pirnt</code>. É o <code>print</code> escrito errado.</dd>
+  <dt><code>stack traceback:</code></dt><dd>O "caminho" até o erro (<em>stack traceback</em> = "rastro da pilha de chamadas"), do mais recente para o mais antigo. <code>in main chunk</code> é o corpo do arquivo; <code>[C]: in ?</code> é o próprio programa <code>lua</code>, que rodou o arquivo. Quando o erro acontece dentro de uma função, aparece uma linha para cada função, como <code>in local 'soma'</code>.</dd>
+  <dt><code>echo $?</code> → <code>1</code></dt><dd>O código de saída: 1 quer dizer "terminou com erro".</dd>
+</dl>
+
+<div class="note">
+<strong>Dois tipos de erro</strong>
+<ul>
+  <li><strong>Erro de sintaxe</strong> (o texto do programa está malformado): o Lua avisa <strong>antes</strong> de rodar qualquer linha, e a mensagem vem <strong>sem</strong> o <code>stack traceback:</code>. Nada do programa é executado, nem as linhas antes do erro.</li>
+  <li><strong>Erro de execução</strong> (o texto está certo, mas algo deu errado rodando): as linhas antes do erro já rodaram, e a mensagem vem com o <code>stack traceback:</code>.</li>
+</ul>
+<p>No <a href="repl.html">modo interativo</a>, o lugar aparece como <code>stdin:1:</code> em vez de <code>main.lua:2:</code>.</p>
+</div>
+
+<p>Pule direto para o grupo que você procura:</p>
+<ul>
+  <li><a href="#nil">Erros com <code>nil</code></a> (os mais comuns): <em>call a nil value</em>, <em>index a nil value</em>, <em>arithmetic on a nil value</em>, <em>concatenate a nil value</em>…</li>
+  <li><a href="#tipos">Tipo errado</a>: <em>attempt to add a 'string'</em>, <em>compare number with string</em>, <em>call a table value</em>, <em>bad argument</em>…</li>
+  <li><a href="#sintaxe">Erros de sintaxe</a>: <em>'end' expected</em>, <em>'then' expected</em>, <em>unexpected symbol</em>, <em>unfinished string</em>…</li>
+  <li><a href="#novos">Erros do 5.5 (<code>for</code>, <code>global</code>, <code>&lt;const&gt;</code>) e do <code>goto</code></a></li>
+  <li><a href="#arquivos">Arquivos e módulos</a>: <em>No such file or directory</em>, <em>closed file</em>, <em>module not found</em></li>
+  <li><a href="#pilha">Recursão sem fim</a>: <em>stack overflow</em>, <em>C stack overflow</em></li>
+  <li><a href="#proprios">Erros lançados pelo programa</a>: <code>error</code>, <code>assert</code>, Ctrl+C</li>
+</ul>
+
+<hr>
+
+<h2 id="nil">Erros com <code>nil</code></h2>
+
+<p>Quase todo erro de quem está começando é um <code>nil</code> onde não devia: um nome escrito errado, uma variável que ficou sem valor, um campo que não existe. A parte entre parênteses no fim da mensagem diz <strong>qual</strong> nome era <code>nil</code>: <code>global 'x'</code> (variável global), <code>local 'x'</code> (variável local), <code>field 'x'</code> (campo de tabela, <code>t.x</code>), <code>method 'x'</code> (método, <code>t:x()</code>), <code>upvalue 'x'</code> (variável de fora da função).</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Código</th><th>Mensagem (depois de <code>lua: </code>)</th><th>O que significa</th><th>Como resolver</th></tr>
+<tr><td><code>pirnt("oi")</code></td><td><code>main.lua:2: attempt to call a nil value (global 'pirnt')</code></td><td>Chamou como função um nome que não existe.</td><td>Confira a escrita (<code>print</code>). Se a função é sua, veja se ela foi criada <strong>antes</strong> da linha que a chama.</td></tr>
+<tr><td><code>local nome = "Ana"</code><br><code>print(nome:maiuscula())</code></td><td><code>main.lua:2: attempt to call a nil value (method 'maiuscula')</code></td><td>O método não existe para esse valor.</td><td>Use um método que existe (<code>nome:upper()</code>). Lista em <a href="ref-string.html">A Biblioteca string</a>.</td></tr>
+<tr><td><code>local aluno = nil</code><br><code>print(aluno.nome)</code></td><td><code>main.lua:2: attempt to index a nil value (local 'aluno')</code></td><td>"Tentativa de indexar um nil": usou <code>.</code> ou <code>[ ]</code> em algo que não é tabela (aqui, <code>nil</code>).</td><td>Descubra por que a variável está <code>nil</code>; ou proteja: <code>if aluno then … end</code>, <code>aluno and aluno.nome</code>.</td></tr>
+<tr><td><code>local pedido = {cliente = "Ana"}</code><br><code>print(pedido.endereco.rua)</code></td><td><code>main.lua:2: attempt to index a nil value (field 'endereco')</code></td><td>O campo <code>endereco</code> não existe, então <code>.rua</code> foi pedido a um <code>nil</code>.</td><td>Crie o campo antes, ou teste: <code>pedido.endereco and pedido.endereco.rua</code>. Veja <a href="tabelas-aninhadas.html">Tabelas Aninhadas</a>.</td></tr>
+<tr><td><code>local t = {}</code><br><code>t.lista[1] = "pão"</code></td><td><code>main.lua:2: attempt to index a nil value (field 'lista')</code></td><td>A tabela de dentro não foi criada.</td><td><code>t.lista = {}</code> antes de usar.</td></tr>
+<tr><td><code>local total = 10</code><br><code>print(totl + 5)</code></td><td><code>main.lua:2: attempt to perform arithmetic on a nil value (global 'totl')</code></td><td>"Tentativa de fazer conta com nil": um nome escrito errado vira uma global que vale <code>nil</code>.</td><td>Confira a escrita. Usar sempre <code>local</code> ajuda a achar o erro (veja <a href="local.html">local × Global</a>).</td></tr>
+<tr><td><code>local function soma(a, b)</code><br><code>  return a + b</code><br><code>end</code><br><code>print(soma(1))</code></td><td><code>main.lua:2: attempt to perform arithmetic on a nil value (local 'b')</code><br>(o traceback mostra <code>main.lua:2: in local 'soma'</code> e <code>main.lua:4: in main chunk</code>)</td><td>Faltou um argumento: o parâmetro <code>b</code> ficou <code>nil</code>. O erro aparece <strong>dentro</strong> da função, mas o culpado é a chamada da linha 4.</td><td>Passe todos os argumentos, ou dê um valor padrão: <code>b = b or 0</code>. Veja <a href="parametros.html">Parâmetros</a>.</td></tr>
+<tr><td><code>local n = tonumber("abc")</code><br><code>print(n * 2)</code></td><td><code>main.lua:3: attempt to perform arithmetic on a nil value (local 'n')</code></td><td>O <code>tonumber</code> não conseguiu converter e devolveu <code>nil</code>.</td><td>Teste antes: <code>if n == nil then print("não é número") end</code>. Veja <a href="conversao.html">Conversão</a>.</td></tr>
+<tr><td><code>local estoque = {pao = 10}</code><br><code>total = total + estoque[item]</code> (com um <code>item</code> que não está no estoque)</td><td><code>attempt to perform arithmetic on a nil value (field '?')</code></td><td>Uma chave que não existe na tabela. O <code>'?'</code> aparece quando a chave vem de uma variável.</td><td><code>(estoque[item] or 0)</code>. Esta é a missão do fim da página.</td></tr>
+<tr><td><code>print(10 + nil)</code></td><td><code>main.lua:1: attempt to perform arithmetic on a nil value</code></td><td>Conta com <code>nil</code>; sem nome entre parênteses quando não há variável.</td><td>Descubra de onde vem o <code>nil</code>.</td></tr>
+<tr><td><code>local nome</code><br><code>print("Olá, " .. nome)</code></td><td><code>main.lua:2: attempt to concatenate a nil value (local 'nome')</code></td><td>"Tentativa de juntar um nil": o <code>..</code> só junta textos e números.</td><td>Dê um valor: <code>"Olá, " .. (nome or "visitante")</code>. Veja <a href="concatenacao.html">Juntando Textos</a>.</td></tr>
+<tr><td><code>local lista</code><br><code>print(#lista)</code></td><td><code>main.lua:2: attempt to get length of a nil value (local 'lista')</code></td><td>"Tentativa de pegar o tamanho de um nil".</td><td>Crie a lista: <code>local lista = {}</code>.</td></tr>
+<tr><td><code>local lista</code><br><code>for i, v in ipairs(lista) do print(v) end</code></td><td><code>attempt to index a nil value</code><br>(sem a linha na primeira parte; o traceback mostra <code>[C]: in for iterator 'for iterator'</code> e <code>main.lua:2: in main chunk</code>)</td><td>O <code>ipairs</code> recebeu <code>nil</code> no lugar de uma tabela. A linha certa está no traceback.</td><td>Confira a variável passada ao <code>ipairs</code>/<code>pairs</code>.</td></tr>
+<tr><td><code>local lista</code><br><code>table.insert(lista, "pão")</code></td><td><code>main.lua:2: bad argument #1 to 'insert' (table expected, got nil)</code></td><td>"Argumento ruim nº 1 para o insert (esperava tabela, recebeu nil)".</td><td><code>local lista = {}</code>.</td></tr>
+<tr><td><code>local idade</code><br><code>if idade &gt; 18 then … end</code></td><td><code>main.lua:2: attempt to compare number with nil</code></td><td>Comparou um número com <code>nil</code>.</td><td>Dê um valor à variável antes de comparar.</td></tr>
+<tr><td><code>local t = {}</code><br><code>t[nil] = 1</code></td><td><code>main.lua:2: table index is nil</code></td><td>"O índice da tabela é nil": <code>nil</code> não pode ser chave.</td><td>Confira a variável usada como chave.</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2 id="tipos">Tipo errado</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Código</th><th>Mensagem (depois de <code>lua: </code>)</th><th>O que significa</th><th>Como resolver</th></tr>
+<tr><td><code>local preco = "dez"</code><br><code>print(preco + 1)</code></td><td><code>main.lua:2: attempt to add a 'string' with a 'number'</code><br>(o traceback começa com <code>[C]: in metamethod 'add'</code>)</td><td>"Tentativa de somar um texto com um número": o texto não é um número (<code>"10" + 1</code> funcionaria).</td><td>Converta com <code>tonumber</code> e teste se deu certo.</td></tr>
+<tr><td><code>local idade = io.read()</code><br><code>if idade &gt; 18 then … end</code></td><td><code>main.lua:2: attempt to compare number with string</code></td><td>O <code>io.read()</code> devolve <strong>texto</strong>, e o Lua não compara texto com número.</td><td><code>local idade = tonumber(io.read())</code> ou <code>io.read("n")</code>. Veja <a href="io-read.html">io.read()</a>.</td></tr>
+<tr><td><code>local compras = {"pão", "leite"}</code><br><code>print("Lista: " .. compras)</code></td><td><code>main.lua:2: attempt to concatenate a table value (local 'compras')</code></td><td>Tentou juntar uma tabela com texto.</td><td><code>"Lista: " .. table.concat(compras, ", ")</code>. Veja <a href="table-concat.html">table.concat</a>.</td></tr>
+<tr><td><code>local dados = {}</code><br><code>dados()</code></td><td><code>main.lua:2: attempt to call a table value (local 'dados')</code></td><td>Chamou uma tabela como se fosse função.</td><td>Confira os parênteses; você queria <code>dados[1]</code> ou <code>dados.algo()</code>?</td></tr>
+<tr><td><code>local n = 42</code><br><code>print(n.valor)</code></td><td><code>main.lua:2: attempt to index a number value (local 'n')</code></td><td>Usou <code>.</code> num número.</td><td>A variável devia ser uma tabela? Confira onde ela recebeu o valor.</td></tr>
+<tr><td><code>function Conta:sacar(v)</code><br><code>  self.saldo = self.saldo - v</code><br><code>end</code><br><code>Conta.sacar(50)</code></td><td><code>main.lua:2: attempt to index a number value (local 'self')</code></td><td>Chamou o método com <strong>ponto</strong>: o <code>50</code> virou o <code>self</code>.</td><td>Use dois-pontos: <code>Conta:sacar(50)</code>. Veja <a href="metodos.html">Métodos e o Dois-Pontos</a>.</td></tr>
+<tr><td><code>local s = "Ana"</code><br><code>print(s.len())</code></td><td><code>main.lua:2: bad argument #1 to 'len' (string expected, got no value)</code></td><td>O mesmo engano com texto: com ponto, o texto não é passado.</td><td><code>s:len()</code> (ou <code>#s</code>).</td></tr>
+<tr><td><code>print(math.floor("abc"))</code></td><td><code>main.lua:1: bad argument #1 to 'floor' (number expected, got string)</code></td><td>"Argumento ruim nº 1": a função esperava um tipo e recebeu outro.</td><td>Passe o tipo pedido (o número do argumento diz qual).</td></tr>
+<tr><td><code>print(string.format("%d", 3.5))</code></td><td><code>main.lua:2: bad argument #2 to 'format' (number has no integer representation)</code></td><td>O <code>%d</code> pede inteiro, e 3.5 tem parte decimal.</td><td>Use <code>%.1f</code>, ou arredonde antes: <code>math.floor(x)</code>. Veja <a href="string-format.html">string.format</a>.</td></tr>
+<tr><td><code>local a, b = 10, 0</code><br><code>print(a // b)</code></td><td><code>main.lua:2: attempt to divide by zero</code></td><td>Divisão inteira (<code>//</code> ou <code>%</code>) por zero. (Com <code>/</code> não é erro: dá <code>inf</code>.)</td><td>Teste antes: <code>if b ~= 0 then … end</code>. Com <code>%</code>, a mensagem é <code>attempt to perform 'n%0'</code>.</td></tr>
+<tr><td><code>local nomes = {"Bia", 3, "Ana"}</code><br><code>table.sort(nomes)</code></td><td><code>attempt to compare number with string</code><br>(sem a linha; o traceback mostra <code>[C]: in field 'sort'</code> e <code>main.lua:2</code>)</td><td>A lista mistura números e textos, que não se comparam.</td><td>Deixe a lista com um tipo só, ou passe uma função de comparação. Veja <a href="table-sort.html">table.sort</a>.</td></tr>
+<tr><td><code>print(table.concat({"a", true}))</code></td><td><code>main.lua:2: invalid value (boolean) at index 2 in table for 'concat'</code></td><td>"Valor inválido no índice 2": o <code>concat</code> só junta textos e números.</td><td>Converta antes com <code>tostring</code>.</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2 id="sintaxe">Erros de sintaxe</h2>
+
+<p>Estes aparecem antes de o programa rodar, sem <code>stack traceback:</code>. A linha que o Lua aponta é onde ele <strong>percebeu</strong> o problema, que pode ser depois de onde ele está de verdade.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Código</th><th>Mensagem (depois de <code>lua: </code>)</th><th>O que significa</th><th>Como resolver</th></tr>
+<tr><td><code>if x &gt; 5 then</code><br><code>  print("grande")</code><br>(e o arquivo acaba)</td><td><code>main.lua:4: 'end' expected (to close 'if' at line 2) near &lt;eof&gt;</code></td><td>"Esperava <code>end</code> (para fechar o <code>if</code> da linha 2) perto do fim do arquivo" (<code>&lt;eof&gt;</code> = <em>end of file</em>).</td><td>Ponha o <code>end</code> que falta. A indentação ajuda a ver qual bloco ficou aberto.</td></tr>
+<tr><td><code>for i = 1, 3 do</code><br><code>  print(i)</code><br><code>end</code><br><code>end</code></td><td><code>main.lua:4: &lt;eof&gt; expected near 'end'</code></td><td>O contrário: um <code>end</code> <strong>sobrando</strong> ("esperava o fim do arquivo").</td><td>Apague o <code>end</code> extra.</td></tr>
+<tr><td><code>if x &gt; 5</code><br><code>  print("grande")</code><br><code>end</code></td><td><code>main.lua:3: 'then' expected near 'print'</code></td><td>Faltou o <code>then</code> depois da condição.</td><td><code>if x &gt; 5 then</code>. (No <code>while</code> e no <code>for</code>, é o <code>do</code> que costuma faltar.)</td></tr>
+<tr><td><code>if x = 10 then … end</code></td><td><code>main.lua:2: 'then' expected near '='</code></td><td>Usou <code>=</code> (guardar) no lugar de <code>==</code> (comparar).</td><td><code>if x == 10 then</code>. Veja <a href="operadores-comparacao.html">Comparações</a>.</td></tr>
+<tr><td><code>local nome = "Ana</code><br><code>print(nome)</code></td><td><code>main.lua:1: unfinished string near '"Ana'</code></td><td>"Texto não terminado": faltou fechar as aspas.</td><td><code>"Ana"</code>. Para texto de várias linhas, <code>[[ … ]]</code> (veja <a href="strings-longas.html">Textos Longos</a>).</td></tr>
+<tr><td><code>x = = 2</code></td><td><code>main.lua:2: unexpected symbol near '='</code></td><td>"Símbolo inesperado": algo que não cabe ali.</td><td>Olhe o símbolo citado e o que vem logo antes dele.</td></tr>
+<tr><td><code>print("Olá"))</code></td><td><code>main.lua:1: unexpected symbol near ')'</code></td><td>Um parêntese sobrando.</td><td>Conte os <code>(</code> e os <code>)</code>.</td></tr>
+<tr><td><code>print(lista[1)</code></td><td><code>main.lua:2: ']' expected near ')'</code></td><td>Abriu <code>[</code> e não fechou.</td><td><code>lista[1]</code>.</td></tr>
+<tr><td><code>local ação = 1</code></td><td><code>main.lua:1: unexpected symbol near '&lt;\195&gt;'</code></td><td>Nome de variável com acento. O <code>\195</code> é o primeiro byte do <code>ç</code> em UTF-8.</td><td>Nomes sem acento: <code>acao</code>. Veja <a href="nomes-variaveis.html">Nomes de Variáveis</a>.</td></tr>
+<tr><td><code>local end = 1</code></td><td><code>&lt;name&gt; expected near 'end'</code> (colhida no modo interativo, como <code>stdin:1:</code>)</td><td>Usou uma palavra reservada como nome.</td><td>Outro nome. Veja <a href="ref-palavras-chave.html">Palavras Reservadas</a>.</td></tr>
+<tr><td><code>1..2</code></td><td><code>malformed number near '1..2'</code> (no modo interativo)</td><td>"Número malformado": o <code>..</code> grudado num número.</td><td>Espaços: <code>1 .. 2</code>.</td></tr>
+<tr><td><code>x += 1</code></td><td><code>syntax error near '+'</code> (no modo interativo)</td><td>O Lua não tem <code>+=</code>.</td><td><code>x = x + 1</code>. Veja <a href="ref-operadores.html">Operadores</a>.</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2 id="novos">Erros do 5.5 (<code>for</code>, <code>global</code>, <code>&lt;const&gt;</code>) e do <code>goto</code></h2>
+
+<p>Também são avisados antes de rodar, sem traceback.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Código</th><th>Mensagem (depois de <code>lua: </code>)</th><th>O que significa</th><th>Como resolver</th></tr>
+<tr><td><code>for i = 1, 3 do</code><br><code>  i = i * 2</code><br><code>  print(i)</code><br><code>end</code></td><td><code>main.lua:2: attempt to assign to const variable 'i'</code> <span class="versao">5.5</span></td><td>No 5.5 a variável do <code>for</code> não pode ser mudada (no 5.4 podia).</td><td>Use outra variável: <code>local dobro = i * 2</code>. Veja <a href="for-numerico.html">for Numérico</a>.</td></tr>
+<tr><td><code>local PI &lt;const&gt; = 3.14</code><br><code>PI = 3</code></td><td><code>main.lua:2: attempt to assign to const variable 'PI'</code></td><td>Tentou mudar uma constante.</td><td>Não mude, ou tire o <code>&lt;const&gt;</code>. Veja <a href="const.html">Constantes</a>.</td></tr>
+<tr><td><code>global contador = 0</code><br><code>contador = contador + 1</code><br><code>print(contador)</code></td><td><code>main.lua:3: variable 'print' not declared</code> <span class="versao">5.5</span></td><td>Depois de um <code>global</code>, todo nome livre precisa ser declarado, inclusive <code>print</code>.</td><td><code>global print</code> (ou <code>global *</code>) no começo. Veja <a href="global.html">A Declaração global</a>.</td></tr>
+<tr><td><code>for i = 1, 3 do</code><br><code>  if i == 2 then goto continue end</code><br><code>  print(i)</code><br><code>end</code></td><td><code>main.lua:4: no visible label 'continue' for &lt;goto&gt; at line 2</code></td><td>"Nenhum rótulo <code>continue</code> visível para o <code>goto</code> da linha 2": faltou o rótulo.</td><td>Ponha <code>::continue::</code> antes do <code>end</code> do laço. Veja <a href="goto.html">goto e Rótulos</a>.</td></tr>
+<tr><td><code>goto fim</code><br><code>local x = 1</code><br><code>::fim::</code><br><code>print(x)</code></td><td><code>main.lua:4: &lt;goto fim&gt; at line 1 jumps into the scope of 'x'</code></td><td>O <code>goto</code> pularia a criação do <code>local x</code>, e o <code>x</code> é usado depois do rótulo.</td><td>Crie o <code>local</code> antes do <code>goto</code>, ou ponha o trecho num <code>do … end</code>.</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2 id="arquivos">Arquivos e módulos</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Código</th><th>Mensagem (depois de <code>lua: </code>)</th><th>O que significa</th><th>Como resolver</th></tr>
+<tr><td><code>local f = assert(io.open("notas.txt"))</code></td><td><code>main.lua:1: notas.txt: No such file or directory</code><br>(traceback: <code>[C]: in global 'assert'</code>)</td><td>"Arquivo ou pasta não existe" na pasta onde o programa rodou.</td><td>Confira o nome e a pasta (<code>ls</code> no terminal). Sem o <code>assert</code>, o <code>io.open</code> devolveria <code>nil</code> e a mensagem, sem parar. Veja <a href="io-open.html">Abrindo Arquivos</a>.</td></tr>
+<tr><td><code>local f = io.open("x.txt", "w")</code><br><code>f:close()</code><br><code>f:write("oi")</code></td><td><code>main.lua:3: attempt to use a closed file</code></td><td>Usou o arquivo depois de fechar.</td><td>Escreva tudo antes do <code>f:close()</code>.</td></tr>
+<tr><td><code>local json = require("json")</code></td><td><code>main.lua:1: module 'json' not found:</code> e, embaixo, cada lugar onde o Lua procurou (<code>no field package.preload['json']</code>, <code>no file '/usr/local/share/lua/5.5/json.lua'</code>, …, <code>no file './json.lua'</code>, …)</td><td>"Módulo não encontrado": não há <code>json.lua</code> na pasta nem nas pastas do Lua 5.5.</td><td>Para um módulo seu, ponha o <code>.lua</code> na mesma pasta. Para uma biblioteca, instale com o LuaRocks <strong>para o 5.5</strong> (veja <a href="luarocks.html">LuaRocks</a> e <a href="package-path.html">Onde o require Procura</a>).</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2 id="pilha">Recursão sem fim</h2>
+
+<pre class="file" data-file="main.lua">local function conta(n)
+  return conta(n + 1) + 1
+end
+conta(1)
+</pre>
+
+<pre class="term">$ lua main.lua
+lua: main.lua:2: stack overflow
+stack traceback:
+	main.lua:2: in upvalue 'conta'
+	main.lua:2: in upvalue 'conta'
+	main.lua:2: in upvalue 'conta'
+	main.lua:2: in upvalue 'conta'
+	main.lua:2: in upvalue 'conta'
+	main.lua:2: in upvalue 'conta'
+	main.lua:2: in upvalue 'conta'
+	main.lua:2: in upvalue 'conta'
+	main.lua:2: in upvalue 'conta'
+	main.lua:2: in upvalue 'conta'
+	...	(skipping 499974 levels)
+	main.lua:2: in upvalue 'conta'
+	main.lua:2: in upvalue 'conta'
+	main.lua:2: in upvalue 'conta'
+	main.lua:2: in upvalue 'conta'
+	main.lua:2: in upvalue 'conta'
+	main.lua:2: in upvalue 'conta'
+	main.lua:2: in upvalue 'conta'
+	main.lua:2: in upvalue 'conta'
+	main.lua:2: in local 'conta'
+	main.lua:4: in main chunk
+	[C]: in ?
+</pre>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Mensagem</th><th>O que significa</th><th>Como resolver</th></tr>
+<tr><td><code>main.lua:2: stack overflow</code></td><td>"Estouro da pilha": a função chamou a si mesma meio milhão de vezes (o traceback pulou 499974 níveis) e nunca parou.</td><td>Toda recursão precisa de um caso que <strong>não</strong> chama a função de novo (<code>if n == 0 then return 0 end</code>). Veja <a href="recursao.html">Recursão</a>.</td></tr>
+<tr><td><code>main.lua:1: C stack overflow</code><br>(com <code>t = setmetatable({}, {__index = function(t, k) return t[k] end})</code> e <code>print(t.x)</code>; traceback com <code>in metamethod 'index'</code>)</td><td>O mesmo, passando por funções internas (um metamétodo que chama a si mesmo).</td><td>Dentro do <code>__index</code>, use <code>rawget(t, k)</code>. Veja <a href="index-newindex.html">__index e __newindex</a>.</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2 id="proprios">Erros lançados pelo programa</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Código</th><th>Mensagem (depois de <code>lua: </code>)</th><th>O que significa</th><th>Como resolver</th></tr>
+<tr><td><code>local function validar(idade)</code><br><code>  if type(idade) ~= "number" then</code><br><code>    error("idade precisa ser número", 2)</code><br><code>  end</code><br><code>end</code><br><code>validar("trinta")</code></td><td><code>main.lua:6: idade precisa ser número</code><br>(traceback: <code>[C]: in global 'error'</code>, <code>main.lua:3: in local 'validar'</code>, <code>main.lua:6: in main chunk</code>)</td><td>O próprio programa chamou <code>error</code>. Com o nível <code>2</code>, a mensagem aponta a linha 6, que <strong>chamou</strong> <code>validar</code> com o valor errado.</td><td>É um erro "de propósito": leia a mensagem (é em português, porque foi a Ana que escreveu) e corrija a chamada. Veja <a href="error.html">error</a>.</td></tr>
+<tr><td><code>error({codigo = 404})</code></td><td><code>(error object is a table value)</code></td><td>O erro é uma tabela, não um texto, e o <code>lua</code> não sabe mostrá-la.</td><td>Capture com <code>pcall</code> e leia os campos (<code>erro.codigo</code>). Veja <a href="pcall.html">pcall</a>.</td></tr>
+<tr><td><code>assert(false)</code></td><td><code>assertion failed!</code></td><td>Um <code>assert</code> sem mensagem falhou.</td><td>Escreva sempre a mensagem: <code>assert(x &gt; 0, "x precisa ser positivo")</code>. Veja <a href="assert.html">assert</a>.</td></tr>
+<tr><td><code>lua -e "while true do end"</code> e Ctrl+C</td><td><code>interrupted!</code> (com o traceback e o código de saída 1)</td><td>A pessoa apertou Ctrl+C para parar um programa que não terminava.</td><td>Procure o laço que nunca termina (veja <a href="while.html">while</a>).</td></tr>
+</table>
+</div>
+
+<div class="cenario">
+<strong>Quando dá errado: a mensagem aparece "antes" do texto</strong>
+<p>Este programa escreve um texto com <code>io.write</code> (sem pular linha) e só depois dá erro:</p>
+<pre class="file" data-file="ordem.lua">local itens = {pao = 2}
+io.write("Total de leite: ")
+print(itens.leite * 3)
+</pre>
+<pre class="term">$ lua ordem.lua
+lua: ordem.lua:3: attempt to perform arithmetic on a nil value (field 'leite')
+stack traceback:
+        ordem.lua:3: in main chunk
+        [C]: in ?
+Total de leite: $
+</pre>
+<p>O <code>Total de leite: </code> apareceu <strong>depois</strong> da mensagem de erro, colado no <code>$</code>. Motivo: o texto normal (a saída padrão) fica guardado na memória até a linha terminar, e a mensagem de erro (a saída de erros) é escrita na hora; o texto guardado só sai quando o <code>lua</code> fecha. Isso confunde: parece que o erro aconteceu antes do <code>io.write</code>. Quando a ordem importa, use <code>print</code> (que termina a linha) ou chame <code>io.flush()</code> depois do <code>io.write</code>. No editor do guia, a ordem pode sair diferente.</p>
+</div>
+
+<hr>
+
+<h2>Experimente</h2>
+
+<div class="trylua" data-goal="out:Total em estoque: 15;;semerro">
+<p class="try-task"><strong>Missão:</strong> rode o programa: ele para com <code>attempt to perform arithmetic on a nil value (field '?')</code> na linha 5. O <code>"cafe"</code> do pedido não está no estoque, então <code>estoque[item]</code> vale <code>nil</code>. Troque <code>estoque[item]</code> por <code>(estoque[item] or 0)</code>: o que não existe conta como zero. O resultado certo é <code>Total em estoque: 15</code>.</p>
+<pre class="script" data-file="main.lua">local estoque = {pao = 10, leite = 5}
+local pedido = {"pao", "cafe", "leite"}
+local total = 0
+for _, item in ipairs(pedido) do
+  total = total + estoque[item]
+end
+print("Total em estoque: " .. total)
+</pre>
+<pre class="solucao" data-file="main.lua">local estoque = {pao = 10, leite = 5}
+local pedido = {"pao", "cafe", "leite"}
+local total = 0
+for _, item in ipairs(pedido) do
+  total = total + (estoque[item] or 0)
+end
+print("Total em estoque: " .. total)
+</pre>
+</div>
+
+<div class="trylua">
+<p class="try-task"><strong>Livre:</strong> o <code>pcall</code> captura o erro sem parar o programa e devolve a mensagem. Troque o código dentro de cada função para provocar outros erros desta página e leia as mensagens.</p>
+<pre class="script" data-file="main.lua">local function testar(f)
+  local ok, mensagem = pcall(f)
+  print(ok, mensagem)
+end
+
+testar(function() local t = nil; return t.campo end)
+testar(function() return "abc" + 1 end)
+testar(function() return "Total: " .. nil end)
+testar(function() return #42 end)
+testar(function() return 1 &lt; "2" end)
+testar(function() error("deu ruim") end)
+</pre>
+</div>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li>Leia a mensagem em três partes: <strong>onde</strong> (<code>main.lua:2:</code>), <strong>o quê</strong> (<code>attempt to …</code>) e <strong>qual nome</strong> (<code>(global 'x')</code>, <code>(local 'x')</code>, <code>(field 'x')</code>).</li>
+  <li>Erro de sintaxe vem sem <code>stack traceback:</code> e nada roda; erro de execução vem com ele.</li>
+  <li>Os campeões: <em>attempt to call a nil value</em> (nome errado), <em>attempt to index a nil value</em> (tabela que não existe), <em>attempt to perform arithmetic / concatenate a nil value</em> (variável sem valor).</li>
+  <li>De sintaxe: <em>'end' expected</em> (falta <code>end</code>), <em>&lt;eof&gt; expected</em> (sobra <code>end</code>), <em>'then' expected</em>, <em>unexpected symbol</em>, <em>unfinished string</em>.</li>
+  <li><span class="versao">5.5</span> <em>attempt to assign to const variable 'i'</em> (a variável do <code>for</code>) e <em>variable 'print' not declared</em> (depois de um <code>global</code>) são novos.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
