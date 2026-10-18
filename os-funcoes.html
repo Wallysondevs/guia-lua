@@ -1,0 +1,504 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua os.getenv, os.clock e os.exit — ambiente, cronômetro e código de saída | Guia Lua</title>
+<meta name="description" content="os.getenv, os.clock e os.exit do Lua 5.5 para quem nunca programou: ler variáveis de ambiente (HOME, USER, LANG, PATH) com um valor padrão, medir quanto tempo um cálculo leva com os.clock e por que ele não conta a espera, encerrar o programa com um código de saída (echo $?, &amp;&amp; e ||), mensagens em io.stderr, e os erros reais do Lua.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">os.getenv</span>, <span class="hl">os.clock</span> e <span class="hl">os.exit</span></h1>
+
+<p class="intro">Um programa não vive sozinho: ele roda dentro do sistema, chamado por alguém, num terminal. Três funções da biblioteca <code>os</code> fazem a ponte com esse mundo de fora. O <code>os.getenv</code> pergunta ao sistema coisas como "qual é a pasta da usuária?". O <code>os.clock</code> é um cronômetro, para saber quanto o seu programa trabalhou. E o <code>os.exit</code> encerra o programa na hora, avisando a quem o chamou se deu certo ou errado.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O que são as <strong>variáveis de ambiente</strong> e como ler uma com <code>os.getenv</code>, com um valor padrão quando ela não existe.</li>
+  <li>Como mudar uma variável de ambiente só para um comando, ou para o terminal inteiro.</li>
+  <li>Como medir quanto tempo um cálculo leva com <code>os.clock</code>, e por que ele não conta o tempo em que o programa fica esperando.</li>
+  <li>Como encerrar o programa com <code>os.exit</code> e um <strong>código de saída</strong>, e como o terminal usa esse código (<code>echo $?</code>, <code>&amp;&amp;</code>, <code>||</code>).</li>
+  <li>Como mandar mensagens de erro para o lugar certo, o <code>io.stderr</code>.</li>
+  <li>Os erros reais de cada uma.</li>
+</ul>
+</div>
+
+<p>Todos os programas desta aula rodaram no <strong>Lua 5.5</strong> da máquina da Ana (usuária <code>ana</code>, computador <code>notebook</code>), em <code>/home/ana</code>.</p>
+
+<hr>
+
+<h2>A ideia: o crachá, o cronômetro e a porta de saída</h2>
+<p>Quando a Ana chega para trabalhar na padaria, três coisas acontecem: ela recebe um <strong>crachá</strong> com o nome dela, o setor e o idioma em que prefere ser atendida; um <strong>cronômetro</strong> marca quanto tempo ela passa de fato trabalhando (o cafezinho não conta); e, ao sair, ela deixa um <strong>bilhete</strong> no balcão: "tudo certo" ou "deu problema no forno".</p>
+<ul>
+  <li>O crachá são as <strong>variáveis de ambiente</strong>: informações que o sistema entrega a todo programa que começa. O <code>os.getenv</code> lê o crachá.</li>
+  <li>O cronômetro que não conta o cafezinho é o <code>os.clock</code>.</li>
+  <li>O bilhete na saída é o <strong>código de saída</strong> do <code>os.exit</code>.</li>
+</ul>
+
+<hr>
+
+<h2>1. <code>os.getenv</code>: lendo o ambiente</h2>
+<p>O <code>os.getenv</code> (de <em>get environment</em>, "pegar do ambiente") recebe o nome de uma variável de ambiente e devolve o valor dela, sempre como <strong>texto</strong>:</p>
+
+<pre class="file" data-file="ambiente.lua">print(os.getenv("HOME"))
+print(os.getenv("USER"))
+print(os.getenv("LANG"))
+print(os.getenv("NAO_EXISTE"))
+</pre>
+
+<pre class="term">$ lua ambiente.lua
+/home/ana
+ana
+pt_BR.UTF-8
+nil
+$ echo $HOME
+/home/ana</pre>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Variável</th><th>O que guarda</th><th>Na máquina da Ana</th></tr>
+<tr><td><code>HOME</code></td><td>A pasta pessoal de quem está usando</td><td><code>/home/ana</code></td></tr>
+<tr><td><code>USER</code></td><td>O nome do usuário</td><td><code>ana</code></td></tr>
+<tr><td><code>LANG</code></td><td>O idioma do sistema (o mesmo que o <code>os.setlocale("")</code> usa; veja <a href="os-date-time.html">Datas e Horas</a>)</td><td><code>pt_BR.UTF-8</code></td></tr>
+<tr><td><code>PATH</code></td><td>As pastas onde o terminal procura os comandos</td><td>veja abaixo</td></tr>
+<tr><td>uma que não existe</td><td>—</td><td><code>nil</code></td></tr>
+</table>
+</div>
+
+<p>O <code>echo $HOME</code> do terminal mostra a mesma coisa: é o próprio terminal que entrega essas variáveis ao <code>lua</code> quando o programa começa. Os nomes costumam ser em MAIÚSCULAS, e maiúscula importa: <code>os.getenv("home")</code> dá <code>nil</code>.</p>
+
+<p>O <code>PATH</code> é uma lista de pastas separadas por <code>:</code>. O <a href="gmatch.html">gmatch</a> separa cada uma:</p>
+
+<pre class="file" data-file="caminho.lua">local caminho = os.getenv("PATH")
+print(caminho)
+for pasta in caminho:gmatch("[^:]+") do
+  print("  " .. pasta)
+end
+</pre>
+
+<pre class="term">$ lua caminho.lua
+/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+  /usr/local/sbin
+  /usr/local/bin
+  /usr/sbin
+  /usr/bin
+  /sbin
+  /bin</pre>
+
+<p>(No terminal de um Ubuntu de desktop, o <code>PATH</code> costuma ter mais pastas, como <code>/snap/bin</code> e <code>/usr/games</code>.)</p>
+
+<h3>Um valor padrão para quando não existe</h3>
+<p>Uma variável que não existe dá <code>nil</code>. Com o <code>or</code>, o programa usa um valor padrão (veja <a href="and-or-ternario.html">O Truque do and/or</a>). Assim, quem usa o programa pode <strong>configurar</strong> sem mexer no código:</p>
+
+<pre class="file" data-file="loja.lua">local nome = os.getenv("NOME_DA_LOJA") or "Lojinha da Ana"
+print("Bem-vindo à " .. nome .. "!")
+</pre>
+
+<pre class="term">$ lua loja.lua
+Bem-vindo à Lojinha da Ana!
+$ NOME_DA_LOJA="Padaria do Zé" lua loja.lua
+Bem-vindo à Padaria do Zé!
+$ lua loja.lua
+Bem-vindo à Lojinha da Ana!
+$ export NOME_DA_LOJA="Mercadinho da Bia"
+$ lua loja.lua
+Bem-vindo à Mercadinho da Bia!
+$ unset NOME_DA_LOJA</pre>
+
+<dl class="anatomy">
+  <dt>lua loja.lua</dt><dd>Sem a variável: o <code>os.getenv</code> deu <code>nil</code>, e o <code>or</code> escolheu o padrão.</dd>
+  <dt>NOME_DA_LOJA="Padaria do Zé" lua loja.lua</dt><dd><code>NOME=valor</code> antes do comando cria a variável <strong>só para aquele comando</strong>. Na execução seguinte, ela já não existia.</dd>
+  <dt>export NOME_DA_LOJA="…"</dt><dd>O <code>export</code> do terminal cria a variável para <strong>todos</strong> os comandos seguintes daquele terminal (até ele ser fechado).</dd>
+  <dt>unset NOME_DA_LOJA</dt><dd>Apaga a variável do terminal.</dd>
+</dl>
+
+<p>O programa só <strong>lê</strong> o ambiente. O Lua puro não tem <code>os.setenv</code>: mudar o ambiente é coisa de quem chama o programa.</p>
+
+<div class="trylua" data-goal="out:Bem-vindo à Lojinha da Ana!;;semerro">
+<p class="try-task"><strong>Missão:</strong> no editor, a variável <code>NOME_DA_LOJA</code> não existe, e o programa para com <code>attempt to concatenate a nil value</code>. Ponha um valor padrão com <code>or</code>, para aparecer <code>Bem-vindo à Lojinha da Ana!</code></p>
+<pre class="script" data-file="main.lua">local nome = os.getenv("NOME_DA_LOJA")
+print("Bem-vindo à " .. nome .. "!")
+</pre>
+<pre class="solucao" data-file="main.lua">local nome = os.getenv("NOME_DA_LOJA") or "Lojinha da Ana"
+print("Bem-vindo à " .. nome .. "!")
+</pre>
+</div>
+
+<p>(No editor do guia, <code>HOME</code>, <code>USER</code>, <code>LANG</code> e <code>PATH</code> têm os mesmos valores da máquina da Ana.)</p>
+
+<hr>
+
+<h2>2. <code>os.clock</code>: o cronômetro do processador</h2>
+<p>O <code>os.clock()</code> devolve quantos segundos de <strong>processador</strong> o programa já usou, com casas decimais. Sozinho, o número não diz muito; o que importa é a <strong>diferença</strong> entre dois momentos. Quanto tempo leva somar os números de 1 a 10 milhões?</p>
+
+<pre class="file" data-file="medir.lua">local inicio = os.clock()
+local soma = 0
+for i = 1, 10000000 do
+  soma = soma + i
+end
+local gasto = os.clock() - inicio
+print("Soma: " .. soma)
+print(string.format("Levou %.3f segundos de processador.", gasto))
+</pre>
+
+<pre class="term">$ lua medir.lua
+Soma: 50000005000000
+Levou 0.053 segundos de processador.
+$ lua medir.lua
+Soma: 50000005000000
+Levou 0.052 segundos de processador.</pre>
+
+<dl class="anatomy">
+  <dt>local inicio = os.clock()</dt><dd>Aperta o cronômetro: guarda o valor de antes.</dd>
+  <dt>os.clock() - inicio</dt><dd>O valor de depois menos o de antes: o tempo gasto no laço.</dd>
+  <dt>%.3f</dt><dd>Mostra com 3 casas decimais (milésimos de segundo).</dd>
+</dl>
+
+<p>Dez milhões de somas em uns 5 centésimos de segundo. Repare que as duas execuções deram tempos um pouco diferentes: o computador está sempre fazendo outras coisas ao mesmo tempo. Num computador mais lento ou mais rápido, e no editor do guia (que roda no navegador), os números serão outros. Para comparar duas formas de fazer a mesma coisa, rode cada uma algumas vezes.</p>
+
+<h3>O cafezinho não conta: <code>os.clock</code> × <code>os.time</code></h3>
+<p>O <code>os.clock</code> só anda enquanto o programa está <strong>trabalhando</strong>. Enquanto ele espera você digitar, o cronômetro fica parado. Este programa mede a mesma espera com os dois relógios:</p>
+
+<pre class="file" data-file="clock_parado.lua">local clock0, time0 = os.clock(), os.time()
+io.write("Espere uns segundos e aperte Enter... ")
+io.read()
+print(string.format("os.time: passaram %d segundos", os.difftime(os.time(), time0)))
+print(string.format("os.clock: passaram %.4f segundos", os.clock() - clock0))
+</pre>
+
+<pre class="term">$ lua clock_parado.lua
+Espere uns segundos e aperte Enter...
+os.time: passaram 4 segundos
+os.clock: passaram 0.0001 segundos</pre>
+
+<p>Pelo relógio da parede (<code>os.time</code>), passaram 4 segundos. Pelo cronômetro do processador (<code>os.clock</code>), um décimo de milésimo: o programa passou quase todo o tempo parado, esperando o <kbd>Enter</kbd>.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th></th><th><code>os.time()</code></th><th><code>os.clock()</code></th></tr>
+<tr><td>Mede</td><td>A hora do relógio (segundos desde 1970)</td><td>O trabalho do processador para este programa</td></tr>
+<tr><td>Precisão</td><td>Segundos inteiros</td><td>Frações de segundo</td></tr>
+<tr><td>Conta a espera (teclado, rede)?</td><td>Sim</td><td>Não</td></tr>
+<tr><td>Use para</td><td>Datas, "quanto tempo a pessoa levou", agendas</td><td>"Quanto tempo este cálculo demora?"</td></tr>
+</table>
+</div>
+
+<div class="trylua" data-goal="out:Soma: 500000500000;;src:os\.clock\(\)\s*-\s*inicio">
+<p class="try-task"><strong>Missão:</strong> o programa aperta o cronômetro antes do laço, mas mostra o valor do <code>os.clock()</code> no fim, e não quanto o laço levou. Troque a conta do <code>gasto</code> para <code>os.clock() - inicio</code>. (O tempo que aparece vai depender do seu computador.)</p>
+<pre class="script" data-file="main.lua">local inicio = os.clock()
+local soma = 0
+for i = 1, 1000000 do
+  soma = soma + i
+end
+local gasto = os.clock()
+print("Soma: " .. soma)
+print(string.format("Levou %.4f segundos.", gasto))
+</pre>
+<pre class="solucao" data-file="main.lua">local inicio = os.clock()
+local soma = 0
+for i = 1, 1000000 do
+  soma = soma + i
+end
+local gasto = os.clock() - inicio
+print("Soma: " .. soma)
+print(string.format("Levou %.4f segundos.", gasto))
+</pre>
+</div>
+
+<hr>
+
+<h2>3. <code>os.exit</code>: sair na hora, com um código</h2>
+<p>Todo programa, ao terminar, devolve ao terminal um número: o <strong>código de saída</strong>. A convenção é: <strong>0 = deu certo</strong>; qualquer outro número = deu algum problema. O terminal guarda esse número em <code>$?</code>, e o comando <code>echo $?</code> mostra o código do último programa. O <code>os.exit(n)</code> encerra o programa <strong>naquele ponto</strong>, com o código <code>n</code>:</p>
+
+<pre class="file" data-file="sair.lua">print("Começando.")
+os.exit(3)
+print("Esta linha nunca aparece.")
+</pre>
+
+<pre class="term">$ lua sair.lua
+Começando.
+$ echo $?
+3</pre>
+
+<p>O programa parou no <code>os.exit</code>; o último <code>print</code> nem rodou. E o código de saída foi 3.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Como o programa termina</th><th>Código de saída</th></tr>
+<tr><td>Chegou ao fim normalmente</td><td>0</td></tr>
+<tr><td><code>os.exit()</code> ou <code>os.exit(true)</code></td><td>0</td></tr>
+<tr><td><code>os.exit(false)</code></td><td>1</td></tr>
+<tr><td><code>os.exit(n)</code></td><td><code>n</code> (use de 0 a 255)</td></tr>
+<tr><td>Um erro não tratado (<code>lua: …</code> e o <code>stack traceback</code>)</td><td>1</td></tr>
+</table>
+</div>
+
+<p>Cada linha da tabela foi conferida no lab (<code>sair_padrao.lua</code> com <code>os.exit()</code> deu 0; <code>sair_bool.lua</code> com <code>os.exit(false)</code> deu 1; um erro de conta com <code>nil</code> deu 1).</p>
+
+<h3>Para que serve: validar e avisar</h3>
+<p>Um programa que atualiza o estoque recebe a quantidade como argumento (o <code>arg[1]</code>, assunto da aula <a href="arg.html">Argumentos da Linha de Comando</a>). Se a quantidade não prestar, não adianta continuar:</p>
+
+<pre class="file" data-file="estoque.lua">local quantidade = tonumber(arg[1])
+if not quantidade or quantidade &lt; 0 then
+  io.stderr:write("Erro: quantidade inválida: ", tostring(arg[1]), "\n")
+  os.exit(1)
+end
+print("Estoque atualizado: " .. quantidade .. " unidades.")
+</pre>
+
+<dl class="anatomy">
+  <dt>tonumber(arg[1])</dt><dd>O que foi digitado depois do nome do programa, convertido em número. Se não for um número, dá <code>nil</code>.</dd>
+  <dt>io.stderr:write(…)</dt><dd>Escreve na <strong>saída de erros</strong> (<em>standard error</em>), um segundo canal da tela, só para mensagens de problema. No terminal, aparece igual a um <code>print</code>; a diferença é que, quando alguém manda a saída do programa para um arquivo (<code>lua estoque.lua 5 &gt; log.txt</code>), as mensagens de erro continuam aparecendo na tela, em vez de sumir dentro do arquivo. É lá que o próprio <code>lua</code> escreve os erros dele.</dd>
+  <dt>os.exit(1)</dt><dd>Encerra com o código 1: "deu errado".</dd>
+</dl>
+
+<pre class="term">$ lua estoque.lua 12
+Estoque atualizado: 12 unidades.
+$ echo $?
+0
+$ lua estoque.lua -5
+Erro: quantidade inválida: -5
+$ echo $?
+1</pre>
+
+<h3>Quem usa o código: o <code>&amp;&amp;</code> e o <code>||</code></h3>
+<p>Para uma pessoa olhando a tela, a mensagem basta. O código de saída é para <strong>outros programas</strong>: scripts que rodam vários comandos em sequência, agendadores, ferramentas de teste. No terminal, <code>&amp;&amp;</code> roda o próximo comando só se o anterior deu 0, e <code>||</code> só se não deu:</p>
+
+<pre class="term">$ lua estoque.lua doze &amp;&amp; echo "deu certo" || echo "deu errado"
+Erro: quantidade inválida: doze
+deu errado
+$ lua estoque.lua 7 &amp;&amp; echo "deu certo" || echo "deu errado"
+Estoque atualizado: 7 unidades.
+deu certo</pre>
+
+<p>O terminal não leu a frase "Erro"; ele olhou só o número. Por isso um programa que falha deve sair com um código diferente de 0: sem isso, quem o chama acha que deu tudo certo.</p>
+
+<div class="trylua" data-goal="exit:2;;out:Quantidade inválida">
+<p class="try-task"><strong>Missão:</strong> o programa percebe que a quantidade é negativa, avisa, mas continua e termina com código 0, como se tudo estivesse certo. Faça ele sair com o código <strong>2</strong> logo depois do aviso. (A caixa mostra o código de saída no fim.)</p>
+<pre class="script" data-file="main.lua">local quantidade = -3
+if quantidade &lt; 0 then
+  io.stderr:write("Quantidade inválida: ", quantidade, "\n")
+end
+print("Estoque atualizado: " .. quantidade .. " unidades.")
+</pre>
+<pre class="solucao" data-file="main.lua">local quantidade = -3
+if quantidade &lt; 0 then
+  io.stderr:write("Quantidade inválida: ", quantidade, "\n")
+  os.exit(2)
+end
+print("Estoque atualizado: " .. quantidade .. " unidades.")
+</pre>
+</div>
+
+<div class="note">
+<strong><code>os.exit(código, true)</code></strong>
+<p>O <code>os.exit</code> aceita um segundo argumento. Com <code>true</code>, antes de sair o Lua <strong>fecha o estado</strong>: roda os fechamentos automáticos (<a href="close.html">&lt;close&gt;</a>) e os finalizadores (<code>__gc</code>, de <a href="coleta-lixo.html">Coleta de Lixo</a>). Sem ele, o programa sai direto. Os arquivos abertos têm o que você escreveu levado para o disco nos dois casos (quem faz isso é a biblioteca de C por baixo do Lua), mas o costume de fechar com <code>f:close()</code> antes continua valendo.</p>
+</div>
+
+<hr>
+
+<h2 id="formas">Formas diferentes de parar</h2>
+<p>O <code>os.exit</code> não é o único jeito de "parar". Cada um para uma coisa diferente:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>Para o quê</th><th>Código de saída</th><th>Quando usar</th></tr>
+<tr><td><code>return</code> (dentro de uma função)</td><td>Só a função; o programa continua</td><td>—</td><td>A função já fez o que tinha de fazer</td></tr>
+<tr><td><code>break</code></td><td>Só o laço</td><td>—</td><td>Achou o que procurava</td></tr>
+<tr><td><code>error("mensagem")</code></td><td>O programa, a não ser que alguém capture com <a href="pcall.html">pcall</a></td><td>1, com <code>lua: …</code> e traceback</td><td>Algo que não devia acontecer (veja <a href="error.html">error</a>)</td></tr>
+<tr><td><code>os.exit(n)</code></td><td>O programa inteiro, na hora, sem traceback</td><td><code>n</code></td><td>Programa de terminal que precisa avisar quem o chamou</td></tr>
+</table>
+</div>
+
+<p>Um <code>return</code> dentro de uma função não encerra o programa:</p>
+
+<pre class="file" data-file="exit_return.lua">local function verificar(n)
+  if n &lt; 0 then
+    return
+  end
+  print("ok: " .. n)
+end
+verificar(-1)
+print("o programa continua depois do return")
+</pre>
+
+<pre class="term">$ lua exit_return.lua
+o programa continua depois do return</pre>
+
+<div class="warning">
+<strong>Cuidado com <code>os.exit</code> no meio do código</strong>
+<p>O <code>os.exit</code> encerra <strong>tudo</strong>, sem chance de ninguém reagir. Numa função que outro programa vai usar (um módulo, veja <a href="modulos-proprios.html">Criando seu Módulo</a>), prefira devolver <code>nil</code> e uma mensagem, ou lançar um <code>error</code>: quem usa a função decide se para ou não. Deixe o <code>os.exit</code> para o programa principal.</p>
+</div>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+
+<div class="cenario">
+<strong>Esqueceu as aspas no nome da variável</strong>
+<pre class="file" data-file="sem_aspas.lua">print(os.getenv(HOME))
+</pre>
+<pre class="term">$ lua sem_aspas.lua
+lua: sem_aspas.lua:1: bad argument #1 to 'getenv' (string expected, got nil)
+stack traceback:
+	[C]: in field 'getenv'
+	sem_aspas.lua:1: in main chunk
+	[C]: in ?</pre>
+<p>"Argumento ruim nº 1 para o <code>getenv</code> (esperava uma string, veio nil)". Sem aspas, <code>HOME</code> é uma variável <strong>do Lua</strong>, que não existe (vale <code>nil</code>). O nome da variável de ambiente é um texto: <code>os.getenv("HOME")</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>A variável não existe e o programa usa assim mesmo</strong>
+<pre class="file" data-file="concat_nil.lua">print("Olá, " .. os.getenv("NOME"))
+</pre>
+<pre class="term">$ lua concat_nil.lua
+lua: concat_nil.lua:1: attempt to concatenate a nil value
+stack traceback:
+	concat_nil.lua:1: in main chunk
+	[C]: in ?</pre>
+<p>Não há <code>NOME</code> no ambiente da Ana, o <code>os.getenv</code> devolveu <code>nil</code>, e o <code>..</code> não junta texto com <code>nil</code>. Funciona no computador de quem criou a variável e quebra no dos outros. <strong>Como consertar:</strong> sempre um padrão: <code>os.getenv("NOME") or "visitante"</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Um texto no <code>os.exit</code></strong>
+<pre class="file" data-file="exit_texto.lua">os.exit("erro")
+</pre>
+<pre class="term">$ lua exit_texto.lua
+lua: exit_texto.lua:1: bad argument #1 to 'exit' (number expected, got string)
+stack traceback:
+	[C]: in field 'exit'
+	exit_texto.lua:1: in main chunk
+	[C]: in ?
+$ echo $?
+1</pre>
+<p>"Esperava um número, veio uma string". O <code>os.exit</code> aceita um número, <code>true</code> ou <code>false</code>; a mensagem vai antes, com <code>io.stderr:write</code>. Ironia: o programa saiu com código 1 do mesmo jeito, mas por causa do erro, não do <code>os.exit</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Medir a espera com <code>os.clock</code></strong>
+<p>A Ana quis saber quanto tempo a pessoa demorou para responder uma pergunta e usou <code>os.clock</code>. Deu <code>0.0001</code> segundo, por mais que a pessoa demorasse (veja a seção 2). Não é erro do Lua: o <code>os.clock</code> só mede o trabalho do processador. <strong>Como consertar:</strong> para tempo de relógio, <code>os.time()</code> e <code>os.difftime</code>.</p>
+</div>
+
+<hr>
+
+<h2>Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>O que faz</th></tr>
+<tr><td><code>os.getenv("NOME")</code></td><td>O valor da variável de ambiente, como texto, ou <code>nil</code></td></tr>
+<tr><td><code>os.getenv("NOME") or "padrão"</code></td><td>Com um valor padrão</td></tr>
+<tr><td><code>NOME=valor lua prog.lua</code></td><td>(no terminal) a variável só para este comando</td></tr>
+<tr><td><code>export NOME=valor</code> / <code>unset NOME</code></td><td>(no terminal) criar para o terminal todo / apagar</td></tr>
+<tr><td><code>os.clock()</code></td><td>Segundos de processador usados pelo programa (float). Meça com <code>os.clock() - inicio</code></td></tr>
+<tr><td><code>os.exit()</code> / <code>os.exit(true)</code></td><td>Sai com 0 ("deu certo")</td></tr>
+<tr><td><code>os.exit(false)</code> / <code>os.exit(n)</code></td><td>Sai com 1 / com <code>n</code></td></tr>
+<tr><td><code>os.exit(n, true)</code></td><td>Sai fechando o estado do Lua antes (<code>&lt;close&gt;</code>, <code>__gc</code>)</td></tr>
+<tr><td><code>io.stderr:write(…)</code></td><td>Escreve uma mensagem na saída de erros</td></tr>
+<tr><td><code>echo $?</code></td><td>(no terminal) o código de saída do último comando</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Sintoma</th><th>Causa provável</th></tr>
+<tr><td><code>bad argument #1 to 'getenv' (string expected, got nil)</code></td><td>Nome da variável sem aspas</td></tr>
+<tr><td><code>attempt to concatenate a nil value</code> com <code>os.getenv</code></td><td>A variável não existe naquele computador: falta o <code>or "padrão"</code></td></tr>
+<tr><td><code>bad argument #1 to 'exit' (number expected, got string)</code></td><td>Texto no <code>os.exit</code></td></tr>
+<tr><td><code>os.clock</code> quase zero numa espera longa</td><td>O <code>os.clock</code> não conta espera; use <code>os.time</code></td></tr>
+<tr><td>O script que chama o seu programa acha que deu certo</td><td>O programa falhou, mas saiu com 0: use <code>os.exit(1)</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. Complete</h3>
+<p>Complete para ler a variável <code>USER</code> e, se não existir, usar <code>"visitante"</code>:</p>
+<div class="ex-code">local quem = os.<input data-answer="getenv" aria-label="função">("USER") <input data-answer="or" aria-label="operador"> "visitante"</div>
+</div>
+
+<div class="exercise">
+<h3>2. O código</h3>
+<p>Depois de <code>lua prog.lua</code>, onde <code>prog.lua</code> é só <code>os.exit(false)</code>, o que <code>echo $?</code> mostra?</p>
+<div class="ex-code"><input data-answer="1" aria-label="código"></div>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">3. Um programa espera 10 segundos o usuário apertar <kbd>Enter</kbd> e quase não faz contas. Quanto a diferença de <code>os.clock()</code> antes e depois vai dar, mais ou menos?</p>
+<label><input type="radio" name="q3"> 10 segundos</label>
+<label><input type="radio" name="q3"> Quase 0: o <code>os.clock</code> não conta o tempo de espera</label>
+<label><input type="radio" name="q3"> Dá erro</label>
+<label><input type="radio" name="q3"> 10 minutos</label>
+</div>
+
+<div class="mc" data-answer="4">
+<p class="mc-q">4. Por convenção, qual código de saída quer dizer "deu tudo certo"?</p>
+<label><input type="radio" name="q4"> 1</label>
+<label><input type="radio" name="q4"> 255</label>
+<label><input type="radio" name="q4"> -1</label>
+<label><input type="radio" name="q4"> 0</label>
+</div>
+
+<div class="mc" data-answer="1">
+<p class="mc-q">5. Com <code>NOME_DA_LOJA="Padaria" lua loja.lua</code> no terminal, a variável existe…</p>
+<label><input type="radio" name="q5"> só durante aquele comando</label>
+<label><input type="radio" name="q5"> até o computador desligar</label>
+<label><input type="radio" name="q5"> para sempre, em todos os terminais</label>
+<label><input type="radio" name="q5"> só dentro do arquivo <code>loja.lua</code>, gravada nele</label>
+</div>
+
+<h3>Missão final: o programa que se recusa a trabalhar sem configuração</h3>
+
+<div class="trylua" data-digitar="pão;4.50" data-goal="exit:1;;out:Falta a variável ARQUIVO_DE_VENDAS">
+<p class="try-task"><strong>Missão:</strong> este programa só funciona com a variável de ambiente <code>ARQUIVO_DE_VENDAS</code>, que diz onde estão as vendas. Sem ela, em vez de quebrar mais adiante com um erro confuso, ele deve avisar <code>Falta a variável ARQUIVO_DE_VENDAS</code> (em <code>io.stderr</code>) e sair com o código <strong>1</strong>. Complete o <code>if</code>.</p>
+<pre class="script" data-file="main.lua">local arquivo = os.getenv("ARQUIVO_DE_VENDAS")
+if not arquivo then
+  -- avise e saia aqui
+end
+for linha in io.lines(arquivo) do
+  print(linha)
+end
+</pre>
+<pre class="solucao" data-file="main.lua">local arquivo = os.getenv("ARQUIVO_DE_VENDAS")
+if not arquivo then
+  io.stderr:write("Falta a variável ARQUIVO_DE_VENDAS\n")
+  os.exit(1)
+end
+for linha in io.lines(arquivo) do
+  print(linha)
+end
+</pre>
+</div>
+
+<p>Rode o código inicial primeiro: sem a variável, o <code>io.lines(nil)</code> passa a ler o <strong>teclado</strong> (veja <a href="io-lines.html">io.lines</a>) e fica esperando, um comportamento bem mais confuso que uma mensagem clara.</p>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li><code>os.getenv("NOME")</code> lê uma variável de ambiente (<code>HOME</code>, <code>USER</code>, <code>LANG</code>, <code>PATH</code>…) como texto, ou <code>nil</code>. Use sempre com um padrão: <code>os.getenv("X") or "padrão"</code>.</li>
+  <li>No terminal, <code>NOME=valor lua prog.lua</code> cria a variável para um comando; <code>export</code>, para o terminal todo.</li>
+  <li><code>os.clock()</code> é o cronômetro do processador: meça com <code>os.clock() - inicio</code>. Ele <strong>não</strong> conta a espera; para tempo de relógio, <code>os.time()</code>.</li>
+  <li><code>os.exit(n)</code> encerra o programa na hora com o código <code>n</code>: 0 = certo, outro número = problema (<code>os.exit(false)</code> = 1). O terminal vê o código em <code>$?</code>, <code>&amp;&amp;</code> e <code>||</code>.</li>
+  <li>Mensagens de erro vão para <code>io.stderr:write(…)</code>. Erros não tratados já saem com código 1.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
