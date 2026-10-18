@@ -1,0 +1,479 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua os.execute e io.popen — rodando outros programas | Guia Lua</title>
+<meta name="description" content="os.execute e io.popen do Lua 5.5 para quem nunca programou: rodar um comando do terminal, o que o os.execute devolve (true/nil, exit, código), criar uma pasta com mkdir, capturar a saída de um comando com io.popen e p:lines(), mandar texto para um comando com o modo w, o perigo dos nomes com espaço e como pôr aspas, o que o editor do guia faz, e os erros reais.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">os.execute</span> e <span class="hl">io.popen</span></h1>
+
+<p class="intro">A biblioteca padrão do Lua é pequena de propósito: ela não sabe criar pastas, listar o que tem dentro delas, descobrir o nome do computador, compactar arquivos. Mas o sistema sabe, e tem um comando para cada coisa: <code>mkdir</code>, <code>ls</code>, <code>hostname</code>, <code>zip</code>. Com <code>os.execute</code> ("executar"), o seu programa roda qualquer um desses comandos, como se você o digitasse no terminal. Com <code>io.popen</code> ("abrir um processo"), ele ainda <strong>lê</strong> o que o comando respondeu.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>Como rodar um comando com <code>os.execute</code>, e o que os três valores que ele devolve querem dizer.</li>
+  <li>Como criar uma pasta (o que o Lua puro não faz) com <code>os.execute("mkdir …")</code>.</li>
+  <li>Por que o <code>os.execute</code> <strong>não</strong> devolve o que o comando escreveu, e como o <code>io.popen</code> resolve isso.</li>
+  <li>Como ler a resposta inteira (<code>p:read("a")</code>) ou linha por linha (<code>p:lines()</code>), e mandar texto para um comando (modo <code>"w"</code>).</li>
+  <li>O perigo dos nomes de arquivo com espaço (e coisa pior), e como pôr aspas direito.</li>
+  <li>O que acontece no editor do guia, que roda no navegador e não tem outros programas.</li>
+</ul>
+</div>
+
+<p>Todos os programas desta aula rodaram no <strong>Lua 5.5</strong> da máquina da Ana (usuária <code>ana</code>, computador <code>notebook</code>, um Ubuntu), em <code>/home/ana</code>. Os comandos usados (<code>ls</code>, <code>mkdir</code>, <code>date</code>, <code>sort</code>, <code>cat</code>) são os do Linux; no macOS são quase todos iguais, e no Windows são outros.</p>
+
+<hr>
+
+<h2>A ideia: o recado para o vizinho</h2>
+<p>A Ana sabe fazer bolo, mas não sabe consertar a bicicleta. Para isso ela tem o vizinho. Ela pode trabalhar com ele de dois jeitos:</p>
+<ul>
+  <li><strong>"Conserta a bicicleta, por favor."</strong> Ela pede, espera ele terminar e só quer saber uma coisa: <strong>deu certo ou não</strong>. Esse é o <code>os.execute</code>.</li>
+  <li><strong>"Me diz que horas são lá no teu relógio?"</strong> Agora ela quer a <strong>resposta</strong> dele, para anotar e usar. Esse é o <code>io.popen</code>.</li>
+</ul>
+<p>Nos dois casos, quem faz o trabalho é outro programa, e o seu programa Lua espera ele terminar.</p>
+
+<hr>
+
+<h2>1. <code>os.execute</code>: rodar um comando</h2>
+<p>A Ana tem um <code>compras.txt</code> dentro da pasta <code>Documentos</code>. O comando <code>ls Documentos</code> lista o que tem lá:</p>
+
+<pre class="file" data-file="executar.lua">print(os.execute("ls Documentos"))
+print("--- o Lua continua depois do comando")
+</pre>
+
+<pre class="term">$ lua executar.lua
+compras.txt
+true	exit	0
+--- o Lua continua depois do comando</pre>
+
+<dl class="anatomy">
+  <dt>os.execute("ls Documentos")</dt><dd>Entrega o texto <code>ls Documentos</code> ao <strong>shell</strong> (o programa que interpreta os comandos do terminal, o <code>sh</code>) e espera ele terminar.</dd>
+  <dt>compras.txt</dt><dd>Quem escreveu isso foi o <strong><code>ls</code></strong>, não o Lua. O que o comando escreve vai <strong>direto para a tela</strong>.</dd>
+  <dt>true	exit	0</dt><dd>Os três valores que o <code>os.execute</code> devolveu, mostrados pelo <code>print</code>: deu certo (<code>true</code>), o comando terminou normalmente (<code>"exit"</code>, "saiu") e o código de saída foi 0 (veja <a href="os-funcoes.html">os.exit</a>: 0 = deu certo).</dd>
+</dl>
+
+<h3>Os três valores</h3>
+<p>Com comandos que terminam de jeitos diferentes:</p>
+
+<pre class="file" data-file="retorno.lua">print(os.execute("true"))
+print(os.execute("false"))
+print(os.execute("exit 3"))
+print(os.execute("programa_que_nao_existe"))
+print(os.execute())
+</pre>
+
+<pre class="term">$ lua retorno.lua
+true	exit	0
+nil	exit	1
+nil	exit	3
+sh: 1: programa_que_nao_existe: not found
+nil	exit	127
+true</pre>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>O comando…</th><th>1º valor</th><th>2º</th><th>3º</th></tr>
+<tr><td>terminou com código 0 (<code>true</code> é um comando que só faz isso)</td><td><code>true</code></td><td><code>"exit"</code></td><td><code>0</code></td></tr>
+<tr><td>terminou com outro código (<code>false</code> sai com 1; <code>exit 3</code>, com 3)</td><td><code>nil</code></td><td><code>"exit"</code></td><td>o código</td></tr>
+<tr><td>não existe: o shell avisa <code>not found</code> ("não encontrado")</td><td><code>nil</code></td><td><code>"exit"</code></td><td><code>127</code>, o código de "comando não encontrado"</td></tr>
+<tr><td>foi morto por um sinal (por exemplo, <code>kill -9</code>)</td><td><code>nil</code></td><td><code>"signal"</code></td><td>o número do sinal (<code>9</code>)</td></tr>
+</table>
+</div>
+
+<p>(O caso do sinal foi colhido com <code>lua -e 'print(os.execute("kill -9 $$"))'</code>, um comando que se mata: saiu <code>nil	signal	9</code>.) E o <code>os.execute()</code> <strong>sem nada</strong> não roda comando nenhum: só responde se existe um shell disponível (<code>true</code>).</p>
+
+<p>Repare na mensagem <code>sh: 1: programa_que_nao_existe: not found</code>: ela vem do <code>sh</code>, e por isso é diferente das mensagens do Lua (e sai em inglês mesmo no Ubuntu da Ana, que está em português).</p>
+
+<hr>
+
+<h2>2. Fazendo o que o Lua não faz: criar uma pasta</h2>
+<p>Na aula <a href="os-remove-rename.html">Apagando e Renomeando</a>, você viu que o Lua puro não cria pastas. O comando <code>mkdir</code> cria; o <code>-p</code> faz ele criar as pastas do caminho que faltarem, e não reclamar se a pasta já existir:</p>
+
+<pre class="file" data-file="pasta.lua">local ok, tipo, codigo = os.execute("mkdir -p Documentos/receitas")
+if ok then
+  print("Pasta pronta.")
+else
+  print("Não consegui criar a pasta: " .. tipo .. " " .. codigo)
+end
+local f = assert(io.open("Documentos/receitas/bolo.txt", "w"))
+f:write("3 ovos\n")
+f:close()
+os.execute("ls -R Documentos")
+</pre>
+
+<pre class="term">$ lua pasta.lua
+Pasta pronta.
+Documentos:
+compras.txt
+receitas
+
+Documentos/receitas:
+bolo.txt</pre>
+
+<p>Os três valores foram guardados em variáveis (<code>ok</code>, <code>tipo</code>, <code>codigo</code>), e o programa só segue achando que a pasta existe se o <code>ok</code> for <code>true</code>. Depois, um <code>io.open</code> normal criou o arquivo lá dentro, e o <code>ls -R</code> (o <code>-R</code> é "recursivo": entra nas subpastas) mostrou o resultado.</p>
+
+<hr>
+
+<h2>3. <code>io.popen</code>: ler o que o comando respondeu</h2>
+<p>O <code>os.execute</code> devolve se deu certo, mas <strong>não</strong> o que o comando escreveu. Tentando pegar o ano com o comando <code>date +%Y</code>:</p>
+
+<pre class="file" data-file="saida_errada.lua">local resultado = os.execute("date +%Y")
+print("O ano é: " .. tostring(resultado))
+</pre>
+
+<pre class="term">$ lua saida_errada.lua
+2026
+O ano é: true</pre>
+
+<p>O <code>2026</code> foi para a tela, escrito pelo <code>date</code>, e a variável ficou com <code>true</code>. Para <strong>capturar</strong> o que o comando escreve, use o <code>io.popen</code>. Ele roda o comando e devolve algo que funciona como um arquivo aberto: você lê dele com <code>:read</code>, do mesmo jeito que em <a href="arquivos-ler.html">Lendo Arquivos</a>:</p>
+
+<pre class="file" data-file="popen.lua">local p = io.popen("date +%Y")
+local ano = p:read("l")
+print(p:close())
+print("O ano é: " .. ano, type(ano))
+</pre>
+
+<pre class="term">$ lua popen.lua
+true	exit	0
+O ano é: 2026	string</pre>
+
+<dl class="anatomy">
+  <dt>io.popen("date +%Y")</dt><dd>Roda o comando e liga a saída dele ao seu programa, como um cano (é daí o nome: <em>pipe open</em>, "abrir um cano"). O que o <code>date</code> escreveria na tela vai para o <code>p</code>.</dd>
+  <dt>p:read("l")</dt><dd>Lê uma linha do que o comando escreveu: <code>2026</code>. Os formatos são os mesmos do <code>f:read</code> (<code>"a"</code>, <code>"l"</code>, <code>"n"</code>…).</dd>
+  <dt>p:close()</dt><dd>Fecha o cano e espera o comando terminar. Devolve os mesmos três valores do <code>os.execute</code>: <code>true	exit	0</code>.</dd>
+  <dt>type(ano) → string</dt><dd>O que vem do comando é sempre <strong>texto</strong>. Para fazer conta com o ano, <code>tonumber(ano)</code>.</dd>
+</dl>
+
+<h3>A resposta inteira, e o Enter do fim</h3>
+<p>Com <code>"a"</code>, você pega tudo. Mas cuidado: quase todo comando termina a resposta com uma quebra de linha:</p>
+
+<pre class="file" data-file="nome.lua">local p = assert(io.popen("hostname"))
+local nome = p:read("a")
+p:close()
+print("[" .. nome .. "]")
+print("[" .. nome:gsub("%s+$", "") .. "]")
+</pre>
+
+<pre class="term">$ lua nome.lua
+[notebook
+]
+[notebook]</pre>
+
+<p>O <code>hostname</code> (o nome do computador) respondeu <code>notebook</code> e um <code>\n</code>; os colchetes mostram o <code>]</code> indo para a linha de baixo. O <code>nome:gsub("%s+$", "")</code> tira os espaços e quebras de linha do fim (veja <a href="gsub.html">gsub</a>). Com <code>p:read("l")</code> esse problema não existe, porque o <code>"l"</code> já tira o <code>\n</code>.</p>
+
+<h3>Linha por linha: <code>p:lines()</code></h3>
+
+<pre class="file" data-file="listar.lua">local p = assert(io.popen("ls Documentos"))
+local quantos = 0
+for linha in p:lines() do
+  quantos = quantos + 1
+  print(quantos .. ": " .. linha)
+end
+p:close()
+print("Itens em Documentos: " .. quantos)
+</pre>
+
+<pre class="term">$ lua listar.lua
+1: compras.txt
+2: receitas
+Itens em Documentos: 2</pre>
+
+<p>É o mesmo <code>for … in</code> do <a href="io-lines.html">io.lines</a>. Assim o seu programa consegue a lista de arquivos de uma pasta, outra coisa que o Lua puro não faz. Como no <code>f:lines()</code>, o <code>p:lines()</code> não fecha: o <code>p:close()</code> depois do laço é seu.</p>
+
+<h3>O caminho contrário: escrever para o comando (<code>"w"</code>)</h3>
+<p>Com o modo <code>"w"</code>, o seu programa escreve e o <strong>comando lê</strong>, como se alguém digitasse para ele. O comando <code>sort</code> põe linhas em ordem:</p>
+
+<pre class="file" data-file="popen_w.lua">local p = assert(io.popen("sort", "w"))
+p:write("Caio\n", "Ana\n", "Bia\n")
+print(p:close())
+</pre>
+
+<pre class="term">$ lua popen_w.lua
+Ana
+Bia
+Caio
+true	exit	0</pre>
+
+<p>O <code>sort</code> recebeu os três nomes e, quando o <code>close</code> avisou que não vinha mais nada, escreveu na tela já em ordem. (Para ordenar em Lua mesmo, o certo é o <a href="table-sort.html">table.sort</a>; o exemplo é só para mostrar o modo <code>"w"</code>.) O <code>io.popen</code> faz <strong>um</strong> sentido por vez: ou você lê (<code>"r"</code>, o padrão), ou escreve (<code>"w"</code>).</p>
+
+<hr>
+
+<h2>4. No editor do guia: não há outros programas</h2>
+<p>O editor "Experimente" roda o Lua de verdade, mas <strong>dentro do navegador</strong>, e lá não existe <code>ls</code>, <code>date</code>, nem shell de verdade. O editor responde como um Linux em que esses comandos não estão instalados. Rode esta caixa e compare com as saídas acima:</p>
+
+<div class="trylua">
+<p class="try-task"><strong>Experimente:</strong> veja o que o editor responde. Depois troque <code>"exit 3"</code> por <code>"exit 7"</code>: esse tipo de comando (e o <code>"true"</code> e o <code>"false"</code>) o editor sabe responder.</p>
+<pre class="script" data-file="main.lua">print(os.execute())
+print(os.execute("ls"))
+print(os.execute("exit 3"))
+local p = io.popen("date +%Y")
+print("[" .. p:read("a") .. "]")
+print(p:close())
+</pre>
+</div>
+
+<p>No editor, o <code>ls</code> e o <code>date</code> dão <code>sh: 1: ls: not found</code> e <code>nil	exit	127</code>, e o <code>io.popen</code> lê um texto vazio. Só o <code>os.execute()</code>, o <code>"true"</code>, o <code>"false"</code> e o <code>"exit N"</code> funcionam como no lab. Por isso, para ver os comandos funcionando de verdade, rode os exemplos desta aula no seu terminal. E as missões abaixo treinam o que dá para treinar sem outros programas: montar o comando e entender a resposta.</p>
+
+<hr>
+
+<h2>5. O perigo: nomes com espaço (e pior)</h2>
+<p>O texto que você passa ao <code>os.execute</code> é lido pelo shell, que separa as palavras nos <strong>espaços</strong>, exatamente como o terminal faz com os <a href="arg.html">argumentos</a>. A Ana tem um arquivo chamado <code>lista de compras.txt</code>:</p>
+
+<pre class="file" data-file="espaco.lua">local nome = "lista de compras.txt"
+print(os.execute("cat " .. nome))
+</pre>
+
+<pre class="term">$ printf 'arroz\nfeijão\n' &gt; 'lista de compras.txt'
+$ lua espaco.lua
+cat: lista: No such file or directory
+cat: de: No such file or directory
+cat: compras.txt: No such file or directory
+nil	exit	3</pre>
+
+<p>O comando que chegou ao shell foi <code>cat lista de compras.txt</code>, e o <code>cat</code> (que mostra arquivos) entendeu <strong>três</strong> arquivos: <code>lista</code>, <code>de</code> e <code>compras.txt</code>. Nenhum existe, e ele terminou com um código diferente de 0 (aqui, 3). Agora imagine o mesmo engano com <code>rm</code> (apagar) no lugar do <code>cat</code>: se existisse um <code>compras.txt</code> na pasta, ele seria apagado, e não o arquivo que você queria.</p>
+
+<p>E é pior que espaço. Um nome de arquivo pode ter <code>;</code>, que no shell separa comandos: um arquivo chamado <code>x; rm -rf Documentos</code> faria o seu <code>os.execute("cat " .. nome)</code> rodar <strong>dois</strong> comandos, e o segundo apaga a pasta inteira. Por isso a regra é: <strong>nunca</strong> junte num comando um texto que veio de fora (do usuário, de um arquivo, da internet) sem pôr aspas.</p>
+
+<h3>Pondo aspas direito</h3>
+<p>No shell, tudo o que fica entre aspas simples (<code>'…'</code>) é <strong>um</strong> texto só, sem nada especial dentro. O único caractere que precisa de cuidado é a própria aspa simples. Esta função resolve:</p>
+
+<pre class="file" data-file="aspas.lua">local function aspas(texto)
+  return "'" .. texto:gsub("'", "'\\''") .. "'"
+end
+local nome = "lista de compras.txt"
+local comando = "cat " .. aspas(nome)
+print(comando)
+print(os.execute(comando))
+print(aspas("d'água.txt"))
+</pre>
+
+<pre class="term">$ lua aspas.lua
+cat 'lista de compras.txt'
+arroz
+feijão
+true	exit	0
+'d'\''água.txt'</pre>
+
+<dl class="anatomy">
+  <dt>"'" .. texto .. "'"</dt><dd>Embrulha o texto em aspas simples.</dd>
+  <dt>texto:gsub("'", "'\\''")</dt><dd>Troca cada <code>'</code> de dentro do texto por <code>'\''</code>: fecha as aspas, põe uma aspa "escapada" (<code>\'</code>) e abre de novo. É a receita clássica do shell. O <code>\\</code> no código Lua vira um <code>\</code> só no texto (veja <a href="strings-escape.html">Caracteres de Escape</a>).</dd>
+  <dt>print(comando)</dt><dd>Mostrar o comando antes de rodar é um ótimo hábito: você vê exatamente o que o shell vai receber.</dd>
+</dl>
+
+<p>O <code>'d'\''água.txt'</code> parece estranho, mas o shell o lê como o nome <code>d'água.txt</code>, inteiro. (A função usa a gramática do shell do Linux e do macOS; o Windows tem outras regras.)</p>
+
+<div class="trylua" data-goal="out:rm 'foto da praia.jpg';;src:aspas\(nome\)">
+<p class="try-task"><strong>Missão:</strong> o programa só <strong>mostra</strong> o comando que rodaria (sem rodar: é mais seguro para treinar). Ele monta <code>rm foto da praia.jpg</code>, que apagaria três arquivos errados. Use a função <code>aspas</code> no <code>nome</code> para o comando ficar <code>rm 'foto da praia.jpg'</code>.</p>
+<pre class="script" data-file="main.lua">local function aspas(texto)
+  return "'" .. texto:gsub("'", "'\\''") .. "'"
+end
+local nome = "foto da praia.jpg"
+local comando = "rm " .. nome
+print(comando)
+</pre>
+<pre class="solucao" data-file="main.lua">local function aspas(texto)
+  return "'" .. texto:gsub("'", "'\\''") .. "'"
+end
+local nome = "foto da praia.jpg"
+local comando = "rm " .. aspas(nome)
+print(comando)
+</pre>
+</div>
+
+<hr>
+
+<h2 id="formas">Formas diferentes, e quando não usar comando nenhum</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Você quer…</th><th>Use</th></tr>
+<tr><td>Rodar um comando e saber se deu certo</td><td><code>local ok, tipo, codigo = os.execute(cmd)</code></td></tr>
+<tr><td>A resposta do comando, inteira</td><td><code>local p = io.popen(cmd)</code>, <code>p:read("a")</code>, <code>p:close()</code></td></tr>
+<tr><td>A resposta, linha por linha</td><td><code>for linha in p:lines() do … end</code> e <code>p:close()</code></td></tr>
+<tr><td>Mandar texto para um comando</td><td><code>io.popen(cmd, "w")</code>, <code>p:write(…)</code>, <code>p:close()</code></td></tr>
+<tr><td>Ler, escrever, apagar ou renomear um arquivo</td><td><strong>Nada de comando:</strong> <code>io.open</code>, <code>os.remove</code>, <code>os.rename</code> (funcionam em qualquer sistema e no editor)</td></tr>
+<tr><td>A data, a hora, uma variável de ambiente</td><td><strong>Nada de comando:</strong> <a href="os-date-time.html">os.date</a>, <a href="os-funcoes.html">os.getenv</a></td></tr>
+<tr><td>Criar e listar pastas em muitos programas, ou em vários sistemas</td><td>A biblioteca LuaFileSystem (<code>lfs.mkdir</code>, <code>lfs.dir</code>), pelo <a href="luarocks.html">LuaRocks</a></td></tr>
+</table>
+</div>
+
+<p>Comando externo é o último recurso: ele depende do sistema (o <code>ls</code> do Linux é o <code>dir</code> do Windows), é mais lento (um programa novo começa a cada chamada) e traz o perigo das aspas. Quando o Lua sabe fazer sozinho, deixe com o Lua.</p>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+
+<div class="cenario">
+<strong>O comando não existe</strong>
+<pre class="file" data-file="nao_existe.lua">local p = io.popen("programa_que_nao_existe")
+print("[" .. p:read("a") .. "]")
+print(p:close())
+</pre>
+<pre class="term">$ lua nao_existe.lua
+sh: 1: programa_que_nao_existe: not found
+[]
+nil	exit	127</pre>
+<p>O <code>io.popen</code> <strong>não</strong> devolveu <code>nil</code>: quem foi aberto foi o shell, e ele existe. O shell é que não achou o comando, avisou com <code>sh: 1: …: not found</code> (direto na tela, pelo canal de erros) e terminou com 127. Para o seu programa, a resposta foi um texto vazio (<code>[]</code>). O único jeito de saber que falhou é olhar o que o <code>p:close()</code> devolve. <strong>Como consertar:</strong> confira o nome do comando (e se ele está instalado: no terminal, digite o nome sozinho e veja se o Ubuntu sugere um pacote), e sempre teste o primeiro valor do <code>p:close()</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Leu depois de fechar</strong>
+<pre class="file" data-file="fechado.lua">local p = io.popen("date +%Y")
+p:close()
+print(p:read("l"))
+</pre>
+<pre class="term">$ lua fechado.lua
+lua: fechado.lua:3: attempt to use a closed file
+stack traceback:
+	[C]: in method 'read'
+	fechado.lua:3: in main chunk
+	[C]: in ?</pre>
+<p>A mesma mensagem dos arquivos: "tentativa de usar um arquivo fechado". Para o Lua, o <code>p</code> é um arquivo. <strong>Como consertar:</strong> leia tudo antes do <code>p:close()</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Ponto no lugar do dois-pontos</strong>
+<pre class="file" data-file="ponto.lua">local p = io.popen("date +%Y")
+print(p.read("l"))
+</pre>
+<pre class="term">$ lua ponto.lua
+lua: ponto.lua:2: bad argument #1 to 'read' (FILE* expected, got string)
+stack traceback:
+	[C]: in field 'read'
+	ponto.lua:2: in main chunk
+	[C]: in ?</pre>
+<p>Igual ao <code>f.read</code> de <a href="arquivos-ler.html">Lendo Arquivos</a>: com o ponto, o <code>p</code> não é entregue ao <code>read</code>. <strong>Como consertar:</strong> <code>p:read("l")</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Esperou a saída do <code>os.execute</code></strong>
+<p>Você viu na seção 3: <code>local resultado = os.execute("date +%Y")</code> deixa o <code>2026</code> na tela e o <code>true</code> na variável. Não é erro do Lua; é o trabalho de cada função. <strong>Como consertar:</strong> para guardar a resposta, <code>io.popen</code>.</p>
+</div>
+
+<hr>
+
+<h2>Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>O que faz</th><th>Devolve</th></tr>
+<tr><td><code>os.execute(cmd)</code></td><td>Roda o comando no shell; a saída dele vai para a tela</td><td><code>true</code>/<code>nil</code>, <code>"exit"</code>/<code>"signal"</code>, código</td></tr>
+<tr><td><code>os.execute()</code></td><td>Pergunta se há um shell</td><td><code>true</code> ou <code>false</code></td></tr>
+<tr><td><code>io.popen(cmd)</code> ou <code>io.popen(cmd, "r")</code></td><td>Roda o comando; você lê a saída dele</td><td>um "arquivo" para <code>:read</code> e <code>:lines</code></td></tr>
+<tr><td><code>io.popen(cmd, "w")</code></td><td>Roda o comando; você escreve e ele lê</td><td>um "arquivo" para <code>:write</code></td></tr>
+<tr><td><code>p:close()</code></td><td>Fecha e espera o comando terminar</td><td>os mesmos três valores do <code>os.execute</code></td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Sintoma</th><th>Causa provável</th></tr>
+<tr><td><code>sh: 1: …: not found</code> e código <code>127</code></td><td>O comando não existe (nome errado ou não instalado). No editor do guia, é o que acontece com todo comando</td></tr>
+<tr><td>A variável tem <code>true</code> e a resposta foi para a tela</td><td>Usou <code>os.execute</code> no lugar de <code>io.popen</code></td></tr>
+<tr><td>A resposta vem com um Enter a mais no fim</td><td><code>p:read("a")</code>: tire com <code>:gsub("%s+$", "")</code> ou leia com <code>"l"</code></td></tr>
+<tr><td>Erros do comando falando de pedaços do nome (<code>cat: lista: …</code>)</td><td>Nome com espaço sem aspas: use a função <code>aspas</code></td></tr>
+<tr><td><code>attempt to use a closed file</code></td><td>Leu depois do <code>p:close()</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. O código do "não encontrado"</h3>
+<p>Qual é o código de saída quando o shell não acha o comando?</p>
+<div class="ex-code"><input data-answer="127" aria-label="código"></div>
+</div>
+
+<div class="exercise">
+<h3>2. Complete</h3>
+<p>Complete para guardar em <code>usuario</code> a resposta do comando <code>whoami</code> (sem o Enter do fim):</p>
+<div class="ex-code">local p = io.<input data-answer="popen" aria-label="função">("whoami")<br>local usuario = p:read("<input data-answer="l" aria-label="formato">")<br>p:<input data-answer="close" aria-label="método">()</div>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">3. O que <code>local x = os.execute("echo oi")</code> guarda em <code>x</code>?</p>
+<label><input type="radio" name="q3"> O texto <code>"oi"</code></label>
+<label><input type="radio" name="q3"> <code>true</code>: o <code>oi</code> vai para a tela, não para a variável</label>
+<label><input type="radio" name="q3"> <code>nil</code></label>
+<label><input type="radio" name="q3"> O número 0</label>
+</div>
+
+<div class="mc" data-answer="4">
+<p class="mc-q">4. Por que <code>os.execute("rm " .. nome)</code> é perigoso quando o <code>nome</code> vem do usuário?</p>
+<label><input type="radio" name="q4"> Porque o <code>rm</code> é lento</label>
+<label><input type="radio" name="q4"> Porque o Lua não deixa juntar textos com <code>..</code> num comando</label>
+<label><input type="radio" name="q4"> Não é perigoso</label>
+<label><input type="radio" name="q4"> Porque o shell separa nos espaços e entende <code>;</code>: o comando pode apagar outros arquivos, ou rodar outro comando</label>
+</div>
+
+<div class="mc" data-answer="1">
+<p class="mc-q">5. No editor do guia, o que <code>os.execute("ls")</code> devolve?</p>
+<label><input type="radio" name="q5"> <code>nil	exit	127</code>, porque no navegador não existe o <code>ls</code></label>
+<label><input type="radio" name="q5"> <code>true	exit	0</code></label>
+<label><input type="radio" name="q5"> A lista de arquivos</label>
+<label><input type="radio" name="q5"> Um erro que para o programa</label>
+</div>
+
+<h3>Missão final: entendendo a resposta</h3>
+
+<div class="trylua" data-goal="out:O comando não existe (código 127).;;out:Deu certo.;;out:Falhou com o código 2.;;semerro">
+<p class="try-task"><strong>Missão:</strong> a função <code>explicar</code> recebe os três valores que o <code>os.execute</code> (ou o <code>p:close()</code>) devolve e escreve uma frase. Os testes no fim usam valores <strong>de exemplo</strong> (sem rodar comando nenhum). Hoje ela diz <code>Deu certo.</code> para tudo. Complete: se <code>ok</code> for verdadeiro, <code>Deu certo.</code>; senão, se o código for 127, <code>O comando não existe (código 127).</code>; senão, <code>Falhou com o código N.</code></p>
+<pre class="script" data-file="main.lua">local function explicar(ok, tipo, codigo)
+  print("Deu certo.")
+end
+
+explicar(true, "exit", 0)
+explicar(nil, "exit", 127)
+explicar(nil, "exit", 2)
+</pre>
+<pre class="solucao" data-file="main.lua">local function explicar(ok, tipo, codigo)
+  if ok then
+    print("Deu certo.")
+  elseif codigo == 127 then
+    print("O comando não existe (código 127).")
+  else
+    print("Falhou com o código " .. codigo .. ".")
+  end
+end
+
+explicar(true, "exit", 0)
+explicar(nil, "exit", 127)
+explicar(nil, "exit", 2)
+</pre>
+</div>
+
+<p>No seu terminal, troque os testes por chamadas de verdade: <code>explicar(os.execute("ls Documentos"))</code> e <code>explicar(os.execute("lss"))</code>. Os três valores do <code>os.execute</code> entram direto nos três parâmetros da função.</p>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li><code>os.execute(cmd)</code> roda um comando do sistema, e a saída dele vai para a tela. Devolve <code>true</code> (ou <code>nil</code>), <code>"exit"</code> (ou <code>"signal"</code>) e o código; comando que não existe dá <code>sh: 1: …: not found</code> e 127.</li>
+  <li>Para <strong>guardar</strong> a resposta, <code>io.popen(cmd)</code>: leia com <code>p:read("a")</code>, <code>p:read("l")</code> ou <code>p:lines()</code>, e feche com <code>p:close()</code>, que devolve os mesmos três valores. Com <code>"w"</code>, você escreve para o comando.</li>
+  <li>A resposta é texto e costuma vir com um <code>\n</code> no fim.</li>
+  <li>O shell separa nos espaços e entende <code>;</code>: nomes vindos de fora vão <strong>sempre</strong> entre aspas simples, com a função <code>aspas</code>.</li>
+  <li>No editor do guia não há outros programas: comandos respondem <code>not found</code> e 127. Rode-os no seu terminal.</li>
+  <li>Quando o Lua faz sozinho (arquivos, datas, ambiente), não chame comando nenhum.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
