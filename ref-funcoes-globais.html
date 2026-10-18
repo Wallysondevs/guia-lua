@@ -1,0 +1,412 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua Funções Globais — referência das 24 funções do Lua 5.5 | Guia Lua</title>
+<meta name="description" content="Referência rápida de todas as funções globais do Lua 5.5 (print, type, tonumber, tostring, pairs, ipairs, select, pcall, error, assert, setmetatable, load, require, collectgarbage, warn…) e das variáveis _G, _VERSION e arg, com exemplo curto, resultado real e o link para a aula de cada uma.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">Funções Globais</span></h1>
+
+<p class="intro">Esta é a página de consulta rápida das <strong>funções globais</strong> do Lua 5.5: as funções que já vêm prontas e podem ser chamadas pelo nome, em qualquer programa, sem <code>require</code>. O manual oficial chama esse grupo de "biblioteca básica" (<em>basic library</em>). São 23 funções da biblioteca básica, mais o <code>require</code> (que vem da biblioteca de módulos), as variáveis <code>_G</code> e <code>_VERSION</code>, o <code>arg</code> e as tabelas das outras bibliotecas (<code>string</code>, <code>table</code>, <code>math</code>…). Cada linha traz um exemplo curto e o resultado que ele deu de verdade.</p>
+
+<div class="note">
+<strong>Como ler as tabelas</strong>
+<ul>
+  <li><strong>Exemplo</strong> é o que você digitaria depois do <code>&gt;</code> do <a href="repl.html">modo interativo</a> (abra com <code>lua</code> no terminal).</li>
+  <li><strong>Resultado</strong> é o que o Lua 5.5.0 respondeu no computador da Ana. O modo interativo mostra os textos <strong>sem aspas</strong>: <code>tostring(42)</code> aparece como <code>42</code>, igual a um número. Use <code>type()</code> quando precisar saber a diferença.</li>
+  <li>Quando o exemplo devolve <strong>vários valores</strong>, o Lua os mostra na mesma linha, separados por TAB. Aqui eles aparecem separados por vírgula: <code>42</code>, <code>7.5</code>.</li>
+  <li>Quando o exemplo dá erro, o resultado mostra a <strong>primeira linha</strong> da mensagem (em inglês). No terminal, depois dela vem o <code>stack traceback:</code>, como no exemplo logo abaixo.</li>
+  <li>Resultados com <code>0x…</code> (endereços na memória, como <code>table: 0x55fe39d69d40</code>) mudam a cada execução.</li>
+</ul>
+</div>
+
+<p>Assim fica no terminal da Ana:</p>
+
+<pre class="term">$ lua
+Lua 5.5.0  Copyright (C) 1994-2025 Lua.org, PUC-Rio
+&gt; tonumber("7,5")
+nil
+&gt; select("#", "a", "b", "c")
+3
+&gt; assert(tonumber("abc"), "não é número")
+stdin:1: não é número
+stack traceback:
+        [C]: in global 'assert'
+        stdin:1: in main chunk
+        [C]: in ?
+&gt; os.exit()
+</pre>
+
+<p>O <code>tonumber("7,5")</code> devolveu <code>nil</code> porque o Lua só entende <strong>ponto</strong> como separador decimal. O <code>select("#", …)</code> contou os valores que vieram depois dele. E o <code>assert</code> parou com a mensagem que a Ana escolheu, porque o primeiro valor (<code>nil</code>) conta como falso. O <code>stdin:1:</code> do começo quer dizer "linha 1 do que foi digitado" (<em>stdin</em> = a entrada padrão, o teclado). Num arquivo, ali aparece o nome do arquivo: <code>main.lua:1:</code>.</p>
+
+<p>Pule direto para o grupo que você procura:</p>
+<ul>
+  <li><a href="#mostrar">Mostrar na tela</a>: <code>print</code></li>
+  <li><a href="#tipos">Tipos e conversão</a>: <code>type</code>, <code>tonumber</code>, <code>tostring</code></li>
+  <li><a href="#tabelas">Percorrer tabelas e argumentos</a>: <code>pairs</code>, <code>ipairs</code>, <code>next</code>, <code>select</code></li>
+  <li><a href="#raw">Acesso "cru" (sem metatabela)</a>: <code>rawget</code>, <code>rawset</code>, <code>rawequal</code>, <code>rawlen</code></li>
+  <li><a href="#meta">Metatabelas</a>: <code>setmetatable</code>, <code>getmetatable</code></li>
+  <li><a href="#erros">Erros e avisos</a>: <code>error</code>, <code>assert</code>, <code>pcall</code>, <code>xpcall</code>, <code>warn</code></li>
+  <li><a href="#codigo">Carregar código e módulos</a>: <code>load</code>, <code>loadfile</code>, <code>dofile</code>, <code>require</code></li>
+  <li><a href="#memoria">Memória</a>: <code>collectgarbage</code></li>
+  <li><a href="#variaveis">Variáveis globais prontas</a>: <code>_G</code>, <code>_VERSION</code>, <code>arg</code> e as tabelas das bibliotecas</li>
+  <li><a href="#az">Todas de A a Z</a></li>
+</ul>
+
+<hr>
+
+<h2 id="mostrar">Mostrar na tela</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Função</th><th>O que faz</th><th>Exemplo</th><th>Resultado</th><th>Aula</th></tr>
+<tr><td><code>print(…)</code></td><td>Mostra os valores na tela, separados por TAB, e pula a linha no fim (<em>print</em> = "imprimir"). Cada valor passa pelo <code>tostring</code>.</td><td><code>print("Ana", 7.5, true, nil)</code></td><td><code>Ana	7.5	true	nil</code></td><td><a href="print.html">print()</a></td></tr>
+<tr><td></td><td>sem nada: só pula uma linha</td><td><code>print()</code></td><td>uma linha em branco</td><td></td></tr>
+<tr><td></td><td>contas: <code>/</code> sempre dá float; <code>//</code> com inteiros dá inteiro</td><td><code>print(10 / 2, 3 // 2, 2^10, 0.1 + 0.2)</code></td><td><code>5.0	1	1024.0	0.30000000000000004</code></td><td><a href="divisao.html">Divisão: /, // e %</a></td></tr>
+</table>
+</div>
+
+<p>O <code>print</code> é para olhar valores depressa. Para escrever sem pular linha ou com controle do formato, use <code>io.write</code> e <code>string.format</code> (veja <a href="io-write.html">io.write()</a> e <a href="string-format.html">string.format</a>). Para ler o teclado, <code>io.read</code> (veja <a href="io-read.html">io.read()</a> e <a href="ref-io-os.html">As Bibliotecas io e os</a>).</p>
+
+<hr>
+
+<h2 id="tipos">Tipos e conversão</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Função</th><th>O que faz</th><th>Exemplo</th><th>Resultado</th><th>Aula</th></tr>
+<tr><td><code>type(v)</code></td><td>O nome do tipo do valor, como texto.</td><td><code>type(42), type(4.2), type("oi"), type(nil), type(true)</code></td><td><code>number</code>, <code>number</code>, <code>string</code>, <code>nil</code>, <code>boolean</code></td><td><a href="type.html">Descobrindo o Tipo</a></td></tr>
+<tr><td></td><td>os outros quatro tipos</td><td><code>type({}), type(print), type(io.stdout), type(coroutine.create(print))</code></td><td><code>table</code>, <code>function</code>, <code>userdata</code>, <code>thread</code></td><td><a href="tipos-de-dados.html">Os Tipos de Dados</a></td></tr>
+<tr><td></td><td>variável que não existe vale <code>nil</code></td><td><code>type(x)</code></td><td><code>nil</code> (o texto <code>"nil"</code>)</td><td><a href="nil.html">O Valor nil</a></td></tr>
+<tr><td></td><td>sem argumento é erro</td><td><code>type()</code></td><td><code>stdin:1: bad argument #1 to 'type' (value expected)</code></td><td></td></tr>
+<tr><td><code>tonumber(v)</code></td><td>Converte um texto em número. Aceita espaços em volta, sinal, hexadecimal (<code>0x</code>) e notação científica.</td><td><code>tonumber("42"), tonumber("7.5"), tonumber("  10  ")</code></td><td><code>42</code>, <code>7.5</code>, <code>10</code></td><td><a href="conversao.html">Conversão</a></td></tr>
+<tr><td></td><td></td><td><code>tonumber("0x1F"), tonumber("1e3")</code></td><td><code>31</code>, <code>1000.0</code></td><td></td></tr>
+<tr><td></td><td>texto que não é número dá <code>nil</code> (não dá erro). Vírgula não serve!</td><td><code>tonumber("abc"), tonumber("7,5"), tonumber("")</code></td><td><code>nil</code>, <code>nil</code>, <code>nil</code></td><td></td></tr>
+<tr><td></td><td>sem ponto vira inteiro; com ponto, float</td><td><code>math.type(tonumber("10")), math.type(tonumber("10.0"))</code></td><td><code>integer</code>, <code>float</code></td><td><a href="numeros.html">Números</a></td></tr>
+<tr><td><code>tonumber(texto, base)</code></td><td>Lê um inteiro escrito noutra base, de 2 a 36 (letras valem 10, 11…).</td><td><code>tonumber("101", 2), tonumber("ff", 16), tonumber("zz", 36)</code></td><td><code>5</code>, <code>255</code>, <code>1295</code></td><td><a href="conversao.html">Conversão</a></td></tr>
+<tr><td></td><td>dígito que não existe na base</td><td><code>tonumber("8", 8)</code></td><td><code>nil</code></td><td></td></tr>
+<tr><td></td><td>com base, o primeiro argumento tem de ser texto</td><td><code>tonumber(42, 10)</code></td><td><code>stdin:1: bad argument #1 to 'tonumber' (string expected, got number)</code></td><td></td></tr>
+<tr><td><code>tostring(v)</code></td><td>Converte qualquer valor em texto. Se o valor tem o metamétodo <code>__tostring</code>, usa ele.</td><td><code>tostring(42), tostring(7.0), tostring(nil), tostring(true)</code></td><td><code>42</code>, <code>7.0</code>, <code>nil</code>, <code>true</code> (todos textos)</td><td><a href="conversao.html">Conversão</a></td></tr>
+<tr><td></td><td>o 5.5 escreve dígitos suficientes para o número ser lido de volta igualzinho</td><td><code>tostring(1/3)</code></td><td><code>0.33333333333333331</code></td><td><a href="novidades.html">Novidades do Lua 5.5</a></td></tr>
+</table>
+</div>
+
+<div class="note">
+<strong>Floats com mais dígitos no 5.5</strong> <span class="versao">5.5</span>
+<p>O Lua 5.5 passou a escrever os floats "com dígitos suficientes para serem lidos de volta corretamente" (está na lista de mudanças do 5.5). No lab, <code>print(1/3)</code> deu <code>0.33333333333333331</code> no <code>lua</code> (5.5) e <code>0.33333333333333</code> no <code>lua5.4</code>; <code>math.pi</code> deu <code>3.1415926535897931</code> e <code>3.1415926535898</code>. Para mostrar um número bonito, não dependa do <code>print</code>: use <code>string.format("%.2f", x)</code>. Mais em <a href="versoes.html">Lua 5.1, LuaJIT, 5.4 e 5.5</a>.</p>
+</div>
+
+<hr>
+
+<h2 id="tabelas">Percorrer tabelas e argumentos</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Função</th><th>O que faz</th><th>Exemplo</th><th>Resultado</th><th>Aula</th></tr>
+<tr><td><code>ipairs(t)</code></td><td>Percorre a <strong>lista</strong> em ordem: 1, 2, 3… e para no primeiro buraco (<code>nil</code>). Usado no <code>for</code>.</td><td><code>for i, v in ipairs({"a", "b"}) do print(i, v) end</code></td><td><code>1	a</code><br><code>2	b</code></td><td><a href="ipairs.html">ipairs</a></td></tr>
+<tr><td><code>pairs(t)</code></td><td>Percorre <strong>todas</strong> as chaves da tabela (números e textos). A ordem não é garantida. Se a tabela tem o metamétodo <code>__pairs</code>, usa ele.</td><td><code>for k, v in pairs({nome = "Ana"}) do print(k, v) end</code></td><td><code>nome	Ana</code></td><td><a href="pairs.html">pairs</a></td></tr>
+<tr><td><code>next(t, chave)</code></td><td>A chave que vem depois de <code>chave</code> (e o valor dela). É o motor do <code>pairs</code>. Sem chave, dá a primeira.</td><td><code>next({"pão"})</code></td><td><code>1</code>, <code>pão</code></td><td><a href="pairs.html">pairs</a></td></tr>
+<tr><td></td><td>o jeito certo de saber se a tabela está vazia</td><td><code>next({})</code></td><td><code>nil</code></td><td><a href="dicionarios.html">Dicionários</a></td></tr>
+<tr><td><code>select("#", …)</code></td><td>Quantos valores vieram depois dele (contando os <code>nil</code>).</td><td><code>select("#", "a", "b", "c")</code></td><td><code>3</code></td><td><a href="select.html">select</a></td></tr>
+<tr><td></td><td></td><td><code>select("#", nil, nil)</code></td><td><code>2</code></td><td></td></tr>
+<tr><td><code>select(n, …)</code></td><td>Os valores do número <code>n</code> em diante.</td><td><code>select(2, "a", "b", "c")</code></td><td><code>b</code>, <code>c</code></td><td><a href="varargs.html">Funções Variádicas</a></td></tr>
+<tr><td></td><td>número negativo conta do fim</td><td><code>select(-1, "a", "b", "c")</code></td><td><code>c</code></td><td></td></tr>
+<tr><td></td><td>depois do fim: nenhum valor</td><td><code>select(5, "a")</code></td><td>(nada aparece)</td><td></td></tr>
+<tr><td></td><td>zero é erro</td><td><code>select(0, "a")</code></td><td><code>stdin:1: bad argument #1 to 'select' (index out of range)</code></td><td></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2 id="raw">Acesso "cru" (sem metatabela)</h2>
+
+<p>As funções <code>raw…</code> (<em>raw</em> = "cru") fazem o que a operação normal faz, mas <strong>ignorando a metatabela</strong>. Nos exemplos, a Ana criou antes uma tabela com um <code>__index</code> que responde <code>"padrão"</code> para qualquer chave que falte:<br><code>p = setmetatable({}, {__index = function(t, k) return "padrão" end})</code></p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Função</th><th>O que faz</th><th>Exemplo</th><th>Resultado</th><th>Aula</th></tr>
+<tr><td><code>rawget(t, k)</code></td><td>O valor que está <strong>de verdade</strong> em <code>t[k]</code>, sem chamar o <code>__index</code>.</td><td><code>p.cor, rawget(p, "cor")</code></td><td><code>padrão</code>, <code>nil</code></td><td><a href="rawget-rawset.html">rawget, rawset e rawequal</a></td></tr>
+<tr><td></td><td>só aceita tabela</td><td><code>rawget("abc", 1)</code></td><td><code>stdin:1: bad argument #1 to 'rawget' (table expected, got string)</code></td><td></td></tr>
+<tr><td><code>rawset(t, k, v)</code></td><td>Guarda <code>v</code> em <code>t[k]</code> sem chamar o <code>__newindex</code>. Devolve a própria tabela.</td><td><code>rawset(p, "cor", "azul") == p</code></td><td><code>true</code></td><td><a href="rawget-rawset.html">rawget, rawset e rawequal</a></td></tr>
+<tr><td></td><td>agora a chave existe de verdade</td><td><code>p.cor, rawget(p, "cor")</code></td><td><code>azul</code>, <code>azul</code></td><td></td></tr>
+<tr><td><code>rawequal(a, b)</code></td><td>Compara sem chamar o <code>__eq</code>. Duas tabelas só são iguais se forem <strong>a mesma</strong>.</td><td><code>rawequal("a", "a"), rawequal({}, {})</code></td><td><code>true</code>, <code>false</code></td><td><a href="tabelas-referencia.html">Tabelas São Referências</a></td></tr>
+<tr><td><code>rawlen(v)</code></td><td>O tamanho de uma tabela ou texto, sem chamar o <code>__len</code>. Em texto, conta <strong>bytes</strong> ("ação" tem 6).</td><td><code>rawlen({1, 2, 3}), rawlen("ação")</code></td><td><code>3</code>, <code>6</code></td><td><a href="operador-tamanho.html">O Operador de Tamanho</a></td></tr>
+<tr><td></td><td>número não tem tamanho</td><td><code>rawlen(42)</code></td><td><code>stdin:1: bad argument #1 to 'rawlen' (table or string expected, got number)</code></td><td></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2 id="meta">Metatabelas</h2>
+
+<p>Nos exemplos, a Ana criou antes uma metatabela que ensina o Lua a escrever uma conta:<br><code>mt = {__tostring = function(c) return "Conta de " .. c.dono end}</code> e <code>c = setmetatable({dono = "Ana"}, mt)</code>.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Função</th><th>O que faz</th><th>Exemplo</th><th>Resultado</th><th>Aula</th></tr>
+<tr><td><code>setmetatable(t, mt)</code></td><td>Liga a metatabela <code>mt</code> à tabela <code>t</code> e devolve <code>t</code>. Os metamétodos de <code>mt</code> passam a valer.</td><td><code>tostring(c)</code></td><td><code>Conta de Ana</code></td><td><a href="metatabelas.html">Metatabelas</a></td></tr>
+<tr><td></td><td>com <code>nil</code>: tira a metatabela</td><td><code>setmetatable(c, nil) == c</code>, depois <code>getmetatable(c)</code></td><td><code>true</code>, depois <code>nil</code></td><td></td></tr>
+<tr><td></td><td>só tabelas (os outros tipos, só pela biblioteca <code>debug</code>)</td><td><code>setmetatable(42, {})</code></td><td><code>stdin:1: bad argument #1 to 'setmetatable' (table expected, got number)</code></td><td><a href="debug.html">A Biblioteca debug</a></td></tr>
+<tr><td><code>getmetatable(v)</code></td><td>A metatabela do valor (ou <code>nil</code> se não tiver).</td><td><code>getmetatable(c) == mt</code></td><td><code>true</code></td><td><a href="metatabelas.html">Metatabelas</a></td></tr>
+<tr><td></td><td>tabela nova não tem</td><td><code>getmetatable({})</code></td><td><code>nil</code></td><td></td></tr>
+<tr><td></td><td>todo texto tem a mesma metatabela, e o <code>__index</code> dela é a tabela <code>string</code> (é por isso que <code>("ana"):upper()</code> funciona)</td><td><code>getmetatable("abc").__index == string</code></td><td><code>true</code></td><td><a href="metodos.html">Métodos e o Dois-Pontos</a></td></tr>
+<tr><td></td><td>com o campo <code>__metatable</code>, a metatabela fica "trancada": o <code>getmetatable</code> devolve esse campo…</td><td><code>trancada = setmetatable({}, {__metatable = "não mexa"})</code>, depois <code>getmetatable(trancada)</code></td><td><code>não mexa</code></td><td><a href="ref-metametodos.html">Metamétodos</a></td></tr>
+<tr><td></td><td>…e o <code>setmetatable</code> recusa</td><td><code>setmetatable(trancada, {})</code></td><td><code>stdin:1: cannot change a protected metatable</code></td><td></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2 id="erros">Erros e avisos</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Função</th><th>O que faz</th><th>Exemplo</th><th>Resultado</th><th>Aula</th></tr>
+<tr><td><code>error(msg)</code></td><td>Para o programa com um erro. Se <code>msg</code> é texto, o Lua põe na frente onde o erro aconteceu.</td><td><code>error("estoque vazio")</code></td><td><code>stdin:1: estoque vazio</code></td><td><a href="error.html">error</a></td></tr>
+<tr><td><code>error(msg, nível)</code></td><td>Nível 0: sem a posição. Nível 2: aponta para quem chamou a sua função (útil para avisar "você me chamou errado").</td><td><code>error("estoque vazio", 0)</code></td><td><code>estoque vazio</code></td><td><a href="error.html">error</a></td></tr>
+<tr><td></td><td>o erro pode ser uma tabela (bom para o <code>pcall</code> examinar)</td><td><code>error({codigo = 42})</code></td><td><code>(error object is a table value)</code></td><td></td></tr>
+<tr><td><code>assert(v, msg)</code></td><td>Se <code>v</code> é falso (<code>false</code> ou <code>nil</code>), para com a mensagem <code>msg</code>. Se não, devolve todos os argumentos.</td><td><code>assert(10 &gt; 5, "matemática quebrou")</code></td><td><code>true</code>, <code>matemática quebrou</code></td><td><a href="assert.html">assert</a></td></tr>
+<tr><td></td><td></td><td><code>assert(1 == 2, "um não é dois")</code></td><td><code>stdin:1: um não é dois</code></td><td></td></tr>
+<tr><td></td><td>sem mensagem</td><td><code>assert(false)</code></td><td><code>stdin:1: assertion failed!</code></td><td></td></tr>
+<tr><td></td><td>o par perfeito do <code>io.open</code>: a mensagem de erro dele vira a do <code>assert</code></td><td><code>assert(io.open("nao-existe.txt"))</code></td><td><code>stdin:1: nao-existe.txt: No such file or directory</code></td><td><a href="io-open.html">Abrindo Arquivos</a></td></tr>
+<tr><td><code>pcall(f, …)</code></td><td>Chama <code>f</code> em "modo protegido" (<em>protected call</em>): se der erro, o programa <strong>não para</strong>. Devolve <code>true</code> e os resultados, ou <code>false</code> e o erro.</td><td><code>pcall(function() return 10, 20 end)</code></td><td><code>true</code>, <code>10</code>, <code>20</code></td><td><a href="pcall.html">pcall</a></td></tr>
+<tr><td></td><td></td><td><code>pcall(function() local x = nil; return x.campo end)</code></td><td><code>false</code>, <code>stdin:1: attempt to index a nil value (local 'x')</code></td><td></td></tr>
+<tr><td></td><td>os argumentos depois de <code>f</code> vão para <code>f</code></td><td><code>pcall(error, "deu ruim", 0)</code></td><td><code>false</code>, <code>deu ruim</code></td><td></td></tr>
+<tr><td></td><td><code>error()</code> sem nada</td><td><code>pcall(error)</code></td><td><code>false</code>, <code>&lt;no error object&gt;</code></td><td></td></tr>
+<tr><td></td><td>erro que é tabela chega inteiro</td><td><code>pcall(error, {codigo = 42})</code></td><td><code>false</code>, <code>table: 0x55fe39d69d40</code> (o endereço muda)</td><td></td></tr>
+<tr><td><code>xpcall(f, trata, …)</code></td><td>Como o <code>pcall</code>, mas passa o erro pela função <code>trata</code> antes (dá para juntar o <code>debug.traceback</code>).</td><td><code>xpcall(function() error("falhou", 0) end, function(m) return "tratado: " .. m end)</code></td><td><code>false</code>, <code>tratado: falhou</code></td><td><a href="xpcall.html">xpcall e debug.traceback</a></td></tr>
+<tr><td></td><td>sem erro, a função de tratamento nem é chamada</td><td><code>xpcall(function(a, b) return a + b end, print, 2, 3)</code></td><td><code>true</code>, <code>5</code></td><td></td></tr>
+<tr><td><code>warn(…)</code></td><td>Emite um <strong>aviso</strong> (não para o programa). No <code>lua</code> do terminal os avisos começam <strong>desligados</strong>: ligue com <code>warn("@on")</code> (ou rode <code>lua -W</code>).</td><td><code>warn("cuidado")</code></td><td>(nada aparece: avisos desligados)</td><td><a href="depuracao.html">Depurando um Programa</a></td></tr>
+<tr><td></td><td>depois de <code>warn("@on")</code>; vai para a saída de erro (<em>stderr</em>)</td><td><code>warn("cuidado: ", "estoque baixo")</code></td><td><code>Lua warning: cuidado: estoque baixo</code></td><td></td></tr>
+<tr><td></td><td><code>"@off"</code> desliga de novo</td><td><code>warn("@off")</code>, depois <code>warn("isto não aparece")</code></td><td>(nada aparece)</td><td></td></tr>
+</table>
+</div>
+
+<p>As mensagens de erro mais comuns, uma por uma, com a causa e o conserto, estão em <a href="ref-erros.html">Mensagens de Erro Comuns</a>.</p>
+
+<hr>
+
+<h2 id="codigo">Carregar código e módulos</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Função</th><th>O que faz</th><th>Exemplo</th><th>Resultado</th><th>Aula</th></tr>
+<tr><td><code>load(texto)</code></td><td>Transforma um texto com código Lua numa <strong>função</strong> (sem rodar). Você roda chamando a função.</td><td><code>f = load("return 2 + 3")</code>, depois <code>f()</code></td><td><code>5</code></td><td><a href="load.html">load, loadfile e dofile</a></td></tr>
+<tr><td></td><td>erro de sintaxe: devolve <code>nil</code> e a mensagem (não para)</td><td><code>load("return 2 +")</code></td><td><code>nil</code>, <code>[string "return 2 +"]:1: unexpected symbol near &lt;eof&gt;</code></td><td></td></tr>
+<tr><td><code>load(texto, nome)</code></td><td>Dá um nome ao pedaço de código, para as mensagens de erro. Com <code>=</code> na frente, o nome aparece sozinho.</td><td><code>load("x = ", "=meu-pedaço")</code></td><td><code>nil</code>, <code>meu-pedaço:1: unexpected symbol near &lt;eof&gt;</code></td><td></td></tr>
+<tr><td><code>load(texto, nome, modo, env)</code></td><td><code>env</code>: a tabela que o código vai usar como "globais". É a forma segura de rodar código de fora.</td><td><code>load("return a * 2", "conta", "t", {a = 21})()</code></td><td><code>42</code></td><td><a href="env.html">_G e _ENV</a></td></tr>
+<tr><td></td><td><code>modo</code>: <code>"t"</code> só texto, <code>"b"</code> só binário (pré-compilado), <code>"bt"</code> os dois (o padrão)</td><td><code>load("return 1", "x", "b")</code></td><td><code>nil</code>, <code>attempt to load a text chunk (mode is 'b')</code></td><td></td></tr>
+<tr><td><code>loadfile(arquivo)</code></td><td>Como o <code>load</code>, mas lê o código de um arquivo.</td><td><code>loadfile("nao-existe.lua")</code></td><td><code>nil</code>, <code>cannot open nao-existe.lua: No such file or directory</code></td><td><a href="load.html">load, loadfile e dofile</a></td></tr>
+<tr><td><code>dofile(arquivo)</code></td><td>Lê <strong>e roda</strong> o arquivo, devolvendo o que ele devolver. Se der erro, o erro passa adiante (não é protegido).</td><td><code>dofile("nao-existe.lua")</code></td><td><code>cannot open nao-existe.lua: No such file or directory</code> (erro)</td><td></td></tr>
+<tr><td><code>require(nome)</code></td><td>Carrega um módulo <strong>uma vez só</strong> e devolve o que ele devolveu (guardado em <code>package.loaded</code>). Procura nos caminhos de <code>package.path</code> e <code>package.cpath</code>.</td><td><code>require("nao_existe")</code></td><td><code>stdin:1: module 'nao_existe' not found:</code> e a lista de todos os lugares onde procurou (veja abaixo)</td><td><a href="modulos.html">Módulos e require</a></td></tr>
+</table>
+</div>
+
+<p>O erro completo do <code>require</code> mostra cada lugar onde o Lua 5.5 do Ubuntu procurou o arquivo, na ordem. Primeiro os arquivos <code>.lua</code>, depois os <code>.so</code> (módulos em C). Repare no <code>./nao_existe.lua</code>: a pasta atual também entra na busca.</p>
+
+<pre class="term">$ lua
+Lua 5.5.0  Copyright (C) 1994-2025 Lua.org, PUC-Rio
+&gt; require("nao_existe")
+stdin:1: module 'nao_existe' not found:
+	no field package.preload['nao_existe']
+	no file '/usr/local/share/lua/5.5/nao_existe.lua'
+	no file '/usr/local/share/lua/5.5/nao_existe/init.lua'
+	no file '/usr/local/lib/lua/5.5/nao_existe.lua'
+	no file '/usr/local/lib/lua/5.5/nao_existe/init.lua'
+	no file '/usr/share/lua/5.5/nao_existe.lua'
+	no file '/usr/share/lua/5.5/nao_existe/init.lua'
+	no file './nao_existe.lua'
+	no file './nao_existe/init.lua'
+	no file '/usr/local/lib/lua/5.5/nao_existe.so'
+	no file '/usr/lib/x86_64-linux-gnu/lua/5.5/nao_existe.so'
+	no file '/usr/lib/lua/5.5/nao_existe.so'
+	no file '/usr/local/lib/lua/5.5/loadall.so'
+	no file './nao_existe.so'
+</pre>
+
+<p>(No terminal, depois dessa lista vem o <code>stack traceback:</code>.) Mais em <a href="package-path.html">Onde o require Procura</a>.</p>
+
+<div class="warning">
+<strong>Cuidado com <code>load</code> de texto que veio de fora</strong>
+<p><code>load(io.read())()</code> roda <strong>qualquer</strong> código que a pessoa digitar, inclusive <code>os.remove("notas.txt")</code>. Para transformar o que foi digitado em número, use <code>tonumber</code>. Se precisar mesmo rodar código de fora, passe uma tabela <code>env</code> só com o que ele pode usar, e o modo <code>"t"</code>.</p>
+</div>
+
+<hr>
+
+<h2 id="memoria">Memória: <code>collectgarbage</code></h2>
+
+<p>O Lua apaga sozinho da memória o que o programa não usa mais (é a <strong>coleta de lixo</strong>, em inglês <em>garbage collection</em>). Quase nunca é preciso mexer nela. O primeiro argumento diz o que fazer:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Chamada</th><th>O que faz</th><th>Resultado no lab</th><th>Aula</th></tr>
+<tr><td><code>collectgarbage()</code> ou <code>collectgarbage("collect")</code></td><td>Faz uma coleta completa agora.</td><td><code>0</code></td><td><a href="coleta-lixo.html">Coleta de Lixo</a></td></tr>
+<tr><td><code>collectgarbage("count")</code></td><td>Quanta memória o Lua está usando, em <strong>kilobytes</strong> (com fração: vezes 1024 dá os bytes).</td><td>um número que muda a cada execução (<code>collectgarbage("count") &gt; 0</code> deu <code>true</code>)</td><td></td></tr>
+<tr><td><code>collectgarbage("step")</code></td><td>Dá um passo da coleta. Devolve <code>true</code> se o passo terminou um ciclo.</td><td><code>false</code></td><td></td></tr>
+<tr><td><code>collectgarbage("stop")</code> / <code>("restart")</code></td><td>Desliga / religa a coleta automática.</td><td><code>0</code> / <code>0</code></td><td></td></tr>
+<tr><td><code>collectgarbage("isrunning")</code></td><td>A coleta automática está ligada?</td><td><code>true</code> (e <code>false</code> depois do <code>"stop"</code>)</td><td></td></tr>
+<tr><td><code>collectgarbage("incremental")</code> / <code>("generational")</code></td><td>Troca o modo da coleta e devolve o modo anterior.</td><td>o primeiro <code>"incremental"</code> devolveu <code>generational</code>: o <code>lua</code> do terminal começa no modo <em>generational</em></td><td></td></tr>
+<tr><td><code>collectgarbage("param", nome, valor)</code> <span class="versao">5.5</span></td><td>Lê ou muda um parâmetro: <code>"pause"</code>, <code>"stepmul"</code>, <code>"stepsize"</code>, <code>"minormul"</code>, <code>"majorminor"</code>, <code>"minormajor"</code>. Devolve o valor anterior.</td><td><code>collectgarbage("param", "pause")</code> deu <code>250</code></td><td></td></tr>
+<tr><td>opção que não existe</td><td>É erro.</td><td><code>stdin:1: bad argument #1 to 'collectgarbage' (invalid option 'abc')</code></td><td></td></tr>
+</table>
+</div>
+
+<div class="note">
+<strong>Mudou no 5.5</strong> <span class="versao">5.5</span>
+<p>No 5.4, os ajustes da coleta iam como argumentos extras de <code>"incremental"</code> e <code>"generational"</code>. No 5.5 eles saíram de lá e foram para a opção nova <code>"param"</code> (o manual do 5.5 lista isso nas incompatibilidades, §8.2).</p>
+</div>
+
+<hr>
+
+<h2 id="variaveis">Variáveis globais prontas</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Nome</th><th>O que é</th><th>Exemplo</th><th>Resultado</th><th>Aula</th></tr>
+<tr><td><code>_G</code></td><td>A tabela com <strong>todas</strong> as variáveis globais. <code>print</code> é, na verdade, <code>_G.print</code>.</td><td><code>_G.print == print</code></td><td><code>true</code></td><td><a href="env.html">_G e _ENV</a></td></tr>
+<tr><td></td><td>ela guarda a si mesma</td><td><code>_G._G == _G</code></td><td><code>true</code></td><td></td></tr>
+<tr><td><code>_ENV</code></td><td>Não é uma global: é o "ambiente" de onde o código tira os nomes livres. No começo, é a mesma tabela que <code>_G</code>.</td><td><code>type(_G), type(_ENV)</code></td><td><code>table</code>, <code>table</code></td><td><a href="env.html">_G e _ENV</a></td></tr>
+<tr><td><code>_VERSION</code></td><td>Texto com a versão do Lua que está rodando.</td><td><code>_VERSION</code></td><td><code>Lua 5.5</code></td><td><a href="versoes.html">As Diferenças entre Versões</a></td></tr>
+<tr><td><code>arg</code></td><td>A tabela com os argumentos da linha de comando (<code>arg[0]</code> é o nome do programa). Quem cria é o programa <code>lua</code>, não a biblioteca.</td><td><code>lua args.lua Ana</code> e, no programa, <code>print(arg[0], arg[1])</code></td><td><code>args.lua	Ana</code></td><td><a href="arg.html">Argumentos da Linha de Comando</a></td></tr>
+<tr><td><code>string</code>, <code>table</code>, <code>math</code>, <code>io</code>, <code>os</code>, <code>utf8</code>, <code>coroutine</code>, <code>debug</code>, <code>package</code></td><td>As outras bibliotecas: cada uma é uma tabela de funções (<code>string.upper</code>, <code>math.floor</code>…).</td><td><code>type(math), type(math.floor)</code></td><td><code>table</code>, <code>function</code></td><td><a href="ref-string.html">string</a>, <a href="ref-table.html">table</a>, <a href="ref-math.html">math</a>, <a href="ref-io-os.html">io e os</a>, <a href="utf8.html">utf8</a>, <a href="corrotinas.html">coroutine</a>, <a href="debug.html">debug</a>, <a href="package-path.html">package</a></td></tr>
+</table>
+</div>
+
+<p>Você mesmo pode conferir a lista: este programa percorre o <code>_G</code>, separa as funções e as mostra em ordem alfabética. Foi assim que esta página foi montada.</p>
+
+<pre class="file" data-file="globais.lua">local nomes = {}
+for nome, valor in pairs(_G) do
+  if type(valor) == "function" then
+    nomes[#nomes + 1] = nome
+  end
+end
+table.sort(nomes)
+print(#nomes .. " funções globais:")
+print(table.concat(nomes, " "))
+</pre>
+
+<pre class="term">$ lua globais.lua
+24 funções globais:
+assert collectgarbage dofile error getmetatable ipairs load loadfile next pairs pcall print rawequal rawget rawlen rawset require select setmetatable tonumber tostring type warn xpcall
+</pre>
+
+<div class="note">
+<strong>Veio de um Lua mais antigo?</strong>
+<p>Algumas globais do <strong>Lua 5.1 e do LuaJIT</strong> (Neovim, LÖVE) não existem no 5.5. No lab, <code>unpack, loadstring, setfenv, getfenv, module, table.getn, math.pow</code> deram todos <code>nil</code> no <code>lua</code> (5.5), e todos existem no <code>luajit</code>. Os substitutos: <code>table.unpack</code> no lugar de <code>unpack</code>; <code>load</code> no lugar de <code>loadstring</code>; <code>_ENV</code> no lugar de <code>setfenv</code>/<code>getfenv</code>; <code>#t</code> no lugar de <code>table.getn(t)</code>; <code>x ^ y</code> no lugar de <code>math.pow(x, y)</code>. No outro sentido, <code>warn</code> não existe no LuaJIT nem no 5.1 (só a partir do 5.4), e <code>rawlen</code> não existe no 5.1. Veja <a href="versoes.html">Lua 5.1, LuaJIT, 5.4 e 5.5</a>.</p>
+</div>
+
+<hr>
+
+<h2 id="az">Todas de A a Z</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Funções</th><th>Grupo</th></tr>
+<tr><td><code>assert</code></td><td><a href="#erros">Erros e avisos</a></td></tr>
+<tr><td><code>collectgarbage</code></td><td><a href="#memoria">Memória</a></td></tr>
+<tr><td><code>dofile</code></td><td><a href="#codigo">Carregar código</a></td></tr>
+<tr><td><code>error</code></td><td><a href="#erros">Erros e avisos</a></td></tr>
+<tr><td><code>getmetatable</code></td><td><a href="#meta">Metatabelas</a></td></tr>
+<tr><td><code>ipairs</code></td><td><a href="#tabelas">Percorrer tabelas</a></td></tr>
+<tr><td><code>load</code>, <code>loadfile</code></td><td><a href="#codigo">Carregar código</a></td></tr>
+<tr><td><code>next</code></td><td><a href="#tabelas">Percorrer tabelas</a></td></tr>
+<tr><td><code>pairs</code></td><td><a href="#tabelas">Percorrer tabelas</a></td></tr>
+<tr><td><code>pcall</code></td><td><a href="#erros">Erros e avisos</a></td></tr>
+<tr><td><code>print</code></td><td><a href="#mostrar">Mostrar na tela</a></td></tr>
+<tr><td><code>rawequal</code>, <code>rawget</code>, <code>rawlen</code>, <code>rawset</code></td><td><a href="#raw">Acesso cru</a></td></tr>
+<tr><td><code>require</code></td><td><a href="#codigo">Carregar código e módulos</a></td></tr>
+<tr><td><code>select</code></td><td><a href="#tabelas">Percorrer tabelas e argumentos</a></td></tr>
+<tr><td><code>setmetatable</code></td><td><a href="#meta">Metatabelas</a></td></tr>
+<tr><td><code>tonumber</code>, <code>tostring</code>, <code>type</code></td><td><a href="#tipos">Tipos e conversão</a></td></tr>
+<tr><td><code>warn</code></td><td><a href="#erros">Erros e avisos</a></td></tr>
+<tr><td><code>xpcall</code></td><td><a href="#erros">Erros e avisos</a></td></tr>
+<tr><td><code>_G</code>, <code>_VERSION</code>, <code>arg</code></td><td><a href="#variaveis">Variáveis globais prontas</a></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Experimente</h2>
+
+<div class="trylua" data-goal="out:soma: 33.5, inválidos: 2;;src:tonumber;;semerro">
+<p class="try-task"><strong>Missão:</strong> a Ana recebeu estes preços digitados num formulário. Alguns vieram errados (<code>"abc"</code>, e <code>"3,5"</code> com vírgula). Do jeito que está, o programa para com erro. Troque <code>local n = texto</code> por <code>local n = tonumber(texto)</code>: o que não é número vira <code>nil</code> e é contado como inválido. O resultado certo é <code>soma: 33.5, inválidos: 2</code> (o <code>"0x10"</code> é hexadecimal: vale 16).</p>
+<pre class="script" data-file="main.lua">local entradas = {"10", "7.5", "abc", "0x10", "3,5"}
+local soma, invalidos = 0, 0
+
+for _, texto in ipairs(entradas) do
+  local n = texto
+  if n == nil then
+    invalidos = invalidos + 1
+  else
+    soma = soma + n
+  end
+end
+
+print(string.format("soma: %s, inválidos: %d", soma, invalidos))
+</pre>
+<pre class="solucao" data-file="main.lua">local entradas = {"10", "7.5", "abc", "0x10", "3,5"}
+local soma, invalidos = 0, 0
+
+for _, texto in ipairs(entradas) do
+  local n = tonumber(texto)
+  if n == nil then
+    invalidos = invalidos + 1
+  else
+    soma = soma + n
+  end
+end
+
+print(string.format("soma: %s, inválidos: %d", soma, invalidos))
+</pre>
+</div>
+
+<div class="trylua">
+<p class="try-task"><strong>Livre:</strong> teste qualquer função desta página. Troque os valores, provoque erros dentro do <code>pcall</code> e veja o que ele devolve.</p>
+<pre class="script" data-file="main.lua">print(type(42), type("42"), type(nil))
+print(tonumber("ff", 16), tonumber("7,5"))
+print(select("#", "a", nil, "c"))
+
+local ok, erro = pcall(function()
+  local estoque = nil
+  return estoque.pao
+end)
+print(ok, erro)
+
+local ok2, e2 = pcall(error, {codigo = 42})
+print(ok2, e2.codigo)
+print(_VERSION)
+</pre>
+</div>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li>O Lua 5.5 tem 24 funções globais: as 23 da biblioteca básica e o <code>require</code>. Estão sempre disponíveis, sem <code>require</code>.</li>
+  <li>Tipos: <code>type</code> (devolve o nome como texto), <code>tonumber</code> (dá <code>nil</code> se não for número; só aceita ponto), <code>tostring</code>.</li>
+  <li>Percorrer: <code>ipairs</code> para listas, <code>pairs</code> para tudo (sem ordem), <code>next(t) == nil</code> para "está vazia?", <code>select("#", …)</code> para contar argumentos.</li>
+  <li>Erros: <code>error</code> para parar, <code>assert</code> para conferir, <code>pcall</code>/<code>xpcall</code> para capturar sem parar o programa. <code>warn</code> só aparece depois de <code>warn("@on")</code>.</li>
+  <li>Metatabelas: <code>setmetatable</code>/<code>getmetatable</code>; as <code>raw…</code> ignoram a metatabela.</li>
+  <li>Código: <code>load</code> (texto), <code>loadfile</code> (arquivo, sem rodar), <code>dofile</code> (arquivo, rodando), <code>require</code> (módulo, uma vez só).</li>
+  <li><span class="versao">5.5</span> <code>collectgarbage("param", …)</code> é novo; os floats saem com mais dígitos (<code>0.33333333333333331</code>).</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
