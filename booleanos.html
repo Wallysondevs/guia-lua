@@ -1,0 +1,498 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua booleanos — true, false e o que conta como verdadeiro | Guia Lua</title>
+<meta name="description" content="Os booleanos do Lua 5.5 para quem nunca programou: true e false, o tipo boolean, comparações que dão true ou false, guardar uma resposta numa variável, o not, e a regra mais importante: só nil e false são falsos (0 e o texto vazio são verdadeiros). Com os erros reais: True com maiúscula, somar e juntar booleanos.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">Booleanos</span> (true e false)</h1>
+
+<p class="intro">A padaria está aberta? Está chovendo? A Ana já tem 18 anos? São perguntas de <strong>sim ou não</strong>, e o computador responde a elas o tempo todo. No Lua, a resposta "sim" se escreve <code>true</code> ("verdadeiro") e a resposta "não", <code>false</code> ("falso"). Esses dois valores formam o tipo <code>boolean</code> (lê-se "booliano", em homenagem ao matemático George Boole). Eles são pequenos, mas é com eles que o programa toma decisões.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>Os dois valores booleanos, <code>true</code> e <code>false</code>, e o tipo <code>boolean</code>.</li>
+  <li>Que toda comparação (<code>5 &gt; 3</code>, <code>idade &gt;= 18</code>) devolve um booleano, e como guardá-lo numa variável.</li>
+  <li>A regra mais importante desta aula: <strong>no Lua, só <code>nil</code> e <code>false</code> são falsos</strong>. O <code>0</code> e o texto vazio <code>""</code> são verdadeiros.</li>
+  <li>O <code>not</code>, que inverte: <code>not true</code> é <code>false</code>.</li>
+  <li>Como mostrar um booleano num texto (<code>tostring</code>) e como transformar uma resposta <code>"s"</code>/<code>"n"</code> em booleano.</li>
+  <li>Os erros reais: <code>True</code> com maiúscula, somar um booleano, juntar um booleano num texto com <code>..</code>.</li>
+</ul>
+</div>
+
+<p>Todos os programas desta aula rodaram no <strong>Lua 5.5</strong> da máquina da Ana (usuária <code>ana</code>, computador <code>notebook</code>), salvos na pasta pessoal dela e executados com <code>lua arquivo.lua</code> (veja <a href="executar.html">Rodando um Programa</a>). Você pode rodar cada um no editor do guia.</p>
+
+<hr>
+
+<h2>A ideia: o interruptor da luz</h2>
+<p>Um interruptor só tem duas posições: <strong>ligado</strong> ou <strong>desligado</strong>. Não existe "meio ligado". O cartaz da porta da padaria também: <strong>ABERTO</strong> ou <strong>FECHADO</strong>. Um booleano é isso: um valor que só pode ser uma de duas coisas.</p>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>No dia a dia</th><th>No Lua</th><th>Em inglês</th></tr>
+<tr><td>sim, ligado, aberto, verdadeiro</td><td><code>true</code></td><td>"verdadeiro"</td></tr>
+<tr><td>não, desligado, fechado, falso</td><td><code>false</code></td><td>"falso"</td></tr>
+</table>
+</div>
+<p><code>true</code> e <code>false</code> são <strong>palavras reservadas</strong> do Lua: escritas assim, em minúsculas e <strong>sem aspas</strong>. Com aspas, <code>"true"</code> seria só um texto de quatro letras.</p>
+
+<hr>
+
+<h2>1. <code>true</code>, <code>false</code> e as comparações</h2>
+
+<pre class="file" data-file="bool.lua">local aberta = true
+local chovendo = false
+print(aberta, chovendo)
+print(type(aberta), type(false))
+print(5 &gt; 3, 5 &lt; 3, 2 + 2 == 4)
+local idade = 17
+local maior = idade &gt;= 18
+print("maior de idade?", maior)
+</pre>
+
+<pre class="term">$ lua bool.lua
+true	false
+boolean	boolean
+true	false	true
+maior de idade?	false</pre>
+
+<dl class="anatomy">
+  <dt>local aberta = true</dt><dd>Uma variável que guarda um booleano. O nome responde a uma pergunta de sim ou não ("está aberta?"): é um bom costume para variáveis booleanas (<code>aberta</code>, <code>tem_estoque</code>, <code>pode_votar</code>).</dd>
+  <dt>type(aberta)</dt><dd>O tipo é <code>boolean</code> (veja <a href="type.html">Descobrindo o Tipo</a>).</dd>
+  <dt>5 &gt; 3, 5 &lt; 3, 2 + 2 == 4</dt><dd>Toda <strong>comparação</strong> é uma pergunta, e a resposta é um booleano: "5 é maior que 3?" → <code>true</code>; "5 é menor que 3?" → <code>false</code>; "2 + 2 é igual a 4?" → <code>true</code>. Os operadores de comparação têm aula própria: <a href="operadores-comparacao.html">Comparações</a>.</dd>
+  <dt>local maior = idade &gt;= 18</dt><dd>A resposta da pergunta pode ser <strong>guardada</strong> numa variável, como qualquer outro valor. O Lua calcula <code>17 &gt;= 18</code> (dá <code>false</code>) e guarda o <code>false</code> em <code>maior</code>.</dd>
+</dl>
+
+<p>No modo interativo (veja <a href="repl.html">O Modo Interativo</a>), dá para fazer as perguntas uma por uma:</p>
+
+<pre class="term">$ lua
+Lua 5.5.0  Copyright (C) 1994-2025 Lua.org, PUC-Rio
+&gt; true
+true
+&gt; 5 &gt; 3
+true
+&gt; not 0
+false
+&gt; type(false)
+boolean
+&gt; True
+nil
+&gt; os.exit()</pre>
+
+<p>Esse <code>not 0</code> que deu <code>false</code> e esse <code>True</code> que deu <code>nil</code> são as duas surpresas desta aula. Elas vêm nas seções 2 e 3.</p>
+
+<div class="trylua" data-goal="out:Pode votar? true;;src:&gt;=\s*16">
+<p class="try-task"><strong>Missão:</strong> no Brasil, dá para votar a partir dos <strong>16 anos</strong>. O programa usa a regra errada (18) e diz que a Ana, com 16, não pode. Conserte a comparação para sair <code>Pode votar? true</code>.</p>
+<pre class="script" data-file="main.lua">local idade = 16
+local pode_votar = idade &gt;= 18
+print("Pode votar? " .. tostring(pode_votar))
+</pre>
+<pre class="solucao" data-file="main.lua">local idade = 16
+local pode_votar = idade &gt;= 16
+print("Pode votar? " .. tostring(pode_votar))
+</pre>
+</div>
+
+<p>O <code>tostring</code> está ali porque o <code>..</code> não junta booleanos num texto (o erro está em <a href="#errado">Quando dá errado</a>).</p>
+
+<hr>
+
+<h2>2. A regra de ouro: só <code>nil</code> e <code>false</code> são falsos</h2>
+
+<div class="warning">
+<strong>Leia com atenção: isto é diferente de muitas outras linguagens</strong>
+<p>Quando o Lua precisa decidir se uma condição é verdadeira (num <code>if</code>, num <code>while</code>, no <code>not</code>), ele usa uma regra só: <strong><code>false</code> e <code>nil</code> contam como falso. Todo o resto conta como verdadeiro</strong>: o número <code>0</code>, o texto vazio <code>""</code>, o texto <code>"false"</code>, uma tabela vazia. Em linguagens como JavaScript e Python, o 0 e o texto vazio contam como falso (e em C, o 0); <strong>no Lua, não</strong>.</p>
+</div>
+
+<pre class="file" data-file="verdade.lua">if 0 then print("0 é verdadeiro") end
+if "" then print("o texto vazio é verdadeiro") end
+if "false" then print("o texto \"false\" é verdadeiro") end
+if {} then print("a tabela vazia é verdadeira") end
+if false then print("isto nunca aparece") end
+if nil then print("isto também não") end
+print("fim")
+</pre>
+
+<pre class="term">$ lua verdade.lua
+0 é verdadeiro
+o texto vazio é verdadeiro
+o texto "false" é verdadeiro
+a tabela vazia é verdadeira
+fim</pre>
+
+<p>O <code>if … then … end</code> ("se … então … fim") roda o que está no meio só quando a condição é verdadeira (aula própria: <a href="if.html">if … then</a>). Quatro mensagens apareceram; as duas de <code>false</code> e de <code>nil</code>, não.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Valor</th><th>Numa condição, conta como…</th></tr>
+<tr><td><code>false</code></td><td><strong>falso</strong></td></tr>
+<tr><td><code>nil</code></td><td><strong>falso</strong></td></tr>
+<tr><td><code>true</code></td><td>verdadeiro</td></tr>
+<tr><td><code>0</code>, <code>0.0</code>, <code>-1</code>, qualquer número</td><td>verdadeiro</td></tr>
+<tr><td><code>""</code> (texto vazio), <code>"false"</code>, <code>"0"</code>, qualquer texto</td><td>verdadeiro</td></tr>
+<tr><td><code>{}</code> (tabela vazia), qualquer tabela ou função</td><td>verdadeiro</td></tr>
+</table>
+</div>
+
+<p>Os programadores chamam os valores que contam como verdadeiro de <strong>"verdadeiros"</strong> e os que contam como falso de <strong>"falsos"</strong>, mesmo quando não são exatamente <code>true</code> ou <code>false</code>. O manual do Lua diz assim: <em>"Both nil and false make a condition false; they are collectively called false values. Any other value makes a condition true"</em>: "<code>nil</code> e <code>false</code> tornam uma condição falsa; juntos, eles são chamados de valores falsos. Qualquer outro valor torna a condição verdadeira".</p>
+
+<h3>Por que isso importa: o estoque zerado</h3>
+<p>A Ana quis avisar quando acabasse o pão e escreveu <code>if paes then</code>, pensando "se tiver pães". Com <strong>zero</strong> pães:</p>
+
+<pre class="file" data-file="estoque.lua">local paes = 0
+if paes then
+  print("Tem pão! Restam " .. paes)
+else
+  print("Acabou o pão.")
+end
+</pre>
+
+<pre class="term">$ lua estoque.lua
+Tem pão! Restam 0</pre>
+
+<p>O <code>0</code> é verdadeiro, então o programa diz que tem pão. A pergunta certa é <strong>"tem mais que zero?"</strong>: <code>if paes &gt; 0 then</code>. Use <code>if variavel then</code> só para perguntar <strong>"a variável existe?"</strong> (não é <code>nil</code>), como no <code>if not idade then</code> da aula <a href="conversao.html">Conversão</a>. Você vai consertar isso na missão final.</p>
+
+<hr>
+
+<h2>3. <code>not</code>: o contrário</h2>
+<p>O <code>not</code> ("não") vira a resposta ao contrário. Ele sempre devolve <code>true</code> ou <code>false</code>, seguindo a regra de ouro:</p>
+
+<pre class="file" data-file="nao.lua">print(not true, not false)
+print(not nil, not 0, not "")
+print(not not 0, not not nil)
+</pre>
+
+<pre class="term">$ lua nao.lua
+false	true
+true	false	false
+true	false</pre>
+
+<dl class="anatomy">
+  <dt>not true, not false</dt><dd>O contrário de verdadeiro é falso, e vice-versa.</dd>
+  <dt>not nil</dt><dd><code>nil</code> conta como falso, então <code>not nil</code> é <code>true</code>. É por isso que <code>if not idade then</code> quer dizer "se não houver idade".</dd>
+  <dt>not 0, not ""</dt><dd><code>0</code> e <code>""</code> contam como verdadeiros, então o contrário deles é <code>false</code>.</dd>
+  <dt>not not 0</dt><dd>Dois <code>not</code> seguidos desfazem um ao outro e sobra o booleano "puro": <code>not not x</code> é <code>true</code> se <code>x</code> conta como verdadeiro, e <code>false</code> se não. Um truque para transformar qualquer valor em <code>true</code>/<code>false</code>.</dd>
+</dl>
+
+<h3>O interruptor: <code>x = not x</code></h3>
+<p>Trocar um booleano para o valor contrário é tão comum que tem até nome: <strong>alternar</strong>. É o interruptor da lâmpada:</p>
+
+<pre class="file" data-file="lampada.lua">local acesa = false
+print("acesa?", acesa)
+acesa = not acesa
+print("acesa?", acesa)
+acesa = not acesa
+print("acesa?", acesa)
+</pre>
+
+<pre class="term">$ lua lampada.lua
+acesa?	false
+acesa?	true
+acesa?	false</pre>
+
+<p>O <code>not</code> é um dos três operadores lógicos. Os outros dois, <code>and</code> ("e") e <code>or</code> ("ou"), juntam várias perguntas numa só: aula <a href="operadores-logicos.html">and, or e not</a>.</p>
+
+<hr>
+
+<h2>4. Booleanos e textos</h2>
+
+<h3>Mostrar um booleano numa frase</h3>
+<p>O <code>print</code> mostra um booleano direto (<code>print(true)</code>), mas o <code>..</code> não junta booleanos num texto. Use <code>tostring</code>, que transforma <code>true</code> no texto <code>"true"</code> (veja <a href="conversao.html">Conversão</a>):</p>
+
+<pre class="term">$ lua -e 'print("aberta: " .. tostring(true))'
+aberta: true</pre>
+
+<h3>O texto <code>"true"</code> não é o booleano <code>true</code></h3>
+
+<pre class="term">$ lua -e 'print("true" == true, tostring(true) == "true")'
+false	true
+$ lua -e 'print(true == 1, false == 0, false == nil)'
+false	false	false</pre>
+
+<ul>
+  <li><code>"true" == true</code> é <code>false</code>: um é texto, o outro é booleano. Valores de tipos diferentes nunca são iguais.</li>
+  <li><code>true == 1</code> e <code>false == 0</code> também são <code>false</code>: no Lua, booleano <strong>não é número</strong> (em algumas linguagens é).</li>
+  <li><code>false == nil</code> é <code>false</code>: os dois contam como falsos numa condição, mas são valores diferentes.</li>
+</ul>
+
+<h3>De uma resposta digitada para um booleano</h3>
+<p>Não existe uma função pronta que transforme <code>"s"</code> em <code>true</code>. Basta uma comparação, que já devolve um booleano:</p>
+
+<pre class="file" data-file="resposta.lua">io.write("Quer sacola? (s/n) ")
+local resposta = io.read()
+local quer_sacola = resposta == "s"
+print("quer_sacola =", quer_sacola, type(quer_sacola))
+</pre>
+
+<pre class="term">$ echo s | lua resposta.lua
+Quer sacola? (s/n) quer_sacola =	true	boolean
+$ echo n | lua resposta.lua
+Quer sacola? (s/n) quer_sacola =	false	boolean</pre>
+
+<p>Leia a linha 3 da direita para a esquerda: primeiro o Lua faz a pergunta <code>resposta == "s"</code>; depois guarda a resposta (<code>true</code> ou <code>false</code>) em <code>quer_sacola</code>. (O <code>echo s |</code> "digita" o <code>s</code> para o programa; ele não aparece na tela.)</p>
+
+<hr>
+
+<h2 id="formas">Formas diferentes de fazer a mesma coisa</h2>
+<p>Para perguntar se uma variável booleana é verdadeira, há um jeito longo e um curto:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Jeito</th><th>Exemplo</th><th>Comentário</th></tr>
+<tr><td>Comparar com <code>true</code></td><td><code>if aberta == true then</code></td><td>Funciona se <code>aberta</code> for sempre <code>true</code> ou <code>false</code>, mas é redundante</td></tr>
+<tr><td>Usar a variável direto</td><td><code>if aberta then</code></td><td><strong>O jeito usual.</strong> Lê-se "se aberta"</td></tr>
+<tr><td>Comparar com <code>false</code></td><td><code>if aberta == false then</code></td><td>Redundante, e não pega o <code>nil</code></td></tr>
+<tr><td>Usar o <code>not</code></td><td><code>if not aberta then</code></td><td><strong>O jeito usual.</strong> Pega <code>false</code> e <code>nil</code></td></tr>
+</table>
+</div>
+
+<p>Cuidado: o <code>== true</code> só aceita o <code>true</code> de verdade, e não "qualquer coisa verdadeira". Olhe:</p>
+
+<pre class="file" data-file="igual_true.lua">local nome = "Ana"
+if nome == true then
+  print("tem nome")
+else
+  print("não tem nome?")
+end
+if nome then
+  print("tem nome")
+end
+</pre>
+
+<pre class="term">$ lua igual_true.lua
+não tem nome?
+tem nome</pre>
+
+<p><code>"Ana" == true</code> é <code>false</code> (texto não é igual a booleano), mas <code>"Ana"</code> conta como verdadeiro num <code>if</code>. Por isso o jeito curto (<code>if nome then</code>) é o mais seguro e o mais usado.</p>
+
+<p>E para <strong>guardar</strong> uma resposta, compare direto em vez de escrever um <code>if</code>:</p>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Longo</th><th>Curto (faz o mesmo)</th></tr>
+<tr><td><code>local maior = false</code><br><code>if idade &gt;= 18 then maior = true end</code></td><td><code>local maior = idade &gt;= 18</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+
+<div class="cenario">
+<strong><code>True</code> com maiúscula (o Lua não reclama!)</strong>
+<pre class="file" data-file="maiuscula.lua">local aberta = True
+print(aberta)
+if aberta then
+  print("Pode entrar!")
+else
+  print("Fechado.")
+end
+</pre>
+<pre class="term">$ lua maiuscula.lua
+nil
+Fechado.</pre>
+<p>Nenhuma mensagem de erro, e a padaria aparece fechada. O Lua diferencia maiúsculas de minúsculas: <code>true</code> é o booleano, mas <code>True</code> é só um <strong>nome de variável</strong> que ninguém criou, e uma variável que não existe vale <code>nil</code> (veja <a href="nil.html">O Valor nil</a>). Como <code>nil</code> conta como falso, o <code>if</code> foi para o <code>else</code>. Quem vem do Python (que escreve <code>True</code> e <code>False</code>) cai muito nessa. <strong>Como consertar:</strong> <code>local aberta = true</code>, tudo minúsculo.</p>
+</div>
+
+<div class="cenario">
+<strong>Fez conta com um booleano</strong>
+<pre class="file" data-file="soma_bool.lua">local aberta = true
+local total = aberta + 1
+</pre>
+<pre class="term">$ lua soma_bool.lua
+lua: soma_bool.lua:2: attempt to perform arithmetic on a boolean value (local 'aberta')
+stack traceback:
+	soma_bool.lua:2: in main chunk
+	[C]: in ?</pre>
+<dl class="anatomy">
+  <dt>lua: soma_bool.lua:2:</dt><dd>O erro foi no arquivo <code>soma_bool.lua</code>, linha 2.</dd>
+  <dt>attempt to perform arithmetic on a boolean value</dt><dd>"Tentativa de fazer conta com um valor booleano". No Lua, <code>true</code> não vale 1 e <code>false</code> não vale 0.</dd>
+  <dt>(local 'aberta')</dt><dd>O booleano estava na variável local <code>aberta</code>.</dd>
+  <dt>stack traceback: …</dt><dd>O caminho até o erro: a linha 2 do programa principal (<code>main chunk</code>), chamado pelo próprio <code>lua</code> (<code>[C]: in ?</code>).</dd>
+</dl>
+<p><strong>Como consertar:</strong> se você queria contar quantas coisas são verdadeiras, use um <code>if</code>: <code>if aberta then total = total + 1 end</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Juntou um booleano num texto com <code>..</code></strong>
+<pre class="file" data-file="junta_bool.lua">local aberta = true
+print("Aberta: " .. aberta)
+</pre>
+<pre class="term">$ lua junta_bool.lua
+lua: junta_bool.lua:2: attempt to concatenate a boolean value (local 'aberta')
+stack traceback:
+	junta_bool.lua:2: in main chunk
+	[C]: in ?</pre>
+<p>"Tentativa de juntar (<em>concatenate</em>) um valor booleano". O <code>..</code> aceita textos e números, mas não booleanos. <strong>Como consertar:</strong> <code>print("Aberta: " .. tostring(aberta))</code>, ou deixe o <code>print</code> separar com vírgula: <code>print("Aberta:", aberta)</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Comparou booleanos com <code>&lt;</code></strong>
+<pre class="term">$ lua -e 'print(true &lt; false)'
+lua: (command line):1: attempt to compare two boolean values
+stack traceback:
+	(command line):1: in main chunk
+	[C]: in ?</pre>
+<p>"Tentativa de comparar dois valores booleanos". Booleanos só se comparam com <code>==</code> e <code>~=</code> ("diferente"); não existe "maior" ou "menor" entre <code>true</code> e <code>false</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Tentou usar <code>true</code> como nome de variável</strong>
+<pre class="term">$ lua -e 'local true = 1'
+lua: (command line):1: &lt;name&gt; expected near 'true'</pre>
+<p>"Era esperado um nome perto de <code>true</code>". Como <code>true</code> e <code>false</code> são palavras reservadas, não podem ser nomes de variáveis (veja <a href="nomes-variaveis.html">Nomes de Variáveis</a>). É um erro de sintaxe: o programa nem começa.</p>
+</div>
+
+<div class="trylua" data-goal="out:Pode entrar!;;src:=\s*true\b;;semerro">
+<p class="try-task"><strong>Missão:</strong> este é o programa do <code>True</code> com maiúscula. Rode e veja o <code>nil</code> e o <code>Fechado.</code>. Conserte para a padaria abrir: deve aparecer <code>Pode entrar!</code>.</p>
+<pre class="script" data-file="main.lua">local aberta = True
+print(aberta)
+if aberta then
+  print("Pode entrar!")
+else
+  print("Fechado.")
+end
+</pre>
+<pre class="solucao" data-file="main.lua">local aberta = true
+print(aberta)
+if aberta then
+  print("Pode entrar!")
+else
+  print("Fechado.")
+end
+</pre>
+</div>
+
+<hr>
+
+<h2>Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>O que faz / o que dá</th></tr>
+<tr><td><code>true</code>, <code>false</code></td><td>Os dois valores booleanos (minúsculos, sem aspas)</td></tr>
+<tr><td><code>type(true)</code></td><td><code>"boolean"</code></td></tr>
+<tr><td><code>5 &gt; 3</code>, <code>x == y</code>, <code>idade &gt;= 18</code></td><td>Comparações: devolvem <code>true</code> ou <code>false</code></td></tr>
+<tr><td><code>local maior = idade &gt;= 18</code></td><td>Guarda a resposta de uma pergunta</td></tr>
+<tr><td><code>not x</code></td><td><code>true</code> se <code>x</code> for <code>false</code> ou <code>nil</code>; <code>false</code> para qualquer outro valor</td></tr>
+<tr><td><code>x = not x</code></td><td>Alterna (liga/desliga)</td></tr>
+<tr><td><code>not not x</code></td><td>Transforma qualquer valor em <code>true</code>/<code>false</code></td></tr>
+<tr><td>Valores falsos numa condição</td><td><strong>só</strong> <code>false</code> e <code>nil</code></td></tr>
+<tr><td><code>0</code>, <code>""</code>, <code>"false"</code>, <code>{}</code></td><td>Verdadeiros numa condição</td></tr>
+<tr><td><code>tostring(true)</code></td><td><code>"true"</code> (para juntar com <code>..</code>)</td></tr>
+<tr><td><code>resposta == "s"</code></td><td>De um texto para um booleano</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Sintoma</th><th>Causa provável</th></tr>
+<tr><td>Aparece <code>nil</code> onde devia ser <code>true</code>; o <code>if</code> nunca entra</td><td>Escreveu <code>True</code> ou <code>False</code> com maiúscula</td></tr>
+<tr><td>O <code>if x then</code> entra mesmo com <code>x</code> valendo <code>0</code> ou <code>""</code></td><td>No Lua, <code>0</code> e <code>""</code> são verdadeiros: compare (<code>x &gt; 0</code>, <code>x ~= ""</code>)</td></tr>
+<tr><td><code>attempt to perform arithmetic on a boolean value</code></td><td>Conta com <code>true</code>/<code>false</code>: booleano não é número</td></tr>
+<tr><td><code>attempt to concatenate a boolean value</code></td><td><code>..</code> com booleano: use <code>tostring</code></td></tr>
+<tr><td><code>attempt to compare two boolean values</code></td><td><code>&lt;</code> ou <code>&gt;</code> entre booleanos: só <code>==</code> e <code>~=</code> servem</td></tr>
+<tr><td><code>&lt;name&gt; expected near 'true'</code></td><td>Usou <code>true</code>/<code>false</code> como nome de variável</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. Verdadeiro ou falso?</h3>
+<p>Escreva o que o Lua mostra (<code>true</code> ou <code>false</code>):</p>
+<div class="ex-code">print(10 &gt; 2) → <input data-answer="true" aria-label="10 maior que 2"><br>print(not 0) → <input data-answer="false" aria-label="not 0"><br>print(not nil) → <input data-answer="true" aria-label="not nil"><br>print("true" == true) → <input data-answer="false" aria-label="texto true igual a true"></div>
+</div>
+
+<div class="exercise">
+<h3>2. O interruptor</h3>
+<p>Complete para a variável trocar de valor (de <code>true</code> para <code>false</code> e vice-versa):</p>
+<div class="ex-code">luz = <input data-answer="not" aria-label="operador"> luz</div>
+</div>
+
+<div class="mc" data-answer="3">
+<p class="mc-q">3. No Lua, quais valores contam como <strong>falso</strong> num <code>if</code>?</p>
+<label><input type="radio" name="q3"> <code>false</code>, <code>nil</code>, <code>0</code> e <code>""</code></label>
+<label><input type="radio" name="q3"> Só <code>false</code></label>
+<label><input type="radio" name="q3"> Só <code>false</code> e <code>nil</code></label>
+<label><input type="radio" name="q3"> <code>false</code> e <code>0</code></label>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">4. O que mostra este programa? <code>local paes = 0</code> / <code>if paes then print("tem") else print("acabou") end</code></p>
+<label><input type="radio" name="q4"> <code>acabou</code></label>
+<label><input type="radio" name="q4"> <code>tem</code>, porque <code>0</code> é verdadeiro no Lua</label>
+<label><input type="radio" name="q4"> Um erro</label>
+<label><input type="radio" name="q4"> Nada</label>
+</div>
+
+<div class="mc" data-answer="4">
+<p class="mc-q">5. A Ana escreveu <code>local ok = False</code>. O que fica em <code>ok</code>?</p>
+<label><input type="radio" name="q5"> <code>false</code></label>
+<label><input type="radio" name="q5"> O texto <code>"False"</code></label>
+<label><input type="radio" name="q5"> Dá erro de sintaxe</label>
+<label><input type="radio" name="q5"> <code>nil</code>: <code>False</code> é uma variável que não existe</label>
+</div>
+
+<div class="mc" data-answer="1">
+<p class="mc-q">6. Qual linha mostra <code>Aberta: true</code> sem erro?</p>
+<label><input type="radio" name="q6"> <code>print("Aberta: " .. tostring(true))</code></label>
+<label><input type="radio" name="q6"> <code>print("Aberta: " .. true)</code></label>
+<label><input type="radio" name="q6"> <code>print("Aberta: " + true)</code></label>
+<label><input type="radio" name="q6"> <code>print("Aberta: " .. True)</code></label>
+</div>
+
+<h3>Missão final: o aviso do estoque</h3>
+
+<div class="trylua" data-goal="out:Acabou o pão.;;src:paes\s*&gt;\s*0;;semerro">
+<p class="try-task"><strong>Missão:</strong> o programa da seção 2 diz <code>Tem pão! Restam 0</code> com o estoque zerado, porque <code>0</code> é verdadeiro no Lua. Troque a condição por uma comparação, <code>paes &gt; 0</code>, para ele mostrar <code>Acabou o pão.</code></p>
+<pre class="script" data-file="main.lua">local paes = 0
+if paes then
+  print("Tem pão! Restam " .. paes)
+else
+  print("Acabou o pão.")
+end
+</pre>
+<pre class="solucao" data-file="main.lua">local paes = 0
+if paes &gt; 0 then
+  print("Tem pão! Restam " .. paes)
+else
+  print("Acabou o pão.")
+end
+</pre>
+</div>
+
+<p>Depois, troque o <code>0</code> por <code>5</code> e rode de novo: deve aparecer <code>Tem pão! Restam 5</code>.</p>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li>O tipo <code>boolean</code> tem dois valores: <code>true</code> (verdadeiro) e <code>false</code> (falso), em minúsculas e sem aspas.</li>
+  <li>Toda comparação devolve um booleano, que pode ser guardado: <code>local maior = idade &gt;= 18</code>.</li>
+  <li><strong>Só <code>nil</code> e <code>false</code> são falsos.</strong> <code>0</code>, <code>""</code>, <code>"false"</code> e <code>{}</code> são verdadeiros. Para perguntar "tem mais que zero?", compare: <code>x &gt; 0</code>.</li>
+  <li><code>not x</code> inverte; <code>x = not x</code> alterna; <code>not not x</code> dá o booleano "puro".</li>
+  <li>Booleano não é número nem texto: <code>true + 1</code> e <code>"a" .. true</code> dão erro; use <code>tostring(x)</code> para mostrar.</li>
+  <li><code>True</code> com maiúscula não é o booleano: é uma variável inexistente, que vale <code>nil</code>, sem erro nenhum.</li>
+  <li>Prefira <code>if x then</code> e <code>if not x then</code> a <code>if x == true then</code>.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
