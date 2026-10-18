@@ -140,7 +140,7 @@ stack traceback:
 
 <div class="note">
 <strong><code>__len</code> em tabelas não funciona no Lua 5.1</strong>
-<p>No lab, <code>print(#setmetatable({}, {__len = function() return 5 end}))</code> deu <code>5</code> no <code>lua5.4</code> e <code>0</code> no <code>lua5.1</code>: no 5.1 (e no LuaJIT, que segue o 5.1) o <code>__len</code> de tabelas é ignorado. Veja <a href="versoes.html">As Diferenças entre Versões</a>.</p>
+<p>No lab, <code>print(#setmetatable({}, {__len = function() return 5 end}))</code> deu <code>5</code> no <code>lua5.4</code> e no <code>luajit</code>, e <code>0</code> no <code>lua5.1</code>: no 5.1 o <code>__len</code> de tabelas é ignorado (o LuaJIT, aqui, se comporta como as versões novas). Veja <a href="versoes.html">As Diferenças entre Versões</a>.</p>
 </div>
 
 <hr>
@@ -163,7 +163,7 @@ stack traceback:
 
 <div class="warning">
 <strong>No Lua 5.1, <code>&lt;=</code> usava o <code>__lt</code></strong>
-<p>No lab, a mesma tabela com só o <code>__lt</code> deu <code>true</code> para <code>a &lt;= b</code> no <code>lua5.1</code> (ele calculava <code>not (b &lt; a)</code>) e o erro acima no <code>lua</code> (5.5). Desde o 5.4 isso acabou: se você usa <code>&lt;=</code> ou <code>&gt;=</code>, defina o <code>__le</code>. O <code>table.sort</code> só precisa do <code>__lt</code>.</p>
+<p>No lab, a mesma tabela com só o <code>__lt</code> deu <code>true</code> para <code>a &lt;= b</code> no <code>lua5.1</code> (ele calculava <code>not (b &lt; a)</code>) e o erro acima no <code>lua</code> (5.5). O manual do 5.4 já tinha tirado isso (o <code>lua5.4</code> do Ubuntu ainda deduz, porque foi compilado com a compatibilidade com o 5.3), e no 5.5 acabou de vez: se você usa <code>&lt;=</code> ou <code>&gt;=</code>, defina o <code>__le</code>. O <code>table.sort</code> só precisa do <code>__lt</code>.</p>
 </div>
 
 <hr>
