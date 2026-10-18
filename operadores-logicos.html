@@ -1,0 +1,493 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua and, or e not — os operadores lógicos | Guia Lua</title>
+<meta name="description" content="Os operadores lógicos do Lua 5.5 para quem nunca programou: and (e), or (ou) e not (não), as tabelas da verdade, juntar comparações (nota &gt;= 0 and nota &lt;= 10), o curto-circuito, por que and e or devolvem um dos valores (10 or 20 dá 10, 0 or 5 dá 0), o valor padrão com or, a ordem (not antes de ==), e os erros reais: &amp;&amp;, ||, !, attempt to compare number with boolean.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">and, or e not</span></h1>
+
+<p class="intro">Uma pergunta só quase nunca basta. "Pode entrar no cinema?" depende de <strong>duas</strong> coisas: ter idade <strong>e</strong> ter ingresso. "É fim de semana?" é sábado <strong>ou</strong> domingo. Os <strong>operadores lógicos</strong> juntam perguntas: <code>and</code> ("e"), <code>or</code> ("ou") e <code>not</code> ("não"). No Lua eles são palavras em inglês, e não símbolos como <code>&amp;&amp;</code> e <code>||</code> de outras linguagens. E têm um superpoder que vale a pena entender: <code>and</code> e <code>or</code> não devolvem só <code>true</code> ou <code>false</code>, mas um dos próprios valores.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O <code>and</code> (os dois lados precisam ser verdadeiros), o <code>or</code> (basta um lado) e o <code>not</code> (o contrário), com as tabelas da verdade.</li>
+  <li>Como juntar comparações: <code>nota &gt;= 0 and nota &lt;= 10</code>, <code>dia == "sábado" or dia == "domingo"</code>.</li>
+  <li>O <strong>curto-circuito</strong>: quando a resposta já está decidida, o Lua nem olha o lado direito.</li>
+  <li>Que <code>and</code> e <code>or</code> devolvem um dos valores (<code>10 or 20</code> é <code>10</code>), e o valor padrão com <code>or</code>.</li>
+  <li>A ordem: <code>not</code> vem antes de <code>==</code>, e <code>and</code> vem antes de <code>or</code>.</li>
+  <li>Os erros reais: <code>&amp;&amp;</code>, <code>||</code>, <code>!</code>, <code>AND</code> maiúsculo, <code>x &gt; 10 or &lt; 20</code> e o <code>not idade &gt;= 18</code>.</li>
+</ul>
+</div>
+
+<p>Todos os programas desta aula rodaram no <strong>Lua 5.5</strong> da máquina da Ana (usuária <code>ana</code>, computador <code>notebook</code>), salvos na pasta pessoal dela e executados com <code>lua arquivo.lua</code> (veja <a href="executar.html">Rodando um Programa</a>). Você pode rodar cada um no editor do guia.</p>
+
+<hr>
+
+<h2>A ideia: as regras da portaria</h2>
+<p>O porteiro do cinema tem um cartaz com as regras. Repare como as palavras "e", "ou" e "não" mudam tudo:</p>
+<ul>
+  <li><strong>"Tem 18 anos <em>e</em> tem ingresso."</strong> Precisa das <strong>duas</strong> coisas. Faltou uma, não entra.</li>
+  <li><strong>"Tem 18 anos <em>ou</em> está com um responsável."</strong> Basta <strong>uma</strong> das duas (ou as duas).</li>
+  <li><strong>"<em>Não</em> está com comida de fora."</strong> Inverte a pergunta.</li>
+</ul>
+<p>É exatamente o que <code>and</code>, <code>or</code> e <code>not</code> fazem com valores <code>true</code> e <code>false</code> (veja <a href="booleanos.html">Booleanos</a>).</p>
+
+<hr>
+
+<h2>1. As tabelas da verdade</h2>
+
+<pre class="file" data-file="tabela_verdade.lua">print(true and true, true and false, false and true, false and false)
+print(true or true, true or false, false or true, false or false)
+print(not true, not false)
+</pre>
+
+<pre class="term">$ lua tabela_verdade.lua
+true	false	false	false
+true	true	true	false
+false	true</pre>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th><code>a</code></th><th><code>b</code></th><th><code>a and b</code> ("e")</th><th><code>a or b</code> ("ou")</th></tr>
+<tr><td><code>true</code></td><td><code>true</code></td><td><code>true</code></td><td><code>true</code></td></tr>
+<tr><td><code>true</code></td><td><code>false</code></td><td><code>false</code></td><td><code>true</code></td></tr>
+<tr><td><code>false</code></td><td><code>true</code></td><td><code>false</code></td><td><code>true</code></td></tr>
+<tr><td><code>false</code></td><td><code>false</code></td><td><code>false</code></td><td><code>false</code></td></tr>
+</table>
+</div>
+
+<ul>
+  <li><code>and</code> só dá <code>true</code> quando os <strong>dois</strong> lados são verdadeiros. É exigente.</li>
+  <li><code>or</code> só dá <code>false</code> quando os <strong>dois</strong> lados são falsos. É generoso.</li>
+  <li><code>not</code> tem um lado só e inverte: <code>not true</code> é <code>false</code>.</li>
+</ul>
+
+<hr>
+
+<h2>2. Juntando comparações</h2>
+<p>Na prática, os dois lados de um <code>and</code> ou de um <code>or</code> são quase sempre comparações (veja <a href="operadores-comparacao.html">Comparações</a>):</p>
+
+<pre class="file" data-file="cinema.lua">local idade = 16
+local tem_ingresso = true
+local com_responsavel = true
+print("pode entrar?", idade &gt;= 18 and tem_ingresso)
+print("pode entrar?", (idade &gt;= 18 or com_responsavel) and tem_ingresso)
+local nota = 7.5
+print("nota válida?", nota &gt;= 0 and nota &lt;= 10)
+local dia = "domingo"
+print("fim de semana?", dia == "sábado" or dia == "domingo")
+</pre>
+
+<pre class="term">$ lua cinema.lua
+pode entrar?	false
+pode entrar?	true
+nota válida?	true
+fim de semana?	true</pre>
+
+<dl class="anatomy">
+  <dt>idade &gt;= 18 and tem_ingresso</dt><dd>A Ana tem 16: <code>idade &gt;= 18</code> é <code>false</code>, e <code>false and …</code> é <code>false</code>. Tem ingresso, mas não basta.</dd>
+  <dt>(idade &gt;= 18 or com_responsavel) and tem_ingresso</dt><dd>Agora a regra é "ter 18 <strong>ou</strong> estar com responsável, <strong>e</strong> ter ingresso". O parêntese é feito primeiro: <code>false or true</code> dá <code>true</code>; depois, <code>true and true</code> dá <code>true</code>.</dd>
+  <dt>nota &gt;= 0 and nota &lt;= 10</dt><dd>O jeito de perguntar "está <strong>entre</strong> 0 e 10?". O Lua não aceita <code>0 &lt;= nota &lt;= 10</code> (veja <a href="operadores-comparacao.html">Comparações</a>).</dd>
+  <dt>dia == "sábado" or dia == "domingo"</dt><dd>"É sábado ou é domingo?" Repare que o <code>dia ==</code> aparece <strong>duas vezes</strong>: cada lado do <code>or</code> é uma pergunta completa.</dd>
+</dl>
+
+<div class="trylua" data-goal="out:Fim de semana? true;;src:\bor\b;;semerro">
+<p class="try-task"><strong>Missão:</strong> hoje é domingo, mas o programa diz <code>Fim de semana? false</code>. O problema é o <code>and</code>: um dia não pode ser sábado <strong>e</strong> domingo ao mesmo tempo. Troque pelo operador certo.</p>
+<pre class="script" data-file="main.lua">local dia = "domingo"
+local fim_de_semana = dia == "sábado" and dia == "domingo"
+print("Fim de semana? " .. tostring(fim_de_semana))
+</pre>
+<pre class="solucao" data-file="main.lua">local dia = "domingo"
+local fim_de_semana = dia == "sábado" or dia == "domingo"
+print("Fim de semana? " .. tostring(fim_de_semana))
+</pre>
+</div>
+
+<hr>
+
+<h2>3. O curto-circuito: o Lua para quando já sabe a resposta</h2>
+<p>Pense no <code>and</code>: se o lado esquerdo já é falso, a resposta vai ser falsa, seja lá o que estiver do lado direito. Então o Lua <strong>nem olha</strong> o lado direito. Com o <code>or</code>, é ao contrário: se o lado esquerdo já é verdadeiro, pronto. Isso se chama <strong>curto-circuito</strong>. Para ver acontecendo, este programa usa uma pequena função (aula <a href="funcoes.html">Funções</a>) que avisa quando é chamada:</p>
+
+<pre class="file" data-file="curto.lua">local function avisa(texto, valor)
+  print("  (avaliou " .. texto .. ")")
+  return valor
+end
+print(avisa("A", false) and avisa("B", true))
+print(avisa("C", true) or avisa("D", true))
+print(avisa("E", true) and avisa("F", false))
+</pre>
+
+<pre class="term">$ lua curto.lua
+  (avaliou A)
+false
+  (avaliou C)
+true
+  (avaliou E)
+  (avaliou F)
+false</pre>
+
+<ul>
+  <li><code>A and B</code>: o A deu <code>false</code>, então o B <strong>não foi avaliado</strong> (não aparece "avaliou B").</li>
+  <li><code>C or D</code>: o C deu <code>true</code>, então o D também não foi avaliado.</li>
+  <li><code>E and F</code>: o E deu <code>true</code>, e aí a resposta depende do F; ele foi avaliado.</li>
+</ul>
+
+<h3>Para que serve: proteção</h3>
+<p>O curto-circuito permite escrever uma pergunta que só faz sentido se outra der certo antes:</p>
+
+<pre class="file" data-file="protecao.lua">local pedido = nil
+if pedido and pedido.total &gt; 100 then
+  print("frete grátis")
+else
+  print("sem frete grátis")
+end
+local quantidade = 0
+if quantidade &gt; 0 and 50 / quantidade &gt; 10 then
+  print("muito")
+else
+  print("ok")
+end
+</pre>
+
+<pre class="term">$ lua protecao.lua
+sem frete grátis
+ok</pre>
+
+<p>Sem o <code>pedido and</code>, o <code>pedido.total</code> daria o erro <code>attempt to index a nil value</code> (veja <a href="nil.html">O Valor nil</a>). Como <code>pedido</code> é <code>nil</code>, o <code>and</code> para ali e o <code>pedido.total</code> nunca é tocado. Do mesmo jeito, o <code>quantidade &gt; 0 and</code> impede a divisão por zero. <strong>A ordem importa:</strong> a pergunta que protege vem à esquerda.</p>
+
+<hr>
+
+<h2>4. <code>and</code> e <code>or</code> devolvem um dos valores</h2>
+<p>Até aqui, os dois lados eram sempre <code>true</code> ou <code>false</code>. Mas <code>and</code> e <code>or</code> aceitam <strong>qualquer valor</strong>, e seguem a regra de ouro dos booleanos: só <code>nil</code> e <code>false</code> são falsos; todo o resto é verdadeiro. E o resultado não é "convertido" em booleano: é <strong>um dos dois valores</strong>, do jeito que estava.</p>
+
+<pre class="file" data-file="valores.lua">print(10 or 20, nil or "a", false or nil)
+print(10 and 20, nil and 10, false and nil)
+print(0 or 5, "" or "vazio", 0 and "zero é verdadeiro")
+print(nil or false, false or false)
+</pre>
+
+<pre class="term">$ lua valores.lua
+10	a	nil
+20	nil	false
+0		zero é verdadeiro
+false	false</pre>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Operador</th><th>Se o lado esquerdo for verdadeiro</th><th>Se o lado esquerdo for falso (<code>nil</code> ou <code>false</code>)</th></tr>
+<tr><td><code>a or b</code></td><td>devolve <code>a</code> (e nem olha o <code>b</code>)</td><td>devolve <code>b</code></td></tr>
+<tr><td><code>a and b</code></td><td>devolve <code>b</code></td><td>devolve <code>a</code> (e nem olha o <code>b</code>)</td></tr>
+</table>
+</div>
+
+<dl class="anatomy">
+  <dt>10 or 20 → 10</dt><dd>10 é verdadeiro, então o <code>or</code> devolve o próprio 10.</dd>
+  <dt>nil or "a" → a</dt><dd>O lado esquerdo é falso, então vem o direito.</dd>
+  <dt>10 and 20 → 20</dt><dd>10 é verdadeiro, então a resposta depende do lado direito, e o <code>and</code> devolve o 20.</dd>
+  <dt>nil and 10 → nil</dt><dd>O lado esquerdo é falso: o <code>and</code> devolve ele mesmo, o <code>nil</code>.</dd>
+  <dt>0 or 5 → 0</dt><dd>De novo a regra de ouro: <strong>0 é verdadeiro</strong> no Lua. O <code>or</code> fica com o 0.</dd>
+  <dt>"" or "vazio" → (nada)</dt><dd>O texto vazio também é verdadeiro, então o resultado é o próprio <code>""</code>. Por isso a coluna saiu em branco.</dd>
+</dl>
+
+<p>Esses exemplos (<code>10 or 20</code>, <code>nil or "a"</code>, <code>nil and 10</code>, <code>false and nil</code>…) são os mesmos do manual oficial do Lua, seção 3.4.5. O <code>not</code>, ao contrário, sempre devolve <code>true</code> ou <code>false</code>.</p>
+
+<h3>O valor padrão: <code>x or "reserva"</code></h3>
+<p>O uso mais comum dessa regra é dar um valor de reserva para algo que pode estar faltando:</p>
+
+<pre class="file" data-file="padrao.lua">local function saudar(nome)
+  nome = nome or "visitante"
+  print("Olá, " .. nome .. "!")
+end
+saudar("Ana")
+saudar()
+</pre>
+
+<pre class="term">$ lua padrao.lua
+Olá, Ana!
+Olá, visitante!</pre>
+
+<p>Quando a função é chamada sem nome, <code>nome</code> chega como <code>nil</code>, e <code>nil or "visitante"</code> dá <code>"visitante"</code>. Quando chega <code>"Ana"</code>, o <code>or</code> fica com ela. É um costume muito usado em Lua.</p>
+
+<div class="warning">
+<strong>O <code>or</code> só troca <code>nil</code> e <code>false</code></strong>
+<pre class="file" data-file="preco_zero.lua">local preco_informado = 0
+local preco = preco_informado or 10
+print(preco)
+local quer_sacola = false
+local sacola = quer_sacola or true
+print(sacola)
+</pre>
+<pre class="term">$ lua preco_zero.lua
+0
+true</pre>
+<p>Duas surpresas em sentidos opostos. O preço <code>0</code> <strong>não</strong> foi trocado por 10, porque 0 é verdadeiro (se você esperava o 10, compare: <code>if preco_informado == 0 then …</code>). E o <code>false</code> de "não quero sacola" <strong>foi</strong> trocado por <code>true</code>, porque o <code>or</code> não distingue <code>false</code> de <code>nil</code>. Quando <code>false</code> é uma resposta válida, teste o <code>nil</code> explicitamente: <code>if quer_sacola == nil then quer_sacola = true end</code>.</p>
+</div>
+
+<h3>O "se … senão" numa linha só</h3>
+<p>Juntando <code>and</code> e <code>or</code>, dá para escolher entre dois valores numa linha:</p>
+
+<pre class="file" data-file="ternario.lua">local idade = 20
+local tipo = idade &gt;= 18 and "adulto" or "menor"
+print(tipo)
+</pre>
+
+<pre class="term">$ lua ternario.lua
+adulto</pre>
+
+<p>Lê-se "se tem 18 ou mais, <code>"adulto"</code>; senão, <code>"menor"</code>". Esse truque tem uma armadilha (quando o valor do meio é <code>false</code> ou <code>nil</code>, ele falha), e por isso tem uma aula só para ele: <a href="and-or-ternario.html">O Truque do and/or</a>.</p>
+
+<hr>
+
+<h2>5. A ordem: quem é feito primeiro</h2>
+<p>Numa expressão com vários operadores, o Lua segue esta ordem (do primeiro para o último):</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Ordem</th><th>Operadores</th></tr>
+<tr><td>1º</td><td>contas: <code>^</code>, depois <code>not</code> e o menos unário, depois <code>* / // %</code>, depois <code>+ -</code></td></tr>
+<tr><td>2º</td><td><code>..</code> (juntar textos)</td></tr>
+<tr><td>3º</td><td>comparações: <code>==</code> <code>~=</code> <code>&lt;</code> <code>&gt;</code> <code>&lt;=</code> <code>&gt;=</code></td></tr>
+<tr><td>4º</td><td><code>and</code></td></tr>
+<tr><td>5º (por último)</td><td><code>or</code></td></tr>
+</table>
+</div>
+
+<p>Duas consequências importantes:</p>
+<ol class="passo">
+  <li><strong><code>and</code> vem antes de <code>or</code></strong>, como a multiplicação antes da soma. <code>true or false and false</code> é <code>true or (false and false)</code>, que dá <code>true</code>. No lab: <code>print(1 or 2 and nil, (1 or 2) and nil, true or false and false)</code> mostrou <code>1</code>, <code>nil</code> e <code>true</code>.</li>
+  <li><strong><code>not</code> vem antes das comparações.</strong> <code>not x == 5</code> é <code>(not x) == 5</code>, e não "x não é 5":</li>
+</ol>
+
+<pre class="file" data-file="not_prec.lua">local x = 3
+print(not x == 5)
+print(not (x == 5))
+print(x ~= 5)
+</pre>
+
+<pre class="term">$ lua not_prec.lua
+false
+true
+true</pre>
+
+<p>Na primeira linha, o Lua fez <code>not 3</code> (que é <code>false</code>, porque 3 é verdadeiro) e comparou <code>false == 5</code>: <code>false</code>. Para perguntar "x não é 5?", use parênteses, <code>not (x == 5)</code>, ou, melhor ainda, o "diferente": <code>x ~= 5</code>. A tabela completa está em <a href="precedencia.html">Precedência dos Operadores</a>.</p>
+
+<div class="tip">
+<strong>Parênteses deixam a regra clara</strong>
+<p>Mesmo quando não são obrigatórios, parênteses ajudam quem lê: <code>(idade &gt;= 18 or com_responsavel) and tem_ingresso</code> diz exatamente qual é a regra da portaria.</p>
+</div>
+
+<hr>
+
+<h2 id="formas">Formas diferentes de fazer a mesma coisa</h2>
+<p>Muitas condições podem ser escritas de mais de um jeito. Escolha a que se lê melhor em voz alta:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Ideia</th><th>Jeito 1</th><th>Jeito 2</th></tr>
+<tr><td>"não é 5"</td><td><code>x ~= 5</code> (melhor)</td><td><code>not (x == 5)</code></td></tr>
+<tr><td>"fora da faixa de 0 a 10"</td><td><code>nota &lt; 0 or nota &gt; 10</code> (melhor)</td><td><code>not (nota &gt;= 0 and nota &lt;= 10)</code></td></tr>
+<tr><td>"nem sábado nem domingo"</td><td><code>dia ~= "sábado" and dia ~= "domingo"</code></td><td><code>not (dia == "sábado" or dia == "domingo")</code></td></tr>
+<tr><td>valor de reserva</td><td><code>nome = nome or "visitante"</code> (curto)</td><td><code>if nome == nil then nome = "visitante" end</code> (também separa o <code>false</code>)</td></tr>
+</table>
+</div>
+
+<p>A linha do meio mostra uma regra útil (as "leis de De Morgan"): para negar um <code>and</code>, troque por <code>or</code> e negue cada lado; para negar um <code>or</code>, troque por <code>and</code> e negue cada lado.</p>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+
+<div class="cenario">
+<strong><code>&amp;&amp;</code>, <code>||</code> e <code>!</code> de outras linguagens</strong>
+<pre class="term">$ lua -e 'print(true &amp;&amp; false)'
+lua: (command line):1: unexpected symbol near '&amp;'
+$ lua -e 'print(true || false)'
+lua: (command line):1: unexpected symbol near '|'
+$ lua -e 'print(!true)'
+lua: (command line):1: unexpected symbol near '!'</pre>
+<p>"Símbolo inesperado perto de <code>&amp;</code>" (e de <code>|</code>, e de <code>!</code>). Em C, JavaScript e Java, "e", "ou" e "não" são <code>&amp;&amp;</code>, <code>||</code> e <code>!</code>. No Lua, são as palavras <code>and</code>, <code>or</code> e <code>not</code>. (O <code>&amp;</code> e o <code>|</code> simples existem no Lua, mas são outra coisa: <a href="operadores-bits.html">Operadores de Bits</a>.) O <code>lua -e '…'</code> roda um programa de uma linha só; por isso as mensagens falam de <code>(command line):1:</code>. <strong>Como consertar:</strong> <code>true and false</code>, <code>true or false</code>, <code>not true</code>.</p>
+</div>
+
+<div class="cenario">
+<strong><code>AND</code> em maiúsculas</strong>
+<pre class="term">$ lua -e 'print(true AND false)'
+lua: (command line):1: ')' expected near 'AND'</pre>
+<p>"Era esperado <code>)</code> perto de <code>AND</code>". O Lua diferencia maiúsculas: <code>and</code> é o operador, mas <code>AND</code> é só um nome qualquer, e um nome ali não faz sentido. (Em SQL se escreve <code>AND</code>; no Lua, tudo minúsculo.)</p>
+</div>
+
+<div class="cenario">
+<strong>Meia comparação: <code>x &gt; 10 or &lt; 20</code></strong>
+<pre class="term">$ lua -e 'local x = 15 if x &gt; 10 or &lt; 20 then print("ok") end'
+lua: (command line):1: unexpected symbol near '&lt;'</pre>
+<p>Em português dizemos "maior que 10 ou menor que 20", sem repetir o "x". O Lua precisa de duas perguntas completas: depois do <code>or</code> veio um <code>&lt;</code> sem nada à esquerda. <strong>Como consertar:</strong> repita a variável: <code>x &gt; 10 or x &lt; 20</code>. (E repare que essa condição é verdadeira para <strong>qualquer</strong> número; se a ideia era "entre 10 e 20", o certo é <code>x &gt; 10 and x &lt; 20</code>.)</p>
+</div>
+
+<div class="cenario">
+<strong>O <code>not</code> grudou no lugar errado</strong>
+<pre class="file" data-file="menor.lua">local idade = 15
+if not idade &gt;= 18 then
+  print("menor de idade")
+end
+</pre>
+<pre class="term">$ lua menor.lua
+lua: menor.lua:2: attempt to compare number with boolean
+stack traceback:
+	menor.lua:2: in main chunk
+	[C]: in ?</pre>
+<dl class="anatomy">
+  <dt>lua: menor.lua:2:</dt><dd>Arquivo <code>menor.lua</code>, linha 2.</dd>
+  <dt>attempt to compare number with boolean</dt><dd>"Tentativa de comparar número com booleano". Como o <code>not</code> vem antes do <code>&gt;=</code>, o Lua fez <code>not idade</code> (dá <code>false</code>, porque 15 é verdadeiro) e depois tentou <code>false &gt;= 18</code>. Booleano não se compara com número. (A ordem "number with boolean" sai invertida porque, por dentro, o Lua troca <code>a &gt;= b</code> por <code>b &lt;= a</code>.)</dd>
+</dl>
+<p><strong>Como consertar:</strong> <code>if not (idade &gt;= 18) then</code>, ou, mais simples, <code>if idade &lt; 18 then</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Trocou <code>and</code> por <code>or</code> (ou o contrário)</strong>
+<pre class="file" data-file="desconto.lua">local paes = 4
+local em_dinheiro = true
+if paes &gt;= 10 or em_dinheiro then
+  print("Com desconto!")
+else
+  print("Sem desconto")
+end
+</pre>
+<pre class="term">$ lua desconto.lua
+Com desconto!</pre>
+<p>Nenhuma mensagem de erro, mas a regra está errada. A promoção da padaria era "10 pães ou mais <strong>e</strong> pagando em dinheiro". Com <code>or</code>, bastou pagar em dinheiro para levar desconto com 4 pães. Leia a condição em voz alta, trocando os operadores por "e" e "ou": se a frase não for a regra que você quer, o operador está errado. Você conserta isso na missão final.</p>
+</div>
+
+<hr>
+
+<h2>Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>O que faz / o que dá</th></tr>
+<tr><td><code>a and b</code></td><td>"e": verdadeiro só se os dois forem; devolve <code>a</code> se <code>a</code> for falso, senão <code>b</code></td></tr>
+<tr><td><code>a or b</code></td><td>"ou": verdadeiro se algum for; devolve <code>a</code> se <code>a</code> for verdadeiro, senão <code>b</code></td></tr>
+<tr><td><code>not a</code></td><td>"não": sempre <code>true</code> ou <code>false</code></td></tr>
+<tr><td>falsos</td><td>só <code>nil</code> e <code>false</code> (<code>0</code> e <code>""</code> são verdadeiros)</td></tr>
+<tr><td>curto-circuito</td><td><code>false and …</code> e <code>true or …</code> nem avaliam o lado direito</td></tr>
+<tr><td><code>x and x.campo</code></td><td>só pega o campo se <code>x</code> existir</td></tr>
+<tr><td><code>x or "padrão"</code></td><td>valor de reserva quando <code>x</code> é <code>nil</code> (ou <code>false</code>)</td></tr>
+<tr><td><code>cond and a or b</code></td><td>"se <code>cond</code>, <code>a</code>; senão, <code>b</code>" (cuidado se <code>a</code> puder ser falso)</td></tr>
+<tr><td><code>x &gt;= 0 and x &lt;= 10</code></td><td>"entre 0 e 10"</td></tr>
+<tr><td>ordem</td><td>contas e <code>not</code> → <code>..</code> → comparações → <code>and</code> → <code>or</code></td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Sintoma</th><th>Causa provável</th></tr>
+<tr><td><code>unexpected symbol near '&amp;'</code> / <code>'|'</code> / <code>'!'</code></td><td>Usou <code>&amp;&amp;</code>, <code>||</code> ou <code>!</code>: no Lua é <code>and</code>, <code>or</code>, <code>not</code></td></tr>
+<tr><td><code>')' expected near 'AND'</code></td><td>Escreveu o operador em maiúsculas</td></tr>
+<tr><td><code>unexpected symbol near '&lt;'</code> depois de um <code>or</code>/<code>and</code></td><td>Meia comparação: repita a variável (<code>x &gt; 10 or x &lt; 20</code>)</td></tr>
+<tr><td><code>attempt to compare number with boolean</code></td><td><code>not x &gt;= 18</code> (o <code>not</code> pegou só o <code>x</code>) ou comparação encadeada</td></tr>
+<tr><td>A condição aceita coisas demais (ou de menos)</td><td>Trocou <code>and</code> por <code>or</code>; leia a condição em voz alta</td></tr>
+<tr><td>O valor de reserva não entrou com <code>0</code> ou <code>""</code></td><td><code>0</code> e <code>""</code> são verdadeiros: o <code>or</code> só troca <code>nil</code>/<code>false</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. Verdadeiro ou falso?</h3>
+<p>Escreva o que o Lua mostra (<code>true</code> ou <code>false</code>):</p>
+<div class="ex-code">print(true and false) → <input data-answer="false" aria-label="true and false"><br>print(true or false) → <input data-answer="true" aria-label="true or false"><br>print(not (3 &gt; 5)) → <input data-answer="true" aria-label="not 3 maior que 5"><br>print(5 &gt; 1 and 2 &gt; 9) → <input data-answer="false" aria-label="5 maior que 1 and 2 maior que 9"></div>
+</div>
+
+<div class="exercise">
+<h3>2. O que o <code>or</code> devolve?</h3>
+<p>Escreva o que aparece na tela:</p>
+<div class="ex-code">print(nil or 7) → <input data-answer="7" aria-label="nil or 7"><br>print(3 or 7) → <input data-answer="3" aria-label="3 or 7"><br>print(0 or 7) → <input data-answer="0" aria-label="0 or 7"></div>
+</div>
+
+<div class="mc" data-answer="3">
+<p class="mc-q">3. Qual condição pergunta "a nota está entre 0 e 10"?</p>
+<label><input type="radio" name="q3"> <code>nota &gt;= 0 or nota &lt;= 10</code></label>
+<label><input type="radio" name="q3"> <code>0 &lt;= nota &lt;= 10</code></label>
+<label><input type="radio" name="q3"> <code>nota &gt;= 0 and nota &lt;= 10</code></label>
+<label><input type="radio" name="q3"> <code>nota &gt;= 0 &amp;&amp; nota &lt;= 10</code></label>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">4. Em <code>if pedido and pedido.total &gt; 100 then</code>, com <code>pedido = nil</code>, o que acontece?</p>
+<label><input type="radio" name="q4"> Erro: <code>attempt to index a nil value</code></label>
+<label><input type="radio" name="q4"> Nada de erro: o <code>and</code> para no <code>nil</code> e nem olha o <code>pedido.total</code></label>
+<label><input type="radio" name="q4"> O <code>if</code> entra</label>
+<label><input type="radio" name="q4"> Erro de sintaxe</label>
+</div>
+
+<div class="mc" data-answer="4">
+<p class="mc-q">5. Com <code>x = 3</code>, o que <code>print(not x == 5)</code> mostra?</p>
+<label><input type="radio" name="q5"> <code>true</code>, porque 3 não é 5</label>
+<label><input type="radio" name="q5"> Um erro</label>
+<label><input type="radio" name="q5"> <code>nil</code></label>
+<label><input type="radio" name="q5"> <code>false</code>: o <code>not</code> vem antes, e <code>false == 5</code> é falso</label>
+</div>
+
+<div class="mc" data-answer="1">
+<p class="mc-q">6. Como se escreve "não" (o <code>!</code> de outras linguagens) no Lua?</p>
+<label><input type="radio" name="q6"> <code>not</code></label>
+<label><input type="radio" name="q6"> <code>!</code></label>
+<label><input type="radio" name="q6"> <code>~</code></label>
+<label><input type="radio" name="q6"> <code>NOT</code></label>
+</div>
+
+<h3>Missão final: a promoção da padaria</h3>
+
+<div class="trylua" data-goal="out:Sem desconto;;src:\band\b;;semerro">
+<p class="try-task"><strong>Missão:</strong> a regra da promoção é "<strong>10 pães ou mais e</strong> pagando em dinheiro". A Ana levou só 4 pães, pagando em dinheiro, e o programa deu desconto. Conserte o operador para o programa mostrar <code>Sem desconto</code>.</p>
+<pre class="script" data-file="main.lua">local paes = 4
+local em_dinheiro = true
+if paes &gt;= 10 or em_dinheiro then
+  print("Com desconto!")
+else
+  print("Sem desconto")
+end
+</pre>
+<pre class="solucao" data-file="main.lua">local paes = 4
+local em_dinheiro = true
+if paes &gt;= 10 and em_dinheiro then
+  print("Com desconto!")
+else
+  print("Sem desconto")
+end
+</pre>
+</div>
+
+<p>Depois, teste as quatro combinações: mude <code>paes</code> para 12 e <code>em_dinheiro</code> para <code>false</code>, um de cada vez. Só com 12 pães <strong>e</strong> <code>true</code> deve aparecer <code>Com desconto!</code>. É a tabela da verdade do <code>and</code>, na padaria.</p>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li><code>and</code> ("e") exige os dois lados verdadeiros; <code>or</code> ("ou") se contenta com um; <code>not</code> ("não") inverte. São palavras minúsculas: nada de <code>&amp;&amp;</code>, <code>||</code>, <code>!</code>.</li>
+  <li>Cada lado de um <code>and</code>/<code>or</code> é uma pergunta completa: <code>dia == "sábado" or dia == "domingo"</code>, <code>nota &gt;= 0 and nota &lt;= 10</code>.</li>
+  <li>Curto-circuito: <code>false and …</code> e <code>true or …</code> não avaliam o lado direito. Use para proteger: <code>pedido and pedido.total &gt; 100</code>.</li>
+  <li><code>and</code> e <code>or</code> devolvem um dos valores: <code>10 or 20</code> → <code>10</code>, <code>nil or "a"</code> → <code>"a"</code>. Daí o valor padrão <code>x or "reserva"</code>, que só troca <code>nil</code> e <code>false</code> (<code>0</code> e <code>""</code> ficam).</li>
+  <li>Ordem: <code>not</code> antes das comparações (<code>not x == 5</code> é <code>(not x) == 5</code>), comparações antes de <code>and</code>, <code>and</code> antes de <code>or</code>. Na dúvida, parênteses.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
