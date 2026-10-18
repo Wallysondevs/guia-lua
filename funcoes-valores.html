@@ -1,0 +1,630 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua Funções São Valores — variáveis, tabelas e argumentos | Guia Lua</title>
+<meta name="description" content="No Lua, uma função é um valor como um número ou um texto: guarde em variáveis, crie funções anônimas (function … end sem nome), coloque numa tabela (a calculadora com uma tabela de operações), passe como argumento (table.sort com função de comparação, aplicar a uma lista) e devolva de outra função. Com os erros reais do Lua 5.5: attempt to call a number value e invalid order function for sorting.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">Funções São Valores</span></h1>
+
+<p class="intro">Na aula <a href="funcoes.html">Funções</a>, o <code>type(bom_dia)</code> respondeu <code>function</code>, e o <code>print(bom_dia)</code> mostrou <code>function: 0x…</code>. Isso quer dizer uma coisa importante: no Lua, uma função é um <strong>valor</strong>, do mesmo jeito que <code>42</code> ou <code>"Ana"</code>. E tudo o que se faz com um valor dá para fazer com uma função: guardar numa variável, colocar numa tabela, mandar como argumento para outra função, devolver com <code>return</code>. Esta aula mostra cada uma dessas coisas, e para que servem.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>Que <code>local function f</code> é uma variável que guarda uma função, e que dá para copiá-la para outra variável.</li>
+  <li>A escrever <strong>funções anônimas</strong> (sem nome): <code>function(x) … end</code>.</li>
+  <li>A guardar funções numa <strong>tabela</strong>, como numa calculadora com uma tabela de operações.</li>
+  <li>A <strong>passar uma função como argumento</strong>: o <code>table.sort</code> com uma função de comparação e uma função <code>aplicar</code> que você mesmo escreve.</li>
+  <li>A <strong>devolver uma função</strong> com <code>return</code>.</li>
+  <li>Os erros reais: <code>attempt to call a number value</code>, chamar a função em vez de passá-la, <code>invalid order function for sorting</code>.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>A ideia: a receita é um papel</h2>
+<p>Na aula de funções, uma função era uma receita com nome. Mas a receita, afinal, é um <strong>papel</strong>. Um papel pode ser copiado e dado a outra pessoa; guardado numa pasta junto com outras receitas; entregue a uma confeiteira com o recado "faça esta aqui"; até tirado da gaveta e devolvido a quem pediu. O papel não é o bolo: é o jeito de fazer o bolo, que alguém pode seguir quando quiser.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Com o papel da receita</th><th>Com uma função no Lua</th></tr>
+<tr><td>Copiar para outra pessoa</td><td>Guardar em outra variável: <code>local f = saudar</code></td></tr>
+<tr><td>Escrever uma receita rápida num guardanapo, sem título</td><td>Função anônima: <code>function(x) … end</code></td></tr>
+<tr><td>Guardar numa pasta de receitas</td><td>Guardar numa tabela: <code>receitas.bolo = function() … end</code></td></tr>
+<tr><td>Entregar à confeiteira: "faça esta"</td><td>Passar como argumento: <code>table.sort(lista, comparar)</code></td></tr>
+<tr><td>Devolver a receita escolhida</td><td>Devolver com <code>return function … end</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>1. A função numa variável</h2>
+<p>Quando você escreve <code>local function saudar(…)</code>, o Lua cria uma variável <code>saudar</code> e guarda a função dentro dela. Essa variável pode ser copiada para outra:</p>
+
+<pre class="file" data-file="valor.lua">local function saudar(nome)
+  print("Bom dia, " .. nome .. "!")
+end
+
+local cumprimentar = saudar
+cumprimentar("Ana")
+saudar("Bia")
+print(type(saudar), type(cumprimentar))
+print(saudar == cumprimentar)
+</pre>
+
+<pre class="term">$ lua valor.lua
+Bom dia, Ana!
+Bom dia, Bia!
+function	function
+true
+</pre>
+
+<dl class="anatomy">
+  <dt>local cumprimentar = saudar</dt><dd><strong>Sem parênteses</strong>: não chama a função, só pega o valor guardado em <code>saudar</code> (a função) e guarda também em <code>cumprimentar</code>. Agora as duas variáveis guardam <strong>a mesma</strong> função.</dd>
+  <dt>cumprimentar("Ana")</dt><dd>Com parênteses, chama. Tanto faz chamar por um nome ou pelo outro.</dd>
+  <dt>saudar == cumprimentar</dt><dd><code>true</code>: é a mesma função, não uma cópia dela.</dd>
+</dl>
+
+<p>Isso vale também para as funções prontas do Lua. O <code>print</code> é só uma variável que guarda uma função:</p>
+
+<pre class="file" data-file="print_valor.lua">local mostrar = print
+mostrar("o print também é um valor")
+print(type(print), type(string.upper))
+print(print == mostrar)
+</pre>
+
+<pre class="term">$ lua print_valor.lua
+o print também é um valor
+function	function
+true
+</pre>
+
+<div class="tip">
+<strong>Com ou sem parênteses?</strong>
+<p>Esta é a chave da aula inteira: <code>saudar</code> (sem parênteses) é <strong>a função</strong>, o papel da receita. <code>saudar()</code> (com parênteses) é <strong>chamar</strong> a função, fazer o bolo, e o resultado é o que ela devolve. Quase todos os erros desta aula vêm de trocar um pelo outro.</p>
+</div>
+
+<hr>
+
+<h2>2. Funções anônimas: <code>function(…) … end</code></h2>
+<p>Uma função não precisa de nome. Escrita assim, ela é um valor, como um número escrito no meio de uma conta:</p>
+
+<pre class="file" data-file="anonima.lua">local dobro = function(n)
+  return n * 2
+end
+
+print(dobro(21))
+print((function(n) return n * 3 end)(5))
+</pre>
+
+<pre class="term">$ lua anonima.lua
+42
+15
+</pre>
+
+<dl class="anatomy">
+  <dt>function(n) … end</dt><dd>Uma <strong>função anônima</strong> ("sem nome"): a palavra <code>function</code>, os parâmetros e o corpo, sem nome no meio. O resultado é um valor do tipo <code>function</code>.</dd>
+  <dt>local dobro = function(n) … end</dt><dd>A função anônima é guardada numa variável, como <code>local x = 42</code>. É a terceira forma da aula <a href="funcoes.html">Funções</a>: no fundo, <code>local function dobro(n)</code> faz quase a mesma coisa.</dd>
+  <dt>(function(n) … end)(5)</dt><dd>Dá até para criar e chamar na mesma hora. É raro; serve para mostrar que a função é um valor que pode ser usado direto.</dd>
+</dl>
+
+<p>As funções anônimas brilham quando são usadas uma vez só, no lugar onde são necessárias: como argumento de outra função (seção 4).</p>
+
+<hr>
+
+<h2>3. Funções dentro de uma tabela</h2>
+<p>Uma tabela guarda valores com nome (aula <a href="dicionarios.html">Tabelas como Dicionários</a>). Como funções são valores, uma tabela pode guardar funções:</p>
+
+<pre class="file" data-file="tabela_funcoes.lua">local operacoes = {
+  soma = function(a, b) return a + b end,
+  subtracao = function(a, b) return a - b end,
+}
+
+function operacoes.divisao(a, b)
+  return a / b
+end
+
+print(operacoes.soma(6, 7))
+print(operacoes.subtracao(6, 7))
+print(operacoes["divisao"](6, 4))
+for _, nome in ipairs({"soma", "subtracao", "divisao"}) do
+  print(nome, operacoes[nome](10, 2))
+end
+</pre>
+
+<pre class="term">$ lua tabela_funcoes.lua
+13
+-1
+1.5
+soma	12
+subtracao	8
+divisao	5.0
+</pre>
+
+<dl class="anatomy">
+  <dt>soma = function(a, b) … end,</dt><dd>Um campo da tabela cujo valor é uma função anônima. Vírgula no fim, como qualquer campo.</dd>
+  <dt>function operacoes.divisao(a, b)</dt><dd>Um atalho para <code>operacoes.divisao = function(a, b) … end</code>: cria a função e guarda no campo <code>divisao</code> da tabela. Repare que aqui não vai <code>local</code>: a tabela <code>operacoes</code> já é local.</dd>
+  <dt>operacoes.soma(6, 7)</dt><dd>Pega a função do campo <code>soma</code> e chama.</dd>
+  <dt>operacoes[nome](10, 2)</dt><dd>O nome do campo pode vir de uma variável. É aqui que a ideia fica poderosa: o programa escolhe <strong>qual</strong> função chamar enquanto roda.</dd>
+</dl>
+
+<p>As bibliotecas do Lua são exatamente isso: <code>string</code>, <code>math</code> e <code>table</code> são tabelas cheias de funções. <code>string.upper</code> é o campo <code>upper</code> da tabela <code>string</code>.</p>
+
+<h3>Uma calculadora com uma tabela de operações</h3>
+<p>Com as funções numa tabela, a calculadora não precisa de um <code>if</code> para cada sinal: ela procura o sinal na tabela.</p>
+
+<pre class="file" data-file="calculadora.lua">local operacoes = {
+  ["+"] = function(a, b) return a + b end,
+  ["-"] = function(a, b) return a - b end,
+  ["*"] = function(a, b) return a * b end,
+}
+
+local function calcular(a, sinal, b)
+  local op = operacoes[sinal]
+  if op == nil then
+    return nil, "não sei fazer " .. sinal
+  end
+  return op(a, b)
+end
+
+print(calcular(6, "+", 7))
+print(calcular(6, "*", 7))
+print(calcular(6, "^", 7))
+</pre>
+
+<pre class="term">$ lua calculadora.lua
+13
+42
+nil	não sei fazer ^
+</pre>
+
+<p>Os sinais <code>"+"</code>, <code>"-"</code>, <code>"*"</code> não são nomes válidos, então vão entre colchetes e aspas: <code>["+"] = …</code>. A função <code>calcular</code> pega a função certa com <code>operacoes[sinal]</code>, guarda em <code>op</code> e a chama. Para ensinar uma operação nova, basta acrescentar uma linha na tabela. (O <code>nil, "mensagem"</code> é o costume da aula <a href="retornos-multiplos.html">Vários Retornos</a>.)</p>
+
+<div class="trylua" data-goal="out:6 * 4 = 24;;out:6 / 4 = 1.5;;semerro">
+<p class="try-task"><strong>Missão:</strong> a calculadora ainda não sabe multiplicar nem dividir. Acrescente na tabela <code>operacoes</code> as funções de <code>"*"</code> e <code>"/"</code>, sem mexer na função <code>mostrar</code>.</p>
+<pre class="script" data-file="main.lua">local operacoes = {
+  ["+"] = function(a, b) return a + b end,
+  ["-"] = function(a, b) return a - b end,
+}
+
+local function mostrar(a, sinal, b)
+  local op = operacoes[sinal]
+  if op == nil then
+    print("não sei fazer " .. sinal)
+  else
+    print(a .. " " .. sinal .. " " .. b .. " = " .. op(a, b))
+  end
+end
+
+mostrar(6, "+", 4)
+mostrar(6, "*", 4)
+mostrar(6, "/", 4)
+</pre>
+<pre class="solucao" data-file="main.lua">local operacoes = {
+  ["+"] = function(a, b) return a + b end,
+  ["-"] = function(a, b) return a - b end,
+  ["*"] = function(a, b) return a * b end,
+  ["/"] = function(a, b) return a / b end,
+}
+
+local function mostrar(a, sinal, b)
+  local op = operacoes[sinal]
+  if op == nil then
+    print("não sei fazer " .. sinal)
+  else
+    print(a .. " " .. sinal .. " " .. b .. " = " .. op(a, b))
+  end
+end
+
+mostrar(6, "+", 4)
+mostrar(6, "*", 4)
+mostrar(6, "/", 4)
+</pre>
+</div>
+
+<hr>
+
+<h2>4. Passando uma função como argumento</h2>
+<p>Se uma função é um valor, ela pode ir como argumento para outra função. A função que recebe decide <strong>quando</strong> chamar a que recebeu.</p>
+
+<pre class="file" data-file="argumento.lua">local function aplicar(lista, f)
+  local nova = {}
+  for i, valor in ipairs(lista) do
+    nova[i] = f(valor)
+  end
+  return nova
+end
+
+local function dobro(n) return n * 2 end
+
+local precos = {10, 4.5, 8}
+local dobrados = aplicar(precos, dobro)
+local com_taxa = aplicar(precos, function(p) return p + 1 end)
+print(table.concat(dobrados, ", "))
+print(table.concat(com_taxa, ", "))
+</pre>
+
+<pre class="term">$ lua argumento.lua
+20, 9.0, 16
+11, 5.5, 9
+</pre>
+
+<dl class="anatomy">
+  <dt>local function aplicar(lista, f)</dt><dd>O segundo parâmetro, <code>f</code>, vai receber uma função. Para o Lua, é um parâmetro como outro qualquer.</dd>
+  <dt>nova[i] = f(valor)</dt><dd><code>aplicar</code> chama a função recebida para cada item e guarda o resultado na lista nova. Ela não sabe nem precisa saber o que <code>f</code> faz.</dd>
+  <dt>aplicar(precos, dobro)</dt><dd>Passa a função <code>dobro</code>, <strong>sem parênteses</strong>: entrega a receita, não o bolo.</dd>
+  <dt>aplicar(precos, function(p) return p + 1 end)</dt><dd>Uma função anônima escrita direto no lugar do argumento: útil quando ela só serve para esta chamada.</dd>
+</dl>
+
+<p>(O <code>table.concat</code> junta os itens com <code>", "</code> entre eles: aula <a href="table-concat.html">table.concat</a>. O <code>9.0</code> aparece porque <code>4.5 * 2</code> é um <em>float</em>.)</p>
+
+<p>Outro exemplo: uma função que repete uma <strong>ação</strong> qualquer:</p>
+
+<pre class="file" data-file="repetir.lua">local function repetir(vezes, acao)
+  for i = 1, vezes do
+    acao(i)
+  end
+end
+
+repetir(3, function(i)
+  print("Volta " .. i)
+end)
+repetir(2, print)
+</pre>
+
+<pre class="term">$ lua repetir.lua
+Volta 1
+Volta 2
+Volta 3
+1
+2
+</pre>
+
+<p>Repare no jeito de escrever a função anônima ocupando várias linhas, no meio da chamada: ela começa depois da vírgula e termina no <code>end)</code>, que fecha a função e depois os parênteses do <code>repetir</code>. E <code>repetir(2, print)</code> passou o próprio <code>print</code> como a ação.</p>
+
+<h3>O exemplo mais comum: <code>table.sort</code> com uma função de comparação</h3>
+<p>O <code>table.sort</code> (aula <a href="table-sort.html">Ordenando</a>) põe uma lista em ordem crescente. Para outra ordem, você entrega a ele uma função que responde a pergunta "o <code>a</code> vem antes do <code>b</code>?":</p>
+
+<pre class="file" data-file="ordenar.lua">local notas = {7, 9.5, 4, 8, 6}
+table.sort(notas)
+print(table.concat(notas, " "))
+table.sort(notas, function(a, b) return a &gt; b end)
+print(table.concat(notas, " "))
+</pre>
+
+<pre class="term">$ lua ordenar.lua
+4 6 7 8 9.5
+9.5 8 7 6 4
+</pre>
+
+<p>A função <code>function(a, b) return a &gt; b end</code> diz: "<code>a</code> vem antes de <code>b</code> quando <code>a</code> é maior". O <code>table.sort</code> a chama várias vezes, com pares de notas, e arruma a lista conforme as respostas. Com uma lista de registros, a função escolhe o <strong>campo</strong> que manda na ordem:</p>
+
+<pre class="file" data-file="ordenar_registros.lua">local produtos = {
+  {nome = "sonho", preco = 4.5},
+  {nome = "pão francês", preco = 0.8},
+  {nome = "bolo de milho", preco = 18},
+  {nome = "café", preco = 4},
+}
+
+local function por_preco(a, b)
+  return a.preco &lt; b.preco
+end
+
+table.sort(produtos, por_preco)
+for _, p in ipairs(produtos) do
+  print(p.nome .. ": R$ " .. string.format("%.2f", p.preco))
+end
+print("---")
+table.sort(produtos, function(a, b) return a.nome &lt; b.nome end)
+for _, p in ipairs(produtos) do
+  print(p.nome)
+end
+</pre>
+
+<pre class="term">$ lua ordenar_registros.lua
+pão francês: R$ 0.80
+café: R$ 4.00
+sonho: R$ 4.50
+bolo de milho: R$ 18.00
+---
+bolo de milho
+café
+pão francês
+sonho
+</pre>
+
+<p>A mesma lista, duas ordens, e o <code>table.sort</code> não mudou nada: só a função entregue a ele.</p>
+
+<div class="trylua">
+<p class="try-task"><strong>Experimente:</strong> rode. Depois, troque a função anônima da segunda chamada para dar o <strong>triplo</strong> de cada preço, e crie uma terceira chamada com uma função que dê 10% de desconto (<code>p * 0.9</code>).</p>
+<pre class="script" data-file="main.lua">local function aplicar(lista, f)
+  local nova = {}
+  for i, valor in ipairs(lista) do
+    nova[i] = f(valor)
+  end
+  return nova
+end
+
+local precos = {10, 4, 8}
+print(table.concat(aplicar(precos, function(p) return p * 2 end), ", "))
+print(table.concat(aplicar(precos, function(p) return p + 1 end), ", "))
+</pre>
+</div>
+
+<hr>
+
+<h2>5. Devolvendo uma função</h2>
+<p>Por fim, uma função pode <strong>criar e devolver</strong> outra função:</p>
+
+<pre class="file" data-file="devolver.lua">local function escolher_saudacao(hora)
+  if hora &lt; 12 then
+    return function(nome) print("Bom dia, " .. nome .. "!") end
+  end
+  return function(nome) print("Boa tarde, " .. nome .. "!") end
+end
+
+local saudar = escolher_saudacao(9)
+saudar("Ana")
+escolher_saudacao(15)("Bia")
+</pre>
+
+<pre class="term">$ lua devolver.lua
+Bom dia, Ana!
+Boa tarde, Bia!
+</pre>
+
+<dl class="anatomy">
+  <dt>return function(nome) … end</dt><dd>O valor devolvido é uma função anônima. Quem chamou <code>escolher_saudacao</code> recebe uma função pronta para usar.</dd>
+  <dt>local saudar = escolher_saudacao(9)</dt><dd>Com 9 horas, recebe a função do "Bom dia" e guarda em <code>saudar</code>.</dd>
+  <dt>escolher_saudacao(15)("Bia")</dt><dd>Dois pares de parênteses: o primeiro chama <code>escolher_saudacao</code>, que devolve uma função; o segundo chama essa função com <code>"Bia"</code>.</dd>
+</dl>
+
+<p>Funções que criam funções ficam ainda mais interessantes quando a função criada <strong>lembra</strong> das variáveis de quem a criou. Esse é o assunto da próxima aula: <a href="closures.html">Closures</a>.</p>
+
+<hr>
+
+<h2>Formas diferentes de guardar uma função</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Forma</th><th>O que é</th><th>Quando usar</th></tr>
+<tr><td><code>local function f(x) … end</code></td><td>Variável local <code>f</code> com a função</td><td>O caso comum: uma função com nome</td></tr>
+<tr><td><code>local f = function(x) … end</code></td><td>O mesmo, escrito como "valor numa variável"</td><td>Quando quer deixar claro que a função é um valor (o <code>local function</code> é melhor para recursão)</td></tr>
+<tr><td><code>t.f = function(x) … end</code> ou <code>function t.f(x) … end</code></td><td>Função num campo de tabela</td><td>Agrupar funções (uma "biblioteca" sua, como a <code>operacoes</code>)</td></tr>
+<tr><td><code>g(function(x) … end)</code></td><td>Função anônima como argumento</td><td>Quando a função só serve para aquela chamada (<code>table.sort</code>)</td></tr>
+<tr><td><code>g(f)</code></td><td>Função com nome como argumento</td><td>Quando a mesma função é usada em vários lugares (<code>por_preco</code>)</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+
+<div class="cenario">
+<strong>Chamar algo que não é função</strong>
+<pre class="file" data-file="erro_numero.lua">local total = 10
+total()
+</pre>
+<pre class="term">$ lua erro_numero.lua
+lua: erro_numero.lua:2: attempt to call a number value (local 'total')
+stack traceback:
+	erro_numero.lua:2: in main chunk
+	[C]: in ?
+</pre>
+<p><code>attempt to call a number value (local 'total')</code>: "tentativa de chamar um valor do tipo número (a variável local <code>total</code>)". Os parênteses pedem "execute", mas <code>total</code> guarda um número, não uma função. É a mesma família do <code>attempt to call a nil value</code> da aula <a href="funcoes.html">Funções</a>; muda só o tipo do valor. Com um texto, <code>local nome = "Ana"</code> e <code>nome("Bia")</code>, a mensagem é <code>attempt to call a string value (local 'nome')</code>.</p>
+<p>Um jeito comum de chegar aqui é guardar o <strong>resultado</strong> da função, achando que guardou a função:</p>
+<pre class="file" data-file="erro_print_res.lua">local function dobro(n) return n * 2 end
+local f = dobro(5)
+print(f(3))
+</pre>
+<pre class="term">$ lua erro_print_res.lua
+lua: erro_print_res.lua:3: attempt to call a number value (local 'f')
+stack traceback:
+	erro_print_res.lua:3: in main chunk
+	[C]: in ?
+</pre>
+<p><code>dobro(5)</code>, com parênteses, já chamou a função: <code>f</code> ficou com <code>10</code>. <strong>Como consertar:</strong> para guardar a função, sem parênteses: <code>local f = dobro</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Chamar a função em vez de passá-la</strong>
+<pre class="file" data-file="erro_chamou.lua">local function por_preco(a, b)
+  return a.preco &lt; b.preco
+end
+
+local produtos = {{preco = 4.5}, {preco = 0.8}}
+table.sort(produtos, por_preco())
+</pre>
+<pre class="term">$ lua erro_chamou.lua
+lua: erro_chamou.lua:2: attempt to index a nil value (local 'a')
+stack traceback:
+	erro_chamou.lua:2: in local 'por_preco'
+	erro_chamou.lua:6: in main chunk
+	[C]: in ?
+</pre>
+<p>Os parênteses em <code>por_preco()</code> fizeram o Lua <strong>chamar</strong> a função ali mesmo, sem argumentos, antes do <code>table.sort</code>. Com <code>a</code> e <code>b</code> valendo <code>nil</code>, o <code>a.preco</code> falhou: <code>attempt to index a nil value (local 'a')</code>, "tentativa de pegar um campo de um valor <code>nil</code>". O rastro mostra que o erro foi dentro de <code>por_preco</code>, chamada pela linha 6, e não pelo <code>table.sort</code> (ele nem chegou a rodar). <strong>Como consertar:</strong> <code>table.sort(produtos, por_preco)</code>, sem parênteses.</p>
+</div>
+
+<div class="cenario">
+<strong>Uma função que não existe na tabela</strong>
+<pre class="file" data-file="erro_campo.lua">local operacoes = {
+  soma = function(a, b) return a + b end,
+}
+print(operacoes.soma(1, 2))
+print(operacoes.multiplicacao(3, 4))
+</pre>
+<pre class="term">$ lua erro_campo.lua
+3
+lua: erro_campo.lua:5: attempt to call a nil value (field 'multiplicacao')
+stack traceback:
+	erro_campo.lua:5: in main chunk
+	[C]: in ?
+</pre>
+<p>Agora o Lua diz <code>field 'multiplicacao'</code>: o valor <code>nil</code> estava num <strong>campo</strong> de tabela, não numa variável. A tabela não tem esse campo (ou o nome está escrito errado). <strong>Como consertar:</strong> confira o nome, ou teste antes, como a <code>calcular</code> faz com <code>if op == nil then</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Uma função de comparação com <code>&lt;=</code></strong>
+<pre class="file" data-file="erro_ordem.lua">local t = {}
+for i = 1, 50 do t[i] = 5 end
+table.sort(t, function(a, b) return a &lt;= b end)
+print("ordenou")
+</pre>
+<pre class="term">$ lua erro_ordem.lua
+lua: erro_ordem.lua:3: invalid order function for sorting
+stack traceback:
+	[C]: in field 'sort'
+	erro_ordem.lua:3: in main chunk
+	[C]: in ?
+</pre>
+<p><code>invalid order function for sorting</code>: "função de ordem inválida para ordenar". A função de comparação tem de responder <strong>"vem estritamente antes?"</strong>: para dois valores iguais, a resposta tem de ser <code>false</code>. Com <code>&lt;=</code>, ela diz que 5 vem antes de 5, e o <code>table.sort</code> se perde. O pior é que o erro depende da lista: no lab, a mesma função ordenou <code>{3, 1, 2}</code> sem reclamar, mas deu este erro com <code>{3, 1, 2, 2}</code>. Um programa pode funcionar nos testes e quebrar no dia em que aparecem dois valores iguais. <strong>Como consertar:</strong> use <code>&lt;</code> ou <code>&gt;</code>, nunca <code>&lt;=</code> ou <code>&gt;=</code>.</p>
+</div>
+
+<hr>
+
+<h2>Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>O que faz</th></tr>
+<tr><td><code>local g = f</code></td><td>Guarda a mesma função em outra variável (sem chamar)</td></tr>
+<tr><td><code>local x = f()</code></td><td>Chama a função e guarda o <strong>resultado</strong></td></tr>
+<tr><td><code>function(x) … end</code></td><td>Uma função anônima (um valor)</td></tr>
+<tr><td><code>t = {f = function() … end}</code></td><td>Função num campo de tabela</td></tr>
+<tr><td><code>function t.f() … end</code></td><td>O mesmo que <code>t.f = function() … end</code></td></tr>
+<tr><td><code>t[nome](…)</code></td><td>Escolhe a função pelo nome e chama</td></tr>
+<tr><td><code>g(f)</code>, <code>g(function(x) … end)</code></td><td>Passa uma função como argumento</td></tr>
+<tr><td><code>table.sort(t, function(a, b) return a &gt; b end)</code></td><td>Ordena do maior para o menor</td></tr>
+<tr><td><code>return function(…) … end</code></td><td>Devolve uma função</td></tr>
+<tr><td><code>f(1)(2)</code></td><td>Chama <code>f</code> e depois chama a função que ela devolveu</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Sintoma</th><th>Causa provável</th></tr>
+<tr><td><code>attempt to call a number value (local '…')</code> (ou <code>string value</code>)</td><td>A variável guarda um número/texto, não uma função; talvez o resultado de <code>f()</code> em vez de <code>f</code></td></tr>
+<tr><td><code>attempt to call a nil value (field '…')</code></td><td>A tabela não tem uma função com esse nome</td></tr>
+<tr><td><code>attempt to index a nil value (local 'a')</code> dentro da função de comparação</td><td><code>table.sort(t, comparar())</code>: a função foi chamada em vez de passada</td></tr>
+<tr><td><code>invalid order function for sorting</code></td><td>Função de comparação com <code>&lt;=</code> ou <code>&gt;=</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. Função anônima</h3>
+<p>Complete a função anônima que devolve o triplo:</p>
+<div class="ex-code">local triplo = <input data-answer="function" aria-label="palavra-chave">(n) return n * 3 end</div>
+</div>
+
+<div class="exercise">
+<h3>2. Do maior para o menor</h3>
+<p>Complete o sinal para ordenar as notas da maior para a menor:</p>
+<div class="ex-code">table.sort(notas, function(a, b) return a <input data-answer="&gt;" aria-label="sinal"> b end)</div>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">3. Qual linha guarda a <strong>função</strong> <code>dobro</code> em <code>f</code>, sem executá-la?</p>
+<label><input type="radio" name="q3"> <code>local f = dobro()</code></label>
+<label><input type="radio" name="q3"> <code>local f = dobro</code></label>
+<label><input type="radio" name="q3"> <code>local f = "dobro"</code></label>
+<label><input type="radio" name="q3"> <code>local f() = dobro</code></label>
+</div>
+
+<div class="mc" data-answer="3">
+<p class="mc-q">4. O que mostra este programa?</p>
+<pre class="file" data-file="exercicio.lua">local acoes = {
+  oi = function() return "olá" end,
+  tchau = function() return "até logo" end,
+}
+local escolha = "tchau"
+print(acoes[escolha]())
+</pre>
+<label><input type="radio" name="q4"> <code>olá</code></label>
+<label><input type="radio" name="q4"> <code>tchau</code></label>
+<label><input type="radio" name="q4"> <code>até logo</code></label>
+<label><input type="radio" name="q4"> <code>function: 0x…</code></label>
+</div>
+
+<div class="mc" data-answer="1">
+<p class="mc-q">5. A mensagem é <code>attempt to call a number value (local 'f')</code>. O que aconteceu?</p>
+<label><input type="radio" name="q5"> <code>f</code> guarda um número, e alguém escreveu <code>f(…)</code></label>
+<label><input type="radio" name="q5"> A função <code>f</code> não tem <code>return</code></label>
+<label><input type="radio" name="q5"> Faltou o <code>end</code> da função <code>f</code></label>
+<label><input type="radio" name="q5"> <code>f</code> recebeu argumentos demais</label>
+</div>
+
+<div class="mc" data-answer="4">
+<p class="mc-q">6. Qual função de comparação o <code>table.sort</code> aceita sem risco de <code>invalid order function for sorting</code>?</p>
+<label><input type="radio" name="q6"> <code>function(a, b) return a &lt;= b end</code></label>
+<label><input type="radio" name="q6"> <code>function(a, b) return a &gt;= b end</code></label>
+<label><input type="radio" name="q6"> <code>function(a, b) return true end</code></label>
+<label><input type="radio" name="q6"> <code>function(a, b) return a &lt; b end</code></label>
+</div>
+
+<h3>Missão final: o ranking da turma</h3>
+
+<div class="trylua" data-goal="outre:^Bia: 9\.5\nAna: 8\nCarla: 6\.5\nDani: 5\n$;;semerro">
+<p class="try-task"><strong>Missão:</strong> a lista está sendo ordenada pelo nome. Troque a função de comparação para ordenar pela <strong>nota, da maior para a menor</strong>. A saída tem de começar por <code>Bia: 9.5</code> e terminar em <code>Dani: 5</code>.</p>
+<pre class="script" data-file="main.lua">local turma = {
+  {nome = "Carla", nota = 6.5},
+  {nome = "Ana", nota = 8},
+  {nome = "Dani", nota = 5},
+  {nome = "Bia", nota = 9.5},
+}
+
+table.sort(turma, function(a, b) return a.nome &lt; b.nome end)
+
+for _, aluno in ipairs(turma) do
+  print(aluno.nome .. ": " .. aluno.nota)
+end
+</pre>
+<pre class="solucao" data-file="main.lua">local turma = {
+  {nome = "Carla", nota = 6.5},
+  {nome = "Ana", nota = 8},
+  {nome = "Dani", nota = 5},
+  {nome = "Bia", nota = 9.5},
+}
+
+table.sort(turma, function(a, b) return a.nota &gt; b.nota end)
+
+for _, aluno in ipairs(turma) do
+  print(aluno.nome .. ": " .. aluno.nota)
+end
+</pre>
+</div>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li>No Lua, uma função é um <strong>valor</strong> do tipo <code>function</code>, como um número ou um texto.</li>
+  <li><code>f</code> (sem parênteses) é a função; <code>f()</code> é chamá-la e ficar com o resultado.</li>
+  <li><code>function(…) … end</code> sem nome é uma função anônima, que pode ir para uma variável, uma tabela ou um argumento.</li>
+  <li>Uma tabela de funções (<code>operacoes["+"]</code>) troca uma fila de <code>if</code>s por uma busca; as bibliotecas <code>string</code>, <code>math</code> e <code>table</code> são assim.</li>
+  <li>Passar uma função como argumento deixa outra função decidir quando chamá-la: <code>table.sort(lista, function(a, b) return a &gt; b end)</code>. A comparação usa <code>&lt;</code> ou <code>&gt;</code>, nunca <code>&lt;=</code>.</li>
+  <li>Uma função pode devolver outra função. Quando essa função "lembra" das variáveis de quem a criou, ela é uma <a href="closures.html">closure</a>, o assunto da próxima aula.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
