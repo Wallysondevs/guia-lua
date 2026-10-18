@@ -1,0 +1,446 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua divisão — /, // e % (divisão inteira e resto) | Guia Lua</title>
+<meta name="description" content="Os três operadores de divisão do Lua 5.5 para quem nunca programou: / (divisão que sempre dá float), // (divisão inteira, arredonda para baixo) e % (resto), com números negativos, floats, par ou ímpar, minutos em horas, o relógio que dá a volta, math.fmod, a divisão por zero (inf, nan, attempt to divide by zero, attempt to perform 'n%0') e as diferenças no Lua 5.1 e no LuaJIT.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">Divisão</span>: /, // e %</h1>
+
+<p class="intro">Dividir parece simples, mas na vida real a pergunta muda conforme a situação. 17 fatias de pizza para 5 pessoas: quanto dá para cada uma, <strong>exatamente</strong>? (3,4.) Quantas fatias <strong>inteiras</strong> cada uma come? (3.) Quantas <strong>sobram</strong>? (2.) O Lua tem um operador para cada pergunta: <code>/</code>, <code>//</code> e <code>%</code>. Esta aula mostra os três, o que acontece com números negativos e com zero, e os usos clássicos do resto, como descobrir se um número é par.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>A divisão <code>/</code>, que <strong>sempre</strong> dá float: <code>6 / 2</code> é <code>3.0</code>.</li>
+  <li>A divisão inteira <code>//</code>, que arredonda para baixo: <code>7 // 2</code> é <code>3</code>.</li>
+  <li>O resto <code>%</code>: <code>7 % 2</code> é <code>1</code>.</li>
+  <li>O que acontece com números negativos (<code>-7 // 2</code> é <code>-4</code>, <code>-7 % 3</code> é <code>2</code>) e com floats.</li>
+  <li>Os usos do <code>%</code> e do <code>//</code>: par ou ímpar, minutos em horas, o último algarismo, o relógio que dá a volta.</li>
+  <li>A divisão por zero: <code>inf</code> e <code>nan</code> com <code>/</code>; erro com <code>//</code> e <code>%</code> de inteiros.</li>
+  <li>As diferenças no Lua 5.1 e no LuaJIT (que não têm <code>//</code>).</li>
+</ul>
+</div>
+
+<p>Todos os programas desta aula rodaram no <strong>Lua 5.5</strong> da máquina da Ana (usuária <code>ana</code>, computador <code>notebook</code>), salvos na pasta pessoal dela e executados com <code>lua arquivo.lua</code> (veja <a href="executar.html">Rodando um Programa</a>). Você pode rodar cada um no editor do guia.</p>
+
+<hr>
+
+<h2>A ideia: a divisão da escola, com resto</h2>
+<p>Lembra da "conta armada" de dividir, da escola? 17 dividido por 5 dá <strong>3</strong> e sobra <strong>2</strong>, porque 3 × 5 = 15, e de 15 para 17 faltam 2. Essas duas respostas, o <strong>quociente</strong> e o <strong>resto</strong>, são exatamente o que o <code>//</code> e o <code>%</code> calculam. E a divisão "com vírgula" (17 ÷ 5 = 3,4) é a <code>/</code>.</p>
+
+<pre class="file" data-file="pizza.lua">local fatias = 17
+local pessoas = 5
+print("Cada um come:", fatias // pessoas)
+print("Sobram:", fatias % pessoas)
+print("Divisão exata:", fatias / pessoas)
+</pre>
+
+<pre class="term">$ lua pizza.lua
+Cada um come:	3
+Sobram:	2
+Divisão exata:	3.4</pre>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Pergunta</th><th>Operador</th><th>17 e 5</th></tr>
+<tr><td>"Quanto dá, exatamente?"</td><td><code>/</code> (divisão)</td><td><code>17 / 5</code> → <code>3.4</code></td></tr>
+<tr><td>"Quantas vezes cabe inteiro?"</td><td><code>//</code> (divisão inteira)</td><td><code>17 // 5</code> → <code>3</code></td></tr>
+<tr><td>"Quanto sobra?"</td><td><code>%</code> (resto, ou módulo)</td><td><code>17 % 5</code> → <code>2</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>1. Os três lado a lado</h2>
+
+<pre class="file" data-file="tres.lua">print(7 / 2, 7 // 2, 7 % 2)
+print(6 / 2, 6 // 2, 6 % 2)
+print(1 / 3, 10 // 3, 10 % 3)
+</pre>
+
+<pre class="term">$ lua tres.lua
+3.5	3	1
+3.0	3	0
+0.33333333333333331	3	1</pre>
+
+<dl class="anatomy">
+  <dt>7 / 2 → 3.5</dt><dd>A barra simples é a divisão de verdade, com casas decimais.</dd>
+  <dt>6 / 2 → 3.0</dt><dd>Mesmo quando a conta "fecha", a <code>/</code> <strong>sempre</strong> devolve um float (veja <a href="numeros.html">Números</a>). É a regra, não um defeito.</dd>
+  <dt>1 / 3 → 0.33333333333333331</dt><dd>Um terço não tem fim em decimal; o float guarda uma aproximação, e o Lua 5.5 mostra todos os algarismos dela.</dd>
+  <dt>7 // 2 → 3, 10 // 3 → 3</dt><dd>A barra dupla é a divisão <strong>inteira</strong> (em inglês, <em>floor division</em>, "divisão com chão"): faz a divisão e arredonda o resultado <strong>para baixo</strong>. Com dois inteiros, dá inteiro.</dd>
+  <dt>7 % 2 → 1, 6 % 2 → 0</dt><dd>O sinal de porcentagem é o <strong>resto</strong>. Quando a divisão é exata, o resto é <code>0</code>.</dd>
+</dl>
+
+<p>O <code>//</code> e o <code>%</code> sempre andam juntos. Para quaisquer números <code>a</code> e <code>b</code>, vale a prova da conta armada: <code>(a // b) * b + a % b</code> dá de volta o <code>a</code>. No lab, <code>17 // 5 * 5 + 17 % 5</code> deu <code>17</code>.</p>
+
+<div class="tip">
+<strong>Quero o resultado da <code>/</code> como inteiro</strong>
+<p>Se você sabe que a divisão é exata e quer o inteiro: <code>6 // 2</code> já dá <code>3</code>. Se a conta veio de uma <code>/</code>: <code>math.tointeger(6 / 2)</code> dá <code>3</code> (ou <code>nil</code>, se não for exata), e <code>math.floor(7 / 2)</code> arredonda para baixo e dá <code>3</code>. No lab, os três deram <code>3</code>.</p>
+</div>
+
+<hr>
+
+<h2>2. Usos clássicos do <code>%</code> e do <code>//</code></h2>
+
+<h3>Par ou ímpar</h3>
+<p>Um número é <strong>par</strong> quando dividir por 2 não deixa resto. É o uso mais famoso do <code>%</code>:</p>
+
+<pre class="file" data-file="par.lua">for n = 1, 6 do
+  if n % 2 == 0 then
+    print(n, "par")
+  else
+    print(n, "ímpar")
+  end
+end
+</pre>
+
+<pre class="term">$ lua par.lua
+1	ímpar
+2	par
+3	ímpar
+4	par
+5	ímpar
+6	par</pre>
+
+<p>O <code>for n = 1, 6 do</code> repete o bloco com <code>n</code> valendo 1, 2, … 6 (aula <a href="for-numerico.html">for Numérico</a>), e o <code>if</code> escolhe o que mostrar (aula <a href="if-else.html">if e else</a>). A pergunta <code>n % 2 == 0</code> lê-se "o resto de <code>n</code> por 2 é zero?". Do mesmo jeito, <code>n % 3 == 0</code> pergunta "é múltiplo de 3?", e <code>n % 10 == 0</code>, "termina em zero?".</p>
+
+<h3>Minutos em horas e minutos</h3>
+
+<pre class="file" data-file="horas.lua">local minutos = 135
+local horas = minutos // 60
+local resto = minutos % 60
+print(minutos .. " minutos = " .. horas .. "h" .. resto .. "min")
+print(string.format("%d:%02d", horas, resto))
+</pre>
+
+<pre class="term">$ lua horas.lua
+135 minutos = 2h15min
+2:15</pre>
+
+<p>Uma hora tem 60 minutos: <code>135 // 60</code> diz quantas horas <strong>inteiras</strong> cabem (2), e <code>135 % 60</code> diz quantos minutos <strong>sobram</strong> (15). O <code>%02d</code> do <code>string.format</code> mostra o número com 2 algarismos, completando com zero (aula <a href="string-format.html">string.format</a>). O mesmo truque converte segundos em minutos, centavos em reais, dias em semanas.</p>
+
+<div class="trylua" data-goal="out:200 minutos = 3h20min;;semerro">
+<p class="try-task"><strong>Missão:</strong> o forno da padaria ficou ligado 200 minutos. O programa usa <code>/</code> e mostra um número quebrado de horas. Troque a conta das horas para a divisão inteira e calcule o <code>resto</code> com <code>%</code>, para sair <code>200 minutos = 3h20min</code>.</p>
+<pre class="script" data-file="main.lua">local minutos = 200
+local horas = minutos / 60
+local resto = 0   -- troque pela conta do resto
+print(minutos .. " minutos = " .. horas .. "h" .. resto .. "min")
+</pre>
+<pre class="solucao" data-file="main.lua">local minutos = 200
+local horas = minutos // 60
+local resto = minutos % 60
+print(minutos .. " minutos = " .. horas .. "h" .. resto .. "min")
+</pre>
+</div>
+
+<h3>Os últimos algarismos</h3>
+
+<pre class="file" data-file="digitos.lua">local n = 2026
+print(n % 10, n // 10)
+print(n % 100, n // 100)
+</pre>
+
+<pre class="term">$ lua digitos.lua
+6	202
+26	20</pre>
+
+<p>Dividir por 10 "corta" o último algarismo: <code>n % 10</code> é o algarismo cortado (6) e <code>n // 10</code> é o que sobrou do número (202). Com 100, são os dois últimos.</p>
+
+<h3>O relógio que dá a volta</h3>
+
+<pre class="file" data-file="relogio.lua">local agora = 22
+print((agora + 5) % 24)
+local dia = 6
+print((dia + 3) % 7)
+</pre>
+
+<pre class="term">$ lua relogio.lua
+3
+2</pre>
+
+<p>São 22 horas; daqui a 5 horas serão 27 horas? Não: o relógio dá a volta no 24, e serão <strong>3 da manhã</strong>. O <code>% 24</code> faz essa volta. Do mesmo jeito, com os dias da semana numerados de 0 (domingo) a 6 (sábado), três dias depois do sábado (6) é o dia <code>(6 + 3) % 7</code> = 2, terça-feira. Sempre que algo "recomeça do zero" depois de um limite, o <code>%</code> resolve.</p>
+
+<hr>
+
+<h2>3. Números negativos: para baixo é para baixo</h2>
+<p>Aqui o Lua pode surpreender. "Arredondar para baixo" quer dizer ir na direção do <strong>menos infinito</strong>, e não "cortar as casas decimais". Para números negativos, isso faz diferença:</p>
+
+<pre class="file" data-file="negativos.lua">print(7 // 2, -7 // 2, 7 // -2, -7 // -2)
+print(7 % 3, -7 % 3, 7 % -3, -7 % -3)
+print(math.floor(-3.5), -7 / 2)
+print(math.fmod(-7, 3), math.fmod(7, -3))
+</pre>
+
+<pre class="term">$ lua negativos.lua
+3	-4	-4	3
+1	2	-2	-1
+-4	-3.5
+-1	1</pre>
+
+<dl class="anatomy">
+  <dt>-7 // 2 → -4</dt><dd>−7 ÷ 2 = −3,5. Para baixo de −3,5 (na direção do −∞) fica o <strong>−4</strong>, não o −3. É o mesmo que <code>math.floor(-3.5)</code>.</dd>
+  <dt>-7 % 3 → 2</dt><dd>O resto acompanha: <code>-7 // 3</code> é −3, e −3 × 3 = −9; de −9 para −7 faltam <strong>2</strong>. A regra prática: <strong>o resto tem o sinal do número da direita</strong> (o divisor). Com divisor positivo, o resto fica sempre entre 0 e o divisor menos 1.</dd>
+  <dt>7 % -3 → -2</dt><dd>Divisor negativo, resto negativo (ou zero).</dd>
+  <dt>math.fmod(-7, 3) → -1</dt><dd>Se você quer o resto "cortando as casas" (o jeito do C e do JavaScript), a biblioteca <code>math</code> tem o <code>math.fmod</code>: aí o resto tem o sinal do número da <strong>esquerda</strong>.</dd>
+</dl>
+
+<p>A prova da conta armada continua valendo com negativos:</p>
+
+<pre class="file" data-file="identidade.lua">local a, b = -7, 3
+print(a // b, a % b, (a // b) * b + a % b)
+</pre>
+
+<pre class="term">$ lua identidade.lua
+-3	2	-7</pre>
+
+<div class="tip">
+<strong>Por que isso é bom</strong>
+<p>O jeito do Lua faz o relógio funcionar até "para trás": 2 horas da manhã menos 5 horas é <code>(2 - 5) % 24</code>, que dá <code>21</code> (9 da noite), e não um número negativo. Com o <code>math.fmod</code>, daria <code>-3</code>.</p>
+</div>
+
+<hr>
+
+<h2>4. <code>//</code> e <code>%</code> com floats</h2>
+
+<pre class="file" data-file="floats.lua">print(7.0 // 2, 7.5 // 2, 7 // 2.0)
+print(5.5 % 2, 7.0 % 2, -5.5 % 2)
+print(math.type(7.0 // 2), math.type(7 // 2))
+</pre>
+
+<pre class="term">$ lua floats.lua
+3.0	3.0	3.0
+1.5	1.0	0.5
+float	integer</pre>
+
+<p>Os dois funcionam com floats também, com a mesma ideia (arredondar para baixo, e o que sobra). A diferença é o subtipo: com algum float na conta, o resultado é float, mesmo no <code>//</code> (<code>7.0 // 2</code> é <code>3.0</code>). E o <code>%</code> com float pode ter casas: <code>5.5 % 2</code> sobra <code>1.5</code>.</p>
+
+<hr>
+
+<h2>5. Divisão por zero</h2>
+<p>Na matemática, dividir por zero não tem resposta. No Lua, o que acontece depende do operador e do subtipo:</p>
+
+<pre class="file" data-file="zero.lua">print(10 / 0, -10 / 0, 0 / 0)
+print(10.0 // 0, 10 // 0.0, 10 % 0.0)
+print(10 / 0 == math.huge)
+</pre>
+
+<pre class="term">$ lua zero.lua
+inf	-inf	-nan
+inf	inf	-nan
+true</pre>
+
+<ul>
+  <li>Com <code>/</code> (que é sempre float), <strong>não dá erro</strong>: <code>10 / 0</code> dá <code>inf</code> (infinito, o mesmo que <code>math.huge</code>), <code>-10 / 0</code> dá <code>-inf</code>, e <code>0 / 0</code> dá <code>nan</code> (<em>not a number</em>, "não é um número"; no Linux aparece <code>-nan</code>).</li>
+  <li>Com <code>//</code> e <code>%</code>, se houver um float na conta, acontece o mesmo: <code>inf</code> ou <code>nan</code>.</li>
+  <li>Com <code>//</code> e <code>%</code> de <strong>dois inteiros</strong>, o programa para com erro (seção <a href="#errado">Quando dá errado</a>): um inteiro não tem como guardar "infinito".</li>
+</ul>
+
+<div class="warning">
+<strong>O <code>nan</code> é traiçoeiro</strong>
+<p>A média de uma turma sem alunos dá <code>0 / 0</code>, e o programa continua, sem erro, com um <code>nan</code> que estraga todas as contas seguintes. Pior: o <code>nan</code> não é igual nem a ele mesmo.</p>
+<pre class="file" data-file="media0.lua">local soma, quantidade = 0, 0
+local media = soma / quantidade
+print("Média:", media)
+print(media == media)
+</pre>
+<pre class="term">$ lua media0.lua
+Média:	-nan
+false</pre>
+<p>Antes de dividir por algo que pode ser zero, pergunte: <code>if quantidade &gt; 0 then … end</code>.</p>
+</div>
+
+<hr>
+
+<h2 id="formas">Formas diferentes de fazer a mesma coisa</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Você quer…</th><th>Jeitos</th><th>Qual usar</th></tr>
+<tr><td>Divisão inteira de dois inteiros</td><td><code>a // b</code> ou <code>math.floor(a / b)</code></td><td><code>a // b</code>: mais curto, e fica inteiro sem passar por float</td></tr>
+<tr><td>O resto</td><td><code>a % b</code> (sinal do divisor) ou <code>math.fmod(a, b)</code> (sinal do dividendo)</td><td><code>%</code>; o <code>math.fmod</code> só quando você precisa do comportamento do C</td></tr>
+<tr><td>Saber se é par</td><td><code>n % 2 == 0</code> ou <code>n // 2 * 2 == n</code></td><td><code>n % 2 == 0</code>: é o que todo mundo reconhece</td></tr>
+<tr><td>A divisão com casas</td><td><code>a / b</code></td><td>Só esse; para mostrar com 2 casas: <code>string.format("%.2f", a / b)</code></td></tr>
+</table>
+</div>
+
+<div class="note">
+<strong>Em outras versões: Lua 5.1 e LuaJIT</strong>
+<p>O <code>//</code> só chegou no Lua 5.3. No Lua 5.1 e no LuaJIT (Neovim, LÖVE, OpenResty), ele é erro de sintaxe; lá se usa <code>math.floor(a / b)</code>. O <code>%</code> existe e segue a mesma regra do sinal. No lab:</p>
+<pre class="term">$ lua5.1 -e 'print(7 // 2)'
+lua5.1: (command line):1: unexpected symbol near '/'
+$ lua5.1 -e 'print(-7 % 3, 7 / 2, 6 / 2, math.floor(-7 / 2), math.fmod(-7, 3))'
+2	3.5	3	-4	-1
+$ luajit -e 'print(-7 % 3, 6 / 2, 7 % 0)'
+2	3	nan</pre>
+<p>Repare: no 5.1, <code>6 / 2</code> mostra <code>3</code> (sem <code>.0</code>, porque lá não existem inteiros), e no LuaJIT <code>7 % 0</code> dá <code>nan</code> em vez de erro. Mais em <a href="versoes.html">Lua 5.1, LuaJIT, 5.4 e 5.5</a>.</p>
+</div>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+
+<div class="cenario">
+<strong>Divisão inteira por zero</strong>
+<pre class="file" data-file="zero2.lua">local pessoas = 0
+print(17 // pessoas)
+</pre>
+<pre class="term">$ lua zero2.lua
+lua: zero2.lua:2: attempt to divide by zero
+stack traceback:
+	zero2.lua:2: in main chunk
+	[C]: in ?</pre>
+<dl class="anatomy">
+  <dt>lua: zero2.lua:2:</dt><dd>Arquivo <code>zero2.lua</code>, linha 2.</dd>
+  <dt>attempt to divide by zero</dt><dd>"Tentativa de dividir por zero". Com dois inteiros, o <code>//</code> não tem resultado possível.</dd>
+  <dt>stack traceback: …</dt><dd>O caminho até o erro: a linha 2 do programa principal (<code>main chunk</code>), chamado pelo <code>lua</code> (<code>[C]: in ?</code>).</dd>
+</dl>
+<p><strong>Como consertar:</strong> confira antes: <code>if pessoas &gt; 0 then print(17 // pessoas) else print("Ninguém para dividir.") end</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Resto da divisão por zero</strong>
+<pre class="file" data-file="zero3.lua">local pessoas = 0
+print(17 % pessoas)
+</pre>
+<pre class="term">$ lua zero3.lua
+lua: zero3.lua:2: attempt to perform 'n%0'
+stack traceback:
+	zero3.lua:2: in main chunk
+	[C]: in ?</pre>
+<p>"Tentativa de fazer <code>n%0</code>" (o resto de um número <code>n</code> por zero). A mensagem é diferente da do <code>//</code>, mas a causa e o conserto são os mesmos.</p>
+</div>
+
+<div class="cenario">
+<strong>Usou <code>/</code> e apareceu um <code>.0</code> (ou um número quebrado)</strong>
+<p>Não é um erro do Lua, mas é o "erro" mais comum desta aula: <code>6 / 2</code> mostra <code>3.0</code> e <code>200 / 60</code> mostra <code>3.3333333333333335</code>. Se você queria "quantas vezes cabe", o operador certo é o <code>//</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>O resto negativo que você não esperava</strong>
+<p>Quem vem do C ou do JavaScript espera <code>-7 % 3</code> = −1, e o Lua dá <code>2</code>. Não é erro: o Lua arredonda o quociente para baixo (seção 3). Se o seu programa precisa do outro comportamento, use <code>math.fmod(-7, 3)</code>, que dá <code>-1</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>O <code>//</code> no Lua 5.1 ou no LuaJIT</strong>
+<p>Se o seu código vai rodar num programa que usa LuaJIT (um plugin do Neovim, um jogo no LÖVE) e aparecer <code>unexpected symbol near '/'</code>, é o <code>//</code>, que lá não existe. Troque por <code>math.floor(a / b)</code>.</p>
+</div>
+
+<hr>
+
+<h2>Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>O que faz</th><th>Exemplos</th></tr>
+<tr><td><code>a / b</code></td><td>divisão com casas; sempre float</td><td><code>7 / 2</code> → <code>3.5</code>; <code>6 / 2</code> → <code>3.0</code></td></tr>
+<tr><td><code>a // b</code></td><td>divisão arredondada para baixo (para o −∞)</td><td><code>7 // 2</code> → <code>3</code>; <code>-7 // 2</code> → <code>-4</code></td></tr>
+<tr><td><code>a % b</code></td><td>resto; tem o sinal de <code>b</code></td><td><code>7 % 2</code> → <code>1</code>; <code>-7 % 3</code> → <code>2</code></td></tr>
+<tr><td><code>(a // b) * b + a % b</code></td><td>sempre dá <code>a</code></td><td></td></tr>
+<tr><td><code>n % 2 == 0</code></td><td>"<code>n</code> é par?"</td><td></td></tr>
+<tr><td><code>x // 60</code>, <code>x % 60</code></td><td>horas inteiras e minutos que sobram</td><td><code>135</code> → <code>2</code> e <code>15</code></td></tr>
+<tr><td><code>(h + n) % 24</code></td><td>relógio que dá a volta</td><td><code>(22 + 5) % 24</code> → <code>3</code></td></tr>
+<tr><td><code>math.fmod(a, b)</code></td><td>resto com o sinal de <code>a</code></td><td><code>math.fmod(-7, 3)</code> → <code>-1</code></td></tr>
+<tr><td><code>x / 0</code></td><td><code>inf</code>, <code>-inf</code> ou <code>nan</code> (sem erro)</td><td></td></tr>
+<tr><td><code>inteiro // 0</code>, <code>inteiro % 0</code></td><td>erro</td><td><code>attempt to divide by zero</code>, <code>attempt to perform 'n%0'</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. Faça as divisões</h3>
+<p>Escreva o que o Lua 5.5 mostra:</p>
+<div class="ex-code">print(9 / 3) → <input data-answer="3.0" aria-label="9 dividido por 3"><br>print(9 // 4) → <input data-answer="2" aria-label="9 divisão inteira 4"><br>print(9 % 4) → <input data-answer="1" aria-label="9 resto 4"><br>print(-9 // 4) → <input data-answer="-3" aria-label="menos 9 divisão inteira 4"></div>
+</div>
+
+<div class="exercise">
+<h3>2. É par?</h3>
+<p>Complete a condição que pergunta se <code>n</code> é par:</p>
+<div class="ex-code">if n <input data-answer="%" aria-label="operador"> 2 == <input data-answer="0" aria-label="número"> then</div>
+</div>
+
+<div class="mc" data-answer="3">
+<p class="mc-q">3. Qual é o resultado de <code>-7 % 3</code> no Lua?</p>
+<label><input type="radio" name="q3"> <code>-1</code></label>
+<label><input type="radio" name="q3"> <code>1</code></label>
+<label><input type="radio" name="q3"> <code>2</code></label>
+<label><input type="radio" name="q3"> Um erro</label>
+</div>
+
+<div class="mc" data-answer="1">
+<p class="mc-q">4. O que acontece com <code>print(5 // 0)</code>?</p>
+<label><input type="radio" name="q4"> O programa para: <code>attempt to divide by zero</code></label>
+<label><input type="radio" name="q4"> Mostra <code>inf</code></label>
+<label><input type="radio" name="q4"> Mostra <code>0</code></label>
+<label><input type="radio" name="q4"> Mostra <code>nil</code></label>
+</div>
+
+<div class="mc" data-answer="4">
+<p class="mc-q">5. E <code>print(5 / 0)</code>?</p>
+<label><input type="radio" name="q5"> O programa para: <code>attempt to divide by zero</code></label>
+<label><input type="radio" name="q5"> Mostra <code>0</code></label>
+<label><input type="radio" name="q5"> Mostra <code>nan</code></label>
+<label><input type="radio" name="q5"> Mostra <code>inf</code></label>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">6. São 21 horas. Que conta dá a hora daqui a 6 horas?</p>
+<label><input type="radio" name="q6"> <code>(21 + 6) // 24</code></label>
+<label><input type="radio" name="q6"> <code>(21 + 6) % 24</code></label>
+<label><input type="radio" name="q6"> <code>(21 + 6) / 24</code></label>
+<label><input type="radio" name="q6"> <code>21 + 6 % 24</code></label>
+</div>
+
+<h3>Missão final: as sacolas de pão</h3>
+
+<div class="trylua" data-goal="out:8 sacolas cheias e sobram 2 pães;;semerro">
+<p class="try-task"><strong>Missão:</strong> a padaria assou 50 pães e vai embalar em sacolas de 6. O programa usa a divisão <code>/</code> e não calcula o que sobra. Troque as contas para o programa mostrar <code>8 sacolas cheias e sobram 2 pães</code>.</p>
+<pre class="script" data-file="main.lua">local paes = 50
+local por_sacola = 6
+local sacolas = paes / por_sacola
+local sobram = 0   -- troque pela conta
+print(sacolas .. " sacolas cheias e sobram " .. sobram .. " pães")
+</pre>
+<pre class="solucao" data-file="main.lua">local paes = 50
+local por_sacola = 6
+local sacolas = paes // por_sacola
+local sobram = paes % por_sacola
+print(sacolas .. " sacolas cheias e sobram " .. sobram .. " pães")
+</pre>
+</div>
+
+<p>Depois, mude para 54 pães: deve dar 9 sacolas e sobrar 0. E tente <code>por_sacola = 0</code> para ver o erro da divisão por zero.</p>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li><code>/</code> é a divisão com casas e <strong>sempre</strong> dá float (<code>6 / 2</code> → <code>3.0</code>).</li>
+  <li><code>//</code> é a divisão inteira: arredonda <strong>para baixo</strong>, na direção do −∞ (<code>7 // 2</code> → <code>3</code>, <code>-7 // 2</code> → <code>-4</code>).</li>
+  <li><code>%</code> é o resto, com o sinal do divisor (<code>-7 % 3</code> → <code>2</code>). <code>(a // b) * b + a % b</code> é sempre <code>a</code>. Para o resto do jeito do C, use <code>math.fmod</code>.</li>
+  <li>Usos clássicos: par (<code>n % 2 == 0</code>), horas e minutos (<code>// 60</code> e <code>% 60</code>), último algarismo (<code>% 10</code>), relógio que dá a volta (<code>% 24</code>).</li>
+  <li>Divisão por zero: com <code>/</code> (ou floats) dá <code>inf</code>/<code>nan</code> sem erro; com <code>//</code> e <code>%</code> de inteiros, o programa para. Confira o divisor antes.</li>
+  <li>O Lua 5.1 e o LuaJIT não têm <code>//</code>: lá se usa <code>math.floor(a / b)</code>.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
