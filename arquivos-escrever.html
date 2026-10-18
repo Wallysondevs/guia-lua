@@ -1,0 +1,595 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua f:write — escrevendo e acrescentando em arquivos | Guia Lua</title>
+<meta name="description" content="Escrevendo arquivos no Lua 5.5 para quem nunca programou: f:write com textos e números, o \n que o print põe e o write não, vários valores e chamadas encadeadas, gravar uma lista, uma tabela alinhada com string.format e um CSV, o modo a para acrescentar, f:flush, io.output e os erros reais do Lua.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">Escrevendo Arquivos</span></h1>
+
+<p class="intro">Ler arquivos que alguém já escreveu é metade da história. A outra metade é o seu programa <strong>guardar</strong> o que fez: a lista de compras que a Ana montou, o relatório do estoque da lojinha, as vendas do dia, as notas da turma num formato que a planilha abre. Para isso existe o <code>f:write</code> ("escrever"), o irmão do <code>f:read</code> que você viu em <a href="arquivos-ler.html">Lendo Arquivos</a>.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>Como abrir um arquivo para escrita e gravar linhas com <code>f:write</code>, e por que o <code>\n</code> é com você.</li>
+  <li>Como escrever vários valores (textos e números) numa chamada só, e encadear chamadas: <code>f:write(…):write(…)</code>.</li>
+  <li>Como gravar uma lista inteira com um laço, uma tabela alinhada com <code>string.format</code> e um arquivo CSV.</li>
+  <li>A diferença, na prática, entre o modo <code>"w"</code> (recomeça) e o <code>"a"</code> (acrescenta).</li>
+  <li>Quando o texto chega de verdade ao disco: <code>f:flush()</code> e <code>f:close()</code>.</li>
+  <li>Os erros reais: escrever <code>true</code> ou <code>nil</code>, escrever num arquivo fechado, e o <code>print</code> que não vai para o arquivo.</li>
+</ul>
+</div>
+
+<p>Todos os programas desta aula rodaram no <strong>Lua 5.5</strong> da máquina da Ana (usuária <code>ana</code>, computador <code>notebook</code>), em <code>/home/ana</code>. Depois de cada um, o comando <code>cat</code> do terminal mostra o que ficou gravado no arquivo.</p>
+
+<hr>
+
+<h2>A ideia: escrever no caderno é diferente de falar</h2>
+<p>Quando a Ana dita a lista de compras em voz alta, cada item sai numa "linha" sozinho, porque ela respira entre um e outro. No caderno, não: se ela escrever <em>arroz</em>, <em>feijão</em> e <em>ovos</em> sem pular de linha, fica tudo grudado: <em>arrozfeijãoovos</em>. Quem pula a linha é a mão dela.</p>
+<p>No Lua é igual. O <code>print</code> é a fala: cada <code>print</code> termina a linha sozinho. O <code>f:write</code> é a mão no caderno: escreve <strong>exatamente</strong> o que você mandou, nem um caractere a mais. Para pular de linha, você manda o <code>\n</code> (a quebra de linha; veja <a href="strings-escape.html">Caracteres de Escape</a>). É a mesma regra do <a href="io-write.html">io.write</a>, que escreve na tela.</p>
+
+<hr>
+
+<h2>1. O primeiro arquivo gravado</h2>
+
+<pre class="file" data-file="primeiro.lua">local f = assert(io.open("lista.txt", "w"))
+f:write("arroz\n")
+f:write("feijão\n")
+f:write("ovos\n")
+f:close()
+print("Lista gravada.")
+</pre>
+
+<dl class="anatomy">
+  <dt>io.open("lista.txt", "w")</dt><dd>Abre para <strong>escrever</strong> (<code>"w"</code>, de <em>write</em>). Se a <code>lista.txt</code> não existe, é criada; se existe, é <strong>esvaziada</strong> antes (veja os modos em <a href="io-open.html">Abrindo Arquivos</a>).</dd>
+  <dt>assert(…)</dt><dd>Se não der para abrir (pasta que não existe, sem permissão), o programa para com a mensagem do motivo, em vez de seguir sem arquivo.</dd>
+  <dt>f:write("arroz\n")</dt><dd>Escreve o texto no arquivo. O <code>\n</code> no fim é a quebra de linha: sem ele, o próximo item continuaria na mesma linha.</dd>
+  <dt>f:close()</dt><dd>Fecha o arquivo e garante que tudo o que foi escrito chegou ao disco (a seção 6 explica por que isso importa).</dd>
+  <dt>print("Lista gravada.")</dt><dd>Este vai para a <strong>tela</strong>, não para o arquivo. É só um aviso para quem rodou o programa.</dd>
+</dl>
+
+<pre class="term">$ lua primeiro.lua
+Lista gravada.
+$ cat lista.txt
+arroz
+feijão
+ovos</pre>
+
+<p>Na tela, só o aviso. O conteúdo foi para o arquivo, e o <code>cat</code> mostra que ele ficou do jeito que o programa mandou: três linhas.</p>
+
+<h3>Sem o <code>\n</code></h3>
+<p>Os mesmos três <code>write</code>, sem a quebra de linha:</p>
+
+<pre class="file" data-file="sem_enter.lua">local f = assert(io.open("lista.txt", "w"))
+f:write("arroz")
+f:write("feijão")
+f:write("ovos")
+f:close()
+</pre>
+
+<pre class="term">$ lua sem_enter.lua
+$ cat lista.txt
+arrozfeijãoovos                  « sem Enter no fim, o prompt do terminal aparece grudado aqui</pre>
+
+<p>Tudo grudado, como no caderno. E como nem a última linha termina com <code>\n</code>, no terminal o prompt seguinte aparece colado no <code>ovos</code>. Arquivo de texto bem-feito termina cada linha (inclusive a última) com <code>\n</code>.</p>
+
+<hr>
+
+<h2>2. Vários valores de uma vez, e números</h2>
+<p>O <code>f:write</code> aceita quantos valores você quiser, separados por vírgula. Ele escreve um logo depois do outro, <strong>sem espaço</strong> entre eles (o <code>print</code> poria um TAB). Números também valem; o Lua os transforma em texto:</p>
+
+<pre class="file" data-file="varios.lua">local f = assert(io.open("pedido.txt", "w"))
+local item, quantidade, preco = "pão francês", 10, 0.75
+f:write("Item: ", item, "\n")
+f:write("Quantidade: ", quantidade, "\n")
+f:write("Preço: ", preco, "\n")
+f:write("Total: ", quantidade * preco, "\n")
+f:close()
+</pre>
+
+<pre class="term">$ lua varios.lua
+$ cat pedido.txt
+Item: pão francês
+Quantidade: 10
+Preço: 0.75
+Total: 7.5</pre>
+
+<p>Cada <code>f:write</code> juntou três pedaços: o rótulo, o valor e o <code>\n</code>. O <code>quantidade * preco</code> foi calculado antes de ser escrito (<code>7.5</code>). Repare que o total saiu como <code>7.5</code>, não como <code>7.50</code>: o Lua escreve o número do jeito mais curto. Para dinheiro com duas casas, use o <code>string.format</code> da seção 4.</p>
+
+<div class="note">
+<strong>Só textos e números</strong>
+<p>O <code>f:write</code> só aceita <strong>textos</strong> e <strong>números</strong>. Um <code>true</code>, um <code>nil</code> ou uma tabela param o programa (a seção <a href="#errado">Quando dá errado</a> mostra a mensagem). Para escrever outros valores, transforme em texto antes com <code>tostring(valor)</code> (veja <a href="conversao.html">Conversão</a>).</p>
+</div>
+
+<h3>Encadeando: <code>f:write(…):write(…)</code></h3>
+<p>Quando dá certo, o <code>f:write</code> devolve <strong>o próprio arquivo</strong>. Por isso dá para emendar um <code>:write</code> no outro:</p>
+
+<pre class="file" data-file="encadeado.lua">local f = assert(io.open("recado.txt", "w"))
+print(f:write("Oi, "))
+f:write("Bia! "):write("Não esquece "):write("o bolo.\n")
+f:close()
+</pre>
+
+<pre class="term">$ lua encadeado.lua
+file (0x561520c40300)
+$ cat recado.txt
+Oi, Bia! Não esquece o bolo.</pre>
+
+<p>O <code>print(f:write("Oi, "))</code> mostrou o que o <code>write</code> devolve: um <code>file (0x…)</code>, o mesmo arquivo <code>f</code> (o número é um endereço de memória e muda a cada execução). Na linha seguinte, o primeiro <code>:write</code> devolve o <code>f</code>, o segundo <code>:write</code> é chamado nele, e assim por diante. O resultado é o mesmo de três linhas de <code>f:write</code>, ou de um só <code>f:write("Bia! ", "Não esquece ", "o bolo.\n")</code>. Use o que ficar mais fácil de ler.</p>
+
+<p>Quando dá <strong>errado</strong> (o disco encheu, o arquivo foi aberto só para leitura), o <code>f:write</code> não para o programa: devolve <code>nil</code>, a mensagem, o código do erro e, no Lua 5.5, quantos bytes chegaram a ser escritos. Para não deixar passar, dá para embrulhar num <code>assert</code>: <code>assert(f:write("texto\n"))</code>.</p>
+
+<hr>
+
+<h2>3. Gravando uma lista inteira</h2>
+<p>A lista de compras da Ana está numa tabela (veja <a href="listas.html">Tabelas como Listas</a>). Um <code>for</code> com <a href="ipairs.html">ipairs</a> passa por cada item e escreve uma linha:</p>
+
+<pre class="file" data-file="lista_tabela.lua">local compras = {"arroz", "feijão", "ovos", "café"}
+local f = assert(io.open("lista.txt", "w"))
+for i, item in ipairs(compras) do
+  f:write(i, ". ", item, "\n")
+end
+f:close()
+print("Gravei " .. #compras .. " itens.")
+</pre>
+
+<pre class="term">$ lua lista_tabela.lua
+Gravei 4 itens.
+$ cat lista.txt
+1. arroz
+2. feijão
+3. ovos
+4. café</pre>
+
+<p>O arquivo é aberto <strong>uma vez</strong>, antes do laço, e fechado <strong>uma vez</strong>, depois dele. Dentro do laço, só o <code>write</code>. Abrir com <code>"w"</code> dentro do laço seria um erro: a cada volta o arquivo seria apagado, e só o último item sobraria.</p>
+
+<div class="trylua" data-goal="out:3. ovos;;semerro">
+<p class="try-task"><strong>Missão:</strong> o programa grava a lista e depois a lê de volta, numerando as linhas. Mas a leitura mostra tudo numa linha só: <code>1. arrozfeijãoovos</code>. Conserte o <code>f:write</code> para cada item ficar na sua linha, até aparecer <code>3. ovos</code>.</p>
+<pre class="script" data-file="main.lua">local compras = {"arroz", "feijão", "ovos"}
+local f = assert(io.open("lista.txt", "w"))
+for _, item in ipairs(compras) do
+  f:write(item)
+end
+f:close()
+
+local numero = 0
+for linha in io.lines("lista.txt") do
+  numero = numero + 1
+  print(numero .. ". " .. linha)
+end
+</pre>
+<pre class="solucao" data-file="main.lua">local compras = {"arroz", "feijão", "ovos"}
+local f = assert(io.open("lista.txt", "w"))
+for _, item in ipairs(compras) do
+  f:write(item, "\n")
+end
+f:close()
+
+local numero = 0
+for linha in io.lines("lista.txt") do
+  numero = numero + 1
+  print(numero .. ". " .. linha)
+end
+</pre>
+</div>
+
+<p>(A leitura de volta usa o <code>io.lines</code>, que lê o arquivo linha por linha: é o assunto de <a href="io-lines.html">Linha por Linha</a>.)</p>
+
+<hr>
+
+<h2>4. Uma tabela alinhada com <code>string.format</code></h2>
+<p>A Ana quer um relatório do estoque da lojinha, com colunas alinhadas, para imprimir e colar na parede. O <a href="string-format.html">string.format</a> monta cada linha com largura fixa, e o <code>f:write</code> grava:</p>
+
+<pre class="file" data-file="estoque.lua">local produtos = {
+  {nome = "arroz", qtd = 12, preco = 6.5},
+  {nome = "feijão", qtd = 8, preco = 8.9},
+  {nome = "café", qtd = 5, preco = 18.75},
+}
+local f = assert(io.open("estoque.txt", "w"))
+f:write(string.format("%-8s %5s %9s\n", "Produto", "Qtd", "Preço"))
+for _, p in ipairs(produtos) do
+  f:write(string.format("%-8s %5d %9.2f\n", p.nome, p.qtd, p.preco))
+end
+f:close()
+</pre>
+
+<dl class="anatomy">
+  <dt>%-8s</dt><dd>Um texto, ocupando 8 posições, encostado à <strong>esquerda</strong> (o <code>-</code>).</dd>
+  <dt>%5d</dt><dd>Um número inteiro, ocupando 5 posições, encostado à direita.</dd>
+  <dt>%9.2f</dt><dd>Um número com <strong>2 casas decimais</strong>, ocupando 9 posições: o jeito de escrever dinheiro (<code>6.50</code>, e não <code>6.5</code>).</dd>
+  <dt>\n</dt><dd>A quebra de linha vai dentro do formato, no fim.</dd>
+</dl>
+
+<pre class="term">$ lua estoque.lua
+$ cat estoque.txt
+Produto    Qtd    Preço
+arroz       12      6.50
+feijão      8      8.90
+café        5     18.75</pre>
+
+<p>Quase perfeito, mas olhe bem: as linhas do <code>feijão</code> e do <code>café</code> ficaram <strong>uma posição para a esquerda</strong>, e o título <code>Preço</code> também. O culpado é o acento. O <code>string.format</code> conta <strong>bytes</strong>, não letras: "feijão" tem 6 letras e 7 bytes (o "ã" ocupa 2), então ele achou que já tinha 7 dos 8 lugares preenchidos e pôs um espaço só. Com "arroz", sem acento, deu certo. É a mesma história do <code>#</code> que conta bytes; o que fazer com isso está em <a href="utf8.html">Acentos e a Biblioteca utf8</a>. Para um relatório sem acento nos nomes (ou para um arquivo que outro programa vai ler), o <code>string.format</code> resolve sozinho.</p>
+
+<hr>
+
+<h2>5. Um arquivo CSV para a planilha</h2>
+<p>CSV (de <em>comma-separated values</em>, "valores separados por vírgula") é um arquivo de texto em que cada linha é uma linha da planilha e as colunas se separam por um caractere combinado. No Brasil, como a vírgula é usada nos números decimais, as planilhas costumam usar o <strong>ponto e vírgula</strong>:</p>
+
+<pre class="file" data-file="csv.lua">local turma = {
+  {"Ana", 9.5},
+  {"Bia", 7},
+  {"Caio", 8.25},
+}
+local f = assert(io.open("notas.csv", "w"))
+f:write("nome;nota\n")
+for _, aluno in ipairs(turma) do
+  f:write(aluno[1], ";", aluno[2], "\n")
+end
+f:close()
+</pre>
+
+<pre class="term">$ lua csv.lua
+$ cat notas.csv
+nome;nota
+Ana;9.5
+Bia;7
+Caio;8.25</pre>
+
+<p>A primeira linha é o <strong>cabeçalho</strong> (os nomes das colunas). Esse arquivo abre no LibreOffice Calc ou no Excel como uma planilha de duas colunas. (O separador decimal que a planilha espera depende da configuração dela: com o idioma em português, ela pode querer <code>9,5</code> em vez de <code>9.5</code>. Ler um CSV de volta é parte do <a href="projeto-notas.html">Projeto: Notas da Turma</a>.)</p>
+
+<hr>
+
+<h2>6. <code>"w"</code> recomeça, <code>"a"</code> acrescenta</h2>
+<p>A Ana vende bolos e quer anotar cada venda num arquivo, sem perder as anteriores. É o modo <code>"a"</code> (<em>append</em>, "acrescentar"): o que você escreve vai para o <strong>fim</strong> do arquivo, e o que já estava lá fica.</p>
+
+<pre class="file" data-file="vendas.lua">local f = assert(io.open("vendas.txt", "a"))
+f:write("bolo de cenoura;25\n")
+f:close()
+</pre>
+
+<p>Ela rodou o programa três vezes, uma para cada bolo vendido:</p>
+
+<pre class="term">$ lua vendas.lua
+$ lua vendas.lua
+$ lua vendas.lua
+$ cat vendas.txt
+bolo de cenoura;25
+bolo de cenoura;25
+bolo de cenoura;25</pre>
+
+<p>Três execuções, três linhas. Na primeira vez, o arquivo não existia, e o <code>"a"</code> o criou. Com <code>"w"</code> no lugar do <code>"a"</code>, o arquivo terminaria com <strong>uma</strong> linha só, por mais vezes que o programa rodasse: cada execução apagaria a anterior.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Você quer…</th><th>Modo</th><th>Exemplos</th></tr>
+<tr><td>Que o arquivo tenha só o resultado <strong>desta</strong> execução</td><td><code>"w"</code></td><td>Relatório do estoque de hoje, lista de compras nova, configuração salva</td></tr>
+<tr><td>Juntar uma coisa nova às que já estavam</td><td><code>"a"</code></td><td>Registro de vendas, diário, histórico de erros (um <em>log</em>)</td></tr>
+</table>
+</div>
+
+<div class="trylua" data-goal="out:pão;;out:café;;semerro">
+<p class="try-task"><strong>Missão:</strong> a função <code>registrar</code> abre o arquivo, escreve uma venda e fecha. O programa registra duas vendas, mas no fim só sobra o <code>café</code>. Troque o modo para o <code>pão</code> continuar no arquivo.</p>
+<pre class="script" data-file="main.lua">local function registrar(venda)
+  local f = assert(io.open("vendas.txt", "w"))
+  f:write(venda, "\n")
+  f:close()
+end
+
+registrar("pão")
+registrar("café")
+
+local f = assert(io.open("vendas.txt", "r"))
+io.write(f:read("a"))
+f:close()
+</pre>
+<pre class="solucao" data-file="main.lua">local function registrar(venda)
+  local f = assert(io.open("vendas.txt", "a"))
+  f:write(venda, "\n")
+  f:close()
+end
+
+registrar("pão")
+registrar("café")
+
+local f = assert(io.open("vendas.txt", "r"))
+io.write(f:read("a"))
+f:close()
+</pre>
+</div>
+
+<hr>
+
+<h2>7. Quando o texto chega ao disco: <code>f:flush()</code></h2>
+<p>Escrever no disco é lento comparado com o resto do programa. Por isso o <code>f:write</code> não vai ao disco a cada chamada: ele junta o texto num pedaço da memória (um <strong>buffer</strong>, "reservatório") e só leva tudo de uma vez quando o buffer enche, quando você fecha o arquivo, ou quando você pede com <code>f:flush()</code> ("descarregar"). Este programa mostra isso acontecendo. Ele escreve com <code>f</code> e, <strong>sem fechar</strong>, lê o mesmo arquivo por outra variável, <code>g</code>:</p>
+
+<pre class="file" data-file="flush.lua">local f = assert(io.open("teste.txt", "w"))
+f:write("linha importante\n")
+
+local g = assert(io.open("teste.txt", "r"))
+print("antes do flush: [" .. g:read("a") .. "]")
+
+f:flush()
+g:seek("set")
+print("depois do flush: [" .. g:read("a") .. "]")
+
+g:close()
+f:close()
+</pre>
+
+<pre class="term">$ lua flush.lua
+antes do flush: []
+depois do flush: [linha importante
+]</pre>
+
+<p>Antes do <code>flush</code>, o arquivo no disco ainda estava <strong>vazio</strong>: a <code>linha importante</code> esperava no buffer. Depois do <code>f:flush()</code>, ela estava lá. (O <code>g:seek("set")</code> põe o marcador de leitura de volta no começo; veja <a href="arquivos-ler.html">Lendo Arquivos</a>.)</p>
+<p>Na prática:</p>
+<ul>
+  <li>O <code>f:close()</code> faz o <code>flush</code> sozinho. Fechando o arquivo, você não precisa se preocupar.</li>
+  <li>Quando o programa termina normalmente (ou com um erro comum), o Lua também fecha e descarrega os arquivos abertos.</li>
+  <li>O <code>f:flush()</code> é para programas que ficam <strong>muito tempo rodando</strong> com o arquivo aberto (um registro que recebe uma linha a cada minuto): sem ele, se o computador desligar de repente, o que estava no buffer se perde.</li>
+</ul>
+
+<hr>
+
+<h2 id="formas">Formas diferentes de escrever as mesmas linhas</h2>
+<p>As quatro formas abaixo gravam a mesma coisa no arquivo (<code>Ana;9.5</code> e a quebra de linha):</p>
+
+<pre class="file" data-file="formas.lua">local nome, nota = "Ana", 9.5
+local f = assert(io.open("formas.txt", "w"))
+
+f:write(nome, ";", nota, "\n")                      -- 1) vários valores
+f:write(nome .. ";" .. nota .. "\n")                 -- 2) juntando com ..
+f:write(nome):write(";"):write(nota):write("\n")     -- 3) encadeado
+f:write(string.format("%s;%.1f\n", nome, nota))      -- 4) string.format
+
+f:close()
+</pre>
+
+<pre class="term">$ lua formas.lua
+$ cat formas.txt
+Ana;9.5
+Ana;9.5
+Ana;9.5
+Ana;9.5</pre>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Forma</th><th>Quando usar</th></tr>
+<tr><td><code>f:write(a, b, c)</code></td><td>O jeito mais comum: rápido e claro</td></tr>
+<tr><td><code>f:write(a .. b .. c)</code></td><td>Funciona, mas cria um texto novo só para escrever; e o <code>..</code> com <code>nil</code> dá erro antes de chegar ao arquivo</td></tr>
+<tr><td><code>f:write(a):write(b)</code></td><td>Quando os pedaços vêm de lugares diferentes do código, ou para escrever "em cascata"</td></tr>
+<tr><td><code>f:write(string.format(…))</code></td><td>Quando o número precisa de formato fixo (dinheiro com 2 casas, colunas alinhadas)</td></tr>
+<tr><td><code>io.output(nome)</code> + <code>io.write(…)</code></td><td>Para mandar o <code>io.write</code> de um programa inteiro para um arquivo (veja a nota abaixo)</td></tr>
+</table>
+</div>
+
+<div class="note">
+<strong><code>io.output</code>: trocar o destino do <code>io.write</code></strong>
+<p>O <code>io.write</code> escreve na "saída atual", que normalmente é a tela. O <code>io.output("saida.txt")</code> troca a saída atual para um arquivo; o <code>io.output(io.stdout)</code> volta para a tela (<code>io.stdout</code> é a tela, a "saída padrão"):</p>
+<pre class="file" data-file="io_output.lua">io.output("saida.txt")
+io.write("escrito com io.write\n")
+io.close()
+io.output(io.stdout)
+io.write("de volta na tela\n")
+</pre>
+<pre class="term">$ lua io_output.lua
+de volta na tela
+$ cat saida.txt
+escrito com io.write</pre>
+<p>O <code>io.close()</code> sem argumento fecha a saída atual (o <code>saida.txt</code>). É prático em programas pequenos, mas o <code>f:write</code> com um arquivo seu é mais claro: quem lê o código vê para onde cada linha vai. E o <code>print</code> <strong>não</strong> muda: ele sempre escreve na tela.</p>
+</div>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+
+<div class="cenario">
+<strong>Escreveu um <code>true</code></strong>
+<pre class="file" data-file="booleano.lua">local f = assert(io.open("config.txt", "w"))
+local som_ligado = true
+f:write("som=", som_ligado, "\n")
+f:close()
+</pre>
+<pre class="term">$ lua booleano.lua
+lua: booleano.lua:3: bad argument #2 to 'write' (string expected, got boolean)
+stack traceback:
+	[C]: in method 'write'
+	booleano.lua:3: in main chunk
+	[C]: in ?</pre>
+<p>"Argumento ruim nº 2 para o <code>write</code> (esperava uma string, veio um booleano)". O argumento nº 2 é o <code>som_ligado</code> (o nº 1 é o <code>"som="</code>). O <code>f:write</code> não converte <code>true</code> e <code>false</code> em texto. <strong>Como consertar:</strong> <code>f:write("som=", tostring(som_ligado), "\n")</code>, que grava <code>som=true</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Escreveu um campo que não existe (<code>nil</code>)</strong>
+<pre class="file" data-file="nil_write.lua">local f = assert(io.open("contato.txt", "w"))
+local contato = {nome = "Bia"}
+f:write("Nome: ", contato.nome, "\n")
+f:write("Telefone: ", contato.telefone, "\n")
+f:close()
+</pre>
+<pre class="term">$ lua nil_write.lua
+lua: nil_write.lua:4: bad argument #2 to 'write' (string expected, got nil)
+stack traceback:
+	[C]: in method 'write'
+	nil_write.lua:4: in main chunk
+	[C]: in ?
+$ cat contato.txt
+Nome: Bia
+Telefone:                        « e o arquivo terminou aqui, sem o Enter</pre>
+<p>O contato não tem <code>telefone</code>, então <code>contato.telefone</code> é <code>nil</code>. Repare no arquivo: o <code>write</code> escreve os valores <strong>na ordem</strong> e só reclamou ao chegar no segundo; o <code>Telefone: </code> já tinha sido gravado. O arquivo ficou pela metade. <strong>Como consertar:</strong> dê um valor para quando faltar: <code>contato.telefone or "(sem telefone)"</code> (veja <a href="and-or-ternario.html">O Truque do and/or</a>).</p>
+</div>
+
+<div class="cenario">
+<strong>Escreveu depois de fechar</strong>
+<pre class="file" data-file="fechado.lua">local f = assert(io.open("lista.txt", "w"))
+f:write("arroz\n")
+f:close()
+f:write("feijão\n")
+</pre>
+<pre class="term">$ lua fechado.lua
+lua: fechado.lua:4: attempt to use a closed file
+stack traceback:
+	[C]: in method 'write'
+	fechado.lua:4: in main chunk
+	[C]: in ?</pre>
+<p>"Tentativa de usar um arquivo fechado". O <code>close</code> veio cedo demais. <strong>Como consertar:</strong> o <code>f:close()</code> é sempre a <strong>última</strong> coisa feita com o arquivo; num laço, ele vai depois do <code>end</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Usou <code>print</code> e o arquivo ficou vazio</strong>
+<pre class="file" data-file="print_errado.lua">local f = assert(io.open("lista.txt", "w"))
+print("arroz")
+f:close()
+</pre>
+<pre class="term">$ lua print_errado.lua
+arroz
+$ ls -l lista.txt
+-rw-rw-r-- 1 ana ana 0 Oct 18 16:43 lista.txt</pre>
+<p>Nenhuma mensagem de erro, mas o <code>arroz</code> apareceu na <strong>tela</strong>, e o arquivo tem 0 bytes (e a lista antiga sumiu, por causa do <code>"w"</code>). O <code>print</code> não sabe nada do <code>f</code>: ele sempre escreve na tela. <strong>Como consertar:</strong> <code>f:write("arroz\n")</code>.</p>
+</div>
+
+<hr>
+
+<h2>Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>O que faz</th></tr>
+<tr><td><code>io.open(nome, "w")</code></td><td>Abre para escrever do zero (cria ou esvazia)</td></tr>
+<tr><td><code>io.open(nome, "a")</code></td><td>Abre para acrescentar no fim (cria se não existir)</td></tr>
+<tr><td><code>f:write(v1, v2, …)</code></td><td>Escreve textos e números, um depois do outro, sem separador e sem <code>\n</code>. Devolve o próprio <code>f</code></td></tr>
+<tr><td><code>f:write(…):write(…)</code></td><td>Escritas encadeadas</td></tr>
+<tr><td><code>f:write(string.format(…))</code></td><td>Escreve com formato (casas decimais, colunas)</td></tr>
+<tr><td><code>f:flush()</code></td><td>Leva para o disco o que está no buffer, sem fechar</td></tr>
+<tr><td><code>f:close()</code></td><td>Descarrega e fecha</td></tr>
+<tr><td><code>io.output(nome)</code> / <code>io.output(io.stdout)</code></td><td>Manda o <code>io.write</code> para um arquivo / de volta para a tela</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Sintoma</th><th>Causa provável</th></tr>
+<tr><td>Tudo numa linha só</td><td>Faltou o <code>"\n"</code> no <code>f:write</code></td></tr>
+<tr><td><code>bad argument #N to 'write' (string expected, got boolean)</code></td><td>Escreveu <code>true</code>/<code>false</code>: use <code>tostring</code></td></tr>
+<tr><td><code>bad argument #N to 'write' (string expected, got nil)</code></td><td>Uma variável ou campo sem valor</td></tr>
+<tr><td><code>attempt to use a closed file</code></td><td>Escreveu depois do <code>f:close()</code></td></tr>
+<tr><td>O arquivo só tem a última linha</td><td>Abriu com <code>"w"</code> dentro do laço, ou várias vezes: use <code>"a"</code> ou abra uma vez só</td></tr>
+<tr><td>O texto saiu na tela e o arquivo está vazio</td><td>Usou <code>print</code> no lugar de <code>f:write</code></td></tr>
+<tr><td>Colunas desalinhadas nas palavras com acento</td><td><code>string.format</code> conta bytes, não letras (<a href="utf8.html">utf8</a>)</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. Complete o programa</h3>
+<p>Complete para gravar <code>Olá</code> numa linha do arquivo <code>oi.txt</code>, apagando o que houvesse antes:</p>
+<div class="ex-code">local f = assert(io.open("oi.txt", "<input data-answer="w" aria-label="modo">"))<br>f:<input data-answer="write" aria-label="método">("Olá\n")<br>f:<input data-answer="close" aria-label="método">()</div>
+</div>
+
+<div class="exercise">
+<h3>2. O que fica no arquivo?</h3>
+<p>Depois de <code>f:write("a", 1, "b")</code>, o que está no arquivo? (Escreva exatamente, sem espaços.)</p>
+<div class="ex-code">O arquivo tem <input data-answer="a1b" aria-label="conteúdo">.</div>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">3. A Ana roda 5 vezes um programa que abre <code>diario.txt</code> com <code>"a"</code> e escreve uma linha. Quantas linhas o arquivo tem no fim (ele não existia antes)?</p>
+<label><input type="radio" name="q3"> 1</label>
+<label><input type="radio" name="q3"> 5</label>
+<label><input type="radio" name="q3"> 0</label>
+<label><input type="radio" name="q3"> Dá erro na primeira vez, porque o arquivo não existe</label>
+</div>
+
+<div class="mc" data-answer="4">
+<p class="mc-q">4. O que <code>f:write("texto")</code> devolve quando dá certo?</p>
+<label><input type="radio" name="q4"> <code>true</code></label>
+<label><input type="radio" name="q4"> O número de bytes escritos</label>
+<label><input type="radio" name="q4"> <code>nil</code></label>
+<label><input type="radio" name="q4"> O próprio arquivo <code>f</code>, e por isso dá para encadear</label>
+</div>
+
+<div class="mc" data-answer="1">
+<p class="mc-q">5. Para que serve o <code>f:flush()</code>?</p>
+<label><input type="radio" name="q5"> Levar para o disco o que ainda está guardado na memória, sem fechar o arquivo</label>
+<label><input type="radio" name="q5"> Apagar o conteúdo do arquivo</label>
+<label><input type="radio" name="q5"> Voltar ao começo do arquivo</label>
+<label><input type="radio" name="q5"> Fechar o arquivo</label>
+</div>
+
+<h3>Missão final: o relatório da lojinha</h3>
+
+<div class="trylua" data-goal="arquivo:relatorio.txt~Total: 27 itens;;semerro">
+<p class="try-task"><strong>Missão:</strong> o programa grava uma linha por produto no <code>relatorio.txt</code> e já soma as quantidades em <code>total</code>. Falta a última linha do relatório: depois do laço (e antes do <code>close</code>), grave <code>Total: 27 itens</code> usando a variável <code>total</code>. O fim do programa mostra o arquivo.</p>
+<pre class="script" data-file="main.lua">local estoque = {
+  {nome = "arroz", qtd = 12},
+  {nome = "feijao", qtd = 10},
+  {nome = "cafe", qtd = 5},
+}
+local f = assert(io.open("relatorio.txt", "w"))
+local total = 0
+for _, p in ipairs(estoque) do
+  f:write(p.nome, ": ", p.qtd, "\n")
+  total = total + p.qtd
+end
+-- grave aqui a linha do total
+f:close()
+
+local g = assert(io.open("relatorio.txt", "r"))
+io.write(g:read("a"))
+g:close()
+</pre>
+<pre class="solucao" data-file="main.lua">local estoque = {
+  {nome = "arroz", qtd = 12},
+  {nome = "feijao", qtd = 10},
+  {nome = "cafe", qtd = 5},
+}
+local f = assert(io.open("relatorio.txt", "w"))
+local total = 0
+for _, p in ipairs(estoque) do
+  f:write(p.nome, ": ", p.qtd, "\n")
+  total = total + p.qtd
+end
+f:write("Total: ", total, " itens\n")
+f:close()
+
+local g = assert(io.open("relatorio.txt", "r"))
+io.write(g:read("a"))
+g:close()
+</pre>
+</div>
+
+<p>Rodando a solução, a caixa mostra <code>arroz: 12</code>, <code>feijao: 10</code>, <code>cafe: 5</code> e <code>Total: 27 itens</code>. Experimente depois trocar o <code>f:write</code> do laço por um <code>string.format("%-8s %3d\n", p.nome, p.qtd)</code> e ver as colunas se alinharem (aqui os nomes estão sem acento de propósito).</p>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li>Abra com <code>"w"</code> para escrever do zero ou com <code>"a"</code> para acrescentar no fim; feche com <code>f:close()</code> quando terminar.</li>
+  <li><code>f:write</code> escreve exatamente o que recebe: sem espaço entre os valores e <strong>sem</strong> pular linha. O <code>"\n"</code> é com você.</li>
+  <li>Aceita textos e números, vários de uma vez (<code>f:write(nome, ";", nota, "\n")</code>). <code>true</code>, <code>false</code> e <code>nil</code> dão erro: use <code>tostring</code> ou um valor padrão.</li>
+  <li>Ele devolve o próprio arquivo, por isso dá para encadear: <code>f:write("a"):write("b")</code>.</li>
+  <li>Para gravar uma lista, abra uma vez antes do laço, escreva dentro e feche depois. Para formatos fixos, <code>string.format</code> (que conta bytes, não letras).</li>
+  <li>O texto fica num buffer até o <code>close</code> (ou o <code>f:flush()</code>). O <code>print</code> sempre vai para a tela, nunca para o arquivo.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
