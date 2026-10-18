@@ -1,0 +1,396 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua Nomes de Variáveis — as regras e os bons costumes | Guia Lua</title>
+<meta name="description" content="Como dar nome a variáveis no Lua para quem nunca programou: letras, algarismos e sublinhado, nada de acento (é erro de sintaxe no Lua 5.5), maiúsculas e minúsculas são nomes diferentes, as palavras reservadas, nomes claros em minúsculas_com_sublinhado, e os erros reais do Lua 5.5 explicados em português.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">Nomes de Variáveis</span></h1>
+
+<p class="intro">Toda variável precisa de um nome, e o Lua tem regras para eles: algumas são <strong>leis</strong> (quebrou, o programa nem roda) e outras são <strong>bons costumes</strong> (o programa roda, mas fica difícil de ler). A regra que mais pega quem fala português: <strong>nada de acento no nome</strong>. <code>preço</code> não funciona; <code>preco</code>, sim.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>Quais caracteres podem formar um nome: letras sem acento, algarismos e o sublinhado <code>_</code>.</li>
+  <li>Por que <code>preço</code>, <code>2lugar</code>, <code>preco-pao</code> e <code>preco pao</code> não servem, com as mensagens reais do Lua.</li>
+  <li>Que <code>nome</code>, <code>Nome</code> e <code>NOME</code> são três variáveis diferentes.</li>
+  <li>As <strong>palavras reservadas</strong>, que não podem ser nome de nada.</li>
+  <li>Os bons costumes: nomes claros, em português, em <code>minúsculas_com_sublinhado</code>.</li>
+  <li>Os nomes que é melhor evitar: os das funções do Lua e os que começam com <code>_</code> e maiúscula.</li>
+</ul>
+</div>
+
+<p>Todos os programas desta aula foram rodados com o <strong>Lua 5.5</strong> na máquina fictícia da Ana (usuária <code>ana</code>, computador <code>notebook</code>). As caixas "Experimente" rodam o mesmo Lua de verdade, no seu navegador.</p>
+
+<hr>
+
+<h2>A ideia: a etiqueta da caixa</h2>
+<p>Na aula de <a href="variaveis.html">Variáveis</a>, o nome era a etiqueta da caixa. Uma boa etiqueta tem duas qualidades: a máquina de etiquetas consegue <strong>imprimir</strong> (ela só tem algumas teclas) e quem lê <strong>entende</strong> o que tem dentro. "farinha_trigo" é uma ótima etiqueta; "f" funciona, mas daqui a um mês ninguém sabe o que é; e "farinha de trigo (1kg)" a máquina nem imprime.</p>
+
+<hr>
+
+<h2>1. A lei: quais caracteres podem</h2>
+<p>Um nome no Lua pode ter:</p>
+<ul>
+  <li><strong>letras sem acento</strong>, maiúsculas ou minúsculas: <code>a</code> a <code>z</code>, <code>A</code> a <code>Z</code>;</li>
+  <li><strong>algarismos</strong>, <code>0</code> a <code>9</code>, mas <strong>nunca no começo</strong>;</li>
+  <li>o <strong>sublinhado</strong>, <code>_</code> (o "underline", que fica no Shift do <code>-</code>), em qualquer lugar.</li>
+</ul>
+<p>Mais nada: nem espaço, nem hífen, nem ponto, nem <code>$</code>, nem acento, nem cedilha. E não pode ser uma <a href="#reservadas">palavra reservada</a>. O tamanho é livre. Todos estes são válidos:</p>
+
+<pre class="file" data-file="validos.lua">local nome = "Ana"
+local preco_pao = 0.9
+local total2 = 15
+local _rascunho = "ok"
+local QUANTIDADE_MAXIMA = 50
+local precoDoBolo = 25
+print(nome, preco_pao, total2, _rascunho, QUANTIDADE_MAXIMA, precoDoBolo)
+</pre>
+
+<pre class="term">$ lua validos.lua
+Ana	0.9	15	ok	50	25
+</pre>
+
+<dl class="anatomy">
+  <dt>preco_pao</dt><dd>Duas palavras ligadas pelo sublinhado: é o jeito de "pôr um espaço" num nome.</dd>
+  <dt>total2</dt><dd>Algarismo no fim (ou no meio) pode.</dd>
+  <dt>_rascunho</dt><dd>Começar com sublinhado pode.</dd>
+  <dt>QUANTIDADE_MAXIMA</dt><dd>Tudo maiúsculo pode.</dd>
+  <dt>precoDoBolo</dt><dd>Palavras grudadas, cada uma começando com maiúscula, pode. A seção 5 fala de qual estilo usar.</dd>
+</dl>
+
+<hr>
+
+<h2>2. Acento no nome: erro de sintaxe</h2>
+
+<pre class="file" data-file="acento.lua">local ação = 1
+print(ação)
+</pre>
+
+<pre class="term">$ lua acento.lua
+lua: acento.lua:1: unexpected symbol near '&lt;\195&gt;'
+$ echo $?
+1
+</pre>
+
+<dl class="anatomy">
+  <dt>unexpected symbol</dt><dd>"Símbolo inesperado": o Lua achou um caractere que não esperava naquele ponto.</dd>
+  <dt>near '&lt;\195&gt;'</dt><dd>"Perto de <code>&lt;\195&gt;</code>". O arquivo é gravado em UTF-8, e nele as letras com acento ocupam <strong>dois bytes</strong>; o <code>ç</code> começa com o byte de número 195. O Lua leu <code>a</code>, depois encontrou esse byte, que não é letra para ele, e mostrou o número no lugar do caractere. Repare que a mensagem não fala de "acento": você precisa reconhecer o <code>&lt;\195&gt;</code> (com <code>á</code>, <code>ã</code>, <code>é</code>, <code>ç</code>, <code>õ</code>... é sempre <code>\195</code>).</dd>
+</dl>
+
+<p>Como é erro de sintaxe, nada roda. O mesmo acontece no Lua 5.4. Já o LuaJIT (o Lua do Neovim e do LÖVE) aceita acento em nomes, e o programa roda lá:</p>
+
+<pre class="term">$ lua5.4 acento.lua
+lua5.4: acento.lua:1: unexpected symbol near '&lt;\195&gt;'
+$ luajit acento.lua
+1
+</pre>
+
+<p>Não conte com isso: um programa com <code>ação</code> no nome só roda no LuaJIT. <strong>Dentro de textos</strong> (entre aspas) e em comentários, acento funciona normalmente, em qualquer versão:</p>
+
+<pre class="file" data-file="acento-texto.lua">local preco = "R$ 5,00 (preço do pão)"
+print(preco)
+</pre>
+
+<pre class="term">$ lua acento-texto.lua
+R$ 5,00 (preço do pão)
+</pre>
+
+<p>A regra prática deste guia: <strong>nomes em português, sem acento</strong>. <code>preco</code>, <code>acao</code>, <code>endereco</code>, <code>mes</code>, <code>pao</code>, <code>cafe</code>. O texto mostrado ao usuário, esse sim com acento. (Contar letras de um texto acentuado tem as suas pegadinhas: aula <a href="utf8.html">Acentos e a Biblioteca utf8</a>.)</p>
+
+<div class="trylua" data-goal="semerro;;outre:Preço:\s+5\n">
+<p class="try-task"><strong>Missão:</strong> o programa não roda por causa do acento no <strong>nome</strong> da variável. Troque o nome para <code>preco</code> (nas duas linhas), mas deixe o acento no <strong>texto</strong> <code>"Preço:"</code>.</p>
+<pre class="script" data-file="main.lua">local preço = 5
+print("Preço:", preço)
+</pre>
+<pre class="solucao" data-file="main.lua">local preco = 5
+print("Preço:", preco)
+</pre>
+</div>
+
+<hr>
+
+<h2>3. Maiúsculas e minúsculas são nomes diferentes</h2>
+<p>Para o Lua, <code>nome</code>, <code>Nome</code> e <code>NOME</code> são três etiquetas diferentes, e podem até existir juntas:</p>
+
+<pre class="file" data-file="maiusculas.lua">local nome = "Ana"
+local Nome = "Bia"
+local NOME = "Caio"
+print(nome, Nome, NOME)
+</pre>
+
+<pre class="term">$ lua maiusculas.lua
+Ana	Bia	Caio
+</pre>
+
+<p>Funciona, mas é uma péssima ideia ter as três: quem lê se confunde. O perigo de verdade é o contrário, criar com uma e usar com outra:</p>
+
+<pre class="file" data-file="maiusculas2.lua">local Cliente = "Ana"
+print("Cliente:", cliente)
+</pre>
+
+<pre class="term">$ lua maiusculas2.lua
+Cliente:	nil
+</pre>
+
+<p>Sem erro, saiu <code>nil</code>. O <code>cliente</code> da linha 2, com <code>c</code> minúsculo, é outro nome, que ninguém criou: o mesmo problema do erro de digitação da aula <a href="local.html">local × Global</a>. Por isso a regra de ouro: <strong>escolha um jeito de escrever e use sempre o mesmo</strong>. Neste guia, variáveis são todas em minúsculas.</p>
+
+<div class="trylua" data-goal="outre:Cliente:\s+Ana\n">
+<p class="try-task"><strong>Missão:</strong> o programa mostra <code>nil</code> em vez do nome da cliente. Conserte, deixando a variável toda em minúsculas (nas duas linhas).</p>
+<pre class="script" data-file="main.lua">local Cliente = "Ana"
+print("Cliente:", cliente)
+</pre>
+<pre class="solucao" data-file="main.lua">local cliente = "Ana"
+print("Cliente:", cliente)
+</pre>
+</div>
+
+<hr>
+
+<h2 id="reservadas">4. As palavras reservadas</h2>
+<p>Algumas palavras são do próprio Lua: ele as usa para montar os comandos (<code>if ... then ... end</code>, <code>local</code>, <code>function</code>...). Elas são <strong>reservadas</strong> e não podem ser nome de variável. O manual do Lua 5.5 lista estas:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><td><code>and</code></td><td><code>break</code></td><td><code>do</code></td><td><code>else</code></td><td><code>elseif</code></td><td><code>end</code></td></tr>
+<tr><td><code>false</code></td><td><code>for</code></td><td><code>function</code></td><td><code>global</code></td><td><code>goto</code></td><td><code>if</code></td></tr>
+<tr><td><code>in</code></td><td><code>local</code></td><td><code>nil</code></td><td><code>not</code></td><td><code>or</code></td><td><code>repeat</code></td></tr>
+<tr><td><code>return</code></td><td><code>then</code></td><td><code>true</code></td><td><code>until</code></td><td><code>while</code></td><td></td></tr>
+</table>
+</div>
+
+<p>São 23 (a lista com o significado de cada uma está em <a href="ref-palavras-chave.html">Palavras Reservadas</a>). Tente usar uma delas como nome:</p>
+
+<pre class="file" data-file="reservada.lua">local end = 10
+</pre>
+
+<pre class="term">$ lua reservada.lua
+lua: reservada.lua:1: &lt;name&gt; expected near 'end'
+</pre>
+
+<p>"Esperava um <code>&lt;name&gt;</code> (um nome) perto de <code>end</code>". Depois do <code>local</code>, o Lua quer um nome de variável; <code>end</code> não conta como nome, porque é a palavra que fecha blocos. A mesma mensagem aparece com as outras: na máquina da Ana, <code>local and = 5</code> e <code>local goto = "ir"</code> deram o mesmo <code>&lt;name&gt; expected</code>. Em português, quase nunca você vai tropeçar nisso, mas fique de olho em <code>end</code> ("fim"), <code>in</code> e <code>do</code>: um <code>fim</code>, um <code>dentro</code> ou um <code>fazer</code> resolvem.</p>
+
+<div class="note">
+<strong>O caso do <code>global</code> <span class="versao">5.5</span></strong>
+<p>O <code>global</code> é a palavra nova do Lua 5.5 (aula <a href="global.html">A Declaração global</a>). O manual a lista como reservada, mas o Lua 5.5.0 vem, por padrão, com uma opção de compatibilidade (<code>LUA_COMPAT_GLOBAL</code>) que ainda deixa usá-la como nome, para não quebrar programas antigos. Na máquina da Ana (e no editor do guia), <code>local global = 1</code> seguido de <code>print(global)</code> mostrou <code>1</code>, sem erro. Mesmo assim, <strong>não use</strong> <code>global</code> como nome: uma versão futura pode tirar essa compatibilidade.</p>
+</div>
+
+<p>As palavras reservadas também diferenciam maiúsculas: <code>Local</code> e <code>END</code> não são reservadas: <code>local Local = "a padaria"</code> e <code>local END = "fim"</code> funcionaram na máquina da Ana. Funcionar, funcionam; mas um programa com uma variável chamada <code>Local</code> é um quebra-cabeça para quem lê.</p>
+
+<hr>
+
+<h2>5. Os bons costumes</h2>
+
+<h3>Nomes que explicam</h3>
+<p>Compare as duas versões do mesmo cálculo:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Difícil de ler</th><th>Fácil de ler</th></tr>
+<tr><td><code>local q = 3</code><br><code>local p = 5</code><br><code>local t = q * p</code></td><td><code>local quantidade = 3</code><br><code>local preco = 5</code><br><code>local total = quantidade * preco</code></td></tr>
+</table>
+</div>
+
+<p>Para o Lua, tanto faz. Para a Ana daqui a um mês, a diferença é enorme. Letras soltas como <code>i</code>, <code>x</code> e <code>n</code> são aceitáveis só em pedaços bem curtos (o contador de um <a href="for-numerico.html">for</a>, uma conta de matemática).</p>
+
+<h3>Qual estilo de escrita</h3>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Estilo</th><th>Exemplo</th><th>No Lua</th></tr>
+<tr><td>minúsculas_com_sublinhado (<em>snake_case</em>, "estilo cobra")</td><td><code>preco_do_bolo</code></td><td>Muito usado em código Lua. <strong>É o deste guia.</strong></td></tr>
+<tr><td>minúsculasGrudadas (<em>camelCase</em>, "estilo camelo")</td><td><code>precoDoBolo</code></td><td>Aparece em projetos que vieram de JavaScript ou Java, e no Roblox (Luau). Funciona igual</td></tr>
+<tr><td>MAIÚSCULAS_COM_SUBLINHADO</td><td><code>TAXA_ENTREGA</code></td><td>Costume para valores que não mudam (constantes; aula <a href="const.html">Constantes</a>)</td></tr>
+<tr><td>tudo grudado em minúsculas</td><td><code>precodobolo</code></td><td>Funciona, mas é difícil de ler. Evite</td></tr>
+</table>
+</div>
+
+<p>O mais importante não é qual estilo, e sim <strong>usar sempre o mesmo</strong> no programa inteiro.</p>
+
+<h3>Nomes para evitar</h3>
+<ul>
+  <li><strong>Os nomes das funções e bibliotecas do Lua</strong>: <code>print</code>, <code>type</code>, <code>string</code>, <code>table</code>, <code>io</code>, <code>os</code>, <code>math</code>, <code>next</code>, <code>select</code>... Eles <strong>não</strong> são reservados (o Lua deixa), mas uma variável com esse nome esconde a função de verdade. A aula <a href="local.html">local × Global</a> mostrou o <code>type = "integral"</code> quebrando o <code>type(10)</code>. Nomes em português evitam o problema quase sempre.</li>
+  <li><strong>Sublinhado seguido de maiúscula</strong>, como <code>_VERSION</code> ou <code>_G</code>: o manual pede que os programas não criem nomes assim, porque o Lua os usa para as suas variáveis internas (<code>print(_VERSION)</code> mostra <code>Lua 5.5</code>).</li>
+  <li><strong>Só um sublinhado</strong>, <code>_</code>: pode, mas por costume ele quer dizer "este valor eu não vou usar". Você vai ver isso em <a href="ipairs.html">ipairs</a> (<code>for _, item in ipairs(lista)</code>).</li>
+</ul>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+
+<div class="cenario">
+<strong>Começando com algarismo</strong>
+<pre class="file" data-file="digito.lua">local 2lugar = "Bia"
+</pre>
+<pre class="term">$ lua digito.lua
+lua: digito.lua:1: malformed number near '2l'
+</pre>
+<p>"Número malformado perto de <code>2l</code>". Quando um nome começa com algarismo, o Lua acha que é um <strong>número</strong>, e <code>2l</code> não é número nenhum. <strong>Como consertar:</strong> ponha o algarismo depois (<code>lugar2</code>) ou escreva por extenso (<code>segundo_lugar</code>).</p>
+</div>
+
+<div class="cenario">
+<strong>Hífen no lugar do sublinhado</strong>
+<pre class="file" data-file="hifen.lua">local preco-pao = 0.9
+</pre>
+<pre class="term">$ lua hifen.lua
+lua: hifen.lua:1: unexpected symbol near '-'
+</pre>
+<p>O <code>-</code> é o sinal de menos: o Lua leu <code>local preco</code> e depois "menos <code>pao</code>", o que não faz sentido depois de um <code>local</code>. <strong>Como consertar:</strong> <code>preco_pao</code>, com sublinhado. O ponto (<code>local preco.pao</code>) dá o mesmo erro, <code>unexpected symbol near '.'</code>, porque o ponto quer dizer "campo de uma tabela" (aula <a href="tabelas.html">Tabelas</a>).</p>
+</div>
+
+<div class="cenario">
+<strong>Espaço no meio do nome: não dá erro, dá <code>nil</code></strong>
+<pre class="file" data-file="espaco.lua">local preco pao = 0.9
+print(preco)
+</pre>
+<pre class="term">$ lua espaco.lua
+nil
+</pre>
+<p>Este é traiçoeiro: nenhum erro. O Lua leu <strong>dois comandos</strong> numa linha só: <code>local preco</code> (uma local sem valor) e <code>pao = 0.9</code> (uma <strong>global</strong> chamada <code>pao</code>). Por isso o <code>preco</code> saiu <code>nil</code>. <strong>Como consertar:</strong> <code>local preco_pao = 0.9</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Palavra reservada como nome</strong>
+<pre class="file" data-file="reservada2.lua">local fim = 10
+local and = 5
+</pre>
+<pre class="term">$ lua reservada2.lua
+lua: reservada2.lua:2: &lt;name&gt; expected near 'and'
+</pre>
+<p><code>fim</code> é um nome comum; <code>and</code> ("e") é reservada. <strong>Como consertar:</strong> outro nome (<code>e_tambem</code>, <code>extra</code>...).</p>
+</div>
+
+<div class="cenario">
+<strong>Caractere especial</strong>
+<pre class="file" data-file="cifrao.lua">local $preco = 5
+</pre>
+<pre class="term">$ lua cifrao.lua
+lua: cifrao.lua:1: &lt;name&gt; expected near '$'
+</pre>
+<p>Quem vem do PHP ou do bash põe <code>$</code> na frente das variáveis. No Lua, não: <code>$</code> não pode aparecer em nome nenhum. <strong>Como consertar:</strong> <code>local preco = 5</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Acento</strong>
+<pre class="term">$ lua acento.lua
+lua: acento.lua:1: unexpected symbol near '&lt;\195&gt;'
+</pre>
+<p>Seção 2: tire o acento do nome (<code>acao</code>). O <code>&lt;\195&gt;</code> numa mensagem quase sempre é uma letra acentuada fora das aspas.</p>
+</div>
+
+<hr>
+
+<h2>Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Nome</th><th>Pode?</th><th>Por quê</th></tr>
+<tr><td><code>preco</code>, <code>quantidade</code></td><td>Sim</td><td>Letras sem acento</td></tr>
+<tr><td><code>preco_pao</code>, <code>_rascunho</code></td><td>Sim</td><td>Sublinhado em qualquer lugar</td></tr>
+<tr><td><code>total2</code></td><td>Sim</td><td>Algarismo, desde que não no começo</td></tr>
+<tr><td><code>precoDoBolo</code>, <code>TAXA</code></td><td>Sim</td><td>Maiúsculas podem (e são outros nomes)</td></tr>
+<tr><td><code>preço</code></td><td>Não</td><td>Acento: <code>unexpected symbol near '&lt;\195&gt;'</code></td></tr>
+<tr><td><code>2lugar</code></td><td>Não</td><td>Começa com algarismo: <code>malformed number</code></td></tr>
+<tr><td><code>preco-pao</code>, <code>preco.pao</code></td><td>Não</td><td>Hífen e ponto: <code>unexpected symbol</code></td></tr>
+<tr><td><code>preco pao</code></td><td>Não</td><td>Vira dois comandos, sem erro</td></tr>
+<tr><td><code>end</code>, <code>and</code>, <code>if</code>...</td><td>Não</td><td>Reservadas: <code>&lt;name&gt; expected</code></td></tr>
+<tr><td><code>$preco</code></td><td>Não</td><td><code>$</code> não é permitido</td></tr>
+<tr><td><code>print</code>, <code>type</code>, <code>string</code></td><td>Pode, mas evite</td><td>Esconde a função do Lua</td></tr>
+<tr><td><code>_VERSION</code>, <code>_TOTAL</code></td><td>Pode, mas evite</td><td>Estilo reservado para o próprio Lua</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. Tire o acento</h3>
+<p>Reescreva o nome <code>endereço</code> para que funcione como nome de variável no Lua:</p>
+<div class="ex-code">local <input data-answer="endereco" aria-label="nome"> = "Rua das Flores"</div>
+</div>
+
+<div class="exercise">
+<h3>2. Duas palavras</h3>
+<p>Escreva "data de entrega" como um nome de variável no estilo deste guia:</p>
+<div class="ex-code">local <input data-answer="data_de_entrega|data_entrega" aria-label="nome"> = "sexta"</div>
+</div>
+
+<div class="mc" data-answer="3">
+<p class="mc-q">3. Qual destes nomes é válido no Lua 5.5?</p>
+<label><input type="radio" name="q3"> <code>1a_vez</code></label>
+<label><input type="radio" name="q3"> <code>mês</code></label>
+<label><input type="radio" name="q3"> <code>primeira_vez</code></label>
+<label><input type="radio" name="q3"> <code>primeira-vez</code></label>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">4. O programa tem <code>local Total = 30</code> e depois <code>print(total)</code>. O que aparece?</p>
+<label><input type="radio" name="q4"> <code>30</code></label>
+<label><input type="radio" name="q4"> <code>nil</code></label>
+<label><input type="radio" name="q4"> Um erro de sintaxe</label>
+<label><input type="radio" name="q4"> <code>Total</code></label>
+</div>
+
+<div class="mc" data-answer="4">
+<p class="mc-q">5. Qual destas palavras é <strong>reservada</strong> e não pode ser nome de variável?</p>
+<label><input type="radio" name="q5"> <code>fim</code></label>
+<label><input type="radio" name="q5"> <code>print</code></label>
+<label><input type="radio" name="q5"> <code>End</code></label>
+<label><input type="radio" name="q5"> <code>end</code></label>
+</div>
+
+<div class="mc" data-answer="1">
+<p class="mc-q">6. Uma mensagem de erro diz <code>near '&lt;\195&gt;'</code>. O que você procura no código?</p>
+<label><input type="radio" name="q6"> Uma letra com acento (ou cedilha) fora das aspas</label>
+<label><input type="radio" name="q6"> Um número grande demais</label>
+<label><input type="radio" name="q6"> Um parêntese a mais</label>
+<label><input type="radio" name="q6"> A linha 195 do arquivo</label>
+</div>
+
+<h3>Missão final: o pódio da corrida da escola</h3>
+
+<div class="trylua" data-goal="semerro;;outre:Ana\s+Bia\s+Caio">
+<p class="try-task"><strong>Missão:</strong> os três nomes de variável abaixo quebram as regras, um de cada jeito. Rode, leia a mensagem, conserte um por vez (use <code>primeiro_lugar</code>, <code>segundo_lugar</code> e <code>terceiro_lugar</code>) até o programa mostrar <code>Ana</code>, <code>Bia</code> e <code>Caio</code>. Lembre de trocar também na linha do <code>print</code>.</p>
+<pre class="script" data-file="main.lua">local 1o_lugar = "Ana"
+local segundo-lugar = "Bia"
+local terceiro lugar = "Caio"
+print(1o_lugar, segundo-lugar, terceiro lugar)
+</pre>
+<pre class="solucao" data-file="main.lua">local primeiro_lugar = "Ana"
+local segundo_lugar = "Bia"
+local terceiro_lugar = "Caio"
+print(primeiro_lugar, segundo_lugar, terceiro_lugar)
+</pre>
+</div>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li>Um nome tem letras sem acento, algarismos (não no começo) e sublinhado. Nada de espaço, hífen, ponto, <code>$</code> ou acento.</li>
+  <li>Acento no nome é erro de sintaxe no Lua 5.5 e no 5.4 (<code>unexpected symbol near '&lt;\195&gt;'</code>); só o LuaJIT aceita. Dentro de textos e comentários, acento funciona.</li>
+  <li>Maiúsculas importam: <code>cliente</code> e <code>Cliente</code> são nomes diferentes; trocar um pelo outro dá <code>nil</code>, sem erro.</li>
+  <li>As 23 palavras reservadas (<code>and</code>, <code>end</code>, <code>local</code>, <code>if</code>...) não podem ser nomes: <code>&lt;name&gt; expected</code>.</li>
+  <li>Bons costumes: nomes claros, em português, em <code>minúsculas_com_sublinhado</code>, sempre no mesmo estilo; constantes em MAIÚSCULAS.</li>
+  <li>Evite os nomes das funções do Lua (<code>print</code>, <code>type</code>...) e os que começam com <code>_</code> e maiúscula.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
