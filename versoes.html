@@ -441,7 +441,50 @@ stack traceback:
 
 <hr>
 
-<h2>12. E o Luau?</h2>
+<h2>12. Metamétodos: <code>__le</code> e <code>__len</code></h2>
+<p>Duas diferenças aparecem em quem usa <a href="metatabelas.html">metatabelas</a> (aula <a href="metametodos-aritmeticos.html">Metamétodos de Operadores</a>):</p>
+
+<pre class="file" data-file="lele.lua">local mt = { __lt = function (a, b) return a.v &lt; b.v end }
+local a = setmetatable({ v = 1 }, mt)
+local b = setmetatable({ v = 2 }, mt)
+print(a &lt; b)
+print(a &lt;= b)
+</pre>
+
+<pre class="term">$ for L in lua lua5.4 lua5.1 luajit; do echo "== $L"; $L lele.lua; done
+== lua
+true
+lua: lele.lua:5: attempt to compare two table values
+stack traceback:
+	lele.lua:5: in main chunk
+	[C]: in ?
+== lua5.4
+true
+true
+== lua5.1
+true
+true
+== luajit
+true
+true</pre>
+
+<p>A metatabela só define o <code>__lt</code> ("menor que"). As versões antigas <strong>deduziam</strong> o <code>&lt;=</code> a partir dele (<code>a &lt;= b</code> como "não <code>b &lt; a</code>"). O manual do 5.4 já diz que isso foi removido, mas o <code>lua5.4</code> do Ubuntu foi compilado com a compatibilidade com o 5.3 e ainda deduz. No <strong>5.5</strong> não há mais esse modo: sem um <code>__le</code>, o <code>&lt;=</code> dá erro. <strong>Conserto que serve em todas:</strong> defina o <code>__le</code> também.</p>
+
+<pre class="file" data-file="len.lua">local t = setmetatable({}, { __len = function () return 42 end })
+print(#t)
+</pre>
+
+<pre class="term">$ for L in lua lua5.4 lua5.1 luajit; do $L len.lua; done
+42
+42
+0
+42</pre>
+
+<p>O <code>__len</code> (aula <a href="tostring-call-len.html">__tostring, __call e __len</a>) muda o que o <code>#</code> responde para uma tabela no 5.2 em diante. No 5.1, o <code>#</code> de uma tabela ignora o <code>__len</code> (deu <code>0</code>); o LuaJIT, aqui, se comporta como as versões novas (<code>42</code>).</p>
+
+<hr>
+
+<h2>13. E o Luau?</h2>
 <p>O Luau, do Roblox, não roda na máquina da Ana; esta seção é um resumo do que o site oficial diz (<a href="https://luau.org/syntax">luau.org/syntax</a> e <a href="https://luau.org/compatibility">luau.org/compatibility</a>), <strong>sem saídas</strong>. Ele parte do Lua 5.1 e foi por outro caminho:</p>
 
 <div class="table-wrap">
@@ -536,6 +579,8 @@ Ana	Bia	Caio</pre>
 <tr><td>variável do <code>for</code> constante</td><td>✘</td><td>✘</td><td>✘</td><td>✘</td><td>✘</td><td>✔</td><td>—</td></tr>
 <tr><td><code>global</code></td><td>✘</td><td>✘</td><td>✘</td><td>✘</td><td>✘</td><td>✔</td><td>✘</td></tr>
 <tr><td>floats com todos os dígitos (<code>0.30000000000000004</code>)</td><td>✘</td><td>✘</td><td>—</td><td>—</td><td>✘</td><td>✔</td><td>—</td></tr>
+<tr><td><code>&lt;=</code> deduzido do <code>__lt</code></td><td>✔</td><td>✔</td><td>—</td><td>—</td><td>✔ (Ubuntu, compat.)</td><td>✘</td><td>—</td></tr>
+<tr><td><code>__len</code> em tabelas</td><td>✘</td><td>✔</td><td>—</td><td>—</td><td>✔</td><td>✔</td><td>—</td></tr>
 <tr><td>acento em nome de variável</td><td>✘</td><td>✔ (só ele)</td><td>✘</td><td>✘</td><td>✘</td><td>✘</td><td>—</td></tr>
 </table>
 </div>
