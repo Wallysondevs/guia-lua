@@ -111,7 +111,7 @@ $ sudo update-alternatives --set lua-compiler /usr/bin/luac5.5</pre>
 <h3>O que precisa estar instalado antes</h3>
 <p>Para compilar, o LuaRocks precisa dos cabeçalhos do Lua 5.5 (o pacote <code>liblua5.5-dev</code>, que você talvez já tenha instalado na aula <a href="instalar.html">Instalar o Lua</a>), do compilador de C (<code>gcc</code>), do <code>make</code>, do <code>unzip</code> e do <code>wget</code>. São os que o lab tem:</p>
 <pre class="term">$ sudo apt install liblua5.5-dev gcc make unzip wget</pre>
-<p>(Esta linha não rodou no lab, que não tem <code>sudo</code>; os pacotes já estavam lá.) O <code>make</code> e o <code>gcc</code> também servem para as rocks escritas em C, como a da seção 4.</p>
+<p>(Esta linha não rodou no lab, que não tem <code>sudo</code>; os pacotes já estavam lá.) O <code>make</code> e o <code>gcc</code> também servem para as rocks escritas em C, como a da seção 5.</p>
 
 <h3>Passo a passo</h3>
 <ol class="passo">
@@ -177,7 +177,7 @@ $ ~/.local/bin/luarocks config lua_version
 
 <div class="tip">
 <strong>Por que <code>~/.local/bin/luarocks</code> e não só <code>luarocks</code>?</strong>
-<p>Até você configurar o terminal (seção 5), o comando <code>luarocks</code> sozinho ainda pode ser o antigo, do <code>apt</code> (se ele estiver instalado), ou nem existir. O caminho completo garante que é o novo. Num Ubuntu, a pasta <code>~/.local/bin</code> entra no <code>PATH</code> sozinha a partir do <strong>próximo login</strong>, se ela existir; até lá, use o caminho completo.</p>
+<p>Até você configurar o terminal (seção 4), o comando <code>luarocks</code> sozinho ainda pode ser o antigo, do <code>apt</code> (se ele estiver instalado), ou nem existir. O caminho completo garante que é o novo. Num Ubuntu, a pasta <code>~/.local/bin</code> entra no <code>PATH</code> sozinha a partir do <strong>próximo login</strong>, se ela existir; até lá, use o caminho completo.</p>
 </div>
 
 <hr>
