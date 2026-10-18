@@ -1,0 +1,573 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua números — inteiro e float, math.type e os limites | Guia Lua</title>
+<meta name="description" content="Os números do Lua 5.5 para quem nunca programou: o tipo number e os dois subtipos (integer e float), math.type, 3 × 3.0, por que 10 / 2 dá 5.0, como escrever números (1e3, 0xff), math.maxinteger e o estouro que dá a volta, 0.1 + 0.2, inf e nan, e os erros reais (malformed number, a vírgula no lugar do ponto).">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">Números</span> (inteiro e float)</h1>
+
+<p class="intro">Quase todo programa faz conta: o preço do pão, a soma das notas da turma, quantos lápis cabem no estoque. No Lua, todo número é do tipo <code>number</code> (em inglês, "número"). Mas por dentro existem <strong>dois jeitos</strong> de guardar um número: o <strong>inteiro</strong> (<em>integer</em>), para contar coisas inteiras, e o <strong>float</strong> (de <em>floating point</em>, "ponto flutuante"), para números com vírgula. Nesta aula você aprende a reconhecer cada um, a escrever números do jeito que o Lua entende e o que acontece nos limites.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>Que o tipo <code>number</code> tem dois <strong>subtipos</strong>: <code>integer</code> (inteiro) e <code>float</code> (com casas decimais), e como descobrir qual é com <code>math.type</code>.</li>
+  <li>Por que <code>3</code> e <code>3.0</code> são iguais, mas aparecem diferentes na tela.</li>
+  <li>Por que <code>10 / 2</code> dá <code>5.0</code>, e quais contas devolvem inteiro e quais devolvem float.</li>
+  <li>Como escrever números: com ponto decimal, com expoente (<code>1e3</code>) e em hexadecimal (<code>0xff</code>).</li>
+  <li>O maior inteiro (<code>math.maxinteger</code>) e o <strong>estouro</strong>: passou do limite, o número "dá a volta" e vira negativo.</li>
+  <li>Por que <code>0.1 + 0.2</code> não dá exatamente <code>0.3</code>, e o que são <code>inf</code> e <code>nan</code>.</li>
+  <li>Os erros reais: <code>malformed number</code>, a vírgula no lugar do ponto e o <code>nil</code> que vem do <code>math.tointeger</code>.</li>
+</ul>
+</div>
+
+<p>Todos os programas desta aula rodaram no <strong>Lua 5.5</strong> da máquina da Ana (usuária <code>ana</code>, computador <code>notebook</code>), salvos na pasta pessoal dela e executados com <code>lua arquivo.lua</code> (veja <a href="executar.html">Rodando um Programa</a>). Você pode rodar cada um no editor do guia.</p>
+
+<hr>
+
+<h2>A ideia: contar pães × pesar farinha</h2>
+<p>Na padaria do bairro existem dois tipos de número no dia a dia:</p>
+<ul>
+  <li>Os que a gente <strong>conta</strong>: 12 pães, 3 clientes na fila, 250 caixas no estoque. Nunca existe "meio cliente". Esses são os <strong>inteiros</strong>.</li>
+  <li>Os que a gente <strong>mede</strong>: 0,75 real por pão, 1,5 kg de farinha, 36,6 graus no termômetro. Eles têm casas depois da vírgula. Esses são os <strong>floats</strong>.</li>
+</ul>
+<p>O Lua faz a mesma separação. Para ele, os dois são do tipo <code>number</code> (o que a função <code>type</code> responde; veja <a href="type.html">Descobrindo o Tipo</a>), mas cada número é guardado como inteiro <strong>ou</strong> como float. Esse "jeito de guardar" se chama <strong>subtipo</strong>. Quase sempre o Lua cuida disso sozinho; esta aula mostra quando a diferença aparece.</p>
+
+<div class="warning">
+<strong>No Lua, a vírgula decimal é um ponto</strong>
+<p>Em português escrevemos <strong>0,75</strong>. Em Lua (e em quase toda linguagem de programação) escreve-se <code>0.75</code>, com <strong>ponto</strong>. A vírgula tem outro trabalho no Lua (separar valores), e trocar uma pela outra gera um erro silencioso: veja <a href="#errado">Quando dá errado</a>.</p>
+</div>
+
+<hr>
+
+<h2>1. Inteiro e float: <code>math.type</code></h2>
+
+<pre class="file" data-file="tipos.lua">print(3, 3.0, -7, 0.5)
+print(type(3), type(3.0))
+print(math.type(3), math.type(3.0), math.type("3"))
+print(3 == 3.0)
+</pre>
+
+<pre class="term">$ lua tipos.lua
+3	3.0	-7	0.5
+number	number
+integer	float	nil
+true</pre>
+
+<dl class="anatomy">
+  <dt>print(3, 3.0, -7, 0.5)</dt><dd>Mostra quatro números. O <code>print</code> separa os valores com uma tabulação (um espaço largo; veja <a href="print.html">print()</a>). Repare: o <code>3</code> aparece como <code>3</code>, e o <code>3.0</code> aparece como <code>3.0</code>. O Lua lembra como cada número foi guardado.</dd>
+  <dt>type(3), type(3.0)</dt><dd>Os dois são do tipo <code>number</code>. Para o <code>type</code>, não há diferença.</dd>
+  <dt>math.type(3)</dt><dd>A função <code>math.type</code> (da biblioteca <code>math</code>, "matemática"; veja <a href="math.html">A Biblioteca math</a>) conta o <strong>subtipo</strong>: <code>integer</code> ("inteiro").</dd>
+  <dt>math.type(3.0)</dt><dd><code>float</code>: basta ter o ponto decimal para o número ser guardado como float, mesmo que a parte depois do ponto seja zero.</dd>
+  <dt>math.type("3")</dt><dd><code>"3"</code> entre aspas é um <strong>texto</strong>, não um número. Para algo que não é número, o <code>math.type</code> responde <code>nil</code> ("nada"; veja <a href="nil.html">O Valor nil</a>). Transformar o texto <code>"3"</code> no número <code>3</code> é assunto da próxima aula, <a href="conversao.html">Conversão</a>.</dd>
+  <dt>3 == 3.0</dt><dd>O <code>==</code> pergunta "é igual?" (veja <a href="operadores-comparacao.html">Comparações</a>). A resposta é <code>true</code> ("verdadeiro"): o <strong>valor</strong> é o mesmo, só o jeito de guardar muda.</dd>
+</dl>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Subtipo</th><th>Como se escreve</th><th>Para que serve</th><th>Exemplos</th></tr>
+<tr><td><code>integer</code> (inteiro)</td><td>só algarismos, sem ponto</td><td>contar: itens, pessoas, voltas de um laço, posições numa lista</td><td><code>12</code>, <code>0</code>, <code>-7</code>, <code>250</code></td></tr>
+<tr><td><code>float</code></td><td>com ponto decimal ou com expoente</td><td>medir: preço, peso, temperatura, médias</td><td><code>0.75</code>, <code>3.0</code>, <code>-2.5</code>, <code>1e3</code></td></tr>
+</table>
+</div>
+
+<h3>No modo interativo</h3>
+<p>No <code>&gt;</code> do Lua (veja <a href="repl.html">O Modo Interativo</a>) você digita uma expressão e ele mostra o resultado na hora. É ótimo para ver os subtipos:</p>
+
+<pre class="term">$ lua
+Lua 5.5.0  Copyright (C) 1994-2025 Lua.org, PUC-Rio
+&gt; 3
+3
+&gt; 3.0
+3.0
+&gt; math.type(3)
+integer
+&gt; math.type(3.0)
+float
+&gt; type(3.0)
+number
+&gt; 10 / 2
+5.0
+&gt; 3 == 3.0
+true
+&gt; os.exit()</pre>
+
+<p>Esse <code>10 / 2</code> que deu <code>5.0</code> (e não <code>5</code>) é a próxima seção.</p>
+
+<div class="trylua" data-goal="out:float;;semerro">
+<p class="try-task"><strong>Missão:</strong> o programa mostra o subtipo do preço do pão. Hoje ele diz <code>integer</code>, porque o preço foi escrito como <code>1</code>. Mude o preço para <strong>um real e vinte centavos</strong> (lembre: com ponto) e rode de novo.</p>
+<pre class="script" data-file="main.lua">local preco = 1
+print("Preço:", preco)
+print("Subtipo:", math.type(preco))
+</pre>
+<pre class="solucao" data-file="main.lua">local preco = 1.20
+print("Preço:", preco)
+print("Subtipo:", math.type(preco))
+</pre>
+</div>
+
+<p>Repare que o Lua mostra <code>1.2</code>, sem o zero do fim: ele não guarda "quantas casas você digitou", só o valor. Para mostrar sempre duas casas (<code>1.20</code>), use <code>string.format("%.2f", preco)</code>, que tem aula própria: <a href="string-format.html">string.format</a>.</p>
+
+<hr>
+
+<h2>2. Que subtipo sai de cada conta</h2>
+<p>Quando você faz uma conta, o resultado também tem um subtipo. A regra é curta:</p>
+
+<pre class="file" data-file="contas.lua">print(2 + 3, 2 + 3.0, 2.5 + 2.5)
+print(10 / 2, 7 / 2)
+print(2 ^ 3, 10 * 1.0)
+print(math.type(2 + 3), math.type(2 + 3.0), math.type(10 / 2))
+</pre>
+
+<pre class="term">$ lua contas.lua
+5	5.0	5.0
+5.0	3.5
+8.0	10.0
+integer	float	float</pre>
+
+<ol class="passo">
+  <li><strong>Inteiro com inteiro</strong> (em <code>+</code>, <code>-</code>, <code>*</code>, <code>//</code> e <code>%</code>) dá <strong>inteiro</strong>: <code>2 + 3</code> é <code>5</code>.</li>
+  <li><strong>Basta um float</strong> na conta para o resultado ser float: <code>2 + 3.0</code> é <code>5.0</code>. O Lua converte o inteiro em float antes de somar.</li>
+  <li><strong>A divisão <code>/</code> e a potência <code>^</code> sempre dão float</strong>, mesmo com dois inteiros e mesmo quando a conta "fecha": <code>10 / 2</code> é <code>5.0</code> e <code>2 ^ 3</code> é <code>8.0</code>. É que uma divisão quase nunca dá inteiro (<code>7 / 2</code> é <code>3.5</code>), então o Lua sempre devolve o subtipo que serve para todos os casos.</li>
+</ol>
+
+<p>Na padaria da Ana: 12 pães (inteiro) a R$ 0,75 (float) dão um total float, mesmo sendo 9 reais redondos:</p>
+
+<pre class="file" data-file="padaria.lua">local paes = 12
+local preco = 0.75
+local total = paes * preco
+print(paes, math.type(paes))
+print(preco, math.type(preco))
+print(total, math.type(total))
+</pre>
+
+<pre class="term">$ lua padaria.lua
+12	integer
+0.75	float
+9.0	float</pre>
+
+<div class="tip">
+<strong>Na maior parte do tempo, não importa</strong>
+<p><code>9.0</code> e <code>9</code> são iguais para o Lua (<code>9.0 == 9</code> é <code>true</code>) e servem igual em qualquer conta. A diferença aparece quando você <strong>mostra</strong> o número (o <code>.0</code> na tela) e em alguns lugares que exigem um inteiro de verdade (como o <code>%d</code> do <code>string.format</code>). Todos os operadores, um por um, estão em <a href="operadores-aritmeticos.html">Operadores Aritméticos</a>, e a divisão tem aula própria: <a href="divisao.html">Divisão: /, // e %</a>.</p>
+</div>
+
+<hr>
+
+<h2>3. Escrevendo números</h2>
+<p>Além do jeito comum, o Lua aceita algumas formas de escrever um número no código:</p>
+
+<pre class="file" data-file="escrever.lua">print(42, -7, 3.14, .5, 5.)
+print(1e3, 2.5e-3, 1E6)
+print(0xff, 0x10, 0XA)
+print(1000000, 1e15, 1e16)
+print(math.type(1e3), math.type(0xff))
+</pre>
+
+<pre class="term">$ lua escrever.lua
+42	-7	3.14	0.5	5.0
+1000.0	0.0025	1000000.0
+255	16	10
+1000000	1e+15	1e+16
+float	integer</pre>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>Lê-se</th><th>Valor</th><th>Subtipo</th></tr>
+<tr><td><code>42</code>, <code>-7</code></td><td>o número normal (o <code>-</code> na frente faz o negativo)</td><td>42, −7</td><td>integer</td></tr>
+<tr><td><code>3.14</code></td><td>com ponto decimal</td><td>3,14</td><td>float</td></tr>
+<tr><td><code>.5</code> e <code>5.</code></td><td>pode faltar o zero antes ou depois do ponto (mas fica mais claro escrever <code>0.5</code> e <code>5.0</code>)</td><td>0,5 e 5,0</td><td>float</td></tr>
+<tr><td><code>1e3</code></td><td>"1 vezes 10 elevado a 3" (o <code>e</code> é de "expoente"; pode ser <code>E</code>)</td><td>1000,0</td><td>float, sempre</td></tr>
+<tr><td><code>2.5e-3</code></td><td>"2,5 vezes 10 elevado a −3": anda 3 casas para a esquerda</td><td>0,0025</td><td>float</td></tr>
+<tr><td><code>0xff</code></td><td><strong>hexadecimal</strong> (base 16, letras de <code>a</code> a <code>f</code>; o <code>0x</code> avisa)</td><td>255</td><td>integer</td></tr>
+</table>
+</div>
+
+<p>Dois detalhes da tela:</p>
+<ul>
+  <li>Floats muito grandes aparecem com expoente: <code>1e15</code> sai como <code>1e+15</code> ("1 vezes 10 elevado a +15"). Inteiros nunca: <code>1000000</code> sai inteiro.</li>
+  <li>Hexadecimal você vai ver em cores (<code>0xff0000</code> é o vermelho) e nos <a href="operadores-bits.html">Operadores de Bits</a>. Não precisa decorar agora.</li>
+</ul>
+
+<div class="note">
+<strong>Sem separador de milhar</strong>
+<p>No código, um milhão se escreve <code>1000000</code>, tudo junto. O Lua não aceita <code>1.000.000</code> (com pontos) nem <code>1_000_000</code> (com sublinhados, que algumas linguagens aceitam): os dois dão erro de sintaxe. A mensagem está em <a href="#errado">Quando dá errado</a>.</p>
+</div>
+
+<hr>
+
+<h2>4. O maior inteiro e o estouro que "dá a volta"</h2>
+<p>Um inteiro do Lua ocupa 64 bits (64 "casinhas" de 0 e 1) na memória. Isso dá para números enormes, mas <strong>não infinitos</strong>. Os limites ficam guardados em <code>math.maxinteger</code> (o maior) e <code>math.mininteger</code> (o menor):</p>
+
+<pre class="file" data-file="limite.lua">print(math.maxinteger)
+print(math.mininteger)
+print(math.maxinteger + 1)
+print(math.maxinteger + 1 == math.mininteger)
+print(math.maxinteger * 2)
+print(math.maxinteger + 1.0)
+print(9223372036854775807, 9223372036854775808)
+print(math.type(9223372036854775808))
+</pre>
+
+<pre class="term">$ lua limite.lua
+9223372036854775807
+-9223372036854775808
+-9223372036854775808
+true
+-2
+9.2233720368547758e+18
+9223372036854775807	9.2233720368547758e+18
+float</pre>
+
+<p>Linha por linha:</p>
+<dl class="anatomy">
+  <dt>9223372036854775807</dt><dd>O maior inteiro: mais de 9 quintilhões. Dá para contar os grãos de areia de muitas praias.</dd>
+  <dt>-9223372036854775808</dt><dd>O menor inteiro (o negativo vai uma unidade mais longe).</dd>
+  <dt>math.maxinteger + 1 → -9223372036854775808</dt><dd>Aqui está a surpresa: somar 1 ao maior inteiro <strong>não dá erro</strong>. O número <strong>dá a volta</strong> e vira o menor inteiro, como o odômetro de um carro antigo que, depois de 99999 km, volta para 00000. Isso se chama <strong>estouro</strong> (em inglês, <em>overflow</em>).</dd>
+  <dt>math.maxinteger * 2 → -2</dt><dd>Multiplicar também estoura, e o resultado parece não fazer sentido nenhum. O Lua não avisa.</dd>
+  <dt>math.maxinteger + 1.0</dt><dd>Com um float na conta, o resultado é float, e float não estoura desse jeito: dá <code>9.2233720368547758e+18</code> (cerca de 9,2 vezes 10 elevado a 18).</dd>
+  <dt>9223372036854775808</dt><dd>Se você <strong>escreve</strong> no código um inteiro grande demais, o Lua o guarda como float (o <code>math.type</code> diz <code>float</code>).</dd>
+</dl>
+
+<p>O estouro também acontece "para trás". Este programa anda um passo de cada vez perto do limite:</p>
+
+<pre class="file" data-file="volta.lua">local grande = math.maxinteger
+print(grande)
+print(grande + 1)
+print(grande + 2)
+print(math.mininteger - 1)
+</pre>
+
+<pre class="term">$ lua volta.lua
+9223372036854775807
+-9223372036854775808
+-9223372036854775807
+9223372036854775807</pre>
+
+<div class="warning">
+<strong>Na prática</strong>
+<p>Contas do dia a dia (dinheiro, notas, estoque) nunca chegam perto desse limite. O estouro aparece quando um número cresce sem parar, por exemplo multiplicando dentro de um laço (o fatorial de 21 já não cabe). Se o resultado de uma conta com números grandes ficou <strong>negativo do nada</strong>, desconfie do estouro.</p>
+</div>
+
+<hr>
+
+<h2>5. Floats são aproximados: <code>0.1 + 0.2</code></h2>
+<p>O float guarda o número em binário (base 2), e muitos números que são "redondos" para nós, como 0,1, não têm uma representação exata em binário. É como tentar escrever 1/3 em decimal: 0,3333… nunca termina, e em algum momento é preciso cortar. O resultado é que algumas contas ficam com um "fiapo" no fim:</p>
+
+<pre class="file" data-file="precisao.lua">print(0.1 + 0.2)
+print(0.1 + 0.2 == 0.3)
+print(string.format("%.17g", 0.1 + 0.2))
+print(string.format("%.2f", 0.1 + 0.2))
+print(2^53, 2^53 + 1)
+print(math.huge, -math.huge, 1/0, 0/0)
+print(100 * 1.1)
+</pre>
+
+<pre class="term">$ lua precisao.lua
+0.30000000000000004
+false
+0.30000000000000004
+0.30
+9007199254740992.0	9007199254740992.0
+inf	-inf	inf	-nan
+110.00000000000001</pre>
+
+<dl class="anatomy">
+  <dt>0.30000000000000004</dt><dd>O resultado de verdade de <code>0.1 + 0.2</code> no computador: um tiquinho a mais que 0,3.</dd>
+  <dt>0.1 + 0.2 == 0.3 → false</dt><dd>Por causa desse tiquinho, a comparação com <code>==</code> dá <code>false</code> ("falso"). <strong>Nunca compare floats com <code>==</code></strong> esperando o valor "redondo".</dd>
+  <dt>string.format("%.2f", …) → 0.30</dt><dd>Para mostrar, arredonde: duas casas resolvem o problema na tela.</dd>
+  <dt>2^53 e 2^53 + 1</dt><dd>Floats muito grandes perdem a precisão das unidades: somar 1 não muda nada. (Inteiros não têm esse problema até o <code>math.maxinteger</code>.)</dd>
+  <dt>inf e -inf</dt><dd>"Infinito": o que um float vira quando passa do maior float possível, ou quando você divide um número por zero com <code>/</code>. <code>math.huge</code> é o próprio infinito.</dd>
+  <dt>-nan</dt><dd><em>Not a Number</em>, "não é um número": o resultado de <code>0/0</code>, uma conta sem resposta. O sinal de menos é um detalhe do Linux; em outros computadores pode aparecer <code>nan</code>. A divisão por zero tem mais detalhes na aula <a href="divisao.html">Divisão</a>.</dd>
+  <dt>100 * 1.1 → 110.00000000000001</dt><dd>Mais um fiapo. Em dinheiro, isso incomoda.</dd>
+</dl>
+
+<div class="tip">
+<strong>Dinheiro sem fiapo: conte em centavos</strong>
+<p>Um truque muito usado: guarde dinheiro como <strong>inteiro de centavos</strong> (<code>local preco = 75</code> para R$ 0,75) e só divida por 100 na hora de mostrar. Contas com inteiros são sempre exatas. Outro jeito, mais simples, é deixar em float e sempre mostrar com <code>string.format("%.2f", valor)</code>.</p>
+</div>
+
+<div class="note">
+<strong><span class="versao">5.5</span> O Lua 5.5 mostra o float inteiro</strong>
+<p>Uma novidade do Lua 5.5: o <code>print</code> mostra um float com <strong>todos os algarismos necessários</strong> para ele ser lido de volta igualzinho. Por isso você viu <code>0.30000000000000004</code>. O Lua 5.4, o 5.1 e o LuaJIT arredondam para 14 algarismos e mostram <code>0.3</code>; o número guardado é o mesmo, e <code>0.1 + 0.2 == 0.3</code> dá <code>false</code> lá também (no lab, <code>lua5.4</code> mostrou <code>0.3</code> e <code>false</code>). Ou seja, o 5.5 não "errou a conta": ele só parou de esconder o fiapo. Mais em <a href="novidades.html">Novidades do Lua 5.5</a>.</p>
+</div>
+
+<hr>
+
+<h2>6. De float para inteiro</h2>
+<p>Às vezes você tem um float e precisa de um inteiro: a posição numa lista, a quantidade de caixas, o <code>%d</code> do <code>string.format</code>. Há três ferramentas:</p>
+
+<pre class="file" data-file="inteiro.lua">print(math.tointeger(3.0), math.tointeger(3.5), math.tointeger("8"))
+print(math.floor(3.7), math.ceil(3.2), math.type(math.floor(3.7)))
+print(math.floor(-3.7))
+print(3.0 + 0, 3.0 // 1, math.tointeger(3.0) + 0)
+print(string.format("%d", 3.0))
+print(string.format("%.2f", 12.5))
+</pre>
+
+<pre class="term">$ lua inteiro.lua
+3	nil	8
+3	4	integer
+-4
+3.0	3.0	3
+3
+12.50</pre>
+
+<dl class="anatomy">
+  <dt>math.tointeger(3.0) → 3</dt><dd>"Para inteiro": converte o float em inteiro <strong>se ele não tiver nada depois do ponto</strong>.</dd>
+  <dt>math.tointeger(3.5) → nil</dt><dd>3,5 não tem um inteiro igual a ele, então a conversão <strong>falha</strong> e a função devolve <code>nil</code>. Ela não arredonda.</dd>
+  <dt>math.tointeger("8") → 8</dt><dd>No Lua 5.5 ela também aceita um texto com um número inteiro dentro.</dd>
+  <dt>math.floor(3.7) → 3</dt><dd>"Chão": arredonda <strong>para baixo</strong> e devolve um inteiro. Cuidado com negativos: para baixo de −3,7 é <strong>−4</strong>.</dd>
+  <dt>math.ceil(3.2) → 4</dt><dd>"Teto": arredonda <strong>para cima</strong>.</dd>
+  <dt>3.0 + 0 e 3.0 // 1</dt><dd>Continuam float: somar um inteiro a um float não muda o subtipo.</dd>
+  <dt>string.format("%d", 3.0) → 3</dt><dd>O <code>%d</code> ("decimal inteiro") aceita um float sem casas, como <code>3.0</code>. Com <code>3.5</code>, ele dá erro (veja <a href="conversao.html">Conversão</a>).</dd>
+</dl>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Você quer…</th><th>Use</th><th>3.7 vira</th><th>−3.7 vira</th></tr>
+<tr><td>arredondar para baixo</td><td><code>math.floor(x)</code></td><td>3</td><td>−4</td></tr>
+<tr><td>arredondar para cima</td><td><code>math.ceil(x)</code></td><td>4</td><td>−3</td></tr>
+<tr><td>converter só se for exato (senão, <code>nil</code>)</td><td><code>math.tointeger(x)</code></td><td><code>nil</code></td><td><code>nil</code></td></tr>
+<tr><td>só mostrar com 2 casas (sem mudar o número)</td><td><code>string.format("%.2f", x)</code></td><td><code>3.70</code></td><td><code>-3.70</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2 id="formas">Formas diferentes de fazer a mesma coisa</h2>
+<p>O mesmo número pode ser escrito de vários jeitos. Para o Lua, todos estes são iguais a mil, mas o subtipo muda:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>Subtipo</th><th>Quando usar</th></tr>
+<tr><td><code>1000</code></td><td>integer</td><td>Para contar. É o jeito normal.</td></tr>
+<tr><td><code>1000.0</code></td><td>float</td><td>Quando o valor é uma medida e você quer deixar claro que pode ter casas decimais.</td></tr>
+<tr><td><code>1e3</code></td><td>float</td><td>Números muito grandes ou muito pequenos (<code>6e23</code>, <code>1e-9</code>): o expoente evita contar zeros.</td></tr>
+<tr><td><code>0x3e8</code></td><td>integer</td><td>Quase nunca para mil; o hexadecimal serve para cores, bytes e bits.</td></tr>
+</table>
+</div>
+
+<p>E para saber o subtipo de um valor, há duas perguntas possíveis:</p>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Pergunta</th><th>Código</th><th>Resposta para <code>3.0</code></th></tr>
+<tr><td>"É um número?"</td><td><code>type(x) == "number"</code></td><td><code>true</code></td></tr>
+<tr><td>"É um número inteiro?"</td><td><code>math.type(x) == "integer"</code></td><td><code>false</code> (é float)</td></tr>
+<tr><td>"Tem valor inteiro?" (3.0 conta)</td><td><code>math.tointeger(x) ~= nil</code></td><td><code>true</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+
+<div class="cenario">
+<strong>Vírgula no lugar do ponto (o Lua não reclama!)</strong>
+<pre class="file" data-file="virgula.lua">local preco = 1,50
+print(preco)
+print(1,50)
+</pre>
+<pre class="term">$ lua virgula.lua
+1
+1	50</pre>
+<p>Nenhuma mensagem de erro, e mesmo assim o programa está errado. Para o Lua, a vírgula <strong>separa valores</strong>: <code>local preco = 1,50</code> quer dizer "guarde o 1 em <code>preco</code> e jogue fora o 50" (é a <a href="atribuicao-multipla.html">atribuição múltipla</a>, com um valor sobrando). O preço virou R$ 1. No <code>print(1,50)</code>, foram dois valores separados: <code>1</code> e <code>50</code>. <strong>Como consertar:</strong> <code>local preco = 1.50</code>. Erros que não dão mensagem são os mais perigosos; por isso vale olhar a saída com atenção.</p>
+</div>
+
+<div class="cenario">
+<strong>Letras grudadas no número: <code>malformed number</code></strong>
+<pre class="term">$ printf 'local x = 12abc\n' &gt; m2.lua
+$ lua m2.lua
+lua: m2.lua:1: malformed number near '12abc'</pre>
+<p>Linha por linha: <code>lua:</code> é quem está falando (o programa <code>lua</code>); <code>m2.lua:1:</code> é o arquivo e a <strong>linha 1</strong>; <code>malformed number</code> quer dizer "número mal formado"; <code>near '12abc'</code>, "perto de <code>12abc</code>", mostra o trecho que ele não entendeu. Um nome de variável não pode começar com algarismo, e um número não pode ter letras (a não ser <code>e</code> no expoente e as do hexadecimal). É um erro de sintaxe: o programa nem começa a rodar.</p>
+<p>O mesmo erro aparece em outras escritas que parecem números, mas não são:</p>
+<pre class="term">$ lua m5.lua
+lua: m5.lua:1: malformed number near '1_'
+$ lua m6.lua
+lua: m6.lua:1: malformed number near '1.000.000'
+$ lua m3.lua
+lua: m3.lua:1: malformed number near '1e'</pre>
+<p>Em <code>m5.lua</code> estava <code>1_000_000</code> (o sublinhado não vale como separador), em <code>m6.lua</code>, <code>1.000.000</code> (um número só pode ter um ponto), e em <code>m3.lua</code>, <code>1e</code> (faltou o expoente depois do <code>e</code>). <strong>Como consertar:</strong> escreva <code>1000000</code>, tudo junto, e <code>1e6</code> se quiser o expoente.</p>
+</div>
+
+<div class="cenario">
+<strong>Juntar números sem espaço: <code>3..2</code></strong>
+<pre class="file" data-file="malformado.lua">local total = 3..2
+</pre>
+<pre class="term">$ lua malformado.lua
+lua: malformado.lua:1: malformed number near '3..2'</pre>
+<p>O <code>..</code> junta dois valores num texto (veja <a href="concatenacao.html">Juntando Textos</a>). Mas, grudado num algarismo, o primeiro ponto parece a vírgula decimal de <code>3.</code>, e o Lua lê <code>3..2</code> como um número com dois pontos. <strong>Como consertar:</strong> ponha espaços em volta: <code>3 .. 2</code>, que dá o texto <code>32</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>O <code>nil</code> do <code>math.tointeger</code></strong>
+<pre class="file" data-file="caixas.lua">local pacotes = 7.5
+local inteiro = math.tointeger(pacotes)
+print(inteiro + 1)
+</pre>
+<pre class="term">$ lua caixas.lua
+lua: caixas.lua:3: attempt to perform arithmetic on a nil value (local 'inteiro')
+stack traceback:
+	caixas.lua:3: in main chunk
+	[C]: in ?</pre>
+<dl class="anatomy">
+  <dt>lua: caixas.lua:3:</dt><dd>O erro aconteceu no arquivo <code>caixas.lua</code>, linha 3, já com o programa rodando.</dd>
+  <dt>attempt to perform arithmetic on a nil value</dt><dd>"Tentativa de fazer conta com um valor <code>nil</code>": o <code>+</code> recebeu "nada" em vez de um número.</dd>
+  <dt>(local 'inteiro')</dt><dd>O "nada" estava na variável local <code>inteiro</code>. Como 7,5 não tem inteiro igual, o <code>math.tointeger</code> devolveu <code>nil</code>, e o erro só estourou uma linha depois.</dd>
+  <dt>stack traceback:</dt><dd>"Rastro da pilha": o caminho que o programa fez até o erro. <code>in main chunk</code> é o programa principal; <code>[C]: in ?</code> é o próprio <code>lua</code>, que começou tudo. Mais em <a href="erros.html">Lendo uma Mensagem de Erro</a>.</dd>
+</dl>
+<p><strong>Como consertar:</strong> se você quer arredondar, use <code>math.floor(pacotes)</code> (dá 7). O <code>math.tointeger</code> serve para quando o número <strong>deveria</strong> ser inteiro e você quer descobrir se é.</p>
+</div>
+
+<div class="cenario">
+<strong>O total ficou negativo do nada</strong>
+<p>Se uma conta com números enormes deu um resultado negativo (ou muito estranho), é o estouro da seção 4: <code>math.maxinteger * 2</code> dá <code>-2</code>, sem mensagem nenhuma. <strong>Como consertar:</strong> use float para números que podem passar de 9 quintilhões (<code>math.maxinteger * 2.0</code> dá <code>1.8446744073709552e+19</code>, um valor aproximado), ou reveja a conta.</p>
+</div>
+
+<div class="trylua" data-goal="out:Total: 12000 lápis (integer);;semerro">
+<p class="try-task"><strong>Missão:</strong> o estoque da papelaria tem 250 caixas com 48 lápis cada. O programa mostra <code>Total: 12000.0 lápis (float)</code>, com um <code>.0</code> estranho para quem conta lápis. Descubra qual número deixou a conta em float e conserte para sair <code>Total: 12000 lápis (integer)</code>.</p>
+<pre class="script" data-file="main.lua">local caixas = 250
+local por_caixa = 48.0
+local total = caixas * por_caixa
+print("Total: " .. total .. " lápis (" .. math.type(total) .. ")")
+</pre>
+<pre class="solucao" data-file="main.lua">local caixas = 250
+local por_caixa = 48
+local total = caixas * por_caixa
+print("Total: " .. total .. " lápis (" .. math.type(total) .. ")")
+</pre>
+</div>
+
+<hr>
+
+<h2>Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>O que faz / o que dá</th></tr>
+<tr><td><code>type(x)</code></td><td><code>"number"</code> para qualquer número (inteiro ou float)</td></tr>
+<tr><td><code>math.type(x)</code></td><td><code>"integer"</code>, <code>"float"</code> ou <code>nil</code> (se não for número)</td></tr>
+<tr><td><code>3</code> × <code>3.0</code></td><td>Mesmo valor (<code>3 == 3.0</code> é <code>true</code>), subtipos diferentes</td></tr>
+<tr><td><code>inteiro + - * // % inteiro</code></td><td>inteiro</td></tr>
+<tr><td>qualquer conta com um float</td><td>float</td></tr>
+<tr><td><code>a / b</code>, <code>a ^ b</code></td><td>sempre float (<code>10 / 2</code> → <code>5.0</code>)</td></tr>
+<tr><td><code>1e3</code>, <code>2.5e-3</code></td><td>expoente: 1000.0 e 0.0025 (float)</td></tr>
+<tr><td><code>0xff</code></td><td>hexadecimal: 255 (inteiro)</td></tr>
+<tr><td><code>math.maxinteger</code> / <code>math.mininteger</code></td><td><code>9223372036854775807</code> / <code>-9223372036854775808</code></td></tr>
+<tr><td><code>math.maxinteger + 1</code></td><td>estouro: dá a volta para <code>math.mininteger</code>, sem erro</td></tr>
+<tr><td><code>math.huge</code>, <code>1/0</code></td><td><code>inf</code> (infinito)</td></tr>
+<tr><td><code>0/0</code></td><td><code>nan</code> ou <code>-nan</code> (não é um número)</td></tr>
+<tr><td><code>math.tointeger(x)</code></td><td>o inteiro igual a <code>x</code>, ou <code>nil</code> se não houver</td></tr>
+<tr><td><code>math.floor(x)</code> / <code>math.ceil(x)</code></td><td>arredonda para baixo / para cima (devolve inteiro)</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Sintoma</th><th>Causa provável</th></tr>
+<tr><td>O preço virou um número inteiro e "sumiu" o centavo</td><td>Usou vírgula em vez de ponto: <code>1,50</code> é o 1 e o 50 separados</td></tr>
+<tr><td><code>malformed number near '…'</code></td><td>Letra grudada no número, dois pontos (<code>1.000.000</code>), sublinhado (<code>1_000</code>), ou <code>..</code> sem espaço (<code>3..2</code>)</td></tr>
+<tr><td>Aparece <code>.0</code> onde você esperava inteiro</td><td>Tem um float na conta, ou foi uma divisão <code>/</code> ou potência <code>^</code></td></tr>
+<tr><td><code>0.30000000000000004</code></td><td>Float é aproximado: mostre com <code>string.format("%.2f", x)</code></td></tr>
+<tr><td>Número enorme virou negativo</td><td>Estouro do inteiro (passou de <code>math.maxinteger</code>)</td></tr>
+<tr><td><code>attempt to perform arithmetic on a nil value</code> depois de <code>math.tointeger</code></td><td>O float tinha casas decimais e a conversão devolveu <code>nil</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. Qual é o subtipo?</h3>
+<p>Escreva o que o <code>math.type</code> responde (<code>integer</code> ou <code>float</code>):</p>
+<div class="ex-code">math.type(250) → <input data-answer="integer" aria-label="subtipo de 250"><br>math.type(0.75) → <input data-answer="float" aria-label="subtipo de 0.75"><br>math.type(10 / 2) → <input data-answer="float" aria-label="subtipo de 10 / 2"><br>math.type(7 + 1) → <input data-answer="integer" aria-label="subtipo de 7 + 1"></div>
+</div>
+
+<div class="exercise">
+<h3>2. O que aparece na tela?</h3>
+<p>Escreva exatamente o que o Lua 5.5 mostra:</p>
+<div class="ex-code">print(2 + 3.0) → <input data-answer="5.0" aria-label="resultado de 2 + 3.0"><br>print(1e3) → <input data-answer="1000.0" aria-label="resultado de 1e3"><br>print(0x10) → <input data-answer="16" aria-label="resultado de 0x10"></div>
+</div>
+
+<div class="mc" data-answer="3">
+<p class="mc-q">3. O que <code>print(math.maxinteger + 1)</code> mostra?</p>
+<label><input type="radio" name="q3"> Um erro: <code>integer overflow</code></label>
+<label><input type="radio" name="q3"> <code>9223372036854775808</code></label>
+<label><input type="radio" name="q3"> <code>-9223372036854775808</code>: o inteiro dá a volta</label>
+<label><input type="radio" name="q3"> <code>inf</code></label>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">4. A Ana escreveu <code>local altura = 1,65</code>. O que fica guardado em <code>altura</code>?</p>
+<label><input type="radio" name="q4"> <code>1.65</code></label>
+<label><input type="radio" name="q4"> <code>1</code>, e o 65 é jogado fora</label>
+<label><input type="radio" name="q4"> Dá erro de sintaxe</label>
+<label><input type="radio" name="q4"> <code>165</code></label>
+</div>
+
+<div class="mc" data-answer="4">
+<p class="mc-q">5. Por que <code>0.1 + 0.2 == 0.3</code> dá <code>false</code>?</p>
+<label><input type="radio" name="q5"> Porque o Lua soma errado</label>
+<label><input type="radio" name="q5"> Porque <code>0.1</code> é inteiro e <code>0.3</code> é float</label>
+<label><input type="radio" name="q5"> Porque o <code>==</code> não funciona com números</label>
+<label><input type="radio" name="q5"> Porque floats são aproximados: a soma dá <code>0.30000000000000004</code></label>
+</div>
+
+<div class="mc" data-answer="1">
+<p class="mc-q">6. O que <code>math.tointeger(2.5)</code> devolve?</p>
+<label><input type="radio" name="q6"> <code>nil</code>, porque 2,5 não tem inteiro igual</label>
+<label><input type="radio" name="q6"> <code>2</code></label>
+<label><input type="radio" name="q6"> <code>3</code></label>
+<label><input type="radio" name="q6"> Um erro</label>
+</div>
+
+<h3>Missão final: as contas da padaria em centavos</h3>
+
+<div class="trylua" data-goal="out:Total: 900 centavos (integer);;semerro">
+<p class="try-task"><strong>Missão:</strong> o programa calcula o preço de 12 pães a R$ 0,75 e mostra <code>Total: 9.0 reais (float)</code>. Para fugir dos fiapos do float, a Ana quer fazer a conta em <strong>centavos</strong>, só com inteiros. Troque o preço para <code>75</code> (centavos) e a palavra <code>reais</code> por <code>centavos</code>, para o programa mostrar <code>Total: 900 centavos (integer)</code>.</p>
+<pre class="script" data-file="main.lua">local paes = 12
+local preco = 0.75
+local total = paes * preco
+print("Total: " .. total .. " reais (" .. math.type(total) .. ")")
+</pre>
+<pre class="solucao" data-file="main.lua">local paes = 12
+local preco = 75
+local total = paes * preco
+print("Total: " .. total .. " centavos (" .. math.type(total) .. ")")
+</pre>
+</div>
+
+<p>Quer ir além? Acrescente <code>print(string.format("R$ %.2f", total / 100))</code> no fim: a divisão por 100 volta para reais (em float) só na hora de mostrar, e o <code>%.2f</code> mostra <code>R$ 9.00</code>.</p>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li>Todo número no Lua é do tipo <code>number</code>, com dois subtipos: <code>integer</code> (sem ponto: <code>12</code>) e <code>float</code> (com ponto ou expoente: <code>0.75</code>, <code>3.0</code>, <code>1e3</code>). <code>math.type(x)</code> diz qual é.</li>
+  <li><code>3 == 3.0</code> é <code>true</code>: mesmo valor, jeitos diferentes de guardar. A diferença aparece na tela (<code>3</code> × <code>3.0</code>).</li>
+  <li>Inteiro com inteiro dá inteiro; basta um float para o resultado ser float; <code>/</code> e <code>^</code> sempre dão float (<code>10 / 2</code> → <code>5.0</code>).</li>
+  <li>No código, a casa decimal é um <strong>ponto</strong>. A vírgula separa valores, e <code>1,50</code> vira só <code>1</code>, sem erro.</li>
+  <li>O inteiro vai até <code>math.maxinteger</code>; passou disso, ele <strong>dá a volta</strong> e fica negativo, sem aviso.</li>
+  <li>Floats são aproximados (<code>0.1 + 0.2</code> → <code>0.30000000000000004</code>): não compare com <code>==</code>, mostre com <code>string.format("%.2f", x)</code> ou conte dinheiro em centavos.</li>
+  <li>Para virar inteiro: <code>math.floor</code> (para baixo), <code>math.ceil</code> (para cima), <code>math.tointeger</code> (só se for exato; senão, <code>nil</code>).</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
