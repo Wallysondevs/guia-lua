@@ -332,7 +332,7 @@ Pedido: 3 pães
 Pedido: pc4.lua:5: attempt to index a nil value (local 'x')
 Pedido: cannot resume dead coroutine
 Pedido: cannot resume dead coroutine</pre>
-<p>O programa <strong>não para nunca</strong> (o <code>| head -4</code> mostrou só as 4 primeiras linhas e encerrou; sem ele, só <kbd>Ctrl</kbd>+<kbd>C</kbd>). O que aconteceu:</p>
+<p>O programa <strong>não para nunca</strong> (o <code>| head -4</code> mostrou só as 4 primeiras linhas e encerrou; sem ele, só <kbd>Ctrl</kbd>+<kbd>C</kbd>; no editor do guia, ele é parado sozinho pelo limite de saída, com <code>(o programa escreveu demais: …)</code>). O que aconteceu:</p>
 <ol class="passo">
   <li>O produtor deu erro na linha 5 e morreu. O <code>resume</code> devolveu <code>false</code> e a mensagem de erro.</li>
   <li>O <code>receber</code> jogou fora o <code>false</code> e devolveu a mensagem, como se fosse um pedido.</li>
