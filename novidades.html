@@ -1,0 +1,528 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua 5.5 novidades — o que mudou em relação ao 5.4 | Guia Lua</title>
+<meta name="description" content="As novidades do Lua 5.5, uma por uma, com exemplo rodado no Lua 5.5 e no 5.4: a declaração global, varargs com nome, a variável do for somente leitura, floats com todos os dígitos, table.create, utf8.offset com dois valores, a coleta de lixo, listas menores, o aviso do modo interativo, a readline, o erro sem objeto e as incompatibilidades.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Novidades do <span class="hl">Lua 5.5</span></h1>
+
+<p class="intro">O Lua 5.5 foi lançado em <strong>22 de dezembro de 2025</strong>, cinco anos depois do 5.4. Ao longo do guia, tudo o que é novo nele ganhou a etiqueta <span class="versao">5.5</span>. Esta página junta essas novidades num lugar só, na ordem da lista oficial de mudanças (<a href="https://www.lua.org/manual/5.5/readme.html#changes">readme.html#changes</a>) e da lista de incompatibilidades do manual (<a href="https://www.lua.org/manual/5.5/manual.html#8">manual §8</a>). Cada uma tem um exemplo rodado no 5.5 e, quando ajuda, no 5.4, e o link para a aula que trata dela.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>As novidades da linguagem: <code>global</code>, varargs com nome, a variável do <code>for</code> somente leitura.</li>
+  <li>As novidades das bibliotecas: floats mostrados com todos os dígitos, <code>table.create</code>, <code>utf8.offset</code>, a coleta de lixo.</li>
+  <li>O que mudou por dentro: listas menores, a readline do modo interativo, o aviso do <code>local</code> no <code>&gt;</code>.</li>
+  <li>As <strong>incompatibilidades</strong>: o que um programa do 5.4 pode estranhar no 5.5.</li>
+</ul>
+</div>
+
+<p>Os exemplos rodaram na máquina da Ana (usuária <code>ana</code>, computador <code>notebook</code>), com o <code>lua</code> (5.5.0) e o <code>lua5.4</code> (5.4.8) do Ubuntu. A versão mais recente do 5.5 em outubro de 2026 é a <strong>5.5.1</strong> (de 3 de agosto de 2026, segundo <a href="https://www.lua.org/versions.html">lua.org/versions.html</a>); as versões "5.5.x" só corrigem defeitos, então tudo aqui vale para elas também.</p>
+
+<hr>
+
+<h2>A ideia: a lista de mudanças da casa nova</h2>
+<p>Quando a família da Ana se muda para um apartamento novo, a maior parte da vida continua igual: os mesmos móveis, as mesmas receitas. Mas tem coisas novas (uma varanda), coisas que mudaram de lugar (o interruptor da sala) e uma ou outra que deixou de existir (a vaga de garagem). Uma lista de mudanças evita os sustos. Esta página é essa lista para quem vem do Lua 5.4 (ou de qualquer versão anterior; para o 5.1 e o LuaJIT, veja <a href="versoes.html">versoes.html</a>).</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Novidade</th><th>Tipo</th><th>Aula</th></tr>
+<tr><td>Declaração <code>global</code></td><td>linguagem</td><td><a href="global.html">A Declaração global</a></td></tr>
+<tr><td>Varargs com nome (<code>...t</code>)</td><td>linguagem</td><td><a href="varargs.html">Funções Variádicas</a></td></tr>
+<tr><td>Variável do <code>for</code> somente leitura</td><td>linguagem (incompatível)</td><td><a href="for-numerico.html">for Numérico</a></td></tr>
+<tr><td>Floats mostrados com todos os dígitos</td><td>biblioteca</td><td><a href="numeros.html">Números</a></td></tr>
+<tr><td><code>table.create</code></td><td>biblioteca</td><td><a href="ref-table.html">A Biblioteca table</a></td></tr>
+<tr><td><code>utf8.offset</code> devolve início e fim</td><td>biblioteca</td><td><a href="utf8.html">utf8</a></td></tr>
+<tr><td>Coleta de lixo: <code>"param"</code>, coletas maiores aos poucos</td><td>biblioteca (incompatível)</td><td><a href="coleta-lixo.html">Coleta de Lixo</a></td></tr>
+<tr><td>Listas grandes ~60% menores</td><td>por dentro</td><td><a href="coleta-lixo.html">Coleta de Lixo</a></td></tr>
+<tr><td>Readline carregada sozinha; aviso do <code>local</code> no <code>&gt;</code></td><td>o programa <code>lua</code></td><td><a href="repl.html">O Modo Interativo</a>, <a href="instalar.html">Instalar</a></td></tr>
+<tr><td>Erro sem objeto vira texto; cadeia de <code>__call</code> limitada</td><td>incompatível</td><td><a href="pcall.html">pcall</a>, <a href="tostring-call-len.html">__call</a></td></tr>
+<tr><td>Uma corrotina pode fechar a si mesma</td><td>biblioteca</td><td><a href="corrotinas.html">Corrotinas</a></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>1. A declaração <code>global</code></h2>
+<p>A maior novidade. No Lua, todo nome que não é <code>local</code> é global, e um nome digitado errado vira uma global nova, sem aviso nenhum (veja <a href="local.html">local × Global</a>). No 5.5, a declaração <code>global</code> deixa você dizer <strong>quais</strong> globais o arquivo usa. Depois dela, qualquer outro nome livre é <strong>erro antes de rodar</strong>:</p>
+
+<pre class="file" data-file="glob.lua">global x = 10
+print(x)
+</pre>
+<pre class="file" data-file="glob2.lua">global print, x
+x = 10
+print(x)
+</pre>
+
+<pre class="term">$ lua glob.lua
+lua: glob.lua:2: variable 'print' not declared
+$ lua glob2.lua
+10
+$ lua5.4 glob2.lua
+lua5.4: glob2.lua:1: syntax error near 'print'</pre>
+
+<p>No <code>glob.lua</code>, só o <code>x</code> foi declarado; o <code>print</code>, não, e o 5.5 recusa o programa ("variável <code>print</code> não declarada"). Repare que não há <code>stack traceback</code>: o erro é pego na compilação, antes da primeira linha rodar. No 5.4, a linha <code>global …</code> é erro de sintaxe.</p>
+
+<p>Outras formas, todas colhidas no lab:</p>
+
+<pre class="file" data-file="gfunc.lua">global print, string
+global function saudar(nome)
+  print(string.format("Olá, %s!", nome))
+end
+saudar("Ana")
+</pre>
+<pre class="file" data-file="gestrela.lua">global *
+contador = 1
+print(contador)
+</pre>
+<pre class="file" data-file="glob5.lua">global&lt;const&gt; *
+print("ok")
+x = 1
+</pre>
+
+<pre class="term">$ lua gfunc.lua
+Olá, Ana!
+$ lua gestrela.lua
+1
+$ lua glob5.lua
+lua: glob5.lua:3: attempt to assign to const variable 'x'</pre>
+
+<dl class="anatomy">
+  <dt>global function saudar</dt><dd>Declara e cria uma função global de uma vez (como o <code>local function</code>, só que global).</dd>
+  <dt>global *</dt><dd>"Todo nome livre daqui para baixo é global": volta ao comportamento antigo, mas por escrito.</dd>
+  <dt>global&lt;const&gt; *</dt><dd>"Todo nome livre é uma global <strong>que eu só leio</strong>": dá para usar o <code>print</code>, mas tentar criar a global <code>x</code> vira erro (<code>attempt to assign to const variable 'x'</code>), também antes de rodar (o <code>ok</code> nem apareceu).</dd>
+</dl>
+
+<div class="note">
+<strong><code>global</code> como nome de variável</strong>
+<p>O manual do 5.5 lista <code>global</code> como palavra reservada (§8.1). Mas o <code>luaconf.h</code> oficial do 5.5.0 vem com a opção <code>LUA_COMPAT_GLOBAL</code> ligada, e é assim que o Lua do Ubuntu e o do editor foram compilados: <code>local global = 1</code> continua funcionando, e <code>global</code> só vira declaração quando vem seguido de um nome, de <code>*</code>, de <code>&lt;</code> ou de <code>function</code>. A explicação completa está em <a href="global.html">A Declaração global</a>.</p>
+</div>
+
+<div class="trylua" data-goal="out:Total: 30;;semerro;;src:^global">
+<p class="try-task"><strong>Missão:</strong> o programa declarou que só usa a global <code>print</code>, e por isso o 5.5 recusa a variável <code>total</code>, que foi criada sem <code>local</code>. Conserte sem apagar a linha do <code>global</code>.</p>
+<pre class="script" data-file="main.lua">global print
+total = 0
+for _, preco in ipairs({ 10, 20 }) do
+  total = total + preco
+end
+print("Total: " .. total)
+</pre>
+<pre class="solucao" data-file="main.lua">global print, ipairs
+local total = 0
+for _, preco in ipairs({ 10, 20 }) do
+  total = total + preco
+end
+print("Total: " .. total)
+</pre>
+</div>
+
+<p>Repare que, consertado o <code>total</code>, o Lua ainda reclama do <code>ipairs</code>, que também é uma global: ele precisa entrar na lista (<code>global print, ipairs</code>). É exatamente o tipo de conferência que a declaração faz por você.</p>
+
+<hr>
+
+<h2>2. Varargs com nome: <code>...t</code></h2>
+<p>Uma função variádica (que aceita "quantos argumentos vierem"; veja <a href="varargs.html">Funções Variádicas</a>) agora pode dar um <strong>nome</strong> à tabela dos argumentos extras, escrito depois dos três pontos. Nessa tabela, os argumentos ficam em <code>t[1]</code>, <code>t[2]</code>… e a quantidade fica em <code>t.n</code>:</p>
+
+<pre class="file" data-file="vnome.lua">local function soma(...t)
+  local total = 0
+  for i = 1, t.n do total = total + t[i] end
+  return total, t.n, select("#", ...)
+end
+print(soma(10, 20, 30))
+print(soma())
+</pre>
+
+<pre class="term">$ lua vnome.lua
+60	3	3
+0	0	0
+$ lua5.4 vararg.lua
+lua5.4: vararg.lua:1: ')' expected near 't'</pre>
+
+<p>O <code>...</code> de sempre continua funcionando junto (o <code>select("#", ...)</code> deu o mesmo 3). Antes, para ter essa tabela, era preciso escrever <code>local t = table.pack(...)</code> (aula <a href="table-unpack.html">table.pack</a>). O nome é uma variável <strong>somente leitura</strong>: <code>t = {}</code> dentro da função dá <code>attempt to assign to const variable 't'</code> (colhido no lab). No 5.4 (o <code>vararg.lua</code> começa com a mesma linha, <code>local function soma(...t)</code>), a sintaxe nem existe.</p>
+
+<div class="trylua" data-goal="out:Média: 8.0;;src:\.\.\.\s*[A-Za-z_]">
+<p class="try-task"><strong>Missão:</strong> complete a função <code>media</code> usando um vararg com nome: troque <code>(...)</code> por <code>(...notas)</code> e calcule a média com <code>notas[i]</code> e <code>notas.n</code>. Para as notas 7, 8 e 9, deve sair <code>Média: 8.0</code>.</p>
+<pre class="script" data-file="main.lua">local function media(...)
+  return 0
+end
+
+print("Média: " .. media(7, 8, 9))
+</pre>
+<pre class="solucao" data-file="main.lua">local function media(...notas)
+  local soma = 0
+  for i = 1, notas.n do
+    soma = soma + notas[i]
+  end
+  return soma / notas.n
+end
+
+print("Média: " .. media(7, 8, 9))
+</pre>
+</div>
+
+<hr>
+
+<h2>3. A variável do <code>for</code> é somente leitura</h2>
+<pre class="file" data-file="forvar.lua">for i = 1, 3 do
+  i = i * 2
+  print(i)
+end
+</pre>
+
+<pre class="term">$ lua forvar.lua
+lua: forvar.lua:2: attempt to assign to const variable 'i'
+$ lua5.4 forvar.lua
+2
+4
+6</pre>
+
+<p>Esta é uma das <strong>incompatibilidades</strong>: um programa que mudava a variável do <code>for</code> rodava no 5.4 e não roda mais. O manual recomenda declarar uma <code>local</code> com o mesmo nome dentro do laço (<code>local i = i * 2</code>). Vale para o <code>for</code> numérico e, no <code>for … in</code>, para a <strong>primeira</strong> variável (a de controle): no lab, <code>for i, nome in ipairs(lista)</code> deixou mudar o <code>nome</code>, mas <code>i = 5</code> deu <code>attempt to assign to const variable 'i'</code>. Aula: <a href="for-numerico.html">for Numérico</a>; a missão final de <a href="versoes.html">versoes.html</a> treina o conserto.</p>
+
+<hr>
+
+<h2>4. Floats mostrados com todos os dígitos</h2>
+<pre class="term">$ lua -e 'print(0.1 + 0.2 == 0.3, 100 / 3, 1e15 / 7, 2^63, -0.0, 1e300 * 1e10)'
+false	33.333333333333336	142857142857142.84	9.2233720368547758e+18	-0.0	inf
+$ lua5.4 -e 'print(0.1 + 0.2 == 0.3, 100 / 3, 1e15 / 7, 2^63, -0.0, 1e300 * 1e10)'
+false	33.333333333333	1.4285714285714e+14	9.2233720368547758e+18	-0.0	inf</pre>
+
+<p>A lista oficial diz: "floats são mostrados em decimal com dígitos suficientes para serem lidos de volta corretamente". O 5.4 arredondava para 14 dígitos na hora de mostrar (por isso <code>100 / 3</code> aparecia como <code>33.333333333333</code>). O <strong>valor</strong> não mudou, só o jeito de escrever: agora, o que o <code>print</code> mostra, se você digitar de volta, dá exatamente o mesmo número. O famoso <code>0.1 + 0.2</code> aparece como <code>0.30000000000000004</code>, e a primeira coluna (<code>false</code>) mostra que ele nunca foi igual a <code>0.3</code>, nem no 5.4. Para mostrar números para pessoas, continue usando <code>string.format("%.2f", x)</code>. Aula: <a href="numeros.html">Números</a>.</p>
+
+<hr>
+
+<h2>5. <code>table.create</code></h2>
+<pre class="file" data-file="tcreate.lua">local t = table.create(1000)
+print(#t, type(t))
+local u = table.create(0, 10)
+u.nome = "Ana"
+print(u.nome)
+</pre>
+
+<pre class="term">$ lua tcreate.lua
+0	table
+Ana
+$ lua5.4 tcreate.lua
+lua5.4: tcreate.lua:1: attempt to call a nil value (field 'create')
+stack traceback:
+	tcreate.lua:1: in main chunk
+	[C]: in ?</pre>
+
+<p><code>table.create(n)</code> cria uma tabela <strong>vazia</strong> (o <code>#t</code> dá 0), mas já com espaço reservado para <code>n</code> itens de lista; <code>table.create(0, m)</code> reserva espaço para <code>m</code> campos com nome. É só uma otimização: para uma tabela que vai receber milhares de itens, o Lua não precisa ir aumentando o espaço aos poucos. Para o dia a dia, <code>{}</code> continua sendo o jeito normal. No 5.4, a função não existe.</p>
+
+<hr>
+
+<h2>6. <code>utf8.offset</code> devolve início <strong>e</strong> fim</h2>
+<pre class="file" data-file="uoff.lua">local s = "Olá, coração"
+print(utf8.offset(s, 3))
+print(s:sub(utf8.offset(s, 3)))
+print(s:sub((utf8.offset(s, 3))))
+</pre>
+
+<pre class="term">$ lua uoff.lua
+3	4
+á
+á, coração
+$ lua5.4 uoff.lua
+3
+á, coração
+á, coração</pre>
+
+<p>O <code>á</code> é o 3º caractere e ocupa os bytes 3 e 4 (veja <a href="utf8.html">Acentos e a Biblioteca utf8</a>). No 5.5, <code>utf8.offset</code> devolve as <strong>duas</strong> posições; no 5.4, só a primeira. Isso muda, sem erro, o resultado de <code>s:sub(utf8.offset(s, 3))</code>: o segundo valor vira o fim do <code>sub</code>, e sai uma letra só. Com parênteses extras em volta (<code>(utf8.offset(s, 3))</code>), fica só o primeiro valor, e as duas versões concordam.</p>
+
+<div class="trylua" data-goal="out:á, coração;;src:utf8\.offset">
+<p class="try-task"><strong>Missão:</strong> a Ana queria o texto a partir do 3º caractere (<code>á, coração</code>), mas no 5.5 está saindo só <code>á</code>. Conserte com os parênteses extras, sem trocar o <code>utf8.offset</code>.</p>
+<pre class="script" data-file="main.lua">local s = "Olá, coração"
+print(s:sub(utf8.offset(s, 3)))
+</pre>
+<pre class="solucao" data-file="main.lua">local s = "Olá, coração"
+print(s:sub((utf8.offset(s, 3))))
+</pre>
+</div>
+
+<hr>
+
+<h2>7. A coleta de lixo</h2>
+<p>Três mudanças, todas explicadas com exemplos em <a href="coleta-lixo.html">Coleta de Lixo (collectgarbage)</a>:</p>
+<ul>
+  <li><strong>Os ajustes agora ficam na opção <code>"param"</code></strong>: <code>collectgarbage("param", "pause", 300)</code>. No 5.4 eles iam junto com o modo (<code>collectgarbage("incremental", 200, 100)</code>); no 5.5 esses números extras são ignorados. É uma incompatibilidade (manual §8.2). No 5.4, <code>"param"</code> dá <code>invalid option 'param'</code>.</li>
+  <li><strong>As coletas maiores do modo generacional são feitas aos poucos</strong> ("incrementalmente"), sem uma pausa grande de uma vez.</li>
+  <li><strong>Listas grandes gastam cerca de 60% menos memória</strong> (a parte de lista das tabelas). No lab, uma tabela com os inteiros de 1 a 100 000 deu <code>Lua 5.5: 1172.0 KB</code> contra <code>Lua 5.4: 2069.5 KB</code> no programa inteiro. Os números do seu computador vão ser outros.</li>
+</ul>
+
+<hr>
+
+<h2>8. O programa <code>lua</code>: readline e o aviso do <code>local</code></h2>
+
+<h3>O aviso do <code>local</code> no modo interativo</h3>
+<pre class="term">$ lua5.4
+Lua 5.4.8  Copyright (C) 1994-2025 Lua.org, PUC-Rio
+&gt; local y = 5
+&gt; print(y)
+nil
+&gt; os.exit()
+$ lua
+Lua 5.5.0  Copyright (C) 1994-2025 Lua.org, PUC-Rio
+&gt; local y = 5
+warning: locals do not survive across lines in interactive mode
+&gt; os.exit()</pre>
+
+<p>No modo interativo, cada linha é um pedacinho de programa separado, então um <code>local</code> some no fim da linha. O 5.4 ficava quieto e o <code>print(y)</code> mostrava <code>nil</code>, para espanto de quem estava aprendendo. O 5.5 avisa: "variáveis locais não sobrevivem de uma linha para outra no modo interativo". Aula: <a href="repl.html">O Modo Interativo</a>.</p>
+
+<h3>O atalho <code>= expressão</code> acabou</h3>
+<pre class="term">$ lua5.4
+Lua 5.4.8  Copyright (C) 1994-2025 Lua.org, PUC-Rio
+&gt; = 1 + 1
+2
+&gt; os.exit()
+$ lua
+Lua 5.5.0  Copyright (C) 1994-2025 Lua.org, PUC-Rio
+&gt; = 1 + 1
+stdin:1: unexpected symbol near '='
+&gt; os.exit()</pre>
+<p>No 5.1 e no 5.4, começar uma linha do <code>&gt;</code> com <code>=</code> era um atalho antigo para "mostre o valor" (no lab, o <code>lua5.1</code> também respondeu <code>2</code>). O 5.5 não aceita mais: digite só a expressão (<code>1 + 1</code>), que ele mostra o resultado do mesmo jeito. Tutoriais antigos usam muito esse <code>=</code>.</p>
+
+<h3>A readline carregada sozinha</h3>
+<p>A <strong>readline</strong> é a biblioteca que dá ao <code>&gt;</code> as setas (voltar no texto) e o histórico (seta para cima). No 5.5, o <code>lua</code> tenta carregar a readline <strong>na hora</strong>, se ela existir, em vez de depender dela. Efeito prático no Ubuntu: quem instalou <strong>só</strong> o pacote <code>lua5.5</code> fica sem setas, porque o arquivo que ele procura (<code>libreadline.so</code>) vem num pacote de desenvolvimento. Num Ubuntu 26.04 só com o <code>lua5.5</code>, a seta para cima aparece como <code>^[[A</code>, e o <code>lua -W</code> (que liga os avisos) conta o motivo: <code>Lua warning: library 'libreadline.so' not found</code>. O conserto (<code>sudo apt install liblua5.5-dev</code> ou <code>libreadline-dev</code>) está em <a href="instalar.html">Instalar o Lua</a>.</p>
+
+<hr>
+
+<h2>9. As outras incompatibilidades (manual §8)</h2>
+
+<h3>Erro sem objeto vira texto</h3>
+<pre class="file" data-file="nilerr.lua">print(pcall(error))
+print(pcall(error, nil))
+</pre>
+<pre class="term">$ lua nilerr.lua
+false	&lt;no error object&gt;
+false	&lt;no error object&gt;
+$ lua5.4 nilerr.lua
+false	nil
+false	nil</pre>
+
+<p>O manual: "num erro, um <code>nil</code> como objeto de erro é trocado por uma mensagem de texto". Antes, quem fazia <code>local ok, erro = pcall(…)</code> podia receber <code>erro == nil</code> mesmo com falha; agora recebe o texto <code>&lt;no error object&gt;</code> ("sem objeto de erro"). Um <code>error()</code> que ninguém captura continua mostrando <code>lua: (error object is a nil value)</code> nas duas versões. Aulas: <a href="error.html">error</a> e <a href="pcall.html">pcall</a>.</p>
+
+<h3>Cadeia de <code>__call</code> com no máximo 15</h3>
+<pre class="file" data-file="chamada.lua">local function encadear(n)
+  local obj = function () return "chegou" end
+  for i = 1, n do
+    obj = setmetatable({}, { __call = obj })
+  end
+  return obj
+end
+print(pcall(encadear(14)))
+print(pcall(encadear(20)))
+</pre>
+<pre class="term">$ lua chamada.lua
+true	chegou
+false	'__call' chain too long
+$ lua5.4 chamada.lua
+true	chegou
+true	chegou</pre>
+
+<p>Uma tabela com <code>__call</code> (aula <a href="tostring-call-len.html">__tostring, __call e __len</a>) pode ser chamada como função; e o <code>__call</code> pode ser outra tabela com <code>__call</code>, e assim por diante. No 5.5, essa corrente tem no máximo 15 elos. Ninguém escreve 20 elos de propósito; é só uma trava contra exageros.</p>
+
+<h3>Uma corrotina pode fechar a si mesma</h3>
+<pre class="file" data-file="coclose.lua">local co = coroutine.create(function ()
+  print("dentro da corrotina")
+  print(coroutine.close(coroutine.running()))
+  print("esta linha não aparece")
+end)
+print(coroutine.resume(co))
+print(coroutine.status(co))
+</pre>
+<pre class="term">$ lua coclose.lua
+dentro da corrotina
+true
+dead
+$ lua5.4 coclose.lua
+dentro da corrotina
+false	coclose.lua:3: cannot close a running coroutine
+dead</pre>
+
+<p>No 5.5, <code>coroutine.close</code> chamado de dentro da própria corrotina a encerra na hora: nada depois dele roda (nem o <code>print</code> em volta), e o <code>resume</code> devolve <code>true</code>. No 5.4.8, a mesma linha dava o erro "não é possível fechar uma corrotina que está rodando". Aula: <a href="corrotinas.html">Corrotinas</a>.</p>
+
+<h3>O rastro dos erros</h3>
+<p>Não está na lista oficial, mas você vai notar: o <code>stack traceback</code> do 5.5 escreve <code>[C]: in global 'error'</code> onde o 5.4 escrevia <code>[C]: in function 'error'</code> (comparação completa em <a href="versoes.html">versoes.html</a>, seção 11). A mensagem principal é a mesma.</p>
+
+<hr>
+
+<h2>10. Por dentro (para quem usa o Lua a partir do C)</h2>
+<p>Algumas mudanças da lista oficial só aparecem para quem embute o Lua num programa em C (como a "loja" de <a href="lua-no-mundo.html">Onde o Lua É Usado</a>). Estão aqui só para a lista ficar completa:</p>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Mudança (em inglês, como na lista oficial)</th><th>O que quer dizer</th></tr>
+<tr><td><em>external strings</em></td><td>o programa em C pode entregar ao Lua um texto que mora numa memória que não é do Lua, sem copiar</td></tr>
+<tr><td><em>luaL_openselectedlibs</em>, <em>luaL_makeseed</em></td><td>funções novas para abrir só algumas bibliotecas e gerar a "semente" das tabelas</td></tr>
+<tr><td><em>static (fixed) binaries</em>; <em>dump and undump reuse all strings</em></td><td>pedaços pré-compilados (o <code>luac</code>) ocupam menos e carregam reaproveitando memória</td></tr>
+<tr><td><em>more levels for constructors</em></td><td>um limite interno dos construtores de tabela (<code>{ … }</code>) ficou maior; não deu para mostrar uma diferença no lab</td></tr>
+<tr><td>mudanças na API (manual §8.3)</td><td><code>lua_newstate</code> ganhou um 3º parâmetro, <code>lua_resetthread</code> e <code>lua_setcstacklimit</code> ficaram obsoletas, entre outras</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2 id="formas">Vale a pena usar as novidades?</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Situação</th><th>Recomendação</th></tr>
+<tr><td>Programas seus, rodando no terminal com o Lua 5.5</td><td>Use: <code>global</code> no começo do arquivo pega nomes digitados errado; <code>...t</code> deixa as funções variádicas mais claras</td></tr>
+<tr><td>Código que precisa rodar também no 5.4 (um módulo para o LuaRocks)</td><td>Evite <code>global</code>, <code>...t</code> e <code>table.create</code> (são erro de sintaxe ou <code>nil</code> no 5.4); use <code>table.pack(...)</code> e <code>(utf8.offset(…))</code> com parênteses</td></tr>
+<tr><td>Neovim, Roblox, Redis, LÖVE</td><td>Nenhuma delas: esses usam o 5.1, o LuaJIT ou o Luau (veja <a href="lua-no-mundo.html">Onde o Lua É Usado</a>)</td></tr>
+<tr><td>Um programa do 5.4 que você trouxe para o 5.5</td><td>Procure: atribuição à variável do <code>for</code>, <code>global</code> usado como nome, <code>collectgarbage</code> com números, <code>s:sub(utf8.offset(…))</code>, <code>pcall</code> que testa <code>erro == nil</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+
+<div class="cenario">
+<strong>Código do 5.5 no 5.4</strong>
+<p>Todos os recursos novos de <strong>sintaxe</strong> fazem o 5.4 recusar o arquivo inteiro: <code>lua5.4: glob2.lua:1: syntax error near 'print'</code> (o <code>global</code>), <code>lua5.4: vararg.lua:1: ')' expected near 't'</code> (o <code>...t</code>). Os de <strong>biblioteca</strong> dão erro só quando a linha roda: <code>attempt to call a nil value (field 'create')</code>. Se o código precisa rodar nas duas versões, não use os de sintaxe.</p>
+</div>
+
+<div class="cenario">
+<strong>Código do 5.4 no 5.5: o <code>for</code></strong>
+<pre class="term">$ lua forvar.lua
+lua: forvar.lua:2: attempt to assign to const variable 'i'</pre>
+<p>"Tentativa de atribuir a uma variável constante <code>i</code>". Não tem <code>stack traceback</code> porque o 5.5 pega na compilação: o programa não roda nem a linha 1. <strong>Como consertar:</strong> <code>local i = i * 2</code> dentro do laço.</p>
+</div>
+
+<div class="cenario">
+<strong>Código do 5.4 no 5.5: a mudança que não dá erro</strong>
+<p>O <code>s:sub(utf8.offset(s, 3))</code> da seção 6 e o <code>pcall</code> que devolvia <code>nil</code> da seção 9 não dão mensagem nenhuma: o programa roda e o resultado muda. São as mais perigosas. Se um programa antigo começou a dar resultados estranhos no 5.5, procure por <code>utf8.offset</code> e por <code>if erro == nil</code>.</p>
+</div>
+
+<hr>
+
+<h2>Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita no 5.5</th><th>O que faz</th><th>No 5.4</th></tr>
+<tr><td><code>global x, print</code></td><td>declara as globais usadas; outros nomes livres viram erro</td><td>erro de sintaxe</td></tr>
+<tr><td><code>global *</code> / <code>global&lt;const&gt; *</code></td><td>todo nome livre é global / global só de leitura</td><td>erro de sintaxe</td></tr>
+<tr><td><code>global function f() end</code></td><td>declara e cria uma função global</td><td>erro de sintaxe</td></tr>
+<tr><td><code>function f(...t)</code></td><td>varargs numa tabela com nome (<code>t[1]</code>, <code>t.n</code>)</td><td>erro de sintaxe</td></tr>
+<tr><td><code>for i = …</code> com <code>i = …</code> dentro</td><td>erro: a variável é somente leitura</td><td>permitido</td></tr>
+<tr><td><code>print(0.1 + 0.2)</code></td><td><code>0.30000000000000004</code></td><td><code>0.3</code></td></tr>
+<tr><td><code>table.create(n [, m])</code></td><td>tabela vazia com espaço reservado</td><td><code>nil</code></td></tr>
+<tr><td><code>utf8.offset(s, i)</code></td><td>início e fim do caractere</td><td>só o início</td></tr>
+<tr><td><code>collectgarbage("param", nome [, valor])</code></td><td>lê/muda um ajuste do coletor</td><td><code>invalid option 'param'</code></td></tr>
+<tr><td><code>pcall(error)</code></td><td><code>false  &lt;no error object&gt;</code></td><td><code>false  nil</code></td></tr>
+<tr><td><code>coroutine.close(coroutine.running())</code></td><td>a corrotina se encerra</td><td><code>cannot close a running coroutine</code></td></tr>
+<tr><td><code>local x = 1</code> no <code>&gt;</code></td><td>avisa que o <code>local</code> não sobrevive à linha</td><td>silêncio</td></tr>
+<tr><td><code>= 1 + 1</code> no <code>&gt;</code></td><td><code>unexpected symbol near '='</code> (digite só <code>1 + 1</code>)</td><td>mostra <code>2</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. A quantidade</h3>
+<p>Numa função <code>function f(...args)</code>, qual campo de <code>args</code> guarda quantos argumentos extras chegaram?</p>
+<div class="ex-code">args.<input data-answer="n" aria-label="campo"></div>
+</div>
+
+<div class="exercise">
+<h3>2. Todo nome livre</h3>
+<p>Complete a declaração que diz "todo nome livre daqui para baixo é global":</p>
+<div class="ex-code">global <input data-answer="*" aria-label="símbolo"></div>
+</div>
+
+<div class="mc" data-answer="3">
+<p class="mc-q">3. No Lua 5.5, o que <code>print(0.1 + 0.2)</code> mostra?</p>
+<label><input type="radio" name="q3"> <code>0.3</code></label>
+<label><input type="radio" name="q3"> <code>0.3000</code></label>
+<label><input type="radio" name="q3"> <code>0.30000000000000004</code></label>
+<label><input type="radio" name="q3"> um erro</label>
+</div>
+
+<div class="mc" data-answer="1">
+<p class="mc-q">4. Um programa do 5.4 que fazia <code>s:sub(utf8.offset(s, 3))</code> passou a mostrar uma letra só no 5.5. Por quê?</p>
+<label><input type="radio" name="q4"> Porque no 5.5 o <code>utf8.offset</code> devolve dois valores, e o segundo virou o fim do <code>sub</code></label>
+<label><input type="radio" name="q4"> Porque o <code>sub</code> foi removido</label>
+<label><input type="radio" name="q4"> Porque o 5.5 não aceita acento</label>
+<label><input type="radio" name="q4"> Porque o texto ficou menor</label>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">5. Qual destas é uma <strong>incompatibilidade</strong> do 5.5 (algo que funcionava no 5.4 e não funciona mais)?</p>
+<label><input type="radio" name="q5"> <code>table.create</code></label>
+<label><input type="radio" name="q5"> Mudar a variável de controle dentro do <code>for</code></label>
+<label><input type="radio" name="q5"> Usar <code>local</code></label>
+<label><input type="radio" name="q5"> Usar <code>string.format</code></label>
+</div>
+
+<div class="mc" data-answer="4">
+<p class="mc-q">6. Num Ubuntu com <strong>só</strong> o pacote <code>lua5.5</code>, a seta para cima no <code>&gt;</code> mostra <code>^[[A</code>. O que falta?</p>
+<label><input type="radio" name="q6"> O <code>lua5.4</code></label>
+<label><input type="radio" name="q6"> A declaração <code>global</code></label>
+<label><input type="radio" name="q6"> O LuaRocks</label>
+<label><input type="radio" name="q6"> A <code>libreadline.so</code>, que vem com o <code>libreadline-dev</code> (ou o <code>liblua5.5-dev</code>)</label>
+</div>
+
+<h3>Missão final: a lista de compras no 5.5</h3>
+
+<div class="trylua" data-goal="out:Total: R$ 23.40 (3 itens);;semerro;;src:^global;;src:\.\.\.\s*[A-Za-z_]">
+<p class="try-task"><strong>Missão:</strong> use duas novidades de uma vez. A função <code>total</code> deve receber os preços como vararg <strong>com nome</strong> (<code>...precos</code>) e somar com <code>precos[i]</code> e <code>precos.n</code>. E o arquivo já começa com <code>global print, string</code>: tudo o mais tem de ser <code>local</code>. Deve sair <code>Total: R$ 23.40 (3 itens)</code>.</p>
+<pre class="script" data-file="main.lua">global print, string
+
+local function total(...)
+  -- some aqui os preços
+  return 0, 0
+end
+
+local soma, quantos = total(4.5, 6.9, 12)
+print(string.format("Total: R$ %.2f (%d itens)", soma, quantos))
+</pre>
+<pre class="solucao" data-file="main.lua">global print, string
+
+local function total(...precos)
+  local soma = 0
+  for i = 1, precos.n do
+    soma = soma + precos[i]
+  end
+  return soma, precos.n
+end
+
+local soma, quantos = total(4.5, 6.9, 12)
+print(string.format("Total: R$ %.2f (%d itens)", soma, quantos))
+</pre>
+</div>
+
+<p>Se aparecer <code>variable 'algo' not declared</code>, é a declaração <code>global</code> fazendo o trabalho dela: ou o nome devia ser <code>local</code>, ou ele precisa entrar na lista do <code>global</code>.</p>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li><strong>Linguagem:</strong> <code>global</code> (declara as globais; o resto vira erro antes de rodar), varargs com nome (<code>...t</code>, com <code>t.n</code>), variável do <code>for</code> somente leitura.</li>
+  <li><strong>Bibliotecas:</strong> floats com todos os dígitos (<code>0.30000000000000004</code>), <code>table.create</code>, <code>utf8.offset</code> com dois valores, <code>collectgarbage("param")</code>, <code>coroutine.close</code> da própria corrotina.</li>
+  <li><strong>Por dentro:</strong> listas grandes ~60% menores, coletas maiores aos poucos, readline carregada sozinha, aviso do <code>local</code> no <code>&gt;</code>.</li>
+  <li><strong>Incompatibilidades com o 5.4:</strong> o <code>for</code>, os ajustes do coletor, o erro sem objeto (<code>&lt;no error object&gt;</code>), a cadeia de <code>__call</code>; e, sem erro, o <code>utf8.offset</code>.</li>
+  <li>O <code>global</code> ainda funciona como nome de variável no 5.5.0 padrão (<code>LUA_COMPAT_GLOBAL</code>), mas não conte com isso no futuro.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
