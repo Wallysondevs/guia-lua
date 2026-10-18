@@ -32,13 +32,16 @@ tar xzf "$TGZ" -C "$OBRA"
 cd "$OBRA/lua-$VERSAO"
 patch -s -p1 < "$SRC/0002-lua-modules-paths.patch"
 echo '#define DEB_HOST_MULTIARCH "x86_64-linux-gnu"' > src/lua5.5-deb-multiarch.h
+# o número do erro com a numeração do Linux (ver guia_errno em guia-rt.c)
+grep -q 'lua_pushinteger(L, en);' src/lauxlib.c
+sed -i 's/lua_pushinteger(L, en);/lua_pushinteger(L, guia_errno(en));/' src/lauxlib.c
 
 # -DLUA_USE_POSIX: o Lua "de Linux" (mkstemp, localtime_r, popen, _setjmp…), sem
 #   LUA_USE_DLOPEN (não há bibliotecas .so no navegador).
 # -mllvm -wasm-enable-sjlj: os erros do Lua (setjmp/longjmp) com as exceções do WebAssembly.
 FLAGS=(--target=wasm32-wasip1 -O2 -Wall -Wextra -DLUA_COMPAT_5_4 -DLUA_USE_POSIX
        -D_WASI_EMULATED_SIGNAL -D_WASI_EMULATED_PROCESS_CLOCKS -D_GNU_SOURCE
-       -mllvm -wasm-enable-sjlj -I "$SRC/inc" -include "$SRC/guia.h")
+       -Wno-deprecated-declarations -mllvm -wasm-enable-sjlj -I "$SRC/inc" -include "$SRC/guia.h")
 cd src
 OBJS=()
 for f in *.c; do
@@ -54,9 +57,8 @@ done
   -Wl,--wrap=__stdio_read,--wrap=localtime_r,--wrap=localtime,--wrap=mktime,--wrap=strftime \
   -Wl,-z,stack-size=8388608 -Wl,--stack-first -Wl,--max-memory=268435456 -Wl,--strip-all
 cp lua.wasm "$SAIDA/lua.wasm"
-cp ../doc/readme.html "$OBRA/readme.html"
 # a licença do Lua (MIT) está no fim do readme.html e no lua.h
-sed -n '/Copyright (C) 1994/,/SOFTWARE\./p' lua.h | sed 's/^\* \{0,1\}//' > "$SAIDA/LICENSE-lua.txt"
+sed -n '/^\* Copyright (C) 1994/,/SOFTWARE\./p' lua.h | sed 's/^\* \{0,1\}//' > "$SAIDA/LICENSE-lua.txt"
 TAM=$(stat -c %s "$SAIDA/lua.wasm")
 GZ=$(gzip -9c "$SAIDA/lua.wasm" | wc -c)
 cat > "$SAIDA/VERSAO.txt" <<EOF

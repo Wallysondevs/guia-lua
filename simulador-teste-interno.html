@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Teste interno do editor | Guia Lua</title>
+<meta name="description" content="Página interna de teste do editor do Guia Lua (luasim.js). Não faz parte do curso.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<h1>Teste interno do <span class="hl">editor</span></h1>
+<p class="intro">Página de teste do <code>assets/luasim.js</code>, fora do menu. O <code>tools/testar-navegador.js</code> abre esta página num Chromium e clica em cada botão; o <code>tools/testar-missoes.js</code> roda as mesmas caixas no Node. Cada caixa abaixo exercita uma parte do editor.</p>
+
+<h2 id="t1">1. print, io.write e Ctrl+Enter</h2>
+<div class="trylua" id="cx-ola">
+<pre class="script" data-file="main.lua">local nome = "Ana"
+print("Olá, " .. nome .. "!")
+print(2 &lt; 3 and "2 &lt; 3 &amp; fim")
+io.write("sem Enter", " e ", 10 // 3, "\n")
+print(_VERSION, math.type(1), math.type(1.0), 7 / 2, 2^53)
+</pre>
+</div>
+
+<h2 id="t2">2. Erro em tempo de execução (com stack traceback)</h2>
+<div class="trylua" id="cx-erro">
+<pre class="script" data-file="main.lua">local function total(itens)
+  local soma = 0
+  for _, preco in ipairs(itens) do
+    soma = soma + preco
+  end
+  return soma
+end
+print("antes do erro")
+print(total({ 10, 20, nil, "x" }))
+print(total({ 10, "vinte" }))
+</pre>
+</div>
+
+<h2 id="t3">3. io.read() digitado no terminal</h2>
+<div class="trylua" id="cx-input" data-digitar="Bia\n30" data-goal="out:Olá, Bia! Ano que vem você terá 31 anos.">
+<p class="try-task"><strong>Missão:</strong> rode e digite <code>Bia</code> e <code>30</code>.</p>
+<pre class="script" data-file="main.lua">io.write("Qual é o seu nome? ")
+local nome = io.read()
+io.write("Quantos anos você tem? ")
+local idade = io.read("n")
+print("Olá, " .. nome .. "! Ano que vem você terá " .. idade .. " anos.")
+</pre>
+<pre class="solucao" data-file="main.lua">io.write("Qual é o seu nome? ")
+local nome = io.read()
+io.write("Quantos anos você tem? ")
+local idade = io.read("n")
+print("Olá, " .. nome .. "! Ano que vem você terá " .. idade + 1 .. " anos.")
+</pre>
+</div>
+
+<h2 id="t4">4. data-stdin: io.read("n"), "l", "L", "a" e io.lines()</h2>
+<div class="trylua" id="cx-stdin" data-stdin="3 4.5\nresto da linha\nlinha L\nAna\nBia\nCaio" data-goal="out:soma: 7.5;;out:3 nomes">
+<p class="try-task"><strong>Missão:</strong> conte os nomes que sobraram na entrada.</p>
+<pre class="script" data-file="main.lua">local a, b = io.read("n", "n")
+print("soma: " .. a + b)
+print("[" .. io.read("l") .. "]")
+print("[" .. io.read("l") .. "]")
+io.write("[", io.read("L"), "]\n")
+for linha in io.lines() do
+  print("nome:", linha)
+end
+print(io.read("a") == "", io.read("l"))
+</pre>
+<pre class="solucao" data-file="main.lua">local a, b = io.read("n", "n")
+print("soma: " .. a + b)
+print("[" .. io.read("l") .. "]")
+print("[" .. io.read("l") .. "]")
+io.write("[", io.read("L"), "]\n")
+local n = 0
+for linha in io.lines() do
+  print("nome:", linha)
+  n = n + 1
+end
+print(n .. " nomes")
+</pre>
+</div>
+
+<h2 id="t5">5. data-args: arg e ...</h2>
+<div class="trylua" id="cx-args" data-args="Ana 'Bia Souza' 30" data-goal="out:3 argumentos">
+<p class="try-task"><strong>Missão:</strong> mostre quantos argumentos chegaram (<code>#arg</code>).</p>
+<pre class="script" data-file="main.lua">print(arg[0], arg[-1], arg[1], arg[2], arg[3])
+print(...)
+</pre>
+<pre class="solucao" data-file="main.lua">print(arg[0], arg[-1], arg[1], arg[2], arg[3])
+print(...)
+print(#arg .. " argumentos")
+</pre>
+</div>
+
+<h2 id="t6">6. Vários arquivos: require de um módulo e io.lines de um .txt</h2>
+<div class="trylua" id="cx-modulo" data-goal="out:Total: 23.5;;src:require">
+<p class="try-task"><strong>Missão:</strong> use <code>contas.somar</code> para mostrar o total dos preços.</p>
+<pre class="script" data-file="main.lua">local precos = {}
+for linha in io.lines("precos.txt") do
+  precos[#precos + 1] = tonumber(linha)
+end
+print(#precos .. " preços")
+</pre>
+<pre class="script" data-file="contas.lua">local M = {}
+
+function M.somar(lista)
+  local s = 0
+  for _, v in ipairs(lista) do s = s + v end
+  return s
+end
+
+return M
+</pre>
+<pre class="script" data-file="precos.txt">10
+8.5
+5
+</pre>
+<pre class="solucao" data-file="main.lua">local contas = require("contas")
+local precos = {}
+for linha in io.lines("precos.txt") do
+  precos[#precos + 1] = tonumber(linha)
+end
+print(#precos .. " preços")
+print("Total: " .. contas.somar(precos))
+</pre>
+</div>
+
+<h2 id="t7">7. Arquivo criado pelo programa (meta arquivo:)</h2>
+<div class="trylua" id="cx-arquivo" data-goal="arquivo:compras.txt~pão">
+<p class="try-task"><strong>Missão:</strong> grave "pão" no arquivo <code>compras.txt</code>.</p>
+<pre class="script" data-file="main.lua">local f = assert(io.open("compras.txt", "w"))
+f:write("leite\n")
+f:close()
+for l in io.lines("compras.txt") do print(l) end
+print(os.rename("compras.txt", "lista.txt"), io.open("compras.txt"))
+print(os.remove("lista.txt"), os.remove("lista.txt"))
+</pre>
+<pre class="solucao" data-file="main.lua">local f = assert(io.open("compras.txt", "w"))
+f:write("leite\n", "pão\n")
+f:close()
+for l in io.lines("compras.txt") do print(l) end
+</pre>
+</div>
+
+<h2 id="t8">8. os.exit e o código de saída</h2>
+<div class="trylua" id="cx-exit" data-goal="exit:3">
+<p class="try-task"><strong>Missão:</strong> termine com o código 3.</p>
+<pre class="script" data-file="main.lua">io.write("tchau sem Enter")
+os.exit(0)
+</pre>
+<pre class="solucao" data-file="main.lua">io.write("tchau sem Enter")
+os.exit(3)
+</pre>
+</div>
+
+<h2 id="t9">9. erro: (erro de sintaxe × erro em tempo de execução)</h2>
+<div class="trylua" id="cx-sintaxe" data-goal="erro:attempt to perform arithmetic on a nil value">
+<p class="try-task"><strong>Missão:</strong> provoque uma conta com <code>nil</code>.</p>
+<pre class="script" data-file="main.lua">print("Olá"
+</pre>
+<pre class="solucao" data-file="main.lua">local x
+print(x + 1)
+</pre>
+</div>
+
+<h2 id="t10">10. os.execute e io.popen (no navegador não há outros programas)</h2>
+<div class="trylua" id="cx-sistema">
+<pre class="script" data-file="main.lua">print(os.execute())
+print(os.execute("ls -l"))
+print(os.execute("exit 3"))
+print(os.execute("true"))
+local p = io.popen("date")
+print(p:read("a"))
+print(p:close())
+print(os.getenv("HOME"), os.getenv("USER"), os.getenv("NADA"))
+</pre>
+</div>
+
+<h2 id="t11">11. Hora, data, sorteio e arquivos temporários</h2>
+<div class="trylua" id="cx-hora">
+<pre class="script" data-file="main.lua">print(os.time() &gt; 1700000000, os.date("%Y-%m-%d %H:%M:%S"), os.date("%z %Z"))
+print(os.date("!%H:%M", 0), os.time({ year = 2026, month = 1, day = 1, hour = 12 }))
+print(os.clock() &lt; 1, math.random(1, 6), math.random())
+math.randomseed(42)
+print(math.random(1, 100), math.random(1, 100))
+local nome = os.tmpname()
+print(nome:match("^/tmp/lua_%w%w%w%w%w%w$") ~= nil)
+local t = io.tmpfile()
+t:write("oi") t:seek("set") print(t:read("a"))
+print(os.setlocale())
+</pre>
+</div>
+
+<h2 id="t12">12. pcall, error, xpcall, corrotinas, pilha e memória</h2>
+<div class="trylua" id="cx-erros">
+<pre class="script" data-file="main.lua">print(pcall(error, "falhou"))
+print(pcall(error, { codigo = 7 }))
+print(select(2, pcall(function () error("nível 1", 1) end)))
+print(xpcall(function () local t = nil; return t.x end, debug.traceback))
+local co = coroutine.create(function () coroutine.yield(1); error("dentro da corrotina") end)
+print(coroutine.resume(co))
+print(coroutine.resume(co))
+print(coroutine.status(co))
+local function f(n) return f(n + 1) + 1 end
+local ok, msg = pcall(f, 1)
+print(ok, msg)
+local function g(n) if n == 0 then return 0 end return pcall(g, n - 1) end
+print(pcall(g, 300))
+print(pcall(string.rep, "x", 1 &lt;&lt; 40))
+print(collectgarbage("count") &gt; 0)
+</pre>
+</div>
+
+<h2 id="t13">13. Cores ANSI</h2>
+<div class="trylua" id="cx-cores">
+<pre class="script" data-file="main.lua">print("\27[31mvermelho\27[0m normal \27[1;32mverde negrito\27[0m")
+io.write("\27[34mazul\27[0m\n")
+</pre>
+</div>
+
+<h2 id="t14">14. Laço infinito (o editor para em 10 s)</h2>
+<div class="trylua" id="cx-infinito" data-sem-fim>
+<pre class="script" data-file="main.lua">local n = 0
+while true do
+  n = n + 1
+end
+</pre>
+</div>
+
+<h2 id="t15">15. io.read num laço (no Firefox/Safari: modo por repetição)</h2>
+<div class="trylua" id="cx-laco-input" data-digitar="10\nabc\n5">
+<pre class="script" data-file="main.lua">local sorteado = math.random(1, 1000)
+print("Pensei num número (sorteado: " .. sorteado .. ")")
+local t = {}
+for i = 1, 20 do t["chave" .. i] = i end
+local ordem = {}
+for k in pairs(t) do ordem[#ordem + 1] = k end
+print("pairs começa por", ordem[1])
+while true do
+  io.write("Número: ")
+  local linha = io.read()
+  if not linha then print("tchau") break end
+  local n = tonumber(linha)
+  if n then print("dobro:", n * 2) else print("Isso não é um número.") end
+end
+</pre>
+</div>
+
+<h2 id="t16">16. Ordem do stdout e do stderr</h2>
+<div class="trylua" id="cx-ordem">
+<pre class="script" data-file="main.lua">io.write("linha 1\n")
+io.write("sem Enter ")
+io.stderr:write("no stderr\n")
+print("print")
+warn("@on")
+warn("um aviso")
+error({})
+</pre>
+</div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

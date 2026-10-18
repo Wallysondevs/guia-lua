@@ -2,4 +2,4 @@ Lua 5.5.0 (https://www.lua.org/ftp/lua-5.5.0.tar.gz, sha256 57ccc32bbbd005cab75b
 luaconf.h com o patch 0002-lua-modules-paths.patch do pacote lua5.5 5.5.0-3ubuntu0.1 do Ubuntu
 compilado com clang version 23.1.0-wasi-sdk (https://github.com/llvm/llvm-project 895aa2c896ada719451be2e3673c83da8ddf1141)
 gerado por tools/construir-lua.sh em 2026-10-18
-lua.wasm: 338009 bytes (124460 com gzip)
+lua.wasm: 338370 bytes (124705 com gzip)

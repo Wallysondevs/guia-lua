@@ -11,6 +11,8 @@
 FILE *popen(const char *comando, const char *modo);
 int pclose(FILE *f);
 int mkstemp(char *modelo);
+/* lauxlib.c (luaL_fileresult): o número do erro como no Linux */
+int guia_errno(int e);
 
 /* lua.c: o tratador do Ctrl+C usa sigaction (a wasi-libc só emula signal) */
 #ifndef SA_RESTART
