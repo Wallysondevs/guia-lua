@@ -1,0 +1,600 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua if … then — fazendo o programa decidir | Guia Lua</title>
+<meta name="description" content="O if do Lua para quem nunca programou: if, then e end, o bloco que só roda quando a condição é verdadeira, por que 0 e o texto vazio contam como verdadeiro, o if no modo interativo e os erros reais do Lua 5.5 (then esquecido, end que falta, = no lugar de ==, != no lugar de ~=).">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">if … then</span></h1>
+
+<p class="intro">Até agora, os seus programas rodaram <strong>todas</strong> as linhas, de cima para baixo, sempre do mesmo jeito. Mas um programa de verdade precisa <strong>decidir</strong>: mostrar o aviso só se o estoque estiver baixo, liberar a entrada só se a senha estiver certa, dar o desconto só se a compra passar de um valor. Para isso existe o <code>if</code>, que em inglês quer dizer "<strong>se</strong>". Ele roda um pedaço do programa <strong>só quando</strong> uma condição é verdadeira.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>Como se escreve um <code>if</code> no Lua: a condição, o <code>then</code> ("então") e o <code>end</code> ("fim").</li>
+  <li>O que acontece quando a condição é verdadeira e quando é falsa.</li>
+  <li>Como pôr várias linhas dentro do <code>if</code>, e por que indentar com 2 espaços.</li>
+  <li>Uma regra do Lua que pega muita gente: <strong>só <code>false</code> e <code>nil</code> são falsos</strong>; o <code>0</code> e o texto vazio <code>""</code> contam como verdadeiro.</li>
+  <li>Como testar se uma variável tem valor (<code>if apelido then</code>).</li>
+  <li>Os erros reais mais comuns: o <code>then</code> esquecido, o <code>end</code> que falta (ou sobra), <code>=</code> no lugar de <code>==</code>, <code>!=</code> no lugar de <code>~=</code>, e comparar texto com número.</li>
+</ul>
+</div>
+
+<p>Todos os programas desta aula rodaram no <strong>Lua 5.5</strong> da máquina da Ana (usuária <code>ana</code>, computador <code>notebook</code>), salvos na pasta pessoal dela e executados com <code>lua arquivo.lua</code> (veja <a href="executar.html">Rodando um Programa</a>). Você pode rodar cada um no editor do guia.</p>
+
+<hr>
+
+<h2>A ideia: "se chover, leve o guarda-chuva"</h2>
+<p>Antes de sair de casa, a mãe da Ana sempre diz: <em>"Se estiver chovendo, então leve o guarda-chuva."</em> Repare como essa frase funciona:</p>
+<ol class="passo">
+  <li>Ela tem uma <strong>pergunta</strong> que só pode ter duas respostas: está chovendo? <strong>Sim</strong> ou <strong>não</strong>.</li>
+  <li>Ela tem uma <strong>ação</strong>: levar o guarda-chuva.</li>
+  <li>A ação só acontece se a resposta for <strong>sim</strong>. Se for não, a Ana simplesmente sai de casa, sem guarda-chuva, e o dia continua normal.</li>
+</ol>
+<p>O <code>if</code> do Lua é essa mesma frase, escrita de um jeito que o computador entende:</p>
+<pre class="file" data-file="chuva.lua">local chovendo = true
+if chovendo then
+  print("Leve o guarda-chuva.")
+end
+</pre>
+<p>Leia em voz alta: "<strong>se</strong> <code>chovendo</code>, <strong>então</strong> mostre <em>Leve o guarda-chuva</em>, <strong>fim</strong>". O Lua usa palavras inteiras (<code>if</code>, <code>then</code>, <code>end</code>) em vez de símbolos. Isso deixa o código parecido com uma frase.</p>
+
+<p>A pergunta do <code>if</code> se chama <strong>condição</strong>. Ela é qualquer coisa que dê <code>true</code> (verdadeiro) ou <code>false</code> (falso): uma variável booleana, como <code>chovendo</code>, ou uma comparação, como <code>idade &gt;= 18</code> (veja <a href="booleanos.html">Booleanos</a> e <a href="operadores-comparacao.html">Comparações</a>).</p>
+
+<hr>
+
+<h2>1. O primeiro <code>if</code>: pode votar?</h2>
+<p>No Brasil, quem tem 18 anos ou mais é obrigado a votar. Um programa que confere a idade da Ana:</p>
+
+<pre class="file" data-file="votar.lua">local idade = 20
+if idade &gt;= 18 then
+  print("A Ana pode votar.")
+end
+print("Fim do programa.")
+</pre>
+
+<dl class="anatomy">
+  <dt>local idade = 20</dt><dd>Uma variável comum, criada antes do <code>if</code> (veja <a href="local.html">local × Global</a>).</dd>
+  <dt>if</dt><dd>A palavra-chave que começa a decisão: "se".</dd>
+  <dt>idade &gt;= 18</dt><dd>A <strong>condição</strong>: "a idade é maior ou igual a 18?". Com <code>idade</code> valendo 20, ela dá <code>true</code>. No Lua, a condição não precisa de parênteses (pode ter, se você quiser: <code>if (idade &gt;= 18) then</code> também funciona).</dd>
+  <dt>then</dt><dd>"Então". Fecha a condição e avisa: "daqui para baixo vem o que fazer se ela for verdadeira". <strong>É obrigatório.</strong></dd>
+  <dt>print("A Ana pode votar.")</dt><dd>O <strong>bloco</strong> do <code>if</code> (o "corpo"): as linhas entre o <code>then</code> e o <code>end</code>. Elas só rodam se a condição for verdadeira. Os 2 espaços na frente não são obrigatórios para o Lua, mas mostram para quem lê que a linha está <strong>dentro</strong> do <code>if</code>.</dd>
+  <dt>end</dt><dd>"Fim". Fecha o <code>if</code>. Todo <code>if</code> precisa do seu <code>end</code> (é o mesmo <code>end</code> que fecha um <code>do … end</code>; veja <a href="sintaxe.html">Sintaxe e Blocos</a>).</dd>
+  <dt>print("Fim do programa.")</dt><dd>Esta linha está <strong>depois</strong> do <code>end</code>, fora do <code>if</code>: ela roda sempre, com a condição verdadeira ou falsa.</dd>
+</dl>
+
+<pre class="term">$ lua votar.lua
+A Ana pode votar.
+Fim do programa.
+</pre>
+
+<h3>E quando a condição é falsa?</h3>
+<p>Troque a idade para 15 e rode de novo:</p>
+
+<pre class="file" data-file="votar.lua">local idade = 15
+if idade &gt;= 18 then
+  print("A Ana pode votar.")
+end
+print("Fim do programa.")
+</pre>
+
+<pre class="term">$ lua votar.lua
+Fim do programa.
+</pre>
+
+<p>A condição <code>15 &gt;= 18</code> deu <code>false</code>, e o Lua <strong>pulou</strong> tudo o que estava entre o <code>then</code> e o <code>end</code>. Não deu erro, não apareceu nada no lugar: o bloco só não rodou. O programa continuou na linha seguinte ao <code>end</code>, que mostrou <code>Fim do programa.</code></p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th><code>idade</code></th><th><code>idade &gt;= 18</code></th><th>O que o Lua fez</th></tr>
+<tr><td>20</td><td><code>true</code></td><td>Rodou o bloco (<code>A Ana pode votar.</code>) e depois a linha de fora</td></tr>
+<tr><td>15</td><td><code>false</code></td><td>Pulou o bloco inteiro e foi direto para a linha de fora</td></tr>
+</table>
+</div>
+
+<p>E se você quiser mostrar outra coisa quando a condição for falsa (por exemplo, <em>"Ainda não pode votar"</em>)? Para isso existe o <code>else</code>, o assunto da próxima aula: <a href="if-else.html">if e else</a>.</p>
+
+<div class="trylua" data-goal="out:Dia de sorvete!;;src:\bif\b">
+<p class="try-task"><strong>Missão:</strong> a Ana só toma sorvete quando faz calor. No lugar do comentário, escreva um <code>if</code>: se a <code>temperatura</code> for <strong>maior que 30</strong>, mostre <code>Dia de sorvete!</code>. Depois, troque a temperatura para 25 e veja a mensagem sumir.</p>
+<pre class="script" data-file="main.lua">local temperatura = 32
+-- escreva o if aqui
+
+print("Temperatura: " .. temperatura .. " graus")
+</pre>
+<pre class="solucao" data-file="main.lua">local temperatura = 32
+if temperatura &gt; 30 then
+  print("Dia de sorvete!")
+end
+print("Temperatura: " .. temperatura .. " graus")
+</pre>
+</div>
+
+<hr>
+
+<h2>2. Várias linhas dentro do <code>if</code></h2>
+<p>O bloco pode ter quantas linhas você quiser: tudo o que estiver entre o <code>then</code> e o <code>end</code> roda junto, ou não roda nada. Na padaria do bairro, quando o estoque de pão fica baixo, o programa mostra três avisos:</p>
+
+<pre class="file" data-file="estoque.lua">local estoque = 3
+if estoque &lt; 5 then
+  print("Atenção: estoque baixo!")
+  print("Restam só " .. estoque .. " pães.")
+  print("Hora de fazer mais uma fornada.")
+end
+print("Estoque conferido.")
+</pre>
+
+<pre class="term">$ lua estoque.lua
+Atenção: estoque baixo!
+Restam só 3 pães.
+Hora de fazer mais uma fornada.
+Estoque conferido.
+</pre>
+
+<p>Com <code>estoque = 3</code>, a condição <code>3 &lt; 5</code> é verdadeira e as três linhas do bloco rodam. Com <code>estoque = 40</code>, nenhuma delas rodaria: só apareceria <code>Estoque conferido.</code>.</p>
+
+<div class="tip">
+<strong>Indente com 2 espaços</strong>
+<p>Para o Lua, os espaços no começo da linha <strong>não fazem diferença</strong>: quem diz onde o bloco termina é o <code>end</code>. Mesmo assim, ponha 2 espaços na frente de cada linha de dentro do <code>if</code>. Assim, quem lê (inclusive você, daqui a uma semana) enxerga de relance o que está dentro e o que está fora, e percebe na hora quando falta um <code>end</code>. A comunidade Lua usa 2, 3 ou 4 espaços; este guia usa 2 (veja <a href="estilo.html">Estilo de Código</a>).</p>
+</div>
+
+<hr>
+
+<h2>3. O <code>if</code> numa linha só</h2>
+<p>Como os espaços e as quebras de linha não importam para o Lua, um <code>if</code> curto pode ficar inteiro numa linha:</p>
+
+<pre class="file" data-file="umalinha.lua">local chovendo = true
+if chovendo then print("Leve o guarda-chuva.") end
+</pre>
+
+<pre class="term">$ lua umalinha.lua
+Leve o guarda-chuva.
+</pre>
+
+<p>Funciona igual à versão em três linhas. Use essa forma só quando o bloco for <strong>uma ação curta</strong>; com duas ou mais ações, prefira uma por linha, que é mais fácil de ler. Repare que o <code>end</code> continua obrigatório, mesmo na linha única.</p>
+
+<hr>
+
+<h2>4. O que conta como verdadeiro no Lua</h2>
+<p>A condição do <code>if</code> não precisa ser uma comparação. Ela pode ser <strong>qualquer valor</strong>, e o Lua decide assim:</p>
+<ul>
+  <li><code>false</code> e <code>nil</code> são <strong>falsos</strong>;</li>
+  <li><strong>todo o resto</strong> é verdadeiro: qualquer número (até o <code>0</code>), qualquer texto (até o vazio, <code>""</code>), qualquer tabela.</li>
+</ul>
+
+<pre class="file" data-file="verdade.lua">if 0 then print("0 conta como verdadeiro") end
+if "" then print("o texto vazio também") end
+if false then print("false: nunca aparece") end
+if nil then print("nil: nunca aparece") end
+print("só false e nil são falsos")
+</pre>
+
+<pre class="term">$ lua verdade.lua
+0 conta como verdadeiro
+o texto vazio também
+só false e nil são falsos
+</pre>
+
+<div class="warning">
+<strong>Quem vem de outra linguagem: o 0 é verdadeiro!</strong>
+<p>Em muitas linguagens (C, JavaScript, Python, PHP), o número <code>0</code> e o texto vazio contam como falso. <strong>No Lua, não.</strong> Um <code>if quantidade then</code> com <code>quantidade = 0</code> <strong>entra</strong> no bloco. Se você quer saber se a quantidade é zero, compare de verdade: <code>if quantidade == 0 then</code> (ou <code>if quantidade &gt; 0 then</code> para "tem alguma coisa").</p>
+</div>
+
+<h3>Testando se uma variável tem valor</h3>
+<p>Essa regra tem um uso muito comum: descobrir se uma variável <strong>tem um valor</strong> ou se está vazia (<code>nil</code>; veja <a href="nil.html">O Valor nil</a>). O <code>not</code> ("não") inverte a pergunta (veja <a href="operadores-logicos.html">and, or e not</a>):</p>
+
+<pre class="file" data-file="apelido.lua">local apelido = nil
+if apelido then
+  print("Oi, " .. apelido .. "!")
+end
+if not apelido then
+  print("A Ana ainda não escolheu um apelido.")
+end
+</pre>
+
+<pre class="term">$ lua apelido.lua
+A Ana ainda não escolheu um apelido.
+</pre>
+
+<dl class="anatomy">
+  <dt>if apelido then</dt><dd>"Se <code>apelido</code> tem valor". Como ele vale <code>nil</code>, que é falso, o bloco é pulado. Ainda bem: juntar <code>nil</code> com texto (<code>..</code>) daria erro.</dd>
+  <dt>if not apelido then</dt><dd>"Se <code>apelido</code> <strong>não</strong> tem valor". <code>not nil</code> dá <code>true</code>, então o bloco roda.</dd>
+</dl>
+
+<p>Troque a primeira linha por <code>local apelido = "Aninha"</code> e o resultado se inverte: aparece <code>Oi, Aninha!</code> e o segundo bloco é pulado.</p>
+
+<div class="trylua">
+<p class="try-task"><strong>Experimente:</strong> troque o valor de <code>x</code> por <code>0</code>, <code>""</code>, <code>false</code>, <code>nil</code>, <code>"não"</code> e <code>{}</code> (uma tabela vazia), e rode a cada troca. Quais valores fazem a mensagem aparecer?</p>
+<pre class="script" data-file="main.lua">local x = 0
+if x then
+  print("entrou no if com", x)
+end
+print("fim")
+</pre>
+</div>
+
+<hr>
+
+<h2>5. Condições com comparações e com <code>and</code>/<code>or</code></h2>
+<p>As condições mais comuns são as comparações. Um lembrete dos sinais (a aula completa é <a href="operadores-comparacao.html">Comparações</a>):</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Sinal</th><th>Pergunta</th><th>Exemplo</th></tr>
+<tr><td><code>==</code></td><td>é igual?</td><td><code>if senha == "pao123" then</code></td></tr>
+<tr><td><code>~=</code></td><td>é diferente?</td><td><code>if senha ~= "abc" then</code></td></tr>
+<tr><td><code>&lt;</code> e <code>&gt;</code></td><td>é menor? é maior?</td><td><code>if estoque &lt; 5 then</code></td></tr>
+<tr><td><code>&lt;=</code> e <code>&gt;=</code></td><td>é menor ou igual? maior ou igual?</td><td><code>if idade &gt;= 18 then</code></td></tr>
+</table>
+</div>
+
+<p>Para juntar duas perguntas numa só, use <code>and</code> ("e": as duas têm de ser verdadeiras) ou <code>or</code> ("ou": basta uma):</p>
+
+<pre class="file" data-file="comp.lua">local senha = "pao123"
+if senha == "pao123" then print("Senha certa, pode entrar.") end
+if senha ~= "abc" then print("Não é abc.") end
+local nota = 7
+if nota &gt;= 6 and nota &lt;= 10 then print("Aprovada!") end
+</pre>
+
+<pre class="term">$ lua comp.lua
+Senha certa, pode entrar.
+Não é abc.
+Aprovada!
+</pre>
+
+<p>A última condição lê-se "a nota é maior ou igual a 6 <strong>e</strong> menor ou igual a 10". O Lua não entende a forma "encadeada" da matemática (<code>6 &lt;= nota &lt;= 10</code>). Ele faz a primeira comparação (<code>6 &lt;= 7</code> dá <code>true</code>) e depois tenta comparar esse <code>true</code> com 10:</p>
+
+<pre class="term">$ lua -e 'local nota = 7 if 6 &lt;= nota &lt;= 10 then print("x") end'
+lua: (command line):1: attempt to compare boolean with number
+stack traceback:
+	(command line):1: in main chunk
+	[C]: in ?
+</pre>
+
+<p>"Tentativa de comparar um booleano com um número". Escreva as duas comparações separadas, com <code>and</code> no meio: <code>nota &gt;= 6 and nota &lt;= 10</code>.</p>
+
+<hr>
+
+<h2>6. <code>if</code> no modo interativo</h2>
+<p>No modo interativo (o <code>&gt;</code> do Lua; veja <a href="repl.html">O Modo Interativo</a>), quando você digita uma linha com <code>if … then</code> e aperta <kbd>Enter</kbd>, o prompt vira <code>&gt;&gt;</code>: o Lua está esperando o resto do bloco. Ele só roda o <code>if</code> quando recebe o <code>end</code>:</p>
+
+<pre class="term">$ lua
+Lua 5.5.0  Copyright (C) 1994-2025 Lua.org, PUC-Rio
+&gt; idade = 20
+&gt; if idade &gt;= 18 then
+&gt;&gt; print("Pode votar.")
+&gt;&gt; end
+Pode votar.
+&gt; if idade &gt; 60 then
+&gt;&gt; print("Tem prioridade na fila.")
+&gt;&gt; end
+&gt; if idade &gt;= 18 then print("maior de idade") end
+maior de idade
+&gt; os.exit()
+</pre>
+
+<p>O segundo <code>if</code> não mostrou nada: <code>20 &gt; 60</code> é falso. E o terceiro, numa linha só, rodou na hora, porque o <code>end</code> já veio na mesma linha. (Aqui a variável foi criada sem <code>local</code> de propósito: no modo interativo, uma <code>local</code> não sobrevive de uma linha para a outra.)</p>
+
+<hr>
+
+<h2 id="formas">Formas diferentes de fazer a mesma coisa</h2>
+<p>As três versões abaixo fazem exatamente o mesmo: mostram o aviso quando o apelido está vazio.</p>
+
+<pre class="file" data-file="formas.lua">local apelido = nil
+
+-- 1) comparando com nil
+if apelido == nil then
+  print("sem apelido (1)")
+end
+
+-- 2) com not: "se não tem valor"
+if not apelido then
+  print("sem apelido (2)")
+end
+
+-- 3) numa linha só
+if not apelido then print("sem apelido (3)") end
+</pre>
+
+<pre class="term">$ lua formas.lua
+sem apelido (1)
+sem apelido (2)
+sem apelido (3)
+</pre>
+
+<p>Há uma diferença pequena entre a 1 e a 2: <code>apelido == nil</code> só é verdadeiro para <code>nil</code>; <code>not apelido</code> é verdadeiro para <code>nil</code> <strong>e</strong> para <code>false</code>. Para uma variável que guarda texto, dá no mesmo.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Situação</th><th>Qual usar</th></tr>
+<tr><td>Fazer algo só quando uma condição é verdadeira</td><td><code>if condição then … end</code></td></tr>
+<tr><td>Uma ação curta</td><td><code>if condição then ação end</code> numa linha</td></tr>
+<tr><td>Saber se uma variável tem valor</td><td><code>if variavel then</code> (ou <code>if not variavel then</code>)</td></tr>
+<tr><td>Saber se um número é zero</td><td><code>if n == 0 then</code> (nunca <code>if not n</code>: o 0 é verdadeiro)</td></tr>
+<tr><td>Fazer uma coisa se for verdade e <strong>outra</strong> se não for</td><td><code>if … else … end</code> (aula <a href="if-else.html">if e else</a>)</td></tr>
+<tr><td>Escolher entre três ou mais caminhos</td><td><code>elseif</code> (aula <a href="elseif.html">elseif</a>)</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+
+<div class="cenario">
+<strong>Esqueceu o <code>then</code></strong>
+<pre class="file" data-file="semthen.lua">local idade = 20
+if idade &gt;= 18
+  print("A Ana pode votar.")
+end
+</pre>
+<pre class="term">$ lua semthen.lua
+lua: semthen.lua:3: 'then' expected near 'print'
+$ echo $?
+1
+</pre>
+<dl class="anatomy">
+  <dt>lua:</dt><dd>Quem está reclamando é o programa <code>lua</code>.</dd>
+  <dt>semthen.lua:3:</dt><dd>O arquivo e a <strong>linha 3</strong>, onde o Lua percebeu o problema.</dd>
+  <dt>'then' expected near 'print'</dt><dd>"Era esperado <code>then</code> perto de <code>print</code>". Depois da condição <code>idade &gt;= 18</code>, o Lua esperava o <code>then</code>; em vez dele, chegou o <code>print</code>.</dd>
+</dl>
+<p>Repare que o erro aponta a linha <strong>3</strong>, mas o <code>then</code> faltou na linha <strong>2</strong>: o Lua só percebe que faltou quando chega à palavra seguinte. Olhe sempre a linha do erro <strong>e a de cima</strong>. Também não apareceu nenhuma mensagem do programa: com erro de sintaxe, o Lua nem começa a rodar (e o código de saída é 1). <strong>Como consertar:</strong> <code>if idade &gt;= 18 then</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Esqueceu o <code>end</code></strong>
+<pre class="file" data-file="semend.lua">local idade = 20
+if idade &gt;= 18 then
+  print("A Ana pode votar.")
+print("Fim do programa.")
+</pre>
+<pre class="term">$ lua semend.lua
+lua: semend.lua:5: 'end' expected (to close 'if' at line 2) near &lt;eof&gt;
+</pre>
+<dl class="anatomy">
+  <dt>semend.lua:5:</dt><dd>A linha 5, que nem existe: o arquivo tem 4 linhas. É o "depois do fim".</dd>
+  <dt>'end' expected</dt><dd>"Era esperado um <code>end</code>"…</dd>
+  <dt>(to close 'if' at line 2)</dt><dd>"…para fechar o <code>if</code> da linha 2". O Lua diz qual bloco ficou aberto. É a parte mais útil da mensagem.</dd>
+  <dt>near &lt;eof&gt;</dt><dd>"Perto do <em>end of file</em>", o fim do arquivo. O Lua leu tudo procurando o <code>end</code> e o arquivo acabou.</dd>
+</dl>
+<p>Aqui a indentação ajuda a achar o lugar: o segundo <code>print</code> está na margem esquerda, então ele deveria estar <strong>fora</strong> do <code>if</code>, e o <code>end</code> vai logo antes dele. <strong>Como consertar:</strong> ponha o <code>end</code> na linha 4, antes de <code>print("Fim do programa.")</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Sobrou um <code>end</code></strong>
+<pre class="file" data-file="endsobra.lua">local idade = 20
+if idade &gt;= 18 then
+  print("A Ana pode votar.")
+end
+end
+</pre>
+<pre class="term">$ lua endsobra.lua
+lua: endsobra.lua:5: &lt;eof&gt; expected near 'end'
+</pre>
+<p>"Era esperado o fim do arquivo perto de <code>end</code>". O <code>end</code> da linha 4 já fechou o <code>if</code>; o da linha 5 não tem o que fechar, e o Lua esperava que o arquivo acabasse ali. <strong>Como consertar:</strong> apague o <code>end</code> que sobrou. Conte: cada <code>if</code> tem exatamente um <code>end</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Usou <code>=</code> no lugar de <code>==</code></strong>
+<pre class="file" data-file="igual.lua">local senha = "pao123"
+if senha = "pao123" then
+  print("Senha certa.")
+end
+</pre>
+<pre class="term">$ lua igual.lua
+lua: igual.lua:2: 'then' expected near '='
+</pre>
+<p>Um <code>=</code> sozinho é <strong>atribuição</strong> ("guarde este valor na variável"), e não uma pergunta. Para o Lua, a condição terminou em <code>senha</code> e ele esperava o <code>then</code>; chegou um <code>=</code>. <strong>Como consertar:</strong> para <strong>comparar</strong>, use dois sinais: <code>if senha == "pao123" then</code>. (O lado bom: no Lua esse engano nunca passa despercebido, ele sempre dá erro.)</p>
+</div>
+
+<div class="cenario">
+<strong>Usou <code>!=</code> no lugar de <code>~=</code></strong>
+<pre class="file" data-file="diferente.lua">local senha = "abc"
+if senha != "pao123" then
+  print("Senha errada.")
+end
+</pre>
+<pre class="term">$ lua diferente.lua
+lua: diferente.lua:2: 'then' expected near '!'
+</pre>
+<p>O "diferente" da maioria das linguagens é <code>!=</code>, mas o do Lua é <strong><code>~=</code></strong> (o til, como num "≠" deitado). O Lua não conhece o <code>!</code> e reclama dele. <strong>Como consertar:</strong> <code>if senha ~= "pao123" then</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Escreveu <code>If</code> com maiúscula</strong>
+<pre class="file" data-file="maiuscula.lua">local idade = 20
+If idade &gt;= 18 then
+  print("A Ana pode votar.")
+end
+</pre>
+<pre class="term">$ lua maiuscula.lua
+lua: maiuscula.lua:2: syntax error near 'idade'
+</pre>
+<p>"Erro de sintaxe perto de <code>idade</code>". O Lua diferencia maiúsculas de minúsculas: <code>If</code> não é a palavra <code>if</code>, é um nome qualquer (como se fosse uma variável). Um nome seguido de outro nome (<code>If idade</code>) não forma nada que o Lua entenda. <strong>Como consertar:</strong> as palavras-chave do Lua são sempre minúsculas: <code>if</code>, <code>then</code>, <code>end</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Comparou um texto com um número</strong>
+<pre class="file" data-file="textonum.lua">local idade = "20"
+if idade &gt;= 18 then
+  print("A Ana pode votar.")
+end
+</pre>
+<pre class="term">$ lua textonum.lua
+lua: textonum.lua:2: attempt to compare number with string
+stack traceback:
+	textonum.lua:2: in main chunk
+	[C]: in ?
+</pre>
+<dl class="anatomy">
+  <dt>textonum.lua:2:</dt><dd>O problema está na linha 2, a do <code>if</code>.</dd>
+  <dt>attempt to compare number with string</dt><dd>"Tentativa de comparar um número com um texto (<em>string</em>)". As aspas em <code>"20"</code> fazem dele um <strong>texto</strong>, e o Lua não sabe dizer se um texto é "maior" que um número. (A ordem dos tipos na mensagem é a da comparação que o Lua fez por dentro, que pode sair invertida em relação ao que você escreveu; não se preocupe com ela.)</dd>
+  <dt>stack traceback:</dt><dd>"Rastro da pilha": o caminho que o programa fez até o erro. Aqui é curto: o erro foi no programa principal (<code>main chunk</code>), na linha 2; o <code>[C]: in ?</code> é o próprio <code>lua</code>, que começou tudo.</dd>
+</dl>
+<p>Diferente dos erros de sintaxe acima, este aparece <strong>com o programa já rodando</strong>, por isso vem o <code>stack traceback</code>. Isso acontece muito com o que vem do teclado: o <code>io.read()</code> devolve texto. <strong>Como consertar:</strong> tire as aspas (<code>local idade = 20</code>) ou converta o texto com <code>tonumber(idade)</code> (veja <a href="conversao.html">Conversão</a>).</p>
+</div>
+
+<div class="cenario">
+<strong>A variável da condição estava vazia (<code>nil</code>)</strong>
+<pre class="file" data-file="nilnum.lua">local idade
+if idade &gt;= 18 then
+  print("A Ana pode votar.")
+end
+</pre>
+<pre class="term">$ lua nilnum.lua
+lua: nilnum.lua:2: attempt to compare number with nil
+stack traceback:
+	nilnum.lua:2: in main chunk
+	[C]: in ?
+</pre>
+<p>"Tentativa de comparar um número com <code>nil</code>". A variável <code>idade</code> foi criada sem valor, e <code>nil &gt;= 18</code> não tem resposta. O mesmo acontece se você errar o nome da variável (<code>idde &gt;= 18</code>): o nome errado vale <code>nil</code>. <strong>Como consertar:</strong> dê um valor à variável antes do <code>if</code>, ou confira o nome.</p>
+</div>
+
+<div class="trylua" data-goal="out:Senha certa, pode entrar.;;semerro">
+<p class="try-task"><strong>Missão:</strong> este programa tem <strong>dois</strong> erros, e o Lua mostra um de cada vez. Rode, leia a mensagem, conserte, e rode de novo até aparecer <code>Senha certa, pode entrar.</code></p>
+<pre class="script" data-file="main.lua">local senha = "pao123"
+if senha = "pao123"
+  print("Senha certa, pode entrar.")
+end
+</pre>
+<pre class="solucao" data-file="main.lua">local senha = "pao123"
+if senha == "pao123" then
+  print("Senha certa, pode entrar.")
+end
+</pre>
+</div>
+
+<hr>
+
+<h2>Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>O que faz</th></tr>
+<tr><td><code>if condição then</code> … <code>end</code></td><td>Roda o bloco só se a condição for verdadeira; senão, pula para depois do <code>end</code></td></tr>
+<tr><td><code>if condição then ação end</code></td><td>O mesmo, numa linha</td></tr>
+<tr><td><code>if variavel then</code></td><td>"Se a variável tem valor" (não é <code>nil</code> nem <code>false</code>)</td></tr>
+<tr><td><code>if not variavel then</code></td><td>"Se a variável não tem valor" (é <code>nil</code> ou <code>false</code>)</td></tr>
+<tr><td><code>==</code>, <code>~=</code>, <code>&lt;</code>, <code>&gt;</code>, <code>&lt;=</code>, <code>&gt;=</code></td><td>Igual, diferente, menor, maior, menor ou igual, maior ou igual</td></tr>
+<tr><td><code>a and b</code> / <code>a or b</code></td><td>As duas condições / pelo menos uma</td></tr>
+<tr><td>Falsos no Lua</td><td>Só <code>false</code> e <code>nil</code>. O <code>0</code> e o <code>""</code> são verdadeiros</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Mensagem</th><th>Causa provável</th></tr>
+<tr><td><code>'then' expected near 'print'</code></td><td>Faltou o <code>then</code> no fim da linha do <code>if</code> (olhe a linha de cima)</td></tr>
+<tr><td><code>'end' expected (to close 'if' at line N) near &lt;eof&gt;</code></td><td>Faltou o <code>end</code> do <code>if</code> da linha N</td></tr>
+<tr><td><code>&lt;eof&gt; expected near 'end'</code></td><td>Sobrou um <code>end</code></td></tr>
+<tr><td><code>'then' expected near '='</code></td><td>Usou <code>=</code> no lugar de <code>==</code></td></tr>
+<tr><td><code>'then' expected near '!'</code></td><td>Usou <code>!=</code> no lugar de <code>~=</code></td></tr>
+<tr><td><code>syntax error near 'idade'</code> (logo depois do <code>If</code>)</td><td>Palavra-chave com maiúscula (<code>If</code>, <code>Then</code>, <code>End</code>)</td></tr>
+<tr><td><code>attempt to compare number with string</code></td><td>Um dos lados é texto (entre aspas, ou vindo do <code>io.read()</code>)</td></tr>
+<tr><td><code>attempt to compare number with nil</code></td><td>A variável não tem valor, ou o nome está errado</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. Complete o <code>if</code></h3>
+<p>Complete para o programa mostrar <code>Frete grátis!</code> quando o total passar de 100:</p>
+<div class="ex-code">local total = 150<br><input data-answer="if" aria-label="palavra-chave do começo"> total &gt; 100 <input data-answer="then" aria-label="palavra-chave depois da condição"><br>&nbsp;&nbsp;print("Frete grátis!")<br><input data-answer="end" aria-label="palavra-chave do fim"></div>
+</div>
+
+<div class="exercise">
+<h3>2. O sinal de "diferente"</h3>
+<p>Complete com o sinal que o Lua usa para "diferente":</p>
+<div class="ex-code">if resposta <input data-answer="~=" aria-label="sinal de diferente"> "sim" then print("Tudo bem, fica para outro dia.") end</div>
+</div>
+
+<div class="mc" data-answer="3">
+<p class="mc-q">3. O que este programa mostra? <code>local n = 0</code> / <code>if n then print("A") end</code> / <code>print("B")</code></p>
+<label><input type="radio" name="q3"> Só <code>B</code>, porque 0 é falso</label>
+<label><input type="radio" name="q3"> Nada: dá erro</label>
+<label><input type="radio" name="q3"> <code>A</code> e depois <code>B</code></label>
+<label><input type="radio" name="q3"> Só <code>A</code></label>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">4. Quais valores o Lua considera <strong>falsos</strong> numa condição?</p>
+<label><input type="radio" name="q4"> <code>false</code>, <code>nil</code>, <code>0</code> e <code>""</code></label>
+<label><input type="radio" name="q4"> Só <code>false</code> e <code>nil</code></label>
+<label><input type="radio" name="q4"> Só <code>false</code></label>
+<label><input type="radio" name="q4"> <code>false</code> e <code>0</code></label>
+</div>
+
+<div class="mc" data-answer="4">
+<p class="mc-q">5. O Lua mostrou <code>lua: main.lua:7: 'end' expected (to close 'if' at line 3) near &lt;eof&gt;</code>. Onde está o problema?</p>
+<label><input type="radio" name="q5"> Na linha 7, que tem um <code>end</code> a mais</label>
+<label><input type="radio" name="q5"> Na linha 3, que tem um <code>then</code> a mais</label>
+<label><input type="radio" name="q5"> Em nenhum lugar: é um aviso, o programa rodou</label>
+<label><input type="radio" name="q5"> O <code>if</code> da linha 3 não foi fechado com um <code>end</code></label>
+</div>
+
+<div class="mc" data-answer="1">
+<p class="mc-q">6. Com <code>local estoque = 40</code>, o que <code>if estoque &lt; 5 then print("baixo") end print("ok")</code> mostra?</p>
+<label><input type="radio" name="q6"> Só <code>ok</code></label>
+<label><input type="radio" name="q6"> <code>baixo</code> e <code>ok</code></label>
+<label><input type="radio" name="q6"> Só <code>baixo</code></label>
+<label><input type="radio" name="q6"> Nada</label>
+</div>
+
+<h3>Missão final: o brinde da padaria</h3>
+
+<div class="trylua" data-goal="out:Ganhou um pão de queijo de brinde!;;src:\bif\b[^\n]*(&gt;|&gt;=)[^\n]*\bthen\b">
+<p class="try-task"><strong>Missão:</strong> a padaria do bairro dá um pão de queijo de brinde em compras <strong>acima de R$ 20</strong>. A cliente levou 3 bolos de R$ 7,50. No lugar do comentário, escreva um <code>if</code> que compare o <code>total</code> com 20 e, se passar, mostre <code>Ganhou um pão de queijo de brinde!</code>. A linha <code>Obrigada pela compra!</code> tem de aparecer sempre.</p>
+<pre class="script" data-file="main.lua">local preco_bolo = 7.50
+local quantidade = 3
+local total = preco_bolo * quantidade
+print("Total: R$ " .. total)
+-- escreva o if aqui
+
+print("Obrigada pela compra!")
+</pre>
+<pre class="solucao" data-file="main.lua">local preco_bolo = 7.50
+local quantidade = 3
+local total = preco_bolo * quantidade
+print("Total: R$ " .. total)
+if total &gt; 20 then
+  print("Ganhou um pão de queijo de brinde!")
+end
+print("Obrigada pela compra!")
+</pre>
+</div>
+
+<p>Com 3 bolos, o total é <code>22.5</code> e o brinde aparece. Teste com <code>quantidade = 2</code> (total <code>15.0</code>): o brinde some, mas o agradecimento continua. Para mostrar o total com vírgula e duas casas (<code>R$ 22,50</code>), veja <a href="string-format.html">string.format</a>.</p>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li><code>if condição then … end</code> ("se … então … fim") roda o bloco só quando a condição é verdadeira. Se for falsa, o Lua pula até depois do <code>end</code>, sem erro.</li>
+  <li>O <code>then</code> e o <code>end</code> são obrigatórios, até no <code>if</code> de uma linha só. Indente o bloco com 2 espaços para enxergar o que está dentro.</li>
+  <li>No Lua, <strong>só <code>false</code> e <code>nil</code> são falsos</strong>. O <code>0</code> e o <code>""</code> são verdadeiros. <code>if variavel then</code> pergunta "tem valor?".</li>
+  <li>Compare com <code>==</code> (dois sinais) e "diferente" é <code>~=</code>. Junte condições com <code>and</code> e <code>or</code>.</li>
+  <li>Erro de <code>then</code> esquecido aparece na linha <strong>seguinte</strong>; erro de <code>end</code> esquecido diz qual <code>if</code> ficou aberto (<code>to close 'if' at line N</code>).</li>
+  <li>Para fazer outra coisa quando a condição é falsa, a próxima aula: <a href="if-else.html">if e else</a>.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
