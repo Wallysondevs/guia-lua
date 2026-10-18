@@ -1,0 +1,359 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua Bibliotecas io e os — referência completa do Lua 5.5 | Guia Lua</title>
+<meta name="description" content="Referência rápida das bibliotecas io e os do Lua 5.5: io.open, io.lines, io.read, io.write, os métodos dos arquivos (read, write, lines, seek, close), os formatos do read, os modos do open, os.date e seus códigos, os.time, os.clock, os.getenv, os.remove, os.rename, os.execute e os.exit, com exemplo curto e resultado real.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">Bibliotecas io e os</span></h1>
+
+<p class="intro">Esta é a página de consulta rápida das duas bibliotecas que ligam o programa ao mundo de fora. A <code>io</code> (<em>input/output</em> = "entrada e saída") lê o teclado, escreve na tela e trabalha com <strong>arquivos</strong>: 14 nomes na tabela <code>io</code> e 7 métodos em cada arquivo aberto. A <code>os</code> (<em>operating system</em> = "sistema operacional") cuida de data e hora, apaga e renomeia arquivos, lê variáveis do sistema e roda outros programas: 11 funções.</p>
+
+<div class="note">
+<strong>Como ler as tabelas</strong>
+<ul>
+  <li><strong>Exemplo</strong> é o que você digitaria depois do <code>&gt;</code> do <a href="repl.html">modo interativo</a>, numa pasta vazia da Ana. Vários comandos na mesma linha são separados por <code>;</code>. Os exemplos seguem em ordem: o <code>compras.txt</code> criado no primeiro é lido nos seguintes.</li>
+  <li><strong>Resultado</strong> é o que o Lua 5.5.0 respondeu no computador da Ana. Vários valores aparecem separados por vírgula; no terminal, o Lua separa com TAB.</li>
+  <li>Quase todas as funções de arquivo, quando falham, <strong>não param o programa</strong>: devolvem <code>nil</code>, a mensagem de erro e um número (o código do erro no sistema). Por isso se usa tanto <code>assert(io.open(…))</code>.</li>
+  <li>Datas e horas dependem do relógio e do fuso do computador. Os exemplos usam datas fixas (com <code>os.time{…}</code>) no fuso da Ana (−03).</li>
+</ul>
+</div>
+
+<p>Um programa completo, com a saída real. Ele grava duas linhas, lê de volta e, no fim, tenta abrir um arquivo que não existe:</p>
+
+<pre class="file" data-file="arquivo.lua">local f = assert(io.open("compras.txt", "w"))
+f:write("pão\n", "leite\n")
+f:close()
+
+for linha in io.lines("compras.txt") do
+  print("item: " .. linha)
+end
+
+local g = assert(io.open("faltando.txt"))
+</pre>
+
+<pre class="term">$ lua arquivo.lua
+item: pão
+item: leite
+lua: arquivo.lua:9: faltando.txt: No such file or directory
+stack traceback:
+	[C]: in global 'assert'
+	arquivo.lua:9: in main chunk
+	[C]: in ?
+</pre>
+
+<p>A mensagem <code>faltando.txt: No such file or directory</code> ("arquivo ou pasta não existe") veio do <code>io.open</code>; o <code>assert</code> a transformou em erro e parou o programa na linha 9. Sem o <code>assert</code>, o <code>g</code> seria <code>nil</code> e o erro só apareceria depois, mais difícil de entender.</p>
+
+<p>Pule direto para o grupo que você procura:</p>
+<ul>
+  <li><a href="#abrir">Abrir e fechar arquivos</a>: <code>io.open</code> e os modos <code>"r"</code>, <code>"w"</code>, <code>"a"</code>…</li>
+  <li><a href="#ler">Ler</a>: <code>f:read</code> e os formatos <code>"l"</code>, <code>"a"</code>, <code>"n"</code>…, <code>io.lines</code>, <code>f:lines</code></li>
+  <li><a href="#escrever">Escrever e posicionar</a>: <code>f:write</code>, <code>io.write</code>, <code>f:seek</code>, <code>f:flush</code>, <code>f:setvbuf</code></li>
+  <li><a href="#padrao">Entrada e saída padrão</a>: <code>io.read</code>, <code>io.stdin</code>, <code>io.stdout</code>, <code>io.stderr</code>, <code>io.input</code>, <code>io.output</code></li>
+  <li><a href="#outros-io">Outras da io</a>: <code>io.type</code>, <code>io.tmpfile</code>, <code>io.popen</code>, <code>io.close</code>, <code>io.flush</code></li>
+  <li><a href="#data">Data e hora</a>: <code>os.time</code>, <code>os.date</code>, <code>os.difftime</code>, <code>os.clock</code>, <code>os.setlocale</code></li>
+  <li><a href="#codigos-data">Os códigos do <code>os.date</code></a>: <code>%d</code>, <code>%m</code>, <code>%Y</code>, <code>%H</code>…</li>
+  <li><a href="#sistema">Arquivos e sistema</a>: <code>os.remove</code>, <code>os.rename</code>, <code>os.tmpname</code>, <code>os.getenv</code>, <code>os.execute</code>, <code>os.exit</code></li>
+  <li><a href="#az">Todas de A a Z</a></li>
+</ul>
+
+<hr>
+
+<h2 id="abrir">Abrir e fechar arquivos</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Função</th><th>O que faz</th><th>Exemplo</th><th>Resultado</th><th>Aula</th></tr>
+<tr><td><code>io.open(nome, modo)</code></td><td>Abre o arquivo e devolve um objeto <strong>arquivo</strong> (<em>file handle</em>), com os métodos <code>f:read</code>, <code>f:write</code>… O modo padrão é <code>"r"</code> (ler).</td><td><code>f = io.open("compras.txt", "w"); print(io.type(f))</code></td><td><code>file</code></td><td><a href="io-open.html">Abrindo Arquivos</a></td></tr>
+<tr><td></td><td>falhou: <code>nil</code>, a mensagem e o código do erro (2 = não existe)</td><td><code>io.open("nao-existe.txt")</code></td><td><code>nil</code>, <code>nao-existe.txt: No such file or directory</code>, <code>2</code></td><td></td></tr>
+<tr><td></td><td>uma pasta não pode ser aberta para escrever (21 = é uma pasta)</td><td><code>io.open("/", "w")</code></td><td><code>nil</code>, <code>/: Is a directory</code>, <code>21</code></td><td></td></tr>
+<tr><td></td><td>modo que não existe é erro de verdade</td><td><code>io.open("compras.txt", "x")</code></td><td><code>stdin:1: bad argument #2 to 'open' (invalid mode)</code></td><td></td></tr>
+<tr><td><code>f:close()</code></td><td>Fecha o arquivo (e grava o que estava esperando). Feche sempre.</td><td><code>f:close(); print(io.type(f))</code></td><td><code>closed file</code></td><td><a href="io-open.html">Abrindo Arquivos</a></td></tr>
+<tr><td></td><td>usar depois de fechar</td><td><code>f:write("x")</code></td><td><code>stdin:1: attempt to use a closed file</code></td><td></td></tr>
+<tr><td><code>local f &lt;close&gt; = …</code> <span class="versao">5.4+</span></td><td>Fecha sozinho quando o bloco termina, mesmo se der erro.</td><td><code>do local g &lt;close&gt; = io.open("compras.txt"); print(g:read()) end</code></td><td><code>pão</code> (e o arquivo já está fechado)</td><td><a href="close.html">Fechamento Automático</a></td></tr>
+</table>
+</div>
+
+<p>Os modos do <code>io.open</code>:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Modo</th><th>Para</th><th>Se o arquivo não existe</th><th>Se já existe</th></tr>
+<tr><td><code>"r"</code></td><td>ler (<em>read</em>; o padrão)</td><td>falha: <code>nil</code> + mensagem</td><td>lê do começo</td></tr>
+<tr><td><code>"w"</code></td><td>escrever (<em>write</em>)</td><td>cria</td><td><strong>apaga tudo</strong> e começa vazio</td></tr>
+<tr><td><code>"a"</code></td><td>acrescentar no fim (<em>append</em>)</td><td>cria</td><td>mantém e escreve no fim</td></tr>
+<tr><td><code>"r+"</code></td><td>ler e escrever</td><td>falha</td><td>mantém o conteúdo</td></tr>
+<tr><td><code>"w+"</code></td><td>ler e escrever</td><td>cria</td><td>apaga tudo</td></tr>
+<tr><td><code>"a+"</code></td><td>ler e acrescentar</td><td>cria</td><td>mantém; só escreve no fim</td></tr>
+<tr><td>com <code>b</code> no fim (<code>"rb"</code>, <code>"wb"</code>…)</td><td>modo binário (faz diferença no Windows)</td><td colspan="2">igual ao modo sem o <code>b</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2 id="ler">Ler</h2>
+
+<p>Nos exemplos, o <code>compras.txt</code> tem três linhas: <code>pão</code>, <code>leite</code> e <code>3</code> (13 bytes, contando o <code>ã</code> como 2 e as três quebras de linha).</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Função</th><th>O que faz</th><th>Exemplo</th><th>Resultado</th><th>Aula</th></tr>
+<tr><td><code>f:read()</code> ou <code>f:read("l")</code></td><td>Lê a próxima <strong>linha</strong>, sem a quebra de linha (<em>line</em>). No fim do arquivo, <code>nil</code>.</td><td><code>f = io.open("compras.txt"); print(f:read()); print(f:read("l"))</code></td><td><code>pão</code><br><code>leite</code></td><td><a href="arquivos-ler.html">Lendo Arquivos</a></td></tr>
+<tr><td><code>f:read("n")</code></td><td>Lê um <strong>número</strong> (pula espaços antes). Devolve número, não texto.</td><td>(continuando) <code>print(f:read("n")); print(f:read("l")); print(f:read("l"))</code></td><td><code>3</code><br>(linha vazia: o resto da linha do 3)<br><code>nil</code> (fim)</td><td><a href="io-read.html">io.read()</a></td></tr>
+<tr><td><code>f:read("a")</code></td><td>Lê <strong>tudo</strong> (<em>all</em>) do ponto atual até o fim.</td><td><code>f = io.open("compras.txt"); print(f:read("a")); f:close()</code></td><td><code>pão</code><br><code>leite</code><br><code>3</code><br>(e uma linha vazia)</td><td><a href="arquivos-ler.html">Lendo Arquivos</a></td></tr>
+<tr><td></td><td>no fim, <code>"a"</code> dá texto vazio (nunca <code>nil</code>); <code>"l"</code> e <code>0</code> dão <code>nil</code></td><td><code>f:read("a"); print(f:read("a"), f:read("l"), f:read(0))</code></td><td>(vazio), <code>nil</code>, <code>nil</code></td><td></td></tr>
+<tr><td><code>f:read("L")</code></td><td>Como <code>"l"</code>, mas <strong>mantém</strong> a quebra de linha.</td><td><code>f = io.open("compras.txt"); print(f:read("L")); f:close()</code></td><td><code>pão</code><br>(e uma linha vazia, da quebra)</td><td></td></tr>
+<tr><td><code>f:read(n)</code></td><td>Lê até <code>n</code> <strong>bytes</strong>. Pode cortar uma letra acentuada ao meio.</td><td><code>f = io.open("compras.txt"); print(f:read(2)); f:close()</code></td><td><code>p�</code> (meio <code>ã</code>)</td><td><a href="utf8.html">Acentos e utf8</a></td></tr>
+<tr><td><code>f:read(fmt1, fmt2…)</code></td><td>Vários formatos de uma vez: um valor para cada.</td><td><code>f = io.open("compras.txt"); print(f:read("l", "l")); f:close()</code></td><td><code>pão</code>, <code>leite</code></td><td></td></tr>
+<tr><td><code>io.lines(nome)</code></td><td>Abre o arquivo e entrega uma linha por volta do <code>for</code>. Fecha sozinho no fim.</td><td><code>for linha in io.lines("compras.txt") do print(linha) end</code></td><td><code>pão</code><br><code>leite</code><br><code>3</code></td><td><a href="io-lines.html">Linha por Linha</a></td></tr>
+<tr><td></td><td>arquivo que não existe: aqui é <strong>erro</strong> (não devolve <code>nil</code>)</td><td><code>io.lines("nao-existe.txt")</code></td><td><code>stdin:1: cannot open file 'nao-existe.txt' (No such file or directory)</code></td><td></td></tr>
+<tr><td><code>io.lines(nome, formato)</code></td><td>Com um formato: <code>1</code> = um byte por volta.</td><td><code>for n in io.lines("compras.txt", 1) do io.write("[", n, "]") end</code></td><td><code>[p][�][�][o][</code>… (o <code>ã</code> são 2 bytes)</td><td></td></tr>
+<tr><td><code>f:lines()</code></td><td>Como <code>io.lines</code>, num arquivo já aberto. <strong>Não</strong> fecha no fim.</td><td><code>f = io.open("compras.txt"); for l in f:lines() do io.write(l, ";") end; print(); print(io.type(f)); f:close()</code></td><td><code>pão;leite;3;café;</code><br><code>file</code> (ainda aberto)</td><td><a href="io-lines.html">Linha por Linha</a></td></tr>
+</table>
+</div>
+
+<p>Os formatos do <code>read</code> (valem para <code>f:read</code>, <code>io.read</code>, <code>io.lines</code> e <code>f:lines</code>):</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Formato</th><th>Lê</th><th>Devolve</th><th>No fim do arquivo</th></tr>
+<tr><td><code>"l"</code> (padrão)</td><td>a próxima linha, sem o <code>\n</code></td><td>texto</td><td><code>nil</code></td></tr>
+<tr><td><code>"L"</code></td><td>a próxima linha, com o <code>\n</code></td><td>texto</td><td><code>nil</code></td></tr>
+<tr><td><code>"n"</code></td><td>um número escrito do jeito do Lua (<code>7</code>, <code>-2.5</code>, <code>0x1F</code>)</td><td>número (inteiro ou float)</td><td><code>nil</code> (também se não houver número ali)</td></tr>
+<tr><td><code>"a"</code></td><td>tudo até o fim</td><td>texto</td><td><code>""</code> (texto vazio, nunca <code>nil</code>)</td></tr>
+<tr><td>um número <code>n</code></td><td>até <code>n</code> bytes</td><td>texto</td><td><code>nil</code></td></tr>
+</table>
+</div>
+
+<div class="note">
+<strong>Lua 5.1 escrevia <code>"*l"</code>, <code>"*a"</code>, <code>"*n"</code></strong>
+<p>Em tutoriais antigos você vai ver <code>f:read("*a")</code> e <code>io.read("*n")</code>, com asterisco. Era o jeito do Lua 5.1 e do LuaJIT. O manual do 5.5 escreve sem o asterisco (<code>"a"</code>, <code>"n"</code>), e é assim que este guia ensina. O 5.5 ainda aceita o asterisco por compatibilidade (no lab, <code>f:read("*a")</code> funcionou), mas formato que não existe é erro: <code>io.read("*x")</code> deu <code>stdin:1: bad argument #1 to 'read' (invalid format)</code>. Veja <a href="versoes.html">As Diferenças entre Versões</a>.</p>
+</div>
+
+<hr>
+
+<h2 id="escrever">Escrever e posicionar</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Função</th><th>O que faz</th><th>Exemplo</th><th>Resultado</th><th>Aula</th></tr>
+<tr><td><code>f:write(…)</code></td><td>Escreve textos e números no arquivo, na ordem, <strong>sem</strong> separador e sem pular linha (ponha o <code>"\n"</code>). Devolve o próprio arquivo.</td><td><code>f:write("pão\n", "leite\n", 3, "\n")</code></td><td>três linhas no arquivo; o modo interativo mostra <code>file (0x5584236ce670)</code> (o arquivo devolvido)</td><td><a href="arquivos-escrever.html">Escrevendo Arquivos</a></td></tr>
+<tr><td></td><td>abrindo com <code>"a"</code>, acrescenta no fim</td><td><code>f = io.open("compras.txt", "a"); f:write("café\n"); f:close()</code></td><td>o arquivo passa a ter 4 linhas</td><td></td></tr>
+<tr><td><code>io.write(…)</code></td><td>O mesmo, na tela (na saída padrão).</td><td><code>io.write("sem pular", " linha", 1, "\n")</code></td><td><code>sem pular linha1</code></td><td><a href="io-write.html">io.write()</a></td></tr>
+<tr><td></td><td>como devolve o arquivo, dá para encadear</td><td><code>io.write("a"):write("b\n")</code></td><td><code>ab</code></td><td></td></tr>
+<tr><td></td><td>só textos e números (o <code>print</code> aceita tudo; o <code>write</code>, não)</td><td><code>io.write(true)</code></td><td><code>stdin:1: bad argument #1 to 'write' (string expected, got boolean)</code></td><td><a href="ref-erros.html">Mensagens de Erro</a></td></tr>
+<tr><td><code>f:seek(base, desvio)</code></td><td>Muda (e informa) a posição de leitura/escrita, em bytes. <code>"set"</code> = do começo, <code>"cur"</code> = daqui, <code>"end"</code> = do fim.</td><td><code>f = io.open("compras.txt"); print(f:seek("end")); print(f:seek("set")); print(f:seek()); f:close()</code></td><td><code>13</code> (o tamanho)<br><code>0</code><br><code>0</code></td><td><a href="arquivos-ler.html">Lendo Arquivos</a></td></tr>
+<tr><td></td><td>pular os 5 primeiros bytes (<code>pão</code> + <code>\n</code>)</td><td><code>f = io.open("compras.txt"); f:seek("set", 5); print(f:read("l")); f:close()</code></td><td><code>leite</code></td><td></td></tr>
+<tr><td><code>f:flush()</code></td><td>Grava agora o que estava esperando na memória (sem fechar).</td><td><code>f = io.open("compras.txt"); print(f:flush()); f:close()</code></td><td><code>true</code></td><td></td></tr>
+<tr><td><code>f:setvbuf(modo)</code></td><td>Escolhe quando gravar: <code>"no"</code> (na hora), <code>"line"</code> (a cada linha), <code>"full"</code> (quando o espaço enche).</td><td><code>f = io.open("compras.txt"); print(f:setvbuf("no")); f:close()</code></td><td><code>true</code></td><td></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2 id="padrao">Entrada e saída padrão</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Nome</th><th>O que faz</th><th>Exemplo</th><th>Resultado</th><th>Aula</th></tr>
+<tr><td><code>io.read(formato)</code></td><td>Lê do teclado (da entrada padrão), com os mesmos formatos do <code>f:read</code>.</td><td><code>local nome = io.read()</code></td><td>o que a pessoa digitou, até o Enter (sem o Enter)</td><td><a href="io-read.html">io.read()</a></td></tr>
+<tr><td></td><td>um número</td><td><code>local idade = io.read("n")</code></td><td>um número, ou <code>nil</code> se a pessoa digitou outra coisa</td><td></td></tr>
+<tr><td><code>io.stdin</code>, <code>io.stdout</code>, <code>io.stderr</code></td><td>Os três "arquivos" que todo programa já tem abertos: a entrada (teclado), a saída (tela) e a saída de erros (também a tela, mas separada).</td><td><code>io.stdout:write("direto no stdout\n")</code></td><td><code>direto no stdout</code></td><td><a href="io-write.html">io.write()</a></td></tr>
+<tr><td></td><td>para mensagens de erro; não se mistura com a saída quando ela vai para um arquivo (<code>lua prog.lua &gt; saida.txt</code>)</td><td><code>io.stderr:write("aviso no stderr\n")</code></td><td><code>aviso no stderr</code></td><td><a href="erros.html">Lendo uma Mensagem de Erro</a></td></tr>
+<tr><td><code>io.output(arquivo)</code></td><td>Troca a saída padrão: o <code>io.write</code> passa a escrever no arquivo. Sem argumento, devolve a atual.</td><td><code>io.output("saida.txt"); io.write("foi para o arquivo\n"); io.close(); io.output(io.stdout)</code></td><td>nada na tela; o texto foi para <code>saida.txt</code></td><td></td></tr>
+<tr><td><code>io.input(arquivo)</code></td><td>Troca a entrada padrão: o <code>io.read</code> passa a ler do arquivo.</td><td><code>io.input("saida.txt"); print(io.read("a")); io.close(io.input()); io.input(io.stdin)</code></td><td><code>foi para o arquivo</code></td><td></td></tr>
+<tr><td></td><td>no começo, são o teclado e a tela</td><td><code>io.output() == io.stdout, io.input() == io.stdin</code></td><td><code>true</code>, <code>true</code></td><td></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2 id="outros-io">Outras da <code>io</code></h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Função</th><th>O que faz</th><th>Exemplo</th><th>Resultado</th><th>Aula</th></tr>
+<tr><td><code>io.type(x)</code></td><td><code>"file"</code> (arquivo aberto), <code>"closed file"</code> (fechado) ou <code>nil</code> (não é arquivo).</td><td><code>io.type(io.stdout), io.type(42)</code></td><td><code>file</code>, <code>nil</code></td><td><a href="io-open.html">Abrindo Arquivos</a></td></tr>
+<tr><td><code>io.close(f)</code></td><td>O mesmo que <code>f:close()</code>. Sem argumento, fecha a saída padrão atual.</td><td><code>io.close(io.input())</code></td><td>fecha o arquivo de entrada</td><td></td></tr>
+<tr><td><code>io.flush()</code></td><td>O mesmo que <code>io.output():flush()</code>: grava o que está esperando na saída.</td><td><code>io.write("Carregando..."); io.flush()</code></td><td>o texto aparece na hora</td><td></td></tr>
+<tr><td><code>io.tmpfile()</code></td><td>Um arquivo temporário, aberto para ler e escrever, que é apagado quando o programa termina.</td><td><code>t = io.tmpfile(); t:write("oi"); t:seek("set"); print(t:read("a")); t:close()</code></td><td><code>oi</code></td><td></td></tr>
+<tr><td><code>io.popen(comando)</code></td><td>Roda um comando do sistema e devolve um "arquivo" de onde se lê o que ele escreveu. O <code>close</code> devolve o mesmo que o <code>os.execute</code>.</td><td><code>p = io.popen("echo Ana"); print(p:read("a")); print(p:close())</code></td><td><code>Ana</code><br>(linha vazia: o <code>\n</code> do <code>echo</code>)<br><code>true	exit	0</code></td><td><a href="os-execute.html">os.execute e io.popen</a></td></tr>
+<tr><td></td><td>comando que termina com erro</td><td><code>p = io.popen("exit 3"); print(p:close())</code></td><td><code>nil	exit	3</code></td><td></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2 id="data">Data e hora</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Função</th><th>O que faz</th><th>Exemplo</th><th>Resultado</th><th>Aula</th></tr>
+<tr><td><code>os.time()</code></td><td>A hora de agora, como um número: os segundos desde 1/1/1970 (UTC). Muda a cada segundo.</td><td><code>type(os.time()), math.type(os.time())</code></td><td><code>number</code>, <code>integer</code></td><td><a href="os-date-time.html">Datas e Horas</a></td></tr>
+<tr><td><code>os.time(tabela)</code></td><td>O número de uma data. Precisa de <code>year</code>, <code>month</code> e <code>day</code>; a hora padrão é meio-dia.</td><td><code>os.time({year = 2026, month = 10, day = 18, hour = 12})</code></td><td><code>1792335600</code></td><td><a href="os-date-time.html">Datas e Horas</a></td></tr>
+<tr><td></td><td>dia "fora do mês" é ajeitado: 32 de outubro = 1º de novembro</td><td><code>os.time({year = 2026, month = 10, day = 32}) == os.time({year = 2026, month = 11, day = 1})</code></td><td><code>true</code></td><td></td></tr>
+<tr><td></td><td>e a tabela é corrigida: daqui a 30 dias</td><td><code>t = {year = 2026, month = 10, day = 18 + 30}; os.time(t); print(t.day, t.month)</code></td><td><code>17</code>, <code>11</code></td><td></td></tr>
+<tr><td></td><td>faltou o mês</td><td><code>os.time({year = 2026})</code></td><td><code>stdin:1: field 'month' missing in date table</code></td><td></td></tr>
+<tr><td><code>os.date(formato, t)</code></td><td>A data <code>t</code> (ou agora) escrita como texto, com os códigos da <a href="#codigos-data">tabela abaixo</a>.</td><td><code>os.date("%d/%m/%Y %H:%M", os.time({year = 2026, month = 10, day = 18, hour = 9, min = 5}))</code></td><td><code>18/10/2026 09:05</code></td><td><a href="os-date-time.html">Datas e Horas</a></td></tr>
+<tr><td></td><td>nomes de dia e mês saem em <strong>inglês</strong>…</td><td><code>os.date("%A, %d de %B de %Y", os.time({year = 2026, month = 10, day = 18}))</code></td><td><code>Sunday, 18 de October de 2026</code></td><td></td></tr>
+<tr><td></td><td>…até o programa chamar <code>os.setlocale("")</code></td><td><code>os.setlocale("")</code>, depois o mesmo <code>os.date</code></td><td><code>pt_BR.UTF-8</code>, depois <code>domingo, 18 de outubro de 2026</code></td><td></td></tr>
+<tr><td><code>os.date("*t", t)</code></td><td>A data como uma <strong>tabela</strong>: <code>year</code>, <code>month</code>, <code>day</code>, <code>hour</code>, <code>min</code>, <code>sec</code>, <code>wday</code> (dia da semana, 1 = domingo), <code>yday</code> (dia do ano), <code>isdst</code> (horário de verão?).</td><td><code>d = os.date("*t", os.time({year = 2026, month = 10, day = 18, hour = 9})); print(d.year, d.month, d.day, d.hour, d.min, d.wday, d.yday, d.isdst)</code></td><td><code>2026	10	18	9	0	1	291	false</code></td><td><a href="os-date-time.html">Datas e Horas</a></td></tr>
+<tr><td><code>os.date("!…")</code></td><td>Com <code>!</code> no começo, usa o horário UTC (de Greenwich) em vez do fuso do computador.</td><td><code>os.date("!%H:%M", 0), os.date("%Y-%m-%d", 0)</code></td><td><code>00:00</code>, <code>1969-12-31</code> (no fuso −03, ainda era 31/12)</td><td></td></tr>
+<tr><td></td><td>código que não existe</td><td><code>os.date("%Q")</code></td><td><code>stdin:1: bad argument #1 to 'date' (invalid conversion specifier '%Q')</code></td><td></td></tr>
+<tr><td><code>os.difftime(t2, t1)</code></td><td>Quantos segundos de <code>t1</code> até <code>t2</code>. Dividindo por 86400, dias.</td><td><code>os.difftime(os.time({year = 2026, month = 12, day = 25}), os.time({year = 2026, month = 10, day = 18})) / 86400</code></td><td><code>68.0</code> (dias até o Natal)</td><td><a href="os-date-time.html">Datas e Horas</a></td></tr>
+<tr><td><code>os.clock()</code></td><td>Quanto tempo de processador o programa já usou, em segundos (float). Para medir quanto algo demora: a diferença entre dois <code>os.clock()</code>.</td><td><code>type(os.clock()), os.clock() &gt;= 0</code></td><td><code>number</code>, <code>true</code></td><td><a href="os-funcoes.html">os.getenv, os.clock e os.exit</a></td></tr>
+<tr><td><code>os.setlocale(nome, categoria)</code></td><td>Troca o idioma/país (<em>locale</em>) do programa. <code>""</code> = o do sistema; <code>"C"</code> = o padrão do C (inglês). Devolve o nome do novo, ou <code>nil</code> se não deu.</td><td><code>os.setlocale("")</code></td><td><code>pt_BR.UTF-8</code></td><td><a href="os-date-time.html">Datas e Horas</a></td></tr>
+<tr><td></td><td>sem argumento: só informa (o Lua começa no <code>C</code>)</td><td><code>os.setlocale()</code></td><td><code>C</code></td><td></td></tr>
+<tr><td></td><td>locale que não existe no sistema</td><td><code>os.setlocale("xx_XX")</code></td><td><code>nil</code></td><td></td></tr>
+<tr><td></td><td>só uma categoria (<code>"all"</code>, <code>"collate"</code>, <code>"ctype"</code>, <code>"monetary"</code>, <code>"numeric"</code>, <code>"time"</code>)</td><td><code>os.setlocale("pt_BR.UTF-8", "time")</code>, depois <code>os.setlocale(nil, "numeric")</code></td><td><code>pt_BR.UTF-8</code>, depois <code>C</code></td><td></td></tr>
+</table>
+</div>
+
+<div class="tip">
+<strong>Por que só a categoria <code>"time"</code>?</strong>
+<p><code>os.setlocale("pt_BR.UTF-8", "time")</code> traduz os nomes de dia e mês do <code>os.date</code> sem mexer no resto. Trocar <strong>tudo</strong> (<code>os.setlocale("")</code>) também muda a categoria <code>"numeric"</code>, e os números passam a usar <strong>vírgula</strong>. No lab, depois de <code>os.setlocale("")</code>, a linha <code>string.format("%.2f", 1.5), tonumber("1,5"), tonumber("1.5"), 1.5</code> deu <code>1,50</code>, <code>1,5</code>, <code>1,5</code>, <code>1,5</code>: o <code>tonumber</code> passou a aceitar a vírgula, e até o <code>print(1.5)</code> passou a mostrar <code>1,5</code>. Isso pode quebrar arquivos CSV e contas com texto. Se só quer as datas em português, troque só o <code>"time"</code>.</p>
+</div>
+
+<h3 id="codigos-data">Os códigos do <code>os.date</code></h3>
+
+<p>Todos os exemplos são da data <code>os.time({year = 2026, month = 10, day = 18})</code> (domingo, meio-dia), com o locale padrão <code>C</code>. Com <code>os.setlocale("")</code> os nomes saem em português.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Código</th><th>O que é</th><th>Resultado</th><th>Código</th><th>O que é</th><th>Resultado</th></tr>
+<tr><td><code>%d</code></td><td>dia (01–31)</td><td><code>18</code></td><td><code>%H</code></td><td>hora (00–23)</td><td><code>12</code></td></tr>
+<tr><td><code>%m</code></td><td>mês (01–12)</td><td><code>10</code></td><td><code>%M</code></td><td>minuto (00–59)</td><td><code>00</code></td></tr>
+<tr><td><code>%Y</code></td><td>ano com 4 dígitos</td><td><code>2026</code></td><td><code>%S</code></td><td>segundo (00–60)</td><td><code>00</code></td></tr>
+<tr><td><code>%y</code></td><td>ano com 2 dígitos</td><td><code>26</code></td><td><code>%p</code></td><td>AM ou PM</td><td><code>PM</code></td></tr>
+<tr><td><code>%A</code></td><td>dia da semana</td><td><code>Sunday</code> (<code>domingo</code>)</td><td><code>%j</code></td><td>dia do ano (001–366)</td><td><code>291</code></td></tr>
+<tr><td><code>%a</code></td><td>dia da semana curto</td><td><code>Sun</code> (<code>dom</code>)</td><td><code>%w</code></td><td>dia da semana em número (0 = domingo)</td><td><code>0</code></td></tr>
+<tr><td><code>%B</code></td><td>mês</td><td><code>October</code> (<code>outubro</code>)</td><td><code>%U</code></td><td>semana do ano</td><td><code>42</code></td></tr>
+<tr><td><code>%b</code></td><td>mês curto</td><td><code>Oct</code> (<code>out</code>)</td><td><code>%Z</code>, <code>%z</code></td><td>fuso horário</td><td><code>-03</code>, <code>-0300</code></td></tr>
+<tr><td><code>%c</code></td><td>data e hora completas, no jeito do locale</td><td><code>Sun Oct 18 12:00:00 2026</code> (<code>dom 18 out 2026 12:00:00</code>)</td><td><code>%x</code>, <code>%X</code></td><td>só a data, só a hora, no jeito do locale</td><td><code>10/18/26</code>, <code>12:00:00</code> (<code>18/10/2026</code>, <code>12:00:00</code>)</td></tr>
+<tr><td><code>%%</code></td><td>um <code>%</code></td><td><code>%</code></td><td><code>*t</code></td><td>(o formato inteiro) devolve uma tabela</td><td>veja acima</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2 id="sistema">Arquivos e sistema</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Função</th><th>O que faz</th><th>Exemplo</th><th>Resultado</th><th>Aula</th></tr>
+<tr><td><code>os.rename(velho, novo)</code></td><td>Renomeia (ou move) um arquivo.</td><td><code>os.rename("compras.txt", "lista.txt")</code></td><td><code>true</code></td><td><a href="os-remove-rename.html">os.remove e os.rename</a></td></tr>
+<tr><td></td><td>falhou: <code>nil</code>, a mensagem e o código (sem erro de verdade)</td><td>de novo: <code>os.rename("compras.txt", "lista.txt")</code></td><td><code>nil</code>, <code>No such file or directory</code>, <code>2</code></td><td></td></tr>
+<tr><td><code>os.remove(nome)</code></td><td>Apaga o arquivo (ou uma pasta vazia). Não vai para a lixeira!</td><td><code>os.remove("lista.txt")</code></td><td><code>true</code></td><td><a href="os-remove-rename.html">os.remove e os.rename</a></td></tr>
+<tr><td></td><td>de novo: já não existe</td><td><code>os.remove("lista.txt")</code></td><td><code>nil</code>, <code>lista.txt: No such file or directory</code>, <code>2</code></td><td></td></tr>
+<tr><td><code>os.tmpname()</code></td><td>Um nome de arquivo temporário (e já cria o arquivo vazio, que você precisa apagar depois). Prefira <code>io.tmpfile()</code>.</td><td><code>os.tmpname():match("^/tmp/lua_") ~= nil</code></td><td><code>true</code> (o nome, como <code>/tmp/lua_e9yfQW</code>, muda a cada vez)</td><td></td></tr>
+<tr><td><code>os.getenv(nome)</code></td><td>O valor de uma <strong>variável de ambiente</strong> do sistema, ou <code>nil</code>.</td><td><code>os.getenv("HOME"), os.getenv("USER"), os.getenv("LANG")</code></td><td><code>/home/ana</code>, <code>ana</code>, <code>pt_BR.UTF-8</code></td><td><a href="os-funcoes.html">os.getenv, os.clock e os.exit</a></td></tr>
+<tr><td></td><td></td><td><code>os.getenv("NAO_EXISTE")</code></td><td><code>nil</code></td><td></td></tr>
+<tr><td><code>os.execute(comando)</code></td><td>Roda um comando do sistema (no terminal). Devolve <code>true</code>/<code>nil</code>, <code>"exit"</code> e o código de saída do comando.</td><td><code>os.execute("true")</code></td><td><code>true</code>, <code>exit</code>, <code>0</code></td><td><a href="os-execute.html">os.execute e io.popen</a></td></tr>
+<tr><td></td><td>comando que terminou com código 3</td><td><code>os.execute("exit 3")</code></td><td><code>nil</code>, <code>exit</code>, <code>3</code></td><td></td></tr>
+<tr><td></td><td>sem comando: há um terminal (<em>shell</em>) disponível?</td><td><code>os.execute()</code></td><td><code>true</code></td><td></td></tr>
+<tr><td><code>os.exit(código)</code></td><td>Termina o programa na hora. <code>0</code> ou <code>true</code> = deu certo (o padrão); outro número ou <code>false</code> = deu errado.</td><td><code>os.exit(3)</code>, e no terminal <code>echo $?</code></td><td><code>3</code></td><td><a href="os-funcoes.html">os.getenv, os.clock e os.exit</a></td></tr>
+<tr><td><code>os.exit(código, true)</code></td><td>Com <code>true</code> no segundo argumento, fecha o Lua direito antes de sair (roda os <code>__gc</code> e <code>&lt;close&gt;</code> pendentes).</td><td><code>os.exit(0, true)</code></td><td>o programa termina</td><td></td></tr>
+</table>
+</div>
+
+<div class="warning">
+<strong>No editor do guia não há outros programas</strong>
+<p>O editor roda o Lua dentro do navegador, sem um sistema por trás: lá, <code>os.execute("ls")</code> e <code>io.popen("date")</code> respondem <code>sh: 1: ls: not found</code>. Arquivos funcionam (numa pasta de mentira, que some a cada Rodar); data e hora são as do seu computador. Para <code>os.execute</code> e <code>io.popen</code> de verdade, use o terminal. Veja <a href="simulador.html">O Editor do Guia</a>.</p>
+</div>
+
+<hr>
+
+<h2 id="az">Todas de A a Z</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Biblioteca <code>io</code></th><th>Métodos do arquivo <code>f</code></th><th>Biblioteca <code>os</code></th></tr>
+<tr><td><code>io.close</code>, <code>io.flush</code>, <code>io.input</code>, <code>io.lines</code>, <code>io.open</code>, <code>io.output</code>, <code>io.popen</code>, <code>io.read</code>, <code>io.stderr</code>, <code>io.stdin</code>, <code>io.stdout</code>, <code>io.tmpfile</code>, <code>io.type</code>, <code>io.write</code></td><td><code>f:close</code>, <code>f:flush</code>, <code>f:lines</code>, <code>f:read</code>, <code>f:seek</code>, <code>f:setvbuf</code>, <code>f:write</code></td><td><code>os.clock</code>, <code>os.date</code>, <code>os.difftime</code>, <code>os.execute</code>, <code>os.exit</code>, <code>os.getenv</code>, <code>os.remove</code>, <code>os.rename</code>, <code>os.setlocale</code>, <code>os.time</code>, <code>os.tmpname</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Experimente</h2>
+
+<div class="trylua" data-goal="out:3 itens;;arquivo:compras.txt~café">
+<p class="try-task"><strong>Missão:</strong> o programa abre o <code>compras.txt</code> para escrever, mas esquece de escrever. Por isso a leitura dá <code>0 itens</code>. No lugar do comentário, faça um <code>for</code> que grave cada item da lista numa linha: <code>f:write(item, "\n")</code>. O resultado certo termina com <code>3 itens</code>, e o arquivo fica com <code>pão</code>, <code>leite</code> e <code>café</code>.</p>
+<pre class="script" data-file="main.lua">local itens = {"pão", "leite", "café"}
+
+local f = assert(io.open("compras.txt", "w"))
+-- escreva aqui cada item numa linha
+f:close()
+
+local quantos = 0
+for linha in io.lines("compras.txt") do
+  quantos = quantos + 1
+  print(quantos .. ". " .. linha)
+end
+print(quantos .. " itens")
+</pre>
+<pre class="solucao" data-file="main.lua">local itens = {"pão", "leite", "café"}
+
+local f = assert(io.open("compras.txt", "w"))
+for _, item in ipairs(itens) do
+  f:write(item, "\n")
+end
+f:close()
+
+local quantos = 0
+for linha in io.lines("compras.txt") do
+  quantos = quantos + 1
+  print(quantos .. ". " .. linha)
+end
+print(quantos .. " itens")
+</pre>
+</div>
+
+<div class="trylua">
+<p class="try-task"><strong>Livre:</strong> teste os formatos do <code>read</code> e as datas. O <code>!</code> do <code>os.date</code> usa UTC, então o resultado é o mesmo em qualquer fuso.</p>
+<pre class="script" data-file="main.lua">local f = assert(io.open("notas.txt", "w"))
+f:write("Ana 9.5\n", "Bia 7\n")
+f:close()
+
+f = assert(io.open("notas.txt"))
+print(f:read("l"))
+print(f:read(4), f:read("n"))
+print(f:seek("end"))
+f:close()
+
+print(io.open("nao-existe.txt"))
+print(os.remove("notas.txt"), os.remove("notas.txt"))
+
+print(os.date("!%d/%m/%Y %H:%M", 1792335600))
+</pre>
+</div>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li><code>io.open(nome, modo)</code> abre (<code>"r"</code> ler, <code>"w"</code> apagar e escrever, <code>"a"</code> acrescentar); falha devolvendo <code>nil</code> + mensagem, por isso <code>assert(io.open(…))</code>. Feche com <code>f:close()</code> ou use <code>&lt;close&gt;</code>.</li>
+  <li>Ler: <code>f:read("l")</code> linha, <code>"n"</code> número, <code>"a"</code> tudo; <code>io.lines(nome)</code> num <code>for</code>.</li>
+  <li>Escrever: <code>f:write(…)</code> e <code>io.write(…)</code> não pulam linha nem separam; só aceitam textos e números.</li>
+  <li><code>os.time</code> dá números; <code>os.date</code> transforma em texto (<code>%d/%m/%Y</code>) ou tabela (<code>"*t"</code>). Os nomes saem em inglês até <code>os.setlocale("")</code>.</li>
+  <li><code>os.remove</code>, <code>os.rename</code>, <code>os.getenv</code>, <code>os.execute</code>, <code>os.exit</code> falam com o sistema; <code>os.execute</code>/<code>io.popen</code> não funcionam no editor do guia.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
