@@ -1,0 +1,329 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua Metamétodos — referência de __index, __add, __eq, __tostring, __call… no Lua 5.5 | Guia Lua</title>
+<meta name="description" content="Referência rápida de todos os metamétodos e campos de metatabela do Lua 5.5: aritméticos (__add, __sub, __mul…), de bits, __concat, __len, __eq, __lt, __le, __index, __newindex, __call, __tostring, __name, __pairs, __metatable, __close, __gc e __mode, com exemplo curto e resultado real.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">Metamétodos</span></h1>
+
+<p class="intro">Esta é a página de consulta rápida dos <strong>metamétodos</strong>: os campos especiais, com nome começando por dois sublinhados (<code>__add</code>, <code>__index</code>…), que você põe numa <strong>metatabela</strong> para ensinar o Lua a fazer contas, comparar, mostrar ou procurar campos nas suas tabelas. Por exemplo, com <code>__add</code> a expressão <code>a + b</code> funciona mesmo quando <code>a</code> e <code>b</code> são tabelas. Estão aqui todos os que o Lua 5.5 reconhece, agrupados pelo que controlam. A explicação passo a passo começa na aula <a href="metatabelas.html">Metatabelas (setmetatable)</a>.</p>
+
+<div class="note">
+<strong>Como ler as tabelas</strong>
+<ul>
+  <li>Quase todos os exemplos usam o tipo <code>Vetor</code> do programa abaixo: uma tabela <code>{x = …, y = …}</code> com a metatabela <code>Vetor</code>. Nos exemplos, <code>a = novo(1, 2)</code> e <code>b = novo(3, 4)</code>.</li>
+  <li><strong>Resultado</strong> é o que o Lua 5.5.0 respondeu no computador da Ana, no <a href="repl.html">modo interativo</a>. Vários valores aparecem separados por vírgula.</li>
+  <li><strong>Recebe</strong> diz com que argumentos o Lua chama o seu metamétodo.</li>
+</ul>
+</div>
+
+<pre class="file" data-file="vetor.lua">local Vetor = {}
+Vetor.__index = Vetor
+
+local function novo(x, y)
+  return setmetatable({x = x, y = y}, Vetor)
+end
+
+Vetor.__add = function(a, b) return novo(a.x + b.x, a.y + b.y) end
+Vetor.__eq = function(a, b) return a.x == b.x and a.y == b.y end
+Vetor.__tostring = function(v) return "(" .. v.x .. ", " .. v.y .. ")" end
+
+local a = novo(1, 2)
+local b = novo(3, 4)
+print(a + b)
+print(a == novo(1, 2), a == b)
+print(a * 2)
+</pre>
+
+<pre class="term">$ lua vetor.lua
+(4, 6)
+true	false
+lua: vetor.lua:16: attempt to perform arithmetic on a table value (local 'a')
+stack traceback:
+	vetor.lua:16: in main chunk
+	[C]: in ?
+</pre>
+
+<p>O <code>a + b</code> funcionou por causa do <code>__add</code>; o <code>print</code> mostrou <code>(4, 6)</code> por causa do <code>__tostring</code>; e o <code>==</code> comparou os números por causa do <code>__eq</code>. Já o <code>a * 2</code> deu erro na linha 16: a metatabela não tem <code>__mul</code>, e o Lua não sabe multiplicar uma tabela (<em>attempt to perform arithmetic on a table value</em> = "tentativa de fazer conta com um valor tabela").</p>
+
+<p>Pule direto para o grupo que você procura:</p>
+<ul>
+  <li><a href="#aritmeticos">Contas</a>: <code>__add</code>, <code>__sub</code>, <code>__mul</code>, <code>__div</code>, <code>__mod</code>, <code>__pow</code>, <code>__unm</code>, <code>__idiv</code></li>
+  <li><a href="#bits">Bits</a>: <code>__band</code>, <code>__bor</code>, <code>__bxor</code>, <code>__bnot</code>, <code>__shl</code>, <code>__shr</code></li>
+  <li><a href="#texto">Juntar e tamanho</a>: <code>__concat</code>, <code>__len</code></li>
+  <li><a href="#comparar">Comparar</a>: <code>__eq</code>, <code>__lt</code>, <code>__le</code></li>
+  <li><a href="#acesso">Acesso a campos e chamada</a>: <code>__index</code>, <code>__newindex</code>, <code>__call</code></li>
+  <li><a href="#biblioteca">Usados pelas funções da biblioteca</a>: <code>__tostring</code>, <code>__name</code>, <code>__pairs</code>, <code>__metatable</code></li>
+  <li><a href="#memoria">Memória e fechamento</a>: <code>__close</code>, <code>__gc</code>, <code>__mode</code></li>
+  <li><a href="#az">Todos de A a Z</a></li>
+</ul>
+
+<hr>
+
+<h2 id="aritmeticos">Contas</h2>
+
+<p>O Lua procura o metamétodo primeiro no operando da <strong>esquerda</strong>; se ele não tiver, no da direita. Por isso <code>3 * a</code> também chama o <code>__mul</code> de <code>a</code>, com o <code>3</code> como primeiro argumento. Para os exemplos, a Ana acrescentou ao <code>Vetor</code> um metamétodo para cada operador (o de <code>__mul</code> troca a ordem quando o número vem primeiro: <code>if type(a) == "number" then a, b = b, a end</code>).</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Metamétodo</th><th>Operação</th><th>Recebe</th><th>Exemplo</th><th>Resultado</th><th>Aula</th></tr>
+<tr><td><code>__add</code></td><td><code>a + b</code></td><td><code>(a, b)</code></td><td><code>tostring(a + b)</code></td><td><code>(4, 6)</code></td><td><a href="metametodos-aritmeticos.html">Metamétodos de Operadores</a></td></tr>
+<tr><td><code>__sub</code></td><td><code>a - b</code></td><td><code>(a, b)</code></td><td><code>tostring(b - a)</code></td><td><code>(2, 2)</code></td><td></td></tr>
+<tr><td><code>__mul</code></td><td><code>a * b</code></td><td><code>(a, b)</code></td><td><code>tostring(a * 3), tostring(3 * a)</code></td><td><code>(3, 6)</code>, <code>(3, 6)</code></td><td></td></tr>
+<tr><td><code>__div</code></td><td><code>a / b</code></td><td><code>(a, b)</code></td><td><code>tostring(b / 2)</code></td><td><code>(1.5, 2.0)</code></td><td></td></tr>
+<tr><td><code>__idiv</code></td><td><code>a // b</code> (divisão inteira)</td><td><code>(a, b)</code></td><td><code>tostring(b // 2)</code></td><td><code>(1, 2)</code></td><td></td></tr>
+<tr><td><code>__mod</code></td><td><code>a % b</code> (resto)</td><td><code>(a, b)</code></td><td><code>tostring(b % 2)</code></td><td><code>(1, 0)</code></td><td></td></tr>
+<tr><td><code>__pow</code></td><td><code>a ^ b</code></td><td><code>(a, b)</code></td><td><code>tostring(a ^ 2)</code></td><td><code>(1.0, 4.0)</code></td><td></td></tr>
+<tr><td><code>__unm</code></td><td><code>-a</code> (o sinal de menos sozinho, <em>unary minus</em>)</td><td><code>(a, a)</code></td><td><code>tostring(-a)</code></td><td><code>(-1, -2)</code></td><td></td></tr>
+</table>
+</div>
+
+<p>Sem o metamétodo, a conta é erro. Se a metatabela tem o campo <code>__name</code>, a mensagem usa esse nome no lugar de <code>table</code>:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Código</th><th>Resultado</th></tr>
+<tr><td><code>y = setmetatable({}, {}); print(y + 1)</code></td><td><code>stdin:1: attempt to perform arithmetic on a table value (global 'y')</code></td></tr>
+<tr><td><code>x = setmetatable({}, {__name = "Produto"}); print(x + 1)</code></td><td><code>stdin:1: attempt to perform arithmetic on a Produto value (global 'x')</code></td></tr>
+</table>
+</div>
+
+<div class="note">
+<strong>Os textos já têm metamétodos de conta</strong>
+<p>É por isso que <code>"10" + 1</code> dá <code>11</code>: a metatabela dos textos tem <code>__add</code>, <code>__sub</code>, <code>__mul</code>, <code>__div</code>, <code>__idiv</code>, <code>__mod</code>, <code>__pow</code> e <code>__unm</code> (conferido no lab, percorrendo <code>getmetatable("")</code>), que tentam converter o texto em número. Quando não dá, o erro vem desse metamétodo: <code>"abc" + 1</code> deu <code>stdin:1: attempt to add a 'string' with a 'number'</code>. Veja <a href="conversao.html">Conversão</a>.</p>
+</div>
+
+<hr>
+
+<h2 id="bits">Bits</h2>
+
+<p>Usados quando um operando não é um número inteiro (nem um float que vire inteiro). Raros fora de bibliotecas. No exemplo, cada metamétodo de <code>o</code> só devolve o próprio nome.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Metamétodo</th><th>Operação</th><th>Recebe</th><th>Exemplo</th><th>Resultado</th></tr>
+<tr><td><code>__band</code></td><td><code>a &amp; b</code> (E bit a bit)</td><td><code>(a, b)</code></td><td><code>o &amp; 1</code></td><td><code>band</code></td></tr>
+<tr><td><code>__bor</code></td><td><code>a | b</code> (OU)</td><td><code>(a, b)</code></td><td><code>o | 1</code></td><td><code>bor</code></td></tr>
+<tr><td><code>__bxor</code></td><td><code>a ~ b</code> (OU exclusivo)</td><td><code>(a, b)</code></td><td><code>o ~ 1</code></td><td><code>bxor</code></td></tr>
+<tr><td><code>__bnot</code></td><td><code>~a</code> (NÃO)</td><td><code>(a, a)</code></td><td><code>~o</code></td><td><code>bnot</code></td></tr>
+<tr><td><code>__shl</code></td><td><code>a &lt;&lt; b</code></td><td><code>(a, b)</code></td><td><code>o &lt;&lt; 1</code></td><td><code>shl</code></td></tr>
+<tr><td><code>__shr</code></td><td><code>a &gt;&gt; b</code></td><td><code>(a, b)</code></td><td><code>o &gt;&gt; 1</code></td><td><code>shr</code></td></tr>
+</table>
+</div>
+
+<p>Os operadores em si estão em <a href="operadores-bits.html">Operadores de Bits</a>.</p>
+
+<hr>
+
+<h2 id="texto">Juntar e tamanho</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Metamétodo</th><th>Operação</th><th>Recebe</th><th>Exemplo</th><th>Resultado</th><th>Aula</th></tr>
+<tr><td><code>__concat</code></td><td><code>a .. b</code>, quando um dos dois não é texto nem número</td><td><code>(a, b)</code></td><td><code>a .. "!", "v=" .. a</code></td><td><code>(1, 2)!</code>, <code>v=(1, 2)</code></td><td><a href="metametodos-aritmeticos.html">Metamétodos de Operadores</a></td></tr>
+<tr><td><code>__len</code></td><td><code>#a</code></td><td><code>(a, a)</code></td><td><code>#a</code> (o <code>__len</code> do <code>Vetor</code> devolve 2)</td><td><code>2</code></td><td><a href="tostring-call-len.html">__tostring, __call e __len</a></td></tr>
+<tr><td></td><td>vale mais que o tamanho de verdade; o <code>rawlen</code> ignora</td><td></td><td><code>t = setmetatable({1, 2, 3}, {__len = function() return 99 end}); print(#t, rawlen(t))</code></td><td><code>99</code>, <code>3</code></td><td><a href="rawget-rawset.html">rawget, rawset e rawequal</a></td></tr>
+</table>
+</div>
+
+<div class="note">
+<strong><code>__len</code> em tabelas não funciona no Lua 5.1</strong>
+<p>No lab, <code>print(#setmetatable({}, {__len = function() return 5 end}))</code> deu <code>5</code> no <code>lua5.4</code> e <code>0</code> no <code>lua5.1</code>: no 5.1 (e no LuaJIT, que segue o 5.1) o <code>__len</code> de tabelas é ignorado. Veja <a href="versoes.html">As Diferenças entre Versões</a>.</p>
+</div>
+
+<hr>
+
+<h2 id="comparar">Comparar</h2>
+
+<p>O resultado destes três é sempre convertido em <code>true</code> ou <code>false</code>. No exemplo, o <code>Vetor</code> compara pelo tamanho (<code>x² + y²</code>).</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Metamétodo</th><th>Operação</th><th>Recebe</th><th>Exemplo</th><th>Resultado</th><th>Aula</th></tr>
+<tr><td><code>__eq</code></td><td><code>a == b</code> e <code>a ~= b</code> (o <code>~=</code> é o contrário)</td><td><code>(a, b)</code></td><td><code>a == novo(1, 2), a ~= b, rawequal(a, novo(1, 2))</code></td><td><code>true</code>, <code>true</code>, <code>false</code></td><td><a href="metametodos-aritmeticos.html">Metamétodos de Operadores</a></td></tr>
+<tr><td></td><td>só é chamado se os dois forem tabelas (ou dois <em>userdata</em>); com um número, é <code>false</code> direto</td><td></td><td><code>setmetatable({}, {__eq = function() return true end}) == 1</code></td><td><code>false</code></td><td></td></tr>
+<tr><td></td><td>basta um dos dois lados ter o <code>__eq</code></td><td></td><td><code>setmetatable({}, {__eq = function() return true end}) == setmetatable({}, {})</code></td><td><code>true</code></td><td></td></tr>
+<tr><td><code>__lt</code></td><td><code>a &lt; b</code> e também <code>b &gt; a</code></td><td><code>(a, b)</code></td><td><code>a &lt; b, a &gt; b</code></td><td><code>true</code>, <code>false</code></td><td></td></tr>
+<tr><td><code>__le</code></td><td><code>a &lt;= b</code> e também <code>b &gt;= a</code></td><td><code>(a, b)</code></td><td><code>a &lt;= b, b &gt;= a</code></td><td><code>true</code>, <code>true</code></td><td></td></tr>
+<tr><td></td><td>sem <code>__le</code>, o <code>&lt;=</code> dá erro, mesmo havendo <code>__lt</code></td><td></td><td>com só o <code>__lt</code> na metatabela: <code>a &lt;= b</code></td><td><code>stdin:1: attempt to compare two table values</code></td><td><a href="ref-erros.html">Mensagens de Erro</a></td></tr>
+</table>
+</div>
+
+<div class="warning">
+<strong>No Lua 5.1, <code>&lt;=</code> usava o <code>__lt</code></strong>
+<p>No lab, a mesma tabela com só o <code>__lt</code> deu <code>true</code> para <code>a &lt;= b</code> no <code>lua5.1</code> (ele calculava <code>not (b &lt; a)</code>) e o erro acima no <code>lua</code> (5.5). Desde o 5.4 isso acabou: se você usa <code>&lt;=</code> ou <code>&gt;=</code>, defina o <code>__le</code>. O <code>table.sort</code> só precisa do <code>__lt</code>.</p>
+</div>
+
+<hr>
+
+<h2 id="acesso">Acesso a campos e chamada</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Metamétodo</th><th>Quando</th><th>Recebe</th><th>Exemplo</th><th>Resultado</th><th>Aula</th></tr>
+<tr><td><code>__index</code> (função)</td><td>ao <strong>ler</strong> <code>t[k]</code> e a chave <strong>não existe</strong> em <code>t</code></td><td><code>(t, k)</code></td><td><code>padrao = setmetatable({}, {__index = function(t, k) return k .. "?" end})</code>, depois <code>padrao.cor, padrao[1]</code></td><td><code>cor?</code>, <code>1?</code></td><td><a href="index-newindex.html">__index e __newindex</a></td></tr>
+<tr><td><code>__index</code> (tabela)</td><td>o mesmo, mas o Lua procura a chave nessa outra tabela: é a base de <strong>classes e herança</strong></td><td>—</td><td><code>heranca = setmetatable({}, {__index = {cor = "azul"}})</code>, depois <code>heranca.cor, rawget(heranca, "cor")</code></td><td><code>azul</code>, <code>nil</code></td><td><a href="classes.html">Classes com Metatabelas</a></td></tr>
+<tr><td></td><td>chave que nem a outra tabela tem: <code>nil</code></td><td></td><td><code>a.comprimento</code> (o <code>Vetor</code> tem <code>Vetor.__index = Vetor</code>)</td><td><code>nil</code></td><td><a href="heranca.html">Herança</a></td></tr>
+<tr><td><code>__newindex</code></td><td>ao <strong>gravar</strong> <code>t[k] = v</code> numa chave que <strong>não existe</strong>. O Lua não grava: quem decide é você (com <code>rawset</code>)</td><td><code>(t, k, v)</code></td><td><code>log = setmetatable({}, {__newindex = function(t, k, v) print("guardando", k, v); rawset(t, k, v) end})</code>, depois <code>log.nome = "Ana"</code></td><td><code>guardando	nome	Ana</code></td><td><a href="index-newindex.html">__index e __newindex</a></td></tr>
+<tr><td></td><td>a chave já existe: o <code>__newindex</code> não é chamado</td><td></td><td><code>log.nome = "Bia"</code>, depois <code>log.nome</code></td><td>(nada aparece), depois <code>Bia</code></td><td></td></tr>
+<tr><td></td><td>uma tabela "só de leitura"</td><td></td><td><code>so_leitura = setmetatable({}, {__newindex = function(t, k) error("tabela só de leitura: " .. k, 2) end})</code>, depois <code>so_leitura.x = 1</code></td><td><code>stdin:1: tabela só de leitura: x</code></td><td><a href="encapsulamento.html">Privacidade com Closures</a></td></tr>
+<tr><td><code>__call</code></td><td>ao <strong>chamar</strong> a tabela como se fosse função: <code>t(…)</code></td><td><code>(t, …)</code></td><td><code>a("x"), a("y")</code> (o <code>__call</code> do <code>Vetor</code> devolve <code>v[k]</code>)</td><td><code>1</code>, <code>2</code></td><td><a href="tostring-call-len.html">__tostring, __call e __len</a></td></tr>
+</table>
+</div>
+
+<div class="warning">
+<strong>Cuidado: <code>t[k]</code> dentro do próprio <code>__index</code></strong>
+<p>Se o <code>__index</code> de <code>t</code> lê <code>t[k]</code>, a chave continua faltando, e ele chama a si mesmo de novo, sem fim. No lab, <code>q = setmetatable({}, {__index = function(t, k) return t[k] end})</code> e <code>pcall(function() return q.a end)</code> deu <code>false</code>, <code>stdin:1: C stack overflow</code>. Dentro do metamétodo, use <code>rawget(t, k)</code>.</p>
+</div>
+
+<hr>
+
+<h2 id="biblioteca">Usados pelas funções da biblioteca</h2>
+
+<p>Estes campos não mudam um operador: são lidos por funções como <code>tostring</code>, <code>print</code>, <code>pairs</code> e <code>getmetatable</code>.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Campo</th><th>Quem usa</th><th>Exemplo</th><th>Resultado</th><th>Aula</th></tr>
+<tr><td><code>__tostring</code></td><td><code>tostring(t)</code> e <code>print(t)</code>: a função recebe <code>t</code> e devolve o texto</td><td><code>print(a)</code></td><td><code>(1, 2)</code></td><td><a href="tostring-call-len.html">__tostring, __call e __len</a></td></tr>
+<tr><td></td><td>um número devolvido também serve</td><td><code>z = setmetatable({}, {__tostring = function() return 42 end}); print(z)</code></td><td><code>42</code></td><td></td></tr>
+<tr><td><code>__name</code></td><td>o <code>tostring</code> (sem <code>__tostring</code>) e as mensagens de erro usam esse nome</td><td><code>setmetatable({}, {__name = "Produto"})</code></td><td><code>Produto: 0x55d46079ceb0</code> (o endereço muda)</td><td><a href="classes.html">Classes com Metatabelas</a></td></tr>
+<tr><td><code>__pairs</code></td><td><code>pairs(t)</code> chama esta função e usa o que ela devolver (o iterador, a tabela e o valor inicial)</td><td>um <code>__pairs</code> que entrega só <code>1, "um"</code>: <code>for k, v in pairs(p) do print(k, v) end</code></td><td><code>1	um</code></td><td><a href="iteradores.html">Iteradores Próprios</a></td></tr>
+<tr><td><code>__metatable</code></td><td><code>getmetatable</code> devolve este valor no lugar da metatabela, e <code>setmetatable</code> passa a recusar</td><td><code>getmetatable(setmetatable({}, {__metatable = "não"}))</code></td><td><code>não</code></td><td><a href="metatabelas.html">Metatabelas</a></td></tr>
+<tr><td></td><td></td><td><code>t = setmetatable({}, {__metatable = "não"}); setmetatable(t, {})</code></td><td><code>stdin:1: cannot change a protected metatable</code></td><td></td></tr>
+</table>
+</div>
+
+<div class="note">
+<strong><code>__ipairs</code> não existe mais</strong>
+<p>Tutoriais antigos citam um <code>__ipairs</code>. Ele foi tirado do Lua: no 5.5, o <code>ipairs(t)</code> simplesmente lê <code>t[1]</code>, <code>t[2]</code>… e, se a chave faltar, respeita o <code>__index</code> (no lab, uma tabela vazia com um <code>__index</code> que devolve <code>i * 10</code> até o 3 deu <code>1 10</code>, <code>2 20</code>, <code>3 30</code> no <code>ipairs</code>). O manual do 5.5 não lista <code>__ipairs</code> entre os metamétodos.</p>
+</div>
+
+<hr>
+
+<h2 id="memoria">Memória e fechamento</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Campo</th><th>Quando</th><th>Recebe</th><th>Exemplo</th><th>Resultado</th><th>Aula</th></tr>
+<tr><td><code>__close</code> <span class="versao">5.4+</span></td><td>quando uma variável <code>local x &lt;close&gt;</code> sai do bloco (normalmente ou por erro)</td><td><code>(objeto, erro)</code></td><td><code>do local x &lt;close&gt; = setmetatable({}, {__close = function(o, e) print("fechando", e) end}); print("dentro") end</code></td><td><code>dentro</code><br><code>fechando	nil</code></td><td><a href="close.html">Fechamento Automático</a></td></tr>
+<tr><td></td><td>saindo por erro, recebe o erro</td><td></td><td>o mesmo, dentro de um <code>pcall</code>, com <code>error("ops", 0)</code></td><td><code>fechando com erro:	ops</code><br><code>false	ops</code></td><td></td></tr>
+<tr><td></td><td>valor sem <code>__close</code> (nem <code>nil</code>/<code>false</code>)</td><td></td><td><code>do local x &lt;close&gt; = {} end</code></td><td><code>stdin:1: variable 'x' got a non-closable value</code></td><td></td></tr>
+<tr><td><code>__gc</code></td><td>quando a coleta de lixo vai apagar a tabela (o "finalizador"). Ponha o <code>__gc</code> na metatabela <strong>antes</strong> do <code>setmetatable</code></td><td><code>(objeto)</code></td><td><code>setmetatable({}, {__gc = function() print("coletado!") end}); collectgarbage()</code></td><td><code>coletado!</code></td><td><a href="coleta-lixo.html">Coleta de Lixo</a></td></tr>
+<tr><td><code>__mode</code></td><td>não é função: <code>"k"</code>, <code>"v"</code> ou <code>"kv"</code> torna as chaves e/ou os valores "fracos" (a coleta pode apagá-los)</td><td>—</td><td><code>fraca = setmetatable({}, {__mode = "k"}); chave = {}; fraca[chave] = "valor"; chave = nil; collectgarbage(); print(next(fraca))</code></td><td><code>nil</code> (a entrada sumiu)</td><td><a href="tabelas-fracas.html">Tabelas Fracas</a></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2 id="az">Todos de A a Z</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Campo</th><th>Controla</th><th>Campo</th><th>Controla</th></tr>
+<tr><td><code>__add</code></td><td><code>+</code></td><td><code>__le</code></td><td><code>&lt;=</code>, <code>&gt;=</code></td></tr>
+<tr><td><code>__band</code></td><td><code>&amp;</code></td><td><code>__len</code></td><td><code>#</code></td></tr>
+<tr><td><code>__bnot</code></td><td><code>~</code> (de um operando)</td><td><code>__lt</code></td><td><code>&lt;</code>, <code>&gt;</code></td></tr>
+<tr><td><code>__bor</code></td><td><code>|</code></td><td><code>__metatable</code></td><td><code>getmetatable</code>/<code>setmetatable</code></td></tr>
+<tr><td><code>__bxor</code></td><td><code>~</code> (de dois operandos)</td><td><code>__mod</code></td><td><code>%</code></td></tr>
+<tr><td><code>__call</code></td><td><code>t(…)</code></td><td><code>__mode</code></td><td>tabela fraca</td></tr>
+<tr><td><code>__close</code></td><td><code>&lt;close&gt;</code></td><td><code>__mul</code></td><td><code>*</code></td></tr>
+<tr><td><code>__concat</code></td><td><code>..</code></td><td><code>__name</code></td><td>nome nas mensagens e no <code>tostring</code></td></tr>
+<tr><td><code>__div</code></td><td><code>/</code></td><td><code>__newindex</code></td><td>gravar chave nova</td></tr>
+<tr><td><code>__eq</code></td><td><code>==</code>, <code>~=</code></td><td><code>__pairs</code></td><td><code>pairs</code></td></tr>
+<tr><td><code>__gc</code></td><td>coleta de lixo</td><td><code>__pow</code></td><td><code>^</code></td></tr>
+<tr><td><code>__idiv</code></td><td><code>//</code></td><td><code>__shl</code>, <code>__shr</code></td><td><code>&lt;&lt;</code>, <code>&gt;&gt;</code></td></tr>
+<tr><td><code>__index</code></td><td>ler chave que falta</td><td><code>__sub</code></td><td><code>-</code> (de dois operandos)</td></tr>
+<tr><td></td><td></td><td><code>__tostring</code></td><td><code>tostring</code>, <code>print</code></td></tr>
+<tr><td></td><td></td><td><code>__unm</code></td><td><code>-</code> (de um operando)</td></tr>
+</table>
+</div>
+
+<p>Não há metamétodo para <code>and</code>, <code>or</code> e <code>not</code> (eles só olham se o valor é falso), nem para a atribuição <code>x = y</code>. As funções <code>setmetatable</code>, <code>getmetatable</code>, <code>rawget</code>, <code>rawset</code>, <code>rawequal</code> e <code>rawlen</code> estão em <a href="ref-funcoes-globais.html">Funções Globais</a>.</p>
+
+<hr>
+
+<h2>Experimente</h2>
+
+<div class="trylua" data-goal="out:Total: R$ 16.40;;src:__add\s*=;;src:__tostring\s*=">
+<p class="try-task"><strong>Missão:</strong> a Ana guarda dinheiro em centavos, numa tabela <code>{centavos = …}</code>. Do jeito que está, o <code>+</code> dá erro. Crie dois metamétodos na metatabela <code>Dinheiro</code>: <code>__add</code>, que devolve <code>reais(a.centavos + b.centavos)</code>, e <code>__tostring</code>, que devolve <code>string.format("R$ %.2f", d.centavos / 100)</code>. O resultado certo é <code>Total: R$ 16.40</code>.</p>
+<pre class="script" data-file="main.lua">local Dinheiro = {}
+
+local function reais(centavos)
+  return setmetatable({centavos = centavos}, Dinheiro)
+end
+
+-- crie aqui Dinheiro.__add e Dinheiro.__tostring
+
+local total = reais(350) + reais(1290)
+print("Total: " .. tostring(total))
+</pre>
+<pre class="solucao" data-file="main.lua">local Dinheiro = {}
+
+local function reais(centavos)
+  return setmetatable({centavos = centavos}, Dinheiro)
+end
+
+Dinheiro.__add = function(a, b)
+  return reais(a.centavos + b.centavos)
+end
+
+Dinheiro.__tostring = function(d)
+  return string.format("R$ %.2f", d.centavos / 100)
+end
+
+local total = reais(350) + reais(1290)
+print("Total: " .. tostring(total))
+</pre>
+</div>
+
+<div class="trylua">
+<p class="try-task"><strong>Livre:</strong> uma tabela de preços com valor padrão (<code>__index</code>) e um aviso ao cadastrar produto novo (<code>__newindex</code>). Troque as funções e veja o que muda.</p>
+<pre class="script" data-file="main.lua">local precos = setmetatable({pao = 0.5}, {
+  __index = function(t, k)
+    return 0
+  end,
+  __newindex = function(t, k, v)
+    print("produto novo: " .. k)
+    rawset(t, k, v)
+  end,
+})
+
+print(precos.pao, precos.queijo)
+precos.leite = 4.9
+precos.leite = 5.2
+print(precos.leite, rawget(precos, "queijo"))
+</pre>
+</div>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li>Um metamétodo é um campo <code>__nome</code> da metatabela; ligue com <code>setmetatable(t, mt)</code>.</li>
+  <li>Contas: <code>__add</code>, <code>__sub</code>, <code>__mul</code>, <code>__div</code>, <code>__idiv</code>, <code>__mod</code>, <code>__pow</code>, <code>__unm</code>; bits: <code>__band</code>, <code>__bor</code>, <code>__bxor</code>, <code>__bnot</code>, <code>__shl</code>, <code>__shr</code>; e <code>__concat</code>, <code>__len</code>.</li>
+  <li>Comparar: <code>__eq</code>, <code>__lt</code> e <code>__le</code> (no 5.5 o <code>&lt;=</code> não usa mais o <code>__lt</code>).</li>
+  <li><code>__index</code> (ler chave que falta: função ou tabela, a base das classes), <code>__newindex</code> (gravar chave nova), <code>__call</code> (chamar a tabela).</li>
+  <li>Campos da biblioteca: <code>__tostring</code>, <code>__name</code>, <code>__pairs</code>, <code>__metatable</code>; memória: <code>__close</code>, <code>__gc</code>, <code>__mode</code>.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
