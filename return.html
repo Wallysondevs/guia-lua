@@ -1,0 +1,597 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua return — a função devolvendo um resultado | Guia Lua</title>
+<meta name="description" content="O return do Lua para quem está começando: a diferença entre mostrar (print) e devolver (return), usar o resultado em contas, textos e if, o return que encerra a função mais cedo, a função sem return (que devolve nada) e os erros reais do Lua 5.5: o nil de quem esqueceu o return, 'end' expected near … e o return solto que engole a linha de baixo.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">return</span></h1>
+
+<p class="intro">Até agora, as funções que você escreveu <strong>mostravam</strong> alguma coisa na tela com <code>print</code>. Mas muitas vezes o programa precisa do resultado para continuar trabalhando: somar a taxa de entrega ao total, comparar a nota com a média, guardar o preço numa lista. Para isso a função precisa <strong>devolver</strong> o resultado a quem a chamou. É o trabalho do <code>return</code> ("retornar, devolver").</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>A diferença entre <strong>mostrar</strong> (<code>print</code>) e <strong>devolver</strong> (<code>return</code>).</li>
+  <li>A usar o valor devolvido numa variável, numa conta, num texto, dentro de outra chamada e num <code>if</code>.</li>
+  <li>Que o <code>return</code> <strong>encerra</strong> a função na hora, e como usar isso para sair mais cedo.</li>
+  <li>O que uma função sem <code>return</code> devolve, e o <code>return</code> sem valor.</li>
+  <li>A regra do Lua: o <code>return</code> tem de ser o último comando do bloco (e o truque <code>do return end</code>).</li>
+  <li>Os erros reais: o <code>nil</code> de quem esqueceu o <code>return</code>, <code>'end' expected … near 'print'</code> e o <code>return</code> solto que "engole" a linha de baixo.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>A ideia: a calculadora da caixa</h2>
+<p>Na padaria, a Ana pede ao caixa: "quanto dá 4 pães de R$ 2,50?". O caixa pode fazer duas coisas:</p>
+<ul>
+  <li><strong>Gritar</strong> o resultado para a loja inteira: "DEZ REAIS!". Todo mundo ouviu, mas a Ana não tem o número na mão para somar com o leite.</li>
+  <li><strong>Escrever</strong> o número num papelzinho e entregar para ela. Agora a Ana pode somar, comparar, guardar.</li>
+</ul>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>O caixa</th><th>No Lua</th><th>Quem recebe</th></tr>
+<tr><td>Grita o resultado</td><td><code>print(total)</code></td><td>A tela. O programa não fica com o valor</td></tr>
+<tr><td>Entrega o papelzinho</td><td><code>return total</code></td><td>Quem chamou a função, que pode guardar o valor e continuar usando</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>1. O primeiro <code>return</code></h2>
+
+<pre class="file" data-file="dobro.lua">local function dobro(n)
+  return n * 2
+end
+
+local resultado = dobro(21)
+print(resultado)
+print(dobro(5))
+</pre>
+
+<pre class="term">$ lua dobro.lua
+42
+10
+</pre>
+
+<dl class="anatomy">
+  <dt>return</dt><dd>"Devolver". Encerra a função e entrega um valor a quem a chamou.</dd>
+  <dt>n * 2</dt><dd>O valor devolvido. O Lua calcula a conta primeiro e devolve o resultado (com <code>n = 21</code>, devolve <code>42</code>).</dd>
+  <dt>local resultado = dobro(21)</dt><dd>A chamada <code>dobro(21)</code> é <strong>substituída</strong> pelo valor que ela devolveu. Para o Lua, essa linha vira <code>local resultado = 42</code>.</dd>
+  <dt>print(dobro(5))</dt><dd>O valor devolvido também pode ir direto para outra função: o Lua calcula <code>dobro(5)</code>, que dá <code>10</code>, e passa o <code>10</code> para o <code>print</code>.</dd>
+</dl>
+
+<p>Repare que a função <code>dobro</code> não tem <code>print</code> nenhum. Quem decide o que fazer com o resultado (mostrar, guardar, somar) é quem chama.</p>
+
+<hr>
+
+<h2>2. Mostrar × devolver</h2>
+<p>As duas funções abaixo fazem a mesma conta. Uma mostra, a outra devolve:</p>
+
+<pre class="file" data-file="print_return.lua">local function mostra_total(preco, quantidade)
+  print(preco * quantidade)
+end
+
+local function calcula_total(preco, quantidade)
+  return preco * quantidade
+end
+
+mostra_total(2.5, 4)
+local t = calcula_total(2.5, 4)
+print("Com a taxa de entrega: " .. t + 5)
+</pre>
+
+<pre class="term">$ lua print_return.lua
+10.0
+Com a taxa de entrega: 15.0
+</pre>
+
+<p>A <code>mostra_total</code> escreveu <code>10.0</code> na tela, e acabou: o número sumiu. A <code>calcula_total</code> não escreveu nada; ela entregou o <code>10.0</code>, que ficou guardado em <code>t</code> e pôde ser somado com a taxa. (O <code>.0</code> aparece porque <code>2.5</code> é um número com vírgula, um <em>float</em>: aula <a href="numeros.html">Números</a>.)</p>
+
+<p>E se você tentar guardar o resultado da função que só mostra?</p>
+
+<pre class="file" data-file="print_nil.lua">local function mostra_total(preco, quantidade)
+  print(preco * quantidade)
+end
+
+local t = mostra_total(2.5, 4)
+print("o que a função devolveu:", t)
+</pre>
+
+<pre class="term">$ lua print_nil.lua
+10.0
+o que a função devolveu:	nil
+</pre>
+
+<p>O <code>10.0</code> apareceu (foi o <code>print</code> de dentro), mas <code>t</code> ficou <code>nil</code>: a função não devolveu nada. É o caixa que gritou o número e não entregou o papel.</p>
+
+<div class="trylua" data-goal="src:return;;out:16;;semerro">
+<p class="try-task"><strong>Missão:</strong> rode e veja o erro. A função <code>triplo</code> mostra o resultado em vez de devolver. Troque o <code>print</code> de dentro dela por um <code>return</code>, para o programa mostrar <code>16</code> (o triplo de 5, mais 1).</p>
+<pre class="script" data-file="main.lua">local function triplo(n)
+  print(n * 3)
+end
+
+local resultado = triplo(5) + 1
+print(resultado)
+</pre>
+<pre class="solucao" data-file="main.lua">local function triplo(n)
+  return n * 3
+end
+
+local resultado = triplo(5) + 1
+print(resultado)
+</pre>
+</div>
+
+<hr>
+
+<h2>3. Usando o valor devolvido</h2>
+<p>Uma chamada que devolve um valor pode aparecer <strong>em qualquer lugar onde caberia esse valor</strong>: numa conta, num texto, dentro de outra chamada, numa tabela.</p>
+
+<pre class="file" data-file="expressoes.lua">local function dobro(n)
+  return n * 2
+end
+
+print(dobro(3) + 1)
+print(dobro(dobro(3)))
+print("O dobro de 7 é " .. dobro(7))
+local lista = {dobro(1), dobro(2), dobro(3)}
+print(lista[1], lista[2], lista[3])
+</pre>
+
+<pre class="term">$ lua expressoes.lua
+7
+12
+O dobro de 7 é 14
+2	4	6
+</pre>
+
+<p>O <code>dobro(dobro(3))</code> é lido de dentro para fora: primeiro <code>dobro(3)</code> dá <code>6</code>; depois <code>dobro(6)</code> dá <code>12</code>.</p>
+
+<h3>Devolvendo <code>true</code> ou <code>false</code></h3>
+<p>Uma função pode devolver uma resposta de "sim ou não", e aí ela cabe direto num <code>if</code>:</p>
+
+<pre class="file" data-file="eh_par.lua">local function eh_par(n)
+  return n % 2 == 0
+end
+
+print(eh_par(4), eh_par(7))
+for i = 1, 5 do
+  if eh_par(i) then
+    print(i .. " é par")
+  end
+end
+</pre>
+
+<pre class="term">$ lua eh_par.lua
+true	false
+2 é par
+4 é par
+</pre>
+
+<p><code>n % 2 == 0</code> é uma comparação (o resto da divisão por 2 é zero?), e toda comparação dá <code>true</code> ou <code>false</code> (aula <a href="operadores-comparacao.html">Comparações</a>). O <code>return</code> devolve esse resultado. Funções assim costumam ter nome de pergunta: <code>eh_par</code>, <code>tem_estoque</code>, <code>esta_aberto</code>.</p>
+
+<hr>
+
+<h2>4. O <code>return</code> encerra a função</h2>
+<p>Quando o Lua executa um <code>return</code>, a função <strong>termina ali</strong>, mesmo que existam outras linhas abaixo:</p>
+
+<pre class="file" data-file="depois_return.lua">local function teste()
+  print("antes do return")
+  if true then
+    return "valor"
+  end
+  print("depois do return")
+end
+
+print(teste())
+</pre>
+
+<pre class="term">$ lua depois_return.lua
+antes do return
+valor
+</pre>
+
+<p>O <code>"depois do return"</code> nunca aparece. Isso parece um defeito, mas é muito útil: uma função pode ter <strong>vários</strong> <code>return</code>, um em cada caminho, e só um deles roda.</p>
+
+<pre class="file" data-file="classificar.lua">local function classificar(nota)
+  if nota &gt;= 7 then
+    return "aprovado"
+  elseif nota &gt;= 5 then
+    return "recuperação"
+  end
+  return "reprovado"
+end
+
+print(classificar(8.5))
+print(classificar(6))
+print(classificar(3))
+</pre>
+
+<pre class="term">$ lua classificar.lua
+aprovado
+recuperação
+reprovado
+</pre>
+
+<ol class="passo">
+  <li>Com <code>8.5</code>: o primeiro <code>if</code> é verdadeiro, o Lua devolve <code>"aprovado"</code> e sai. O resto nem é olhado.</li>
+  <li>Com <code>6</code>: o primeiro teste falha, o <code>elseif</code> é verdadeiro, devolve <code>"recuperação"</code> e sai.</li>
+  <li>Com <code>3</code>: os dois testes falham, o <code>if</code> termina, e o Lua chega ao último <code>return</code>: <code>"reprovado"</code>.</li>
+</ol>
+
+<h3>Sair mais cedo quando algo está errado</h3>
+<p>Um costume muito usado: conferir os problemas <strong>logo no começo</strong> e sair com <code>return</code>, para o resto da função só cuidar do caso normal:</p>
+
+<pre class="file" data-file="guarda.lua">local function preco_final(preco, quantidade)
+  if quantidade &lt;= 0 then
+    return nil
+  end
+  local total = preco * quantidade
+  if quantidade &gt;= 10 then
+    total = total * 0.9
+  end
+  return total
+end
+
+print(preco_final(0.80, 5))
+print(preco_final(0.80, 20))
+print(preco_final(0.80, 0))
+</pre>
+
+<pre class="term">$ lua guarda.lua
+4.0
+14.4
+nil
+</pre>
+
+<p>Com 20 pães, o total ganhou 10% de desconto (<code>16 * 0.9 = 14.4</code>). Com quantidade 0, a função saiu na terceira linha devolvendo <code>nil</code>, o jeito do Lua de dizer "não tenho resposta". Quem chama pode testar: <code>if total == nil then …</code>. (Devolver também uma mensagem explicando o motivo é o assunto da próxima aula, <a href="retornos-multiplos.html">Vários Retornos</a>.)</p>
+
+<hr>
+
+<h2>5. Função sem <code>return</code> e <code>return</code> sem valor</h2>
+<p>Toda função do Lua termina devolvendo alguma coisa ou <strong>nada</strong>. Uma função sem <code>return</code> (como as da aula <a href="funcoes.html">Funções</a>) devolve nada. Guardado numa variável, esse "nada" vira <code>nil</code>:</p>
+
+<pre class="file" data-file="sem_return.lua">local function nada()
+end
+
+local x = nada()
+print(x)
+print(nada())
+print("fim")
+</pre>
+
+<pre class="term">$ lua sem_return.lua
+nil
+                                                   « print(nada()): linha vazia
+fim
+</pre>
+
+<p>Repare na diferença: <code>print(x)</code> mostrou <code>nil</code>, mas <code>print(nada())</code> mostrou uma <strong>linha vazia</strong>. É que a função não devolveu nem o <code>nil</code>: ela devolveu <strong>zero valores</strong>, e o <code>print</code> recebeu zero coisas para mostrar. Quando se guarda numa variável, o Lua completa o que falta com <code>nil</code>, como faz com os parâmetros (aula <a href="parametros.html">Parâmetros e Argumentos</a>). A próxima aula mostra essa contagem de valores em detalhe.</p>
+
+<h3><code>return</code> sozinho: só sair</h3>
+<p>Um <code>return</code> sem nada depois serve só para <strong>parar</strong> a função:</p>
+
+<pre class="file" data-file="return_vazio.lua">local function avisar(estoque)
+  if estoque &gt; 0 then
+    return
+  end
+  print("Acabou o estoque!")
+end
+
+avisar(5)
+avisar(0)
+print(avisar(3))
+</pre>
+
+<pre class="term">$ lua return_vazio.lua
+Acabou o estoque!
+                                                   « print(avisar(3)): linha vazia
+</pre>
+
+<p><code>avisar(5)</code> saiu pelo <code>return</code> sem mostrar nada; <code>avisar(0)</code> passou do <code>if</code> e mostrou o aviso; <code>print(avisar(3))</code> mostrou uma linha vazia, porque esse <code>return</code> também devolve zero valores.</p>
+
+<div class="warning">
+<strong>O <code>return</code> sozinho engole a linha de baixo</strong>
+<p>Cuidado com um <code>return</code> sem valor no fim de uma linha e mais código embaixo. Para o Lua, quebras de linha não separam comandos: ele lê o <code>return</code> e a linha seguinte como <strong>um comando só</strong>, <code>return print(…)</code>:</p>
+<pre class="file" data-file="return_solto.lua">local function testar()
+  print("1. começou")
+  return
+  print("2. esta linha deveria ser pulada")
+end
+
+testar()
+</pre>
+<pre class="term">$ lua return_solto.lua
+1. começou
+2. esta linha deveria ser pulada
+</pre>
+<p>A linha 2 rodou! O Lua executou <code>print("2. …")</code> para devolver o resultado dele. Isso acontece quando alguém põe um <code>return</code> no meio da função para "desligar" o resto enquanto testa. O jeito certo é a seção 6.</p>
+</div>
+
+<hr>
+
+<h2>6. O <code>return</code> tem de ser o último do bloco</h2>
+<p>No Lua, o <code>return</code> só pode aparecer como o <strong>último comando</strong> de um bloco (o fim da função, ou o fim de um <code>if</code>, de um <code>for</code>, de um <code>do … end</code>). Uma linha depois dele, no mesmo bloco, é erro de sintaxe:</p>
+
+<pre class="file" data-file="return_meio.lua">local function dobro(n)
+  return n * 2
+  print("calculei")
+end
+</pre>
+
+<pre class="term">$ lua return_meio.lua
+lua: return_meio.lua:3: 'end' expected (to close 'function' at line 1) near 'print'
+</pre>
+
+<p><code>'end' expected (to close 'function' at line 1) near 'print'</code>: "esperava o <code>end</code> (para fechar o <code>function</code> da linha 1) perto do <code>print</code>". Depois de <code>return n * 2</code>, a única coisa que o Lua aceita é o fim do bloco. Faz sentido: uma linha depois do <code>return</code> nunca rodaria.</p>
+
+<p>Por isso, nos exemplos da seção 4, cada <code>return</code> está no fim de um bloco: no fim do <code>if</code>, do <code>elseif</code> ou da função.</p>
+
+<h3>O truque <code>do return end</code></h3>
+<p>E se você quiser mesmo sair no meio da função, por exemplo para testar só a primeira parte? Embrulhe o <code>return</code> num bloco <code>do … end</code> só dele. Aí ele é o último do <strong>seu</strong> bloco, e a regra está cumprida:</p>
+
+<pre class="file" data-file="return_do.lua">local function testar()
+  print("1. começou")
+  do return end
+  print("2. esta linha deveria ser pulada")
+end
+
+testar()
+</pre>
+
+<pre class="term">$ lua return_do.lua
+1. começou
+</pre>
+
+<p>Agora a linha 2 foi pulada de verdade. O <code>do return end</code> é coisa de teste: no programa pronto, prefira um <code>if</code> com <code>return</code>, como na seção 4.</p>
+
+<div class="trylua">
+<p class="try-task"><strong>Experimente:</strong> rode e confira as três classificações. Depois acrescente um caso novo no começo da função: se a nota for maior que 10, devolva <code>"nota inválida"</code>. Teste com <code>classificar(11)</code>.</p>
+<pre class="script" data-file="main.lua">local function classificar(nota)
+  if nota &gt;= 7 then
+    return "aprovado"
+  elseif nota &gt;= 5 then
+    return "recuperação"
+  end
+  return "reprovado"
+end
+
+print(classificar(8.5))
+print(classificar(6))
+print(classificar(3))
+</pre>
+</div>
+
+<hr>
+
+<h2>Formas diferentes de devolver um "sim ou não"</h2>
+<p>As duas funções abaixo devolvem a mesma coisa:</p>
+
+<pre class="file" data-file="formas.lua">local function eh_par_a(n)
+  if n % 2 == 0 then
+    return true
+  else
+    return false
+  end
+end
+
+local function eh_par_b(n)
+  return n % 2 == 0
+end
+
+print(eh_par_a(4), eh_par_b(4), eh_par_a(3), eh_par_b(3))
+</pre>
+
+<pre class="term">$ lua formas.lua
+true	true	false	false
+</pre>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Forma</th><th>Quando usar</th></tr>
+<tr><td><code>if … then return true else return false end</code></td><td>Quando você está começando e quer ver os dois caminhos escritos. Funciona, mas é comprido</td></tr>
+<tr><td><code>return comparação</code></td><td>Quando a resposta é a própria comparação: mais curto, e é como os programadores Lua costumam escrever</td></tr>
+<tr><td>Vários <code>return</code> com <code>if</code>/<code>elseif</code></td><td>Quando há mais de duas respostas (<code>classificar</code>)</td></tr>
+<tr><td><code>return nil</code> no começo</td><td>Para sair mais cedo quando os dados não servem</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+
+<div class="cenario">
+<strong>Esquecer o <code>return</code>: a conta com <code>nil</code></strong>
+<pre class="file" data-file="esqueceu.lua">local function subtotal(preco, quantidade)
+  local total = preco * quantidade
+end
+
+local valor = subtotal(3, 2) + 5
+print(valor)
+</pre>
+<pre class="term">$ lua esqueceu.lua
+lua: esqueceu.lua:5: attempt to perform arithmetic on a nil value
+stack traceback:
+	esqueceu.lua:5: in main chunk
+	[C]: in ?
+</pre>
+<p>A função calculou o <code>total</code>… e não devolveu. <code>subtotal(3, 2)</code> virou "nada", e <code>nada + 5</code> não existe. <code>attempt to perform arithmetic on a nil value</code>: "tentativa de fazer conta com um valor <code>nil</code>". Desta vez o Lua <strong>não diz o nome</strong> da variável entre parênteses, porque o <code>nil</code> não estava numa variável: ele veio direto da chamada. Quando uma mensagem de <code>nil</code> não tem nome, desconfie de uma função que não devolveu nada.</p>
+<p>Se o valor for guardado antes, o nome aparece, mas é o da variável de fora:</p>
+<pre class="file" data-file="esqueceu2.lua">local function subtotal(preco, quantidade)
+  local total = preco * quantidade
+end
+
+local valor = subtotal(3, 2)
+print("Total: " .. valor)
+</pre>
+<pre class="term">$ lua esqueceu2.lua
+lua: esqueceu2.lua:6: attempt to concatenate a nil value (local 'valor')
+stack traceback:
+	esqueceu2.lua:6: in main chunk
+	[C]: in ?
+</pre>
+<p>A culpada não é a linha 6, e sim a função: <strong>como consertar:</strong> acrescente <code>return total</code> antes do <code>end</code> da <code>subtotal</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Uma linha depois do <code>return</code></strong>
+<p>É o erro da seção 6: <code>'end' expected (to close 'function' at line 1) near 'print'</code>. Dentro de um <code>if</code>, a mensagem fala do <code>if</code>: com <code>return "positivo"</code> seguido de <code>print("nunca")</code> dentro de um <code>if</code> que começa na linha 2, o Lua respondeu <code>'end' expected (to close 'if' at line 2) near 'print'</code>. <strong>Como consertar:</strong> apague a linha que nunca rodaria, ou mova-a para antes do <code>return</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Usar <code>print</code> no lugar de <code>return</code></strong>
+<p>Sem erro, mas com uma linha a mais e um <code>nil</code> na saída, como em <code>print_nil.lua</code> (seção 2): o valor apareceu na tela, mas o programa não ficou com ele. Se a saída mostra um número sozinho e depois <code>nil</code>, procure um <code>print</code> dentro da função onde deveria haver um <code>return</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Um <code>return</code> sozinho no meio da função</strong>
+<p>Sem erro, e a linha de baixo roda (veja <code>return_solto.lua</code>, no aviso da seção 5). <strong>Como consertar:</strong> <code>do return end</code>, ou um <code>if … then return end</code>.</p>
+</div>
+
+<hr>
+
+<h2>Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>O que faz</th></tr>
+<tr><td><code>return valor</code></td><td>Encerra a função e devolve <code>valor</code> a quem chamou</td></tr>
+<tr><td><code>local x = f()</code></td><td>Guarda o valor devolvido (ou <code>nil</code>, se a função não devolveu nada)</td></tr>
+<tr><td><code>print(f())</code>, <code>f() + 1</code>, <code>"…" .. f()</code></td><td>Usa o valor devolvido direto</td></tr>
+<tr><td><code>return comparação</code></td><td>Devolve <code>true</code> ou <code>false</code></td></tr>
+<tr><td><code>return</code> (sem valor)</td><td>Só encerra a função; devolve zero valores</td></tr>
+<tr><td><code>return nil</code></td><td>Encerra e devolve <code>nil</code> ("sem resposta")</td></tr>
+<tr><td><code>do return end</code></td><td>Sai no meio da função (para testes)</td></tr>
+<tr><td>Função sem <code>return</code></td><td>Devolve zero valores; numa variável, vira <code>nil</code></td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Sintoma</th><th>Causa provável</th></tr>
+<tr><td><code>attempt to perform arithmetic on a nil value</code> (sem nome)</td><td>Uma função que não devolveu nada foi usada numa conta</td></tr>
+<tr><td><code>attempt to concatenate a nil value (local '…')</code> numa variável que recebeu uma chamada</td><td>A função esqueceu o <code>return</code></td></tr>
+<tr><td><code>'end' expected (to close 'function' at line N) near …</code></td><td>Há uma linha depois do <code>return</code> no mesmo bloco</td></tr>
+<tr><td>O valor aparece na tela e a variável fica <code>nil</code></td><td><code>print</code> no lugar de <code>return</code></td></tr>
+<tr><td>Linha depois de um <code>return</code> sozinho roda mesmo assim</td><td>O <code>return</code> "engoliu" a linha de baixo; use <code>do return end</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. Devolvendo o resultado</h3>
+<p>Complete a palavra que faz a função <strong>devolver</strong> a metade do número:</p>
+<div class="ex-code">local function metade(n)<br>&nbsp;&nbsp;<input data-answer="return" aria-label="palavra-chave"> n / 2<br>end</div>
+</div>
+
+<div class="exercise">
+<h3>2. O valor de quem não devolve</h3>
+<p>Uma função não tem <code>return</code>. O que fica guardado em <code>x</code> depois de <code>local x = f()</code>?</p>
+<div class="ex-code">x vale <input data-answer="nil" aria-label="valor"></div>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">3. O que este programa mostra?</p>
+<pre class="file" data-file="exercicio.lua">local function soma(a, b)
+  return a + b
+end
+
+print(soma(2, 3) * 10)
+</pre>
+<label><input type="radio" name="q3"> <code>5</code></label>
+<label><input type="radio" name="q3"> <code>50</code></label>
+<label><input type="radio" name="q3"> <code>23</code></label>
+<label><input type="radio" name="q3"> <code>nil</code></label>
+</div>
+
+<div class="mc" data-answer="3">
+<p class="mc-q">4. Uma função tem <code>return "A"</code> dentro de um <code>if</code> verdadeiro e, depois do <code>if</code>, um <code>print("B")</code>. O que acontece quando ela é chamada?</p>
+<label><input type="radio" name="q4"> Mostra B e devolve "A"</label>
+<label><input type="radio" name="q4"> Dá erro de sintaxe</label>
+<label><input type="radio" name="q4"> Devolve "A" e não mostra B: o <code>return</code> encerra a função</label>
+<label><input type="radio" name="q4"> Devolve "A" e "B"</label>
+</div>
+
+<div class="mc" data-answer="1">
+<p class="mc-q">5. Por que <code>return n * 2</code> seguido de <code>print("ok")</code>, no mesmo bloco, dá erro?</p>
+<label><input type="radio" name="q5"> Porque no Lua o <code>return</code> tem de ser o último comando do bloco</label>
+<label><input type="radio" name="q5"> Porque <code>print</code> não pode aparecer numa função que tem <code>return</code></label>
+<label><input type="radio" name="q5"> Porque faltou um <code>;</code> depois do <code>return</code></label>
+<label><input type="radio" name="q5"> Não dá erro: o <code>print</code> roda antes do <code>return</code></label>
+</div>
+
+<div class="mc" data-answer="4">
+<p class="mc-q">6. A mensagem é <code>attempt to perform arithmetic on a nil value</code>, sem nenhum nome entre parênteses, numa linha como <code>local x = calcular(5) + 1</code>. Qual é a causa mais provável?</p>
+<label><input type="radio" name="q6"> A variável <code>x</code> não foi declarada</label>
+<label><input type="radio" name="q6"> O <code>5</code> deveria estar entre aspas</label>
+<label><input type="radio" name="q6"> Faltou um <code>end</code></label>
+<label><input type="radio" name="q6"> A função <code>calcular</code> não tem <code>return</code></label>
+</div>
+
+<h3>Missão final: o frete da padaria</h3>
+
+<div class="trylua" data-goal="out:Frete para 2 km: 5;;out:Frete para 8 km: 12;;out:Frete para 15 km: nil;;semerro">
+<p class="try-task"><strong>Missão:</strong> complete a função <code>frete(km)</code> com <code>return</code>: até 5 km, o frete é <code>5</code>; até 10 km, é <code>12</code>; acima de 10 km a padaria não entrega, e a função devolve <code>nil</code>. Não mude as linhas de baixo.</p>
+<pre class="script" data-file="main.lua">local function frete(km)
+  -- escreva aqui
+end
+
+print("Frete para 2 km: " .. tostring(frete(2)))
+print("Frete para 8 km: " .. tostring(frete(8)))
+print("Frete para 15 km: " .. tostring(frete(15)))
+</pre>
+<pre class="solucao" data-file="main.lua">local function frete(km)
+  if km &gt; 10 then
+    return nil
+  end
+  if km &lt;= 5 then
+    return 5
+  end
+  return 12
+end
+
+print("Frete para 2 km: " .. tostring(frete(2)))
+print("Frete para 8 km: " .. tostring(frete(8)))
+print("Frete para 15 km: " .. tostring(frete(15)))
+</pre>
+</div>
+
+<p>(O <code>tostring</code> transforma o valor em texto, inclusive o <code>nil</code>, para o <code>..</code> não reclamar: aula <a href="conversao.html">Conversão</a>. Se você rodar sem mudar nada, o Lua responde <code>bad argument #1 to 'tostring' (value expected)</code>, "argumento nº 1 do <code>tostring</code> inválido (esperava um valor)": a função vazia devolveu <strong>zero</strong> valores, como na seção 5, e o <code>tostring</code> ficou sem nada para converter.)</p>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li><code>print</code> <strong>mostra</strong> na tela; <code>return</code> <strong>devolve</strong> o valor para quem chamou, que pode guardar, somar, comparar.</li>
+  <li>A chamada é substituída pelo valor devolvido: <code>dobro(21) + 1</code> vira <code>42 + 1</code>.</li>
+  <li>O <code>return</code> encerra a função na hora; vários <code>return</code> em caminhos diferentes são comuns, e um <code>return</code> no começo serve para sair mais cedo.</li>
+  <li>Sem <code>return</code>, a função devolve zero valores: numa variável vira <code>nil</code>; no <code>print</code>, uma linha vazia.</li>
+  <li>O <code>return</code> tem de ser o último comando do bloco (senão, <code>'end' expected … near …</code>); para sair no meio, <code>do return end</code>. Um <code>return</code> sozinho engole a linha de baixo.</li>
+  <li>Esqueceu o <code>return</code>? Aparece <code>attempt to … a nil value</code> longe da função.</li>
+  <li>No Lua, o <code>return</code> pode devolver <strong>mais de um</strong> valor: próxima aula, <a href="retornos-multiplos.html">Vários Retornos</a>.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
