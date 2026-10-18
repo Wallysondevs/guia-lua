@@ -1,0 +1,499 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua xpcall e debug.traceback — capturando o erro com o rastro | Guia Lua</title>
+<meta name="description" content="xpcall e debug.traceback no Lua 5.5 para quem nunca programou: capturar um erro sem perder o stack traceback, escrever o seu próprio tratador de erros, tratar erros em tabela, guardar um log, debug.traceback com mensagem e nível, o error in error handling e as diferenças do Lua 5.1. Saídas reais do lab.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">xpcall</span> e debug.traceback</h1>
+
+<p class="intro">O <a href="pcall.html">pcall</a> segura o erro e devolve a mensagem, mas joga fora uma coisa preciosa: o <code>stack traceback</code>, o caminho que o programa fez até o erro. Quando a função protegida chama outras, que chamam outras, saber só "deu erro na linha 4" pode não bastar. O <code>xpcall</code> ("pcall estendido") resolve isso: ele aceita uma <strong>função tratadora</strong>, que o Lua chama no exato momento do erro, <strong>antes</strong> de desmontar a pilha. Com a tratadora certa, a <code>debug.traceback</code>, você captura o erro <strong>e</strong> o rastro.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>Como usar <code>xpcall(funcao, tratadora, args…)</code> e o que ele devolve.</li>
+  <li>O atalho mais usado: <code>xpcall(f, debug.traceback)</code>, que devolve a mensagem com o <code>stack traceback</code>.</li>
+  <li>Como escrever a sua própria tratadora: acrescentar texto, tratar tabelas, guardar um registro (log).</li>
+  <li>A <code>debug.traceback</code> sozinha: ver "onde estou" a qualquer momento, com mensagem e nível.</li>
+  <li>O que acontece quando a tratadora também dá erro (<code>error in error handling</code>).</li>
+</ul>
+</div>
+
+<p>Todos os programas desta aula rodaram no <strong>Lua 5.5</strong> da máquina da Ana (usuária <code>ana</code>, computador <code>notebook</code>) com <code>lua arquivo.lua</code>. Antes, leia <a href="pcall.html">pcall</a> e <a href="erros.html">Lendo uma Mensagem de Erro</a>.</p>
+
+<hr>
+
+<h2>A ideia: a caixa-preta do avião</h2>
+<p>Quando um avião tem um problema, a investigação não quer saber só "onde ele pousou". Ela quer saber <strong>o caminho</strong>: a rota, a altitude, cada decisão do piloto. Por isso todo avião tem uma <strong>caixa-preta</strong>, que grava tudo no momento em que as coisas acontecem.</p>
+<p>O <code>pcall</code> é a rede de proteção: o avião desce inteiro, mas ninguém sabe o caminho. O <code>xpcall</code> é a rede <strong>com</strong> uma caixa-preta: no instante do problema, antes de qualquer coisa ser desmontada, ele chama a sua função tratadora, que pode "gravar" o caminho (a pilha de chamadas) enquanto ele ainda existe.</p>
+
+<hr>
+
+<h2>1. <code>pcall</code> × <code>xpcall</code>: o rastro que some e o que fica</h2>
+<p>O boletim da escola, do jeito que você conheceu em <a href="erros.html">Lendo uma Mensagem de Erro</a>, com uma nota digitada como texto. Primeiro com <code>pcall</code>, depois com <code>xpcall</code>:</p>
+
+<pre class="file" data-file="x1.lua">local function media(notas)
+  local soma = 0
+  for _, n in ipairs(notas) do
+    soma = soma + n
+  end
+  return soma / #notas
+end
+
+local function boletim(aluno)
+  return aluno.nome .. ": " .. media(aluno.notas)
+end
+
+print(pcall(boletim, { nome = "Bia", notas = {8, "dez"} }))
+print()
+print(xpcall(boletim, debug.traceback, { nome = "Bia", notas = {8, "dez"} }))
+</pre>
+
+<pre class="term">$ lua x1.lua
+false	x1.lua:4: attempt to add a 'number' with a 'string'
+
+false	x1.lua:4: attempt to add a 'number' with a 'string'
+stack traceback:
+	[C]: in metamethod 'add'
+	x1.lua:4: in upvalue 'media'
+	x1.lua:10: in function &lt;x1.lua:9&gt;
+	[C]: in global 'xpcall'
+	x1.lua:15: in main chunk
+	[C]: in ?
+$ echo $?
+0</pre>
+
+<dl class="anatomy">
+  <dt>xpcall(boletim, debug.traceback, {…})</dt><dd>Três partes: a <strong>função</strong> a proteger (<code>boletim</code>), a <strong>tratadora</strong> (<code>debug.traceback</code>) e, depois, os <strong>argumentos</strong> da função (a tabela da Bia). Como no <code>pcall</code>, as funções vão sem parênteses.</dd>
+  <dt>false	x1.lua:4: …</dt><dd>O primeiro valor continua sendo <code>false</code> (deu erro). O segundo, em vez da mensagem pura, é o que a tratadora devolveu: a mensagem <strong>mais</strong> o rastro.</dd>
+  <dt>x1.lua:10: in function &lt;x1.lua:9&gt;</dt><dd>O <code>boletim</code> aparece sem nome. Quem o chamou foi o <code>xpcall</code>, que o recebeu como argumento, sem nome nenhum; então o Lua diz onde a função foi escrita (linha 9).</dd>
+  <dt>[C]: in global 'xpcall'</dt><dd>O próprio <code>xpcall</code> no caminho: a "rede" está no rastro.</dd>
+  <dt>x1.lua:15: in main chunk</dt><dd>A linha do programa principal que chamou o <code>xpcall</code>.</dd>
+  <dt>echo $? → 0</dt><dd>Mesmo com o rastro inteiro na tela, o erro foi <strong>capturado</strong>: o programa terminou normalmente. Quem imprimiu o rastro foi o seu <code>print</code>, não o <code>lua</code>.</dd>
+</dl>
+
+<p>Com o <code>pcall</code>, você sabia que a soma da linha 4 falhou. Com o <code>xpcall</code>, sabe também que ela estava na <code>media</code>, chamada pelo <code>boletim</code>, chamado pela linha 15. É o mesmo rastro que o <code>lua</code> mostraria se o erro não fosse capturado; só que agora ele está numa variável, e o programa continua.</p>
+
+<div class="trylua" data-goal="out:stack traceback:;;out:in upvalue 'media';;semerro;;src:xpcall">
+<p class="try-task"><strong>Missão:</strong> o programa captura o erro com <code>pcall</code> e mostra só a mensagem. Troque por <code>xpcall</code> com a tratadora <code>debug.traceback</code>, para a saída mostrar também o <code>stack traceback</code> (e, nele, a linha <code>in upvalue 'media'</code>).</p>
+<pre class="script" data-file="main.lua">local function media(notas)
+  local soma = 0
+  for _, n in ipairs(notas) do
+    soma = soma + n
+  end
+  return soma / #notas
+end
+
+local function boletim(aluno)
+  return aluno.nome .. ": " .. media(aluno.notas)
+end
+
+local ok, msg = pcall(boletim, { nome = "Bia", notas = {8, "dez"} })
+print(ok)
+print(msg)
+</pre>
+<pre class="solucao" data-file="main.lua">local function media(notas)
+  local soma = 0
+  for _, n in ipairs(notas) do
+    soma = soma + n
+  end
+  return soma / #notas
+end
+
+local function boletim(aluno)
+  return aluno.nome .. ": " .. media(aluno.notas)
+end
+
+local ok, msg = xpcall(boletim, debug.traceback, { nome = "Bia", notas = {8, "dez"} })
+print(ok)
+print(msg)
+</pre>
+</div>
+
+<hr>
+
+<h2>2. A sua própria tratadora</h2>
+<p>A tratadora é uma função comum, que recebe <strong>um</strong> argumento (o erro, como foi lançado) e devolve <strong>o que o <code>xpcall</code> vai entregar</strong> no lugar da mensagem. Ela só é chamada quando há erro:</p>
+
+<pre class="file" data-file="x2.lua">local function arriscada()
+  local t = nil
+  return t.campo
+end
+
+local function tratador(msg)
+  return "[ERRO CAPTURADO] " .. msg
+end
+
+local ok, r = xpcall(arriscada, tratador)
+print(ok)
+print(r)
+print(xpcall(function () return "tudo certo", 42 end, tratador))
+</pre>
+
+<pre class="term">$ lua x2.lua
+false
+[ERRO CAPTURADO] x2.lua:3: attempt to index a nil value (local 't')
+true	tudo certo	42</pre>
+
+<dl class="anatomy">
+  <dt>local function tratador(msg)</dt><dd>Recebe a mensagem do erro (<code>x2.lua:3: attempt to index …</code>).</dd>
+  <dt>return "[ERRO CAPTURADO] " .. msg</dt><dd>O que ela devolver vira o segundo valor do <code>xpcall</code>.</dd>
+  <dt>true	tudo certo	42</dt><dd>Sem erro, a tratadora nem é chamada, e o <code>xpcall</code> se comporta igual ao <code>pcall</code>: <code>true</code> e todos os resultados da função.</dd>
+</dl>
+
+<h3>Tratando erros em tabela</h3>
+<p>A tratadora recebe o erro <strong>como ele foi lançado</strong>, que pode ser uma tabela (veja <a href="error.html">error</a>). Ela pode olhar o tipo e montar uma mensagem para cada caso:</p>
+
+<pre class="file" data-file="x4.lua">local function tratador(e)
+  if type(e) == "table" then
+    return "Erro " .. e.codigo .. ": " .. e.mensagem
+  end
+  return "Erro inesperado: " .. tostring(e)
+end
+
+local function buscar(codigo)
+  if codigo ~= 1 then
+    error({ codigo = 404, mensagem = "produto não encontrado" })
+  end
+  return "pão francês"
+end
+
+print(xpcall(buscar, tratador, 1))
+print(xpcall(buscar, tratador, 7))
+print(xpcall(function () return 1 + nil end, tratador))
+</pre>
+
+<pre class="term">$ lua x4.lua
+true	pão francês
+false	Erro 404: produto não encontrado
+false	Erro inesperado: x4.lua:17: attempt to perform arithmetic on a nil value</pre>
+
+<p>Os erros "previstos" (as tabelas, lançadas de propósito) viram mensagens bonitas. Os imprevistos (um engano de programação, como o <code>1 + nil</code>) ficam marcados como "inesperado", com a mensagem original. O <code>tostring(e)</code> garante que a tratadora não quebre se o erro for um número ou <code>nil</code>.</p>
+
+<h3>Guardando um registro (log) com o rastro</h3>
+<p>Num programa de verdade, você não quer jogar um rastro enorme na cara de quem usa, mas quer <strong>guardá-lo</strong> para investigar depois. A tratadora pode fazer as duas coisas: guardar o rastro completo e devolver só a mensagem:</p>
+
+<pre class="file" data-file="x6.lua">local log = {}
+local function registrar(msg)
+  local completo = debug.traceback(msg, 2)
+  log[#log + 1] = completo
+  return msg
+end
+
+for _, valor in ipairs({ 10, "x", 30 }) do
+  local ok, r = xpcall(function () return valor * 2 end, registrar)
+  print(valor, ok, r)
+end
+print("--- conteúdo do log ---")
+for i, texto in ipairs(log) do
+  print(i, texto)
+end
+</pre>
+
+<pre class="term">$ lua x6.lua
+10	true	20
+x	false	x6.lua:9: attempt to mul a 'string' with a 'number'
+30	true	60
+--- conteúdo do log ---
+1	x6.lua:9: attempt to mul a 'string' with a 'number'
+stack traceback:
+	[C]: in metamethod 'mul'
+	x6.lua:9: in function &lt;x6.lua:9&gt;
+	[C]: in global 'xpcall'
+	x6.lua:9: in main chunk
+	[C]: in ?</pre>
+
+<p>O <code>debug.traceback(msg, 2)</code> monta o rastro começando no nível 2: o nível 1 seria a própria <code>registrar</code>, que não interessa. (A próxima seção explica os níveis.) Num programa maior, o <code>log</code> iria para um arquivo (veja <a href="arquivos-escrever.html">Escrevendo Arquivos</a>).</p>
+
+<div class="warning">
+<strong>Por que não chamar o <code>debug.traceback</code> depois do <code>pcall</code>?</strong>
+<p>Porque aí é tarde: quando o <code>pcall</code> devolve o <code>false</code>, a pilha de chamadas da função que deu erro <strong>já foi desmontada</strong>. Um <code>debug.traceback()</code> nesse ponto mostra só onde <strong>você</strong> está agora (o <code>main chunk</code>), não onde o erro aconteceu. A tratadora do <code>xpcall</code> é o único lugar em que o caminho do erro ainda existe.</p>
+</div>
+
+<hr>
+
+<h2>3. A <code>debug.traceback</code> sozinha: "onde estou?"</h2>
+<p>A <code>debug.traceback</code> não precisa de erro nenhum. Chamada em qualquer lugar, ela devolve um texto com o rastro <strong>daquele momento</strong>. É ótima para descobrir quem chamou uma função:</p>
+
+<pre class="file" data-file="x3.lua">local function onde()
+  print(debug.traceback())
+end
+
+local function caixa()
+  onde()
+end
+
+caixa()
+print("---")
+print(debug.traceback("mensagem no topo"))
+print("---")
+print(debug.traceback("nível 2", 2))
+</pre>
+
+<pre class="term">$ lua x3.lua
+stack traceback:
+	x3.lua:2: in upvalue 'onde'
+	x3.lua:6: in local 'caixa'
+	x3.lua:9: in main chunk
+	[C]: in ?
+---
+mensagem no topo
+stack traceback:
+	x3.lua:11: in main chunk
+	[C]: in ?
+---
+nível 2
+stack traceback:
+	[C]: in ?</pre>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Chamada</th><th>O que devolve</th></tr>
+<tr><td><code>debug.traceback()</code></td><td><code>stack traceback:</code> e as chamadas em andamento, a partir de quem chamou a <code>debug.traceback</code> (nível 1)</td></tr>
+<tr><td><code>debug.traceback("texto")</code></td><td>O texto na primeira linha, e o rastro embaixo (é o que acontece no <code>xpcall</code>: ela recebe a mensagem do erro)</td></tr>
+<tr><td><code>debug.traceback("texto", 2)</code></td><td>O rastro começa um nível acima: pula a função atual. No exemplo, pulou o <code>main chunk</code> e sobrou só o <code>[C]: in ?</code></td></tr>
+</table>
+</div>
+
+<p>Ela <strong>não imprime</strong> nada sozinha: devolve um texto. Por isso o <code>print(debug.traceback())</code>. A biblioteca <code>debug</code> tem outras ferramentas (ver variáveis, contar linhas…); veja <a href="debug.html">A Biblioteca debug</a>.</p>
+
+<div class="trylua">
+<p class="try-task"><strong>Experimente:</strong> rode e compare as três partes. Depois crie uma terceira função, <code>padaria</code>, que chama <code>caixa()</code>, e troque o <code>caixa()</code> da linha 9 por <code>padaria()</code>: em que linha do rastro ela aparece?</p>
+<pre class="script" data-file="main.lua">local function onde()
+  print(debug.traceback())
+end
+
+local function caixa()
+  onde()
+end
+
+caixa()
+print("---")
+print(debug.traceback("mensagem no topo"))
+print("---")
+print(debug.traceback("nível 2", 2))
+</pre>
+</div>
+
+<hr>
+
+<h2>4. Mais detalhes do <code>xpcall</code></h2>
+
+<h3>Argumentos depois da tratadora</h3>
+<pre class="file" data-file="x7.lua">print(xpcall(function (a, b) return a + b end, debug.traceback, 2, 3))
+</pre>
+<pre class="term">$ lua x7.lua
+true	5</pre>
+<p>Tudo o que vem depois da tratadora vai para a função: aqui, <code>a = 2</code> e <code>b = 3</code>.</p>
+
+<div class="note">
+<strong>No Lua 5.1, não</strong>
+<p>Os argumentos extras do <code>xpcall</code> só existem a partir do Lua 5.2. No <code>lua5.1</code> do lab, o mesmo <code>x7.lua</code> ignorou o 2 e o 3, a função recebeu <code>nil</code>, e o resultado foi um erro:</p>
+<pre class="term">$ lua5.1 x7.lua
+false	x7.lua:1: attempt to perform arithmetic on local 'a' (a nil value)
+stack traceback:
+	x7.lua:1: in function &lt;x7.lua:1&gt;
+	[C]: in function 'xpcall'
+	x7.lua:1: in main chunk
+	[C]: ?</pre>
+<p>O LuaJIT aceita os argumentos (deu <code>true	5</code> no lab). Se o seu código precisa rodar no 5.1, use uma função anônima: <code>xpcall(function () return somar(2, 3) end, debug.traceback)</code>. Mais em <a href="versoes.html">as diferenças entre versões</a>.</p>
+</div>
+
+<h3>A tratadora é obrigatória</h3>
+<pre class="file" data-file="x9.lua">local ok, msg = xpcall(function () error("ops") end)
+print(ok, msg)
+</pre>
+<pre class="term">$ lua x9.lua
+lua: x9.lua:1: bad argument #2 to 'xpcall' (function expected, got no value)
+stack traceback:
+	[C]: in global 'xpcall'
+	x9.lua:1: in main chunk
+	[C]: in ?</pre>
+<p>"Argumento ruim nº 2 para o <code>xpcall</code> (esperava uma função, não veio nada)". Sem a tratadora, o <code>xpcall</code> nem começa, e esse erro <strong>não</strong> é capturado. Se não precisa de tratadora, use <code>pcall</code>.</p>
+
+<hr>
+
+<h2 id="formas">Formas diferentes de fazer a mesma coisa</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Você quer…</th><th>Use</th></tr>
+<tr><td>Só saber se deu certo e a mensagem</td><td><code>pcall(f, …)</code></td></tr>
+<tr><td>A mensagem <strong>e</strong> o rastro, num texto</td><td><code>xpcall(f, debug.traceback, …)</code></td></tr>
+<tr><td>Transformar o erro (prefixo, tabela → texto, tradução)</td><td><code>xpcall(f, minha_tratadora, …)</code></td></tr>
+<tr><td>Guardar o rastro e mostrar só a mensagem</td><td>Uma tratadora que chama <code>debug.traceback(msg, 2)</code>, guarda e devolve <code>msg</code></td></tr>
+<tr><td>Ver quem chamou uma função, sem erro nenhum</td><td><code>print(debug.traceback())</code> dentro dela</td></tr>
+<tr><td>Deixar o <code>lua</code> mostrar o rastro e parar</td><td>Nada: não capture o erro</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+
+<div class="cenario">
+<strong>A tratadora também deu erro: <code>error in error handling</code></strong>
+<pre class="file" data-file="x5.lua">local function tratador(msg)
+  return msg .. nada_aqui
+end
+print(xpcall(function () error("primeiro erro") end, tratador))
+</pre>
+<pre class="term">$ lua x5.lua
+false	error in error handling</pre>
+<p>"Erro ao tratar o erro". A tratadora tentou juntar a mensagem com uma variável que não existe (<code>nada_aqui</code> é <code>nil</code>), e deu um segundo erro dentro dela. O Lua desiste e devolve essa frase genérica, e você perde <strong>as duas</strong> mensagens: nem o <code>primeiro erro</code>, nem o motivo do segundo aparecem. (O Lua 5.4 e o 5.1 do lab deram a mesma frase.) <strong>Como consertar:</strong> mantenha a tratadora bem simples e à prova de falhas: use <code>tostring(msg)</code> para juntar textos e teste-a sozinha antes.</p>
+</div>
+
+<div class="cenario">
+<strong>Chamou <code>debug.traceback</code> depois do <code>pcall</code></strong>
+<p>O rastro mostra só o <code>main chunk</code>, sem a função que deu erro. No lab, com <code>local ok2, msg = pcall(f)</code> (a <code>f</code> da linha 3 indexa um <code>nil</code>) e depois <code>print(debug.traceback(msg))</code> na linha 5:</p>
+<pre class="term">$ lua x10.lua
+x10.lua:3: attempt to index a nil value (local 't')
+stack traceback:
+	x10.lua:5: in main chunk
+	[C]: in ?</pre>
+<p>O rastro diz linha 5 (onde está o <code>debug.traceback</code>), e a <code>f</code> sumiu. É o aviso da seção 2:depois que o <code>pcall</code> volta, o caminho do erro já foi desmontado. <strong>Como consertar:</strong> passe a <code>debug.traceback</code> como tratadora de um <code>xpcall</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Escreveu <code>xpcall(f(), debug.traceback)</code></strong>
+<p>O mesmo engano do <code>pcall(f(x))</code>: com os parênteses, <code>f()</code> roda antes, fora da proteção, e o erro derruba o programa. Passe a função sem parênteses e os argumentos depois da tratadora: <code>xpcall(f, debug.traceback, x)</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Passou a mensagem errada para o <code>debug.traceback</code></strong>
+<p>Na tratadora, se o erro for uma tabela, <code>debug.traceback(e)</code> não sabe juntar a tabela com o rastro e devolve a própria tabela, sem rastro nenhum. Para erros em tabela, monte o texto antes (<code>debug.traceback("Erro " .. e.codigo, 2)</code>) ou trate a tabela como na seção 2.</p>
+</div>
+
+<hr>
+
+<h2>Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>O que faz</th></tr>
+<tr><td><code>xpcall(f, h, a, b)</code></td><td>Roda <code>f(a, b)</code>. Sem erro: <code>true, &lt;resultados&gt;</code>. Com erro: chama <code>h(erro)</code> antes de desmontar a pilha e devolve <code>false, &lt;o que h devolveu&gt;</code></td></tr>
+<tr><td><code>xpcall(f, debug.traceback)</code></td><td><code>false</code> e a mensagem com o <code>stack traceback</code></td></tr>
+<tr><td><code>debug.traceback()</code></td><td>Texto com o rastro de agora</td></tr>
+<tr><td><code>debug.traceback(msg)</code></td><td>A mensagem e o rastro embaixo</td></tr>
+<tr><td><code>debug.traceback(msg, n)</code></td><td>O rastro começando no nível <code>n</code></td></tr>
+<tr><td><code>error in error handling</code></td><td>A tratadora deu erro</td></tr>
+<tr><td><code>bad argument #2 to 'xpcall' (function expected, got no value)</code></td><td>Faltou a tratadora</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. Complete</h3>
+<p>Complete para capturar o erro de <code>calcular(5)</code> com o rastro:</p>
+<div class="ex-code">local ok, msg = <input data-answer="xpcall" aria-label="função">(calcular, <input data-answer="debug.traceback" aria-label="tratadora">, 5)</div>
+</div>
+
+<div class="mc" data-answer="3">
+<p class="mc-q">2. Quando a função tratadora do <code>xpcall</code> é chamada?</p>
+<label><input type="radio" name="q2"> Sempre, antes da função protegida</label>
+<label><input type="radio" name="q2"> Sempre, depois da função protegida</label>
+<label><input type="radio" name="q2"> Só quando há erro, no momento do erro, antes de a pilha ser desmontada</label>
+<label><input type="radio" name="q2"> Nunca: ela só serve de enfeite</label>
+</div>
+
+<div class="mc" data-answer="1">
+<p class="mc-q">3. O <code>xpcall</code> devolveu <code>false</code> e <code>error in error handling</code>. O que aconteceu?</p>
+<label><input type="radio" name="q3"> A função tratadora também deu erro</label>
+<label><input type="radio" name="q3"> A função protegida não existe</label>
+<label><input type="radio" name="q3"> Faltou o <code>debug.traceback</code></label>
+<label><input type="radio" name="q3"> O programa terminou sem erro</label>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">4. Um erro foi capturado por <code>xpcall(f, debug.traceback)</code> e o texto foi impresso com <code>print</code>. Qual é o código de saída do programa (se nada mais der erro)?</p>
+<label><input type="radio" name="q4"> 1, porque houve um erro</label>
+<label><input type="radio" name="q4"> 0, porque o erro foi capturado</label>
+<label><input type="radio" name="q4"> 2</label>
+<label><input type="radio" name="q4"> Depende do tamanho do rastro</label>
+</div>
+
+<h3>Missão final: a tratadora do caixa</h3>
+
+<div class="trylua" data-goal="out:Problema: só temos 3 de leite;;out:Problema: produto desconhecido;;src:xpcall;;semerro">
+<p class="try-task"><strong>Missão:</strong> complete a função <code>tratador</code> para ela devolver o texto <code>"Problema: "</code> seguido da mensagem, e troque o <code>pcall</code> do laço por um <code>xpcall</code> que use essa tratadora (lembre: a tratadora vem antes dos argumentos). A saída deve ter <code>Problema: produto desconhecido: "bolo"</code> e <code>Problema: só temos 3 de leite</code>.</p>
+<pre class="script" data-file="main.lua">local estoque = { pao = 10, leite = 3 }
+
+local function vender(produto, qtd)
+  local tem = estoque[produto]
+  if tem == nil then
+    error(string.format("produto desconhecido: %q", produto), 0)
+  end
+  if qtd &gt; tem then
+    error(string.format("só temos %d de %s", tem, produto), 0)
+  end
+  estoque[produto] = tem - qtd
+  return estoque[produto]
+end
+
+local function tratador(msg)
+  -- devolva "Problema: " seguido da mensagem
+end
+
+for _, pedido in ipairs({ {"pao", 2}, {"bolo", 1}, {"leite", 5} }) do
+  local ok, r = pcall(vender, pedido[1], pedido[2])
+  print(pedido[1], ok, r)
+end
+</pre>
+<pre class="solucao" data-file="main.lua">local estoque = { pao = 10, leite = 3 }
+
+local function vender(produto, qtd)
+  local tem = estoque[produto]
+  if tem == nil then
+    error(string.format("produto desconhecido: %q", produto), 0)
+  end
+  if qtd &gt; tem then
+    error(string.format("só temos %d de %s", tem, produto), 0)
+  end
+  estoque[produto] = tem - qtd
+  return estoque[produto]
+end
+
+local function tratador(msg)
+  return "Problema: " .. tostring(msg)
+end
+
+for _, pedido in ipairs({ {"pao", 2}, {"bolo", 1}, {"leite", 5} }) do
+  local ok, r = xpcall(vender, tratador, pedido[1], pedido[2])
+  print(pedido[1], ok, r)
+end
+</pre>
+</div>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li><code>xpcall(f, tratadora, args…)</code> funciona como o <code>pcall</code>, mas, em caso de erro, chama a tratadora <strong>antes</strong> de desmontar a pilha, e devolve <code>false</code> e o que ela devolveu.</li>
+  <li><code>xpcall(f, debug.traceback)</code> é o atalho para capturar o erro <strong>com</strong> o <code>stack traceback</code>, sem parar o programa.</li>
+  <li>Uma tratadora sua recebe o erro (texto, tabela, número) e pode transformá-lo, guardá-lo num log ou ambos. Mantenha-a simples: se ela der erro, sobra só <code>error in error handling</code>.</li>
+  <li><code>debug.traceback()</code> também funciona sozinha, para ver "onde estou"; aceita uma mensagem e um nível.</li>
+  <li>Os argumentos depois da tratadora existem desde o Lua 5.2 (o 5.1 os ignora; o LuaJIT aceita).</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
