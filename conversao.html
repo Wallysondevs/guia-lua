@@ -1,0 +1,567 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua conversão — tonumber e tostring, texto × número | Guia Lua</title>
+<meta name="description" content="Conversão de tipos no Lua 5.5 para quem nunca programou: tonumber (texto para número, o nil quando falha, bases 2, 8 e 16), tostring (número para texto), o io.read que devolve texto, a conversão automática de &quot;10&quot; + 1 e o que o manual do 5.5 diz dela, e os erros reais (attempt to compare number with string, attempt to add a 'string' with a 'number').">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">Conversão</span> (tonumber e tostring)</h1>
+
+<p class="intro">Para o Lua, <code>42</code> e <code>"42"</code> são coisas diferentes: o primeiro é um <strong>número</strong>, com que se faz conta; o segundo é um <strong>texto</strong> (uma <em>string</em>) que, por acaso, tem dois algarismos. Tudo o que a pessoa digita no teclado chega como texto, e tudo o que vai para a tela vira texto. Por isso todo programa, cedo ou tarde, precisa <strong>converter</strong>: de texto para número com <code>tonumber</code>, de número (ou outra coisa) para texto com <code>tostring</code>.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>A diferença entre o número <code>42</code> e o texto <code>"42"</code>.</li>
+  <li>Como transformar texto em número com <code>tonumber</code>, e o que ele aceita (espaços, sinal, <code>1e3</code>, <code>0x10</code>).</li>
+  <li>Por que <code>tonumber("12abc")</code> dá <code>nil</code>, e como usar isso para conferir o que a pessoa digitou.</li>
+  <li>Como ler números em outras bases: <code>tonumber("ff", 16)</code>, <code>tonumber("1010", 2)</code>.</li>
+  <li>Como transformar qualquer valor em texto com <code>tostring</code>, e o atalho do <code>..</code>.</li>
+  <li>A <strong>conversão automática</strong> de <code>"10" + 1</code>, onde ela não funciona, e o que o manual do Lua 5.5 recomenda.</li>
+  <li>Os erros reais: comparar texto com número, somar texto que não é número, juntar <code>nil</code> num texto.</li>
+</ul>
+</div>
+
+<p>Todos os programas desta aula rodaram no <strong>Lua 5.5</strong> da máquina da Ana (usuária <code>ana</code>, computador <code>notebook</code>), salvos na pasta pessoal dela e executados com <code>lua arquivo.lua</code> (veja <a href="executar.html">Rodando um Programa</a>). Você pode rodar cada um no editor do guia.</p>
+
+<hr>
+
+<h2>A ideia: o número escrito no papel × o dinheiro na mão</h2>
+<p>Na padaria, um cliente entrega um bilhete: <em>"12 pães"</em>. O <strong>12 escrito no papel</strong> é só tinta: ele não dá para somar com o troco nem multiplicar pelo preço. Para fazer conta, a Ana precisa <strong>ler</strong> o bilhete e entender que ali está o número doze. Se o bilhete disser <em>"uma dúzia"</em> ou estiver borrado, ela não consegue tirar um número dali.</p>
+<p>No Lua é igual:</p>
+<ul>
+  <li><code>"12"</code> (com aspas) é o bilhete: um <strong>texto</strong>, tipo <code>string</code>.</li>
+  <li><code>12</code> (sem aspas) é o número de verdade, tipo <code>number</code> (veja <a href="numeros.html">Números</a>).</li>
+  <li><code>tonumber</code> ("para número") é a Ana lendo o bilhete. Quando não dá para ler, a resposta é <code>nil</code> ("nada"; veja <a href="nil.html">O Valor nil</a>).</li>
+  <li><code>tostring</code> ("para texto") é o caminho contrário: escrever o número num bilhete.</li>
+</ul>
+
+<pre class="file" data-file="tipo.lua">print(12, "12")
+print(type(12), type("12"))
+print(12 == "12")
+</pre>
+
+<pre class="term">$ lua tipo.lua
+12	12
+number	string
+false</pre>
+
+<p>Os dois aparecem iguais na tela (<code>12</code>), mas o <code>type</code> (veja <a href="type.html">Descobrindo o Tipo</a>) mostra que um é <code>number</code> e o outro é <code>string</code>, e o <code>==</code> diz que eles <strong>não são iguais</strong>: <code>false</code>. Isso é o centro desta aula.</p>
+
+<hr>
+
+<h2>1. <code>tonumber</code>: de texto para número</h2>
+
+<pre class="file" data-file="tonumber.lua">print(tonumber("42"), tonumber("3.14"), tonumber("-7"))
+print(tonumber("  10  "), tonumber("1e3"), tonumber("0x10"))
+print(tonumber("12abc"), tonumber("10 reais"), tonumber(""))
+print(tonumber("1,5"), tonumber("dez"), tonumber("1 000"))
+print(math.type(tonumber("42")), math.type(tonumber("42.0")))
+print(tonumber(42), tonumber(true), tonumber(nil))
+</pre>
+
+<pre class="term">$ lua tonumber.lua
+42	3.14	-7
+10	1000.0	16
+nil	nil	nil
+nil	nil	nil
+integer	float
+42	nil	nil</pre>
+
+<p>Linha por linha:</p>
+<dl class="anatomy">
+  <dt>tonumber("42"), ("3.14"), ("-7")</dt><dd>Textos que são números do jeito que você escreveria no código viram os números <code>42</code>, <code>3.14</code> e <code>-7</code>.</dd>
+  <dt>tonumber("  10  ")</dt><dd>Espaços <strong>antes e depois</strong> são aceitos (e ignorados): dá <code>10</code>. Isso ajuda com o que a pessoa digita.</dd>
+  <dt>tonumber("1e3"), tonumber("0x10")</dt><dd>O expoente e o hexadecimal também valem, como no código: <code>1000.0</code> e <code>16</code>.</dd>
+  <dt>tonumber("12abc"), ("10 reais"), ("")</dt><dd>Se <strong>qualquer pedaço</strong> do texto não for número, a conversão inteira falha e o resultado é <code>nil</code>. O <code>tonumber</code> não "aproveita o começo": <code>"10 reais"</code> não vira 10. O texto vazio também dá <code>nil</code>.</dd>
+  <dt>tonumber("1,5"), ("dez"), ("1 000")</dt><dd>Vírgula decimal, número por extenso e espaço no meio: tudo <code>nil</code>.</dd>
+  <dt>math.type(…)</dt><dd>O subtipo sai pela escrita: <code>"42"</code> vira inteiro; <code>"42.0"</code> vira float.</dd>
+  <dt>tonumber(42), (true), (nil)</dt><dd>Um número já é número: volta o próprio <code>42</code>. Qualquer outra coisa que não seja texto nem número dá <code>nil</code>.</dd>
+</dl>
+
+<div class="tip">
+<strong>O <code>nil</code> é a resposta "não deu"</strong>
+<p>O manual do Lua diz que, quando a conversão não dá certo, o <code>tonumber</code> devolve <em>fail</em> ("falha"), e explica que hoje <em>fail</em> é o próprio <code>nil</code>. Por isso o jeito recomendado de testar é <code>if not n then</code> ("se não deu…"), que você vai ver na próxima seção.</p>
+</div>
+
+<hr>
+
+<h2>2. O teclado sempre entrega texto</h2>
+<p>A função <code>io.read()</code> lê uma linha do teclado (veja <a href="io-read.html">io.read()</a>) e devolve <strong>sempre um texto</strong>, mesmo quando a pessoa digita só algarismos. Olhe este programa, que pergunta a idade:</p>
+
+<pre class="file" data-file="idade.lua">io.write("Quantos anos você tem? ")
+local idade = io.read()
+print("Tipo:", type(idade))
+print("Daqui a 10 anos:", idade + 10)
+if idade &gt;= 18 then
+  print("Maior de idade")
+end
+</pre>
+
+<p>A Ana mandou o <code>30</code> pelo terminal (o <code>echo 30 |</code> "digita" o 30 para o programa):</p>
+
+<pre class="term">$ echo 30 | lua idade.lua
+Quantos anos você tem? Tipo:	string
+Daqui a 10 anos:	40
+lua: idade.lua:5: attempt to compare number with string
+stack traceback:
+	idade.lua:5: in main chunk
+	[C]: in ?</pre>
+
+<p>Duas coisas aconteceram, e as duas são importantes:</p>
+<ol class="passo">
+  <li><code>type(idade)</code> é <code>string</code>: o 30 chegou como texto, <code>"30"</code>.</li>
+  <li>A conta <code>idade + 10</code> <strong>funcionou</strong> (deu 40), porque o Lua converte texto em número sozinho nas contas (seção 5).</li>
+  <li>Mas a comparação <code>idade &gt;= 18</code> <strong>parou o programa</strong>: <em>attempt to compare number with string</em>, "tentativa de comparar número com texto". Nas comparações, o Lua <strong>não</strong> converte. (Ele fala "number with string", na ordem invertida, porque por dentro ele troca <code>a &gt;= b</code> por <code>b &lt;= a</code>.)</li>
+</ol>
+
+<p>O conserto é converter <strong>logo na leitura</strong>, e conferir se deu certo:</p>
+
+<pre class="file" data-file="idade2.lua">io.write("Quantos anos você tem? ")
+local idade = tonumber(io.read())
+if not idade then
+  print("Isso não é um número.")
+elseif idade &gt;= 18 then
+  print("Maior de idade")
+else
+  print("Menor de idade")
+end
+</pre>
+
+<pre class="term">$ echo 30 | lua idade2.lua
+Quantos anos você tem? Maior de idade
+$ echo trinta | lua idade2.lua
+Quantos anos você tem? Isso não é um número.
+$ echo 15 | lua idade2.lua
+Quantos anos você tem? Menor de idade</pre>
+
+<dl class="anatomy">
+  <dt>tonumber(io.read())</dt><dd>Lê a linha e já converte. Se a pessoa digitou <code>30</code>, <code>idade</code> vale o número 30; se digitou <code>trinta</code>, vale <code>nil</code>.</dd>
+  <dt>if not idade then</dt><dd>"Se <strong>não</strong> houver idade": o <code>not</code> transforma <code>nil</code> em verdadeiro (veja <a href="operadores-logicos.html">and, or e not</a>). É aqui que o programa trata a entrada ruim, em vez de quebrar.</dd>
+  <dt>elseif idade &gt;= 18</dt><dd>Agora a comparação é entre dois números e funciona (veja <a href="elseif.html">elseif</a>).</dd>
+</dl>
+
+<p>O <code>echo</code> não aparece na tela do programa: num terminal de verdade, você veria o <code>30</code> digitado logo depois da pergunta.</p>
+
+<div class="trylua" data-stdin="30" data-goal="out:Maior de idade;;semerro">
+<p class="try-task"><strong>Missão:</strong> a caixa vai "digitar" <code>30</code>. Rode e veja o erro <code>attempt to compare number with string</code>. Depois conserte a linha do <code>io.read()</code> com <code>tonumber</code> para o programa mostrar <code>Maior de idade</code>.</p>
+<pre class="script" data-file="main.lua">io.write("Quantos anos você tem? ")
+local idade = io.read()
+if idade &gt;= 18 then
+  print("Maior de idade")
+else
+  print("Menor de idade")
+end
+</pre>
+<pre class="solucao" data-file="main.lua">io.write("Quantos anos você tem? ")
+local idade = tonumber(io.read())
+if idade &gt;= 18 then
+  print("Maior de idade")
+else
+  print("Menor de idade")
+end
+</pre>
+</div>
+
+<p>E se a pessoa digitar <code>trinta</code>? Com o <code>tonumber</code>, a <code>idade</code> vira <code>nil</code>, e a comparação dá outro erro. No lab:</p>
+
+<pre class="term">$ echo trinta | lua idade3.lua
+lua: idade3.lua:3: attempt to compare number with nil
+stack traceback:
+	idade3.lua:3: in main chunk
+	[C]: in ?
+Quantos anos você tem?          « a pergunta saiu por último</pre>
+
+<p>(<code>idade3.lua</code> é a solução da missão.) "Tentativa de comparar número com <code>nil</code>". Repare que a pergunta apareceu <strong>depois</strong> do erro: o texto do <code>io.write</code> sem quebra de linha fica guardado esperando o resto da linha, enquanto a mensagem de erro vai direto para a tela; a pergunta só sai quando o programa termina. Não se assuste se isso acontecer com você. Para o programa sobreviver a qualquer entrada, falta o <code>if not idade then</code> do <code>idade2.lua</code>.</p>
+
+<hr>
+
+<h2>3. Números em outras bases: <code>tonumber(texto, base)</code></h2>
+<p>O <code>tonumber</code> aceita um segundo valor: a <strong>base</strong> em que o texto está escrito. Nós contamos na base 10 (dez algarismos, de 0 a 9). O computador usa muito a base 2 (binário: só 0 e 1) e a base 16 (hexadecimal: de 0 a 9 e de <code>a</code> a <code>f</code>, como nas cores <code>ff8800</code>).</p>
+
+<pre class="file" data-file="bases.lua">print(tonumber("ff", 16), tonumber("FF", 16), tonumber("1010", 2))
+print(tonumber("777", 8), tonumber("z", 36), tonumber("10", 10))
+print(tonumber("8", 2), tonumber("0x10", 16), tonumber("1.5", 10))
+</pre>
+
+<pre class="term">$ lua bases.lua
+255	255	10
+511	35	10
+nil	nil	nil</pre>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Chamada</th><th>Resultado</th><th>Por quê</th></tr>
+<tr><td><code>tonumber("ff", 16)</code></td><td>255</td><td>Na base 16, <code>f</code> vale 15: 15 × 16 + 15. Maiúsculas ou minúsculas tanto faz.</td></tr>
+<tr><td><code>tonumber("1010", 2)</code></td><td>10</td><td>Binário: 8 + 0 + 2 + 0.</td></tr>
+<tr><td><code>tonumber("777", 8)</code></td><td>511</td><td>Base 8 (octal), usada nas permissões de arquivo do Linux.</td></tr>
+<tr><td><code>tonumber("z", 36)</code></td><td>35</td><td>A base vai de 2 a 36: as letras de <code>a</code> a <code>z</code> valem de 10 a 35.</td></tr>
+<tr><td><code>tonumber("8", 2)</code></td><td><code>nil</code></td><td>Não existe o algarismo 8 em binário.</td></tr>
+<tr><td><code>tonumber("0x10", 16)</code></td><td><code>nil</code></td><td>Com base, o texto tem de ter <strong>só</strong> os algarismos: sem o <code>0x</code>.</td></tr>
+<tr><td><code>tonumber("1.5", 10)</code></td><td><code>nil</code></td><td>Com base, só valem <strong>inteiros</strong>: sem ponto decimal.</td></tr>
+</table>
+</div>
+
+<p>Com base, o resultado é sempre inteiro. Sem base (seção 1), <code>tonumber("0x10")</code> funciona, porque aí vale a escrita do código.</p>
+
+<hr>
+
+<h2>4. <code>tostring</code>: qualquer valor vira texto</h2>
+
+<pre class="file" data-file="tostring.lua">print(tostring(42), tostring(3.0), tostring(-0.5))
+print(tostring(true), tostring(nil), tostring(1e100))
+print(type(tostring(42)), #tostring(12345))
+print(42 .. "", 3.0 .. " kg", 10 .. 20)
+</pre>
+
+<pre class="term">$ lua tostring.lua
+42	3.0	-0.5
+true	nil	1e+100
+string	5
+42	3.0 kg	1020</pre>
+
+<dl class="anatomy">
+  <dt>tostring(42), tostring(3.0)</dt><dd>O número vira o texto que você vê na tela: <code>"42"</code>, <code>"3.0"</code> (o float mantém o <code>.0</code>).</dd>
+  <dt>tostring(true), tostring(nil)</dt><dd>Funciona com qualquer valor: <code>"true"</code> e <code>"nil"</code> viram textos.</dd>
+  <dt>type(tostring(42)) e #tostring(12345)</dt><dd>O resultado é mesmo uma <code>string</code>. E, sendo texto, dá para medir: <code>12345</code> tem 5 algarismos (o <code>#</code> mede o tamanho; veja <a href="operador-tamanho.html">O Operador de Tamanho</a>).</dd>
+  <dt>42 .. "", 3.0 .. " kg", 10 .. 20</dt><dd>O <code>..</code> (juntar textos; veja <a href="concatenacao.html">Juntando Textos</a>) converte números sozinho. Por isso <code>10 .. 20</code> dá o texto <code>1020</code>, e não 30.</dd>
+</dl>
+
+<p>Se é tão fácil juntar número com <code>..</code>, para que serve o <code>tostring</code>? Para os valores que o <code>..</code> <strong>não</strong> aceita, como <code>nil</code> e <code>true</code>:</p>
+
+<pre class="term">$ lua -e 'local x = nil print("Total: " .. x)'
+lua: (command line):1: attempt to concatenate a nil value (local 'x')
+stack traceback:
+	(command line):1: in main chunk
+	[C]: in ?
+$ lua -e 'print("Total: " .. tostring(nil))'
+Total: nil</pre>
+
+<p>(O <code>lua -e '…'</code> roda um programa curtinho escrito ali mesmo, sem arquivo; por isso o erro fala de <code>(command line):1:</code>, "linha de comando, linha 1".)</p>
+
+<div class="note">
+<strong>Para escolher o formato, use <code>string.format</code></strong>
+<p>O <code>tostring</code> mostra o número "do jeito dele" (<code>0.30000000000000004</code>, <code>1e+100</code>). Quando você quer duas casas, zeros na frente ou alinhamento, quem manda é o <code>string.format</code>: <code>string.format("%.1f", 0.1 + 0.2)</code> dá <code>0.3</code>. Aula própria: <a href="string-format.html">string.format</a>.</p>
+</div>
+
+<hr>
+
+<h2>5. A conversão automática: <code>"10" + 1</code></h2>
+<p>Você viu na seção 2 que <code>idade + 10</code> funcionou com <code>idade</code> sendo o texto <code>"30"</code>. É a <strong>conversão automática</strong> (os programadores dizem <strong>coerção</strong>): numa conta, se um lado é um texto que parece número, o Lua o converte antes de calcular.</p>
+
+<pre class="file" data-file="coercao.lua">print("10" + 1, "10" * "2", "3.5" + 1)
+print(math.type("10" + 1), math.type("10.0" + 1))
+print("0x10" + 0, " 5 " + 1, "10" - "4")
+print("10" .. 1, 10 .. 1)
+print("10" == 10, tonumber("10") == 10)
+</pre>
+
+<pre class="term">$ lua coercao.lua
+11	20	4.5
+integer	float
+16	6	6
+101	101
+false	true</pre>
+
+<ul>
+  <li>Nas contas (<code>+ - * / // % ^</code>), o texto vira número: <code>"10" + 1</code> é <code>11</code>, e até <code>"10" * "2"</code> funciona.</li>
+  <li>O subtipo segue a escrita do texto: <code>"10"</code> vira inteiro, <code>"10.0"</code> vira float.</li>
+  <li>Com <code>..</code> é o contrário: o número vira texto (<code>"10" .. 1</code> é <code>"101"</code>).</li>
+  <li>No <code>==</code>, <strong>nada é convertido</strong>: <code>"10" == 10</code> é <code>false</code>.</li>
+</ul>
+
+<p>E onde a conversão automática <strong>não</strong> acontece, o programa para:</p>
+
+<pre class="term">$ lua -e 'print("10" &lt; 5)'
+lua: (command line):1: attempt to compare string with number
+stack traceback:
+	(command line):1: in main chunk
+	[C]: in ?
+$ lua -e 'print("3" &amp; 1)'
+lua: (command line):1: attempt to perform bitwise operation on a string value (constant '3')
+stack traceback:
+	(command line):1: in main chunk
+	[C]: in ?</pre>
+
+<p>A primeira é a comparação (<code>&lt;</code>, <code>&gt;</code>, <code>&lt;=</code>, <code>&gt;=</code>). A segunda é um operador de bits (<code>&amp;</code>; veja <a href="operadores-bits.html">Operadores de Bits</a>): "tentativa de fazer operação de bits com um valor texto".</p>
+
+<div class="warning">
+<strong>O que o manual do Lua 5.5 diz</strong>
+<p>O manual oficial (seção 3.4.3, <em>Coercions and Conversions</em>) é claro: <em>"It is always a good practice not to rely on the implicit coercions from strings to numbers, as they are not always applied; in particular, "1"==1 is false and "1"&lt;1 raises an error"</em>, ou seja, <strong>é sempre uma boa prática não depender da conversão automática de texto para número</strong>, porque ela nem sempre acontece: <code>"1" == 1</code> é falso e <code>"1" &lt; 1</code> dá erro. E continua: <em>"These coercions exist mainly for compatibility and may be removed in future versions of the language"</em>, "essas conversões existem principalmente por compatibilidade e <strong>podem ser removidas</strong> em versões futuras".</p>
+<p>O manual também conta um detalhe de bastidor: quem faz essa conversão nas contas não é o "miolo" da linguagem, e sim a biblioteca <code>string</code>, que dá aos textos um jeito especial de reagir a contas. É por isso que o erro de <code>"abc" + 1</code> fala em <code>metamethod 'add'</code> (veja <a href="#errado">Quando dá errado</a>).</p>
+<p><strong>Conclusão:</strong> converta você mesmo, com <code>tonumber</code>, assim que o texto entra no programa. Fica claro para quem lê, funciona nas comparações, e você ainda pode conferir com <code>if not n then</code>.</p>
+</div>
+
+<div class="note">
+<strong>Vírgula decimal e o <code>os.setlocale</code> (só no terminal)</strong>
+<p>O manual também diz que a conversão de texto para número aceita a "marca decimal do idioma atual". Normalmente o Lua começa no idioma neutro (<code>C</code>), em que só o ponto vale. Mas, se o programa chamar <code>os.setlocale("")</code> (usado para ter datas em português; veja <a href="os-date-time.html">Datas e Horas</a>), o idioma vira o do computador da Ana, e muda <strong>mais coisa</strong> do que a data. No lab:</p>
+<pre class="file" data-file="locale.lua">print(tonumber("1,5"))
+print(os.setlocale(""))
+print(tonumber("1,5"), tonumber("1.5"))
+print(1.5)
+</pre>
+<pre class="term">$ lua locale.lua
+nil
+pt_BR.UTF-8
+1,5	1,5
+1,5</pre>
+<p>Depois do <code>os.setlocale("")</code>, <code>tonumber("1,5")</code> passou a funcionar, mas o <code>print(1.5)</code> passou a mostrar <code>1,5</code>, com vírgula (o código continua escrito com ponto). Se você só quer as datas em português, use <code>os.setlocale("", "time")</code>, que muda só a parte de datas: no lab, com ele, <code>print(1.5)</code> continuou <code>1.5</code>. <strong>No editor do guia</strong> isso não acontece: lá os números continuam com ponto mesmo depois do <code>os.setlocale("")</code>.</p>
+</div>
+
+<hr>
+
+<h2 id="formas">Formas diferentes de fazer a mesma coisa</h2>
+
+<h3>Ler um número do teclado</h3>
+<p>Além de <code>tonumber(io.read())</code>, o <code>io.read</code> sabe ler um número direto, com o formato <code>"n"</code>:</p>
+
+<pre class="file" data-file="ler_n.lua">io.write("Quantos pães? ")
+local n = io.read("n")
+print(n, math.type(n))
+</pre>
+
+<pre class="term">$ echo 12 | lua ler_n.lua
+Quantos pães? 12	integer
+$ echo doze | lua ler_n.lua
+Quantos pães? nil	nil</pre>
+
+<p>Os dois jeitos devolvem <code>nil</code> quando não há número. A diferença é que o <code>io.read("n")</code> lê só o número e deixa o resto da linha para a próxima leitura, o que confunde quem mistura números e textos. O <code>tonumber(io.read())</code> lê a linha inteira, e é o mais previsível.</p>
+
+<h3>Transformar um número em texto</h3>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Jeito</th><th>Exemplo</th><th>Quando usar</th></tr>
+<tr><td><code>tostring(x)</code></td><td><code>tostring(42)</code> → <code>"42"</code></td><td>Quando você precisa do texto em si, ou quando <code>x</code> pode ser <code>nil</code>, <code>true</code>, <code>false</code></td></tr>
+<tr><td><code>..</code></td><td><code>"Total: " .. 42</code></td><td>Para montar uma frase com números (o mais comum)</td></tr>
+<tr><td><code>string.format</code></td><td><code>string.format("%.2f", 9)</code> → <code>"9.00"</code></td><td>Quando o formato importa: casas decimais, dinheiro, alinhamento</td></tr>
+</table>
+</div>
+
+<h3>Transformar texto em número</h3>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Jeito</th><th>Quando usar</th></tr>
+<tr><td><code>tonumber(texto)</code></td><td>Sempre que um texto deve virar número: o que foi digitado, o que veio de um arquivo. Confira o <code>nil</code>.</td></tr>
+<tr><td><code>tonumber(texto, base)</code></td><td>Textos em binário, octal, hexadecimal (cores, códigos)</td></tr>
+<tr><td><code>"10" + 0</code> (automático)</td><td>Evite: funciona nas contas, mas não nas comparações, e pode sair da linguagem um dia</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+
+<div class="cenario">
+<strong>Comparou o texto do teclado com um número</strong>
+<p>É o erro da seção 2:</p>
+<pre class="term">lua: idade.lua:5: attempt to compare number with string</pre>
+<p>"Tentativa de comparar número com texto", na linha 5. A variável tinha um texto (o que o <code>io.read()</code> devolve) e o <code>if</code> comparou com <code>18</code>. <strong>Como consertar:</strong> <code>local idade = tonumber(io.read())</code>. Se o erro disser <code>attempt to compare number with nil</code>, o <code>tonumber</code> já está lá, mas a pessoa digitou algo que não é número: falta o <code>if not idade then</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Fez conta com um texto que não é número</strong>
+<pre class="file" data-file="soma_texto.lua">local preco = "4,50"
+local total = preco + 1
+</pre>
+<pre class="term">$ lua soma_texto.lua
+lua: soma_texto.lua:2: attempt to add a 'string' with a 'number'
+stack traceback:
+	[C]: in metamethod 'add'
+	soma_texto.lua:2: in main chunk
+	[C]: in ?</pre>
+<dl class="anatomy">
+  <dt>attempt to add a 'string' with a 'number'</dt><dd>"Tentativa de somar (<em>add</em>) um texto com um número". O Lua tentou a conversão automática, mas <code>"4,50"</code>, com vírgula, não é um número válido.</dd>
+  <dt>[C]: in metamethod 'add'</dt><dd>Uma linha a mais no rastro: é a biblioteca <code>string</code> tentando a conversão (o "metamétodo" da soma; veja <a href="metametodos-aritmeticos.html">Metamétodos de Operadores</a>). Na multiplicação, a mensagem diz <code>mul</code>: <code>attempt to mul a 'string' with a 'number'</code>.</dd>
+</dl>
+<p><strong>Como consertar:</strong> escreva o número com ponto (<code>"4.50"</code>) ou, se o texto veio de fora com vírgula, troque antes: <code>tonumber((preco:gsub(",", ".")))</code> (o <code>gsub</code> tem aula própria: <a href="gsub.html">Substituindo</a>).</p>
+</div>
+
+<div class="cenario">
+<strong>Juntou o <code>nil</code> de um <code>tonumber</code> que falhou</strong>
+<pre class="file" data-file="nulo.lua">local digitado = "doze"
+local quantidade = tonumber(digitado)
+print("Você pediu " .. quantidade .. " pães")
+</pre>
+<pre class="term">$ lua nulo.lua
+lua: nulo.lua:3: attempt to concatenate a nil value (local 'quantidade')
+stack traceback:
+	nulo.lua:3: in main chunk
+	[C]: in ?</pre>
+<p>"Tentativa de juntar (<em>concatenate</em>) um valor <code>nil</code>, na variável local <code>quantidade</code>". O <code>tonumber("doze")</code> deu <code>nil</code> na linha 2, sem erro nenhum; o problema só apareceu na linha 3, quando o <code>..</code> recebeu o <code>nil</code>. <strong>Como consertar:</strong> confira logo depois de converter: <code>if not quantidade then print("Quantidade inválida") return end</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Deu a base para um número (e não para um texto)</strong>
+<pre class="term">$ lua -e 'print(tonumber(10, 16))'
+lua: (command line):1: bad argument #1 to 'tonumber' (string expected, got number)
+stack traceback:
+	[C]: in global 'tonumber'
+	(command line):1: in main chunk
+	[C]: in ?
+$ lua -e 'print(tonumber("10", 99))'
+lua: (command line):1: bad argument #2 to 'tonumber' (base out of range)
+stack traceback:
+	[C]: in global 'tonumber'
+	(command line):1: in main chunk
+	[C]: in ?</pre>
+<p><em>bad argument #1 to 'tonumber'</em> quer dizer "argumento ruim, o 1º, para o <code>tonumber</code>", e entre parênteses vem o motivo: <em>string expected, got number</em>, "esperava um texto, recebeu um número". Com base, o primeiro valor tem de ser texto: <code>tonumber("10", 16)</code>. No segundo caso, o 2º argumento está ruim: <em>base out of range</em>, "base fora do intervalo" (vai de 2 a 36). A linha <code>[C]: in global 'tonumber'</code> mostra que o erro foi dentro da função <code>tonumber</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Juntou os textos em vez de somar</strong>
+<pre class="file" data-file="caixa.lua">local a, b, c = "4.50", "12.90", "3.25"
+local total = a .. b .. c
+print(string.format("Total: R$ %.2f", total))
+</pre>
+<pre class="term">$ lua caixa.lua
+lua: caixa.lua:3: bad argument #2 to 'format' (number expected, got string)
+stack traceback:
+	[C]: in field 'format'
+	caixa.lua:3: in main chunk
+	[C]: in ?</pre>
+<p>O <code>..</code> não soma: ele <strong>gruda</strong> os textos, e <code>total</code> virou <code>"4.5012.903.25"</code>. O <code>%.2f</code> do <code>string.format</code> esperava um número (<em>number expected</em>) no 2º argumento e recebeu esse texto, que não dá para converter. A missão abaixo conserta.</p>
+</div>
+
+<div class="trylua" data-goal="out:Total: R$ 20.65;;src:tonumber;;semerro">
+<p class="try-task"><strong>Missão:</strong> os preços chegaram do caixa como textos. Troque a linha do <code>total</code> para <strong>somar</strong> os três preços convertidos com <code>tonumber</code>, e o programa vai mostrar <code>Total: R$ 20.65</code>.</p>
+<pre class="script" data-file="main.lua">local a, b, c = "4.50", "12.90", "3.25"
+local total = a .. b .. c
+print(string.format("Total: R$ %.2f", total))
+</pre>
+<pre class="solucao" data-file="main.lua">local a, b, c = "4.50", "12.90", "3.25"
+local total = tonumber(a) + tonumber(b) + tonumber(c)
+print(string.format("Total: R$ %.2f", total))
+</pre>
+</div>
+
+<hr>
+
+<h2>Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>Resultado</th></tr>
+<tr><td><code>tonumber("42")</code> / <code>tonumber("3.14")</code></td><td><code>42</code> (inteiro) / <code>3.14</code> (float)</td></tr>
+<tr><td><code>tonumber("  10  ")</code>, <code>tonumber("1e3")</code>, <code>tonumber("0x10")</code></td><td><code>10</code>, <code>1000.0</code>, <code>16</code></td></tr>
+<tr><td><code>tonumber("12abc")</code>, <code>tonumber("1,5")</code>, <code>tonumber("")</code></td><td><code>nil</code> (não é número)</td></tr>
+<tr><td><code>tonumber("ff", 16)</code>, <code>tonumber("1010", 2)</code></td><td><code>255</code>, <code>10</code> (base de 2 a 36, só inteiros)</td></tr>
+<tr><td><code>tostring(42)</code>, <code>tostring(nil)</code></td><td><code>"42"</code>, <code>"nil"</code></td></tr>
+<tr><td><code>"Total: " .. 42</code></td><td><code>"Total: 42"</code> (o <code>..</code> converte números, mas não <code>nil</code> nem booleanos)</td></tr>
+<tr><td><code>"10" + 1</code></td><td><code>11</code> (conversão automática; evite)</td></tr>
+<tr><td><code>"10" == 10</code></td><td><code>false</code> (o <code>==</code> não converte)</td></tr>
+<tr><td><code>"10" &lt; 5</code></td><td>erro: <code>attempt to compare string with number</code></td></tr>
+<tr><td><code>tonumber(io.read())</code></td><td>lê uma linha e converte (ou <code>nil</code>)</td></tr>
+<tr><td><code>io.read("n")</code></td><td>lê um número direto (ou <code>nil</code>)</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Sintoma</th><th>Causa provável</th></tr>
+<tr><td><code>attempt to compare number with string</code> (ou <code>string with number</code>)</td><td>Comparou um texto (do <code>io.read()</code>?) com um número: faltou o <code>tonumber</code></td></tr>
+<tr><td><code>attempt to compare number with nil</code></td><td>O <code>tonumber</code> devolveu <code>nil</code> (a entrada não era número) e ninguém conferiu</td></tr>
+<tr><td><code>attempt to add a 'string' with a 'number'</code></td><td>Conta com um texto que não é número (<code>"4,50"</code>, <code>"abc"</code>)</td></tr>
+<tr><td><code>attempt to concatenate a nil value</code></td><td>Juntou com <code>..</code> uma variável <code>nil</code> (talvez de um <code>tonumber</code> que falhou)</td></tr>
+<tr><td><code>bad argument #1 to 'tonumber' (string expected, got number)</code></td><td>Passou um número com base: o primeiro valor tem de ser texto</td></tr>
+<tr><td>A "soma" deu <code>1020</code></td><td>Usou <code>..</code> (junta) em vez de <code>+</code> (soma)</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. O que o <code>tonumber</code> devolve?</h3>
+<p>Escreva o resultado (um número, ou <code>nil</code>):</p>
+<div class="ex-code">tonumber("25") → <input data-answer="25" aria-label="tonumber de 25"><br>tonumber("25 kg") → <input data-answer="nil" aria-label="tonumber de 25 kg"><br>tonumber(" 7 ") → <input data-answer="7" aria-label="tonumber de 7 com espaços"><br>tonumber("11", 2) → <input data-answer="3" aria-label="tonumber de 11 na base 2"></div>
+</div>
+
+<div class="exercise">
+<h3>2. Complete a conversão</h3>
+<p>Complete para o programa ler um número do teclado e avisar quando não for número:</p>
+<div class="ex-code">local n = <input data-answer="tonumber" aria-label="função de conversão">(io.read())<br>if <input data-answer="not" aria-label="operador"> n then<br>&nbsp;&nbsp;print("Isso não é um número.")<br>end</div>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">3. O que <code>print("10" + 5)</code> mostra?</p>
+<label><input type="radio" name="q3"> <code>105</code></label>
+<label><input type="radio" name="q3"> <code>15</code></label>
+<label><input type="radio" name="q3"> Um erro</label>
+<label><input type="radio" name="q3"> <code>nil</code></label>
+</div>
+
+<div class="mc" data-answer="3">
+<p class="mc-q">4. E <code>print("10" == 10)</code>?</p>
+<label><input type="radio" name="q4"> <code>true</code></label>
+<label><input type="radio" name="q4"> Um erro: <code>attempt to compare</code></label>
+<label><input type="radio" name="q4"> <code>false</code>: o <code>==</code> não converte texto em número</label>
+<label><input type="radio" name="q4"> <code>nil</code></label>
+</div>
+
+<div class="mc" data-answer="1">
+<p class="mc-q">5. O que <code>print(10 .. 20)</code> mostra?</p>
+<label><input type="radio" name="q5"> <code>1020</code>: o <code>..</code> junta como texto</label>
+<label><input type="radio" name="q5"> <code>30</code></label>
+<label><input type="radio" name="q5"> <code>malformed number</code></label>
+<label><input type="radio" name="q5"> <code>10 20</code></label>
+</div>
+
+<div class="mc" data-answer="4">
+<p class="mc-q">6. Segundo o manual do Lua 5.5, o que é melhor fazer com um texto que deve virar número?</p>
+<label><input type="radio" name="q6"> Deixar a conversão automática cuidar, sempre</label>
+<label><input type="radio" name="q6"> Usar <code>tostring</code></label>
+<label><input type="radio" name="q6"> Somar <code>0</code> para converter</label>
+<label><input type="radio" name="q6"> Converter com <code>tonumber</code>: a conversão automática nem sempre acontece e pode ser removida</label>
+</div>
+
+<h3>Missão final: a cor em hexadecimal</h3>
+
+<div class="trylua" data-goal="out:vermelho = 255, verde = 136, azul = 0;;src:tonumber;;semerro">
+<p class="try-task"><strong>Missão:</strong> a cor laranja do cardápio da padaria é <code>ff8800</code>: os dois primeiros caracteres são o vermelho, os dois do meio, o verde, e os dois últimos, o azul, cada um em <strong>hexadecimal</strong>. O programa separa os pedaços, mas esqueceu a base. Complete os três <code>tonumber</code> com a base certa para aparecer <code>vermelho = 255, verde = 136, azul = 0</code>.</p>
+<pre class="script" data-file="main.lua">local cor = "ff8800"
+local r = tonumber(cor:sub(1, 2))
+local g = tonumber(cor:sub(3, 4))
+local b = tonumber(cor:sub(5, 6))
+print("vermelho = " .. tostring(r) .. ", verde = " .. tostring(g) .. ", azul = " .. tostring(b))
+</pre>
+<pre class="solucao" data-file="main.lua">local cor = "ff8800"
+local r = tonumber(cor:sub(1, 2), 16)
+local g = tonumber(cor:sub(3, 4), 16)
+local b = tonumber(cor:sub(5, 6), 16)
+print("vermelho = " .. tostring(r) .. ", verde = " .. tostring(g) .. ", azul = " .. tostring(b))
+</pre>
+</div>
+
+<p>O <code>cor:sub(1, 2)</code> pega o pedaço do 1º ao 2º caractere (aula <a href="string-sub.html">Pedaços de Texto</a>). Sem a base, <code>tonumber("ff")</code> dá <code>nil</code>, e o <code>"88"</code> vira o número 88 (decimal): por isso a primeira execução mostra <code>vermelho = nil, verde = 88, azul = 0</code>. Repare também no <code>tostring</code>: sem ele, o <code>..</code> daria erro com o <code>nil</code>.</p>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li><code>42</code> (número) e <code>"42"</code> (texto) são diferentes: <code>"42" == 42</code> é <code>false</code>.</li>
+  <li><code>tonumber(texto)</code> converte texto em número. Aceita espaços nas pontas, sinal, <code>1e3</code> e <code>0x10</code>; se qualquer pedaço não for número (<code>"12abc"</code>, <code>"1,5"</code>), devolve <code>nil</code>.</li>
+  <li><code>tonumber(texto, base)</code> lê inteiros em outras bases: <code>tonumber("ff", 16)</code> → 255.</li>
+  <li><code>tostring(valor)</code> transforma qualquer valor em texto. O <code>..</code> já converte números, mas não <code>nil</code> nem booleanos.</li>
+  <li><code>io.read()</code> sempre devolve texto: converta na hora com <code>tonumber(io.read())</code> e confira com <code>if not n then</code>.</li>
+  <li>A conversão automática (<code>"10" + 1</code> → 11) só vale nas contas; nas comparações dá erro. O manual do 5.5 recomenda não depender dela, que pode sair da linguagem.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
