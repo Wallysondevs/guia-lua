@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua Palavras Reservadas — as 23 palavras-chave do Lua 5.5 (com global) | Guia Lua</title>
+<meta name="description" content="Referência rápida das 23 palavras reservadas do Lua 5.5 (and, break, do, else, elseif, end, false, for, function, global, goto, if, in, local, nil, not, or, repeat, return, then, true, until, while): tradução, para que serve, exemplo com resultado real e o que acontece quando se usa uma como nome de variável.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">Palavras Reservadas</span></h1>
+
+<p class="intro">Esta é a página de consulta rápida das <strong>palavras reservadas</strong> (ou <strong>palavras-chave</strong>; em inglês, <em>keywords</em>): as palavras que fazem parte da própria linguagem, como <code>if</code>, <code>for</code> e <code>end</code>. Elas têm um significado fixo e <strong>não podem</strong> ser usadas como nome de variável ou de função. O manual do Lua 5.5 lista 23. Uma delas é nova: <code>global</code> <span class="versao">5.5</span>.</p>
+
+<div class="note">
+<strong>Como ler as tabelas</strong>
+<ul>
+  <li><strong>Exemplo</strong> é o que você digitaria depois do <code>&gt;</code> do <a href="repl.html">modo interativo</a> (vários comandos numa linha só, para caber).</li>
+  <li><strong>Resultado</strong> é o que o Lua 5.5.0 respondeu no computador da Ana. Vários valores aparecem separados por vírgula; várias linhas, uma embaixo da outra.</li>
+  <li>O Lua diferencia maiúsculas de minúsculas: <code>end</code> é reservada, mas <code>End</code> e <code>END</code> são nomes comuns.</li>
+</ul>
+</div>
+
+<p>As 23, como o manual do 5.5 as escreve:</p>
+
+<pre class="file" data-file="manual do Lua 5.5, §3.1">and       break     do        else      elseif    end
+false     for       function  global    goto      if
+in        local     nil       not       or        repeat
+return    then      true      until     while
+</pre>
+
+<p>E o que acontece quando a Ana tenta usar uma delas como nome de variável:</p>
+
+<pre class="term">$ lua
+Lua 5.5.0  Copyright (C) 1994-2025 Lua.org, PUC-Rio
+&gt; local end = 1
+warning: locals do not survive across lines in interactive mode
+stdin:1: &lt;name&gt; expected near 'end'
+&gt; t = {end = 1}
+stdin:1: unexpected symbol near 'end'
+&gt; t = {}; t["end"] = 1; print(t["end"])
+1
+&gt; os.exit()
+</pre>
+
+<p>A mensagem <em>&lt;name&gt; expected near 'end'</em> quer dizer "esperava um nome perto de <code>end</code>": depois de <code>local</code> o Lua esperava um nome de variável e encontrou uma palavra reservada. Como <strong>chave de tabela</strong>, a palavra reservada funciona entre colchetes e aspas: <code>t["end"]</code>.</p>
+
+<hr>
+
+<h2 id="lista">As 23 palavras, uma por uma</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Palavra</th><th>Quer dizer</th><th>Para que serve</th><th>Exemplo</th><th>Resultado</th><th>Aula</th></tr>
+<tr><td><code>and</code></td><td>"e"</td><td>Verdadeiro só se os dois lados forem. Devolve o primeiro valor falso, ou o último.</td><td><code>true and "sim", false and "sim", nil and 1</code></td><td><code>sim</code>, <code>false</code>, <code>nil</code></td><td><a href="operadores-logicos.html">and, or e not</a></td></tr>
+<tr><td><code>break</code></td><td>"quebrar"</td><td>Sai do laço (<code>for</code>, <code>while</code>, <code>repeat</code>) na hora.</td><td><code>for i = 1, 10 do if i &gt; 3 then break end print(i) end</code></td><td><code>1</code><br><code>2</code><br><code>3</code></td><td><a href="break.html">break</a></td></tr>
+<tr><td><code>do</code></td><td>"faça"</td><td>Abre o corpo de um <code>for</code>/<code>while</code>, ou um bloco sozinho (<code>do … end</code>), que limita o alcance das variáveis <code>local</code>.</td><td><code>do local x = 5; print(x) end</code>, depois <code>x</code></td><td><code>5</code>, depois <code>nil</code></td><td><a href="sintaxe.html">Sintaxe e Blocos</a></td></tr>
+<tr><td><code>else</code></td><td>"senão"</td><td>O caminho do <code>if</code> quando a condição é falsa.</td><td><code>if 2 &gt; 3 then print("maior") else print("não é maior") end</code></td><td><code>não é maior</code></td><td><a href="if-else.html">if e else</a></td></tr>
+<tr><td><code>elseif</code></td><td>"senão, se"</td><td>Mais uma condição no mesmo <code>if</code> (uma palavra só, sem espaço).</td><td><code>nota = 7; if nota &gt;= 9 then print("A") elseif nota &gt;= 7 then print("B") else print("C") end</code></td><td><code>B</code></td><td><a href="elseif.html">elseif</a></td></tr>
+<tr><td><code>end</code></td><td>"fim"</td><td>Fecha um bloco: <code>if</code>, <code>for</code>, <code>while</code>, <code>do</code>, <code>function</code>.</td><td>(em todos os exemplos desta tabela)</td><td>—</td><td><a href="sintaxe.html">Sintaxe e Blocos</a></td></tr>
+<tr><td><code>false</code></td><td>"falso"</td><td>Um dos dois valores booleanos.</td><td><code>type(false), not false</code></td><td><code>boolean</code>, <code>true</code></td><td><a href="booleanos.html">Booleanos</a></td></tr>
+<tr><td><code>for</code></td><td>"para"</td><td>Laço que conta (<code>for i = 1, 3</code>) ou que percorre (<code>for k, v in pairs(t)</code>).</td><td><code>for i = 1, 3 do io.write(i, " ") end</code></td><td><code>1 2 3 </code></td><td><a href="for-numerico.html">for Numérico</a></td></tr>
+<tr><td><code>function</code></td><td>"função"</td><td>Cria uma função.</td><td><code>function dobro(n) return n * 2 end; print(dobro(21))</code></td><td><code>42</code></td><td><a href="funcoes.html">Funções</a></td></tr>
+<tr><td><code>global</code> <span class="versao">5.5</span></td><td>"global"</td><td>Declara variáveis globais. Depois de um <code>global</code>, todo nome usado precisa estar declarado (veja abaixo). Atenção: o manual a lista como reservada, mas o 5.5.0 do Ubuntu e o editor do guia foram compilados com <code>LUA_COMPAT_GLOBAL</code>, e lá <code>local global = 1</code> ainda funciona (conferido no lab).</td><td>um programa com <code>global x = 10</code> e depois <code>print(x)</code></td><td><code>variable 'print' not declared</code> (faltou declarar o <code>print</code>)</td><td><a href="global.html">A Declaração global</a></td></tr>
+<tr><td><code>goto</code></td><td>"vá para"</td><td>Pula para um rótulo <code>::nome::</code>. O uso comum: imitar o <code>continue</code> de outras linguagens.</td><td><code>for i = 1, 3 do if i == 2 then goto continue end print(i) ::continue:: end</code></td><td><code>1</code><br><code>3</code></td><td><a href="goto.html">goto e Rótulos</a></td></tr>
+<tr><td><code>if</code></td><td>"se"</td><td>Executa um bloco só se a condição for verdadeira.</td><td><code>if nil then print("nunca") end</code></td><td>(nada: <code>nil</code> conta como falso)</td><td><a href="if.html">if … then</a></td></tr>
+<tr><td><code>in</code></td><td>"em"</td><td>No <code>for</code> que percorre: "para cada chave e valor <strong>em</strong>…".</td><td><code>for k, v in pairs({nome = "Ana"}) do print(k, v) end</code></td><td><code>nome	Ana</code></td><td><a href="pairs.html">pairs</a></td></tr>
+<tr><td><code>local</code></td><td>"local"</td><td>Cria uma variável que só existe no bloco atual. Use sempre.</td><td><code>local idade = 30; print(idade)</code></td><td><code>30</code></td><td><a href="local.html">local × Global</a></td></tr>
+<tr><td><code>nil</code></td><td>"nada"</td><td>O valor que representa "nenhum valor".</td><td><code>type(nil), nil == false</code></td><td><code>nil</code>, <code>false</code></td><td><a href="nil.html">O Valor nil</a></td></tr>
+<tr><td><code>not</code></td><td>"não"</td><td>Inverte: <code>true</code> se o valor é falso. Só <code>nil</code> e <code>false</code> são falsos; <code>0</code> e <code>""</code> são verdadeiros!</td><td><code>not nil, not 0, not ""</code></td><td><code>true</code>, <code>false</code>, <code>false</code></td><td><a href="operadores-logicos.html">and, or e not</a></td></tr>
+<tr><td><code>or</code></td><td>"ou"</td><td>Verdadeiro se um dos lados for. Devolve o primeiro valor verdadeiro: ótimo para valor padrão.</td><td><code>false or "padrão", nil or 0</code></td><td><code>padrão</code>, <code>0</code></td><td><a href="and-or-ternario.html">O Truque do and/or</a></td></tr>
+<tr><td><code>repeat</code></td><td>"repita"</td><td>Laço que roda pelo menos uma vez, até (<code>until</code>) a condição ficar verdadeira.</td><td><code>n = 0; repeat n = n + 1 until n &gt;= 3; print(n)</code></td><td><code>3</code></td><td><a href="repeat.html">repeat … until</a></td></tr>
+<tr><td><code>return</code></td><td>"devolva"</td><td>Termina a função e devolve valores.</td><td>(o <code>return n * 2</code> do <code>dobro</code>, acima)</td><td><code>42</code></td><td><a href="return.html">return</a></td></tr>
+<tr><td><code>then</code></td><td>"então"</td><td>Vem depois da condição do <code>if</code> e do <code>elseif</code>.</td><td>(nos exemplos de <code>if</code>)</td><td>—</td><td><a href="if.html">if … then</a></td></tr>
+<tr><td><code>true</code></td><td>"verdadeiro"</td><td>O outro valor booleano.</td><td><code>true and "sim"</code></td><td><code>sim</code></td><td><a href="booleanos.html">Booleanos</a></td></tr>
+<tr><td><code>until</code></td><td>"até"</td><td>Fecha o <code>repeat</code> com a condição de parada (no lugar do <code>end</code>).</td><td>(no exemplo de <code>repeat</code>)</td><td>—</td><td><a href="repeat.html">repeat … until</a></td></tr>
+<tr><td><code>while</code></td><td>"enquanto"</td><td>Laço que roda enquanto a condição for verdadeira.</td><td><code>n = 3; while n &gt; 0 do io.write(n, " "); n = n - 1 end</code></td><td><code>3 2 1 </code></td><td><a href="while.html">while</a></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2 id="global">O caso do <code>global</code> <span class="versao">5.5</span></h2>
+
+<p>O manual do 5.5 diz, na lista de incompatibilidades (§8.1): "<em>The word global is a reserved word. Do not use it as a regular name</em>" ("a palavra global é reservada; não a use como nome comum"). Ela declara variáveis globais, e depois de qualquer declaração <code>global</code> o Lua passa a exigir que <strong>todo</strong> nome livre seja declarado. Este programa da Ana mostra isso:</p>
+
+<pre class="file" data-file="g2.lua">global print
+global x = 10
+x = x + 1
+print(x)
+y = 5
+</pre>
+
+<pre class="term">$ lua g2.lua
+lua: g2.lua:5: variable 'y' not declared
+</pre>
+
+<p>Nada foi impresso, nem o <code>print(x)</code> da linha 4: o erro aparece <strong>antes</strong> de o programa começar a rodar, quando o Lua lê o arquivo, como um erro de sintaxe. O <code>y</code> da linha 5 não foi declarado. Outras formas da declaração, conferidas no lab:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Declaração</th><th>Quer dizer</th><th>Resultado no lab</th></tr>
+<tr><td><code>global x = 10</code> (sem declarar o <code>print</code>) e depois <code>print(x)</code></td><td>declarou só o <code>x</code></td><td><code>lua: g1.lua:3: variable 'print' not declared</code></td></tr>
+<tr><td><code>global *</code></td><td>"todos os nomes são globais" (volta ao jeito antigo, a partir desse ponto)</td><td>com <code>total = 1</code> e <code>print(total)</code> depois: <code>1</code></td></tr>
+<tr><td><code>global &lt;const&gt; PI = 3.14</code></td><td>global que não pode mudar</td><td><code>PI = 3</code> depois deu <code>lua: g3.lua:4: attempt to assign to const variable 'PI'</code></td></tr>
+<tr><td><code>global&lt;const&gt; *</code></td><td>todas as globais viram constantes (protege <code>print</code>, <code>math</code>…)</td><td><code>print = nil</code> depois deu <code>lua: g5.lua:3: attempt to assign to const variable 'print'</code></td></tr>
+</table>
+</div>
+
+<div class="warning">
+<strong>No Lua 5.5.0 de verdade, <code>global</code> ainda funciona como nome</strong>
+<p>O código-fonte oficial do 5.5.0 vem com a opção <code>LUA_COMPAT_GLOBAL</code> ligada no <code>luaconf.h</code> ("<em>avoids 'global' being a reserved word</em>"). Com ela, o Lua entende <code>global</code> como declaração quando ela faz sentido e, nos outros lugares, como um nome comum. No lab, tanto o <code>lua</code> do Ubuntu quanto o editor do guia aceitaram <code>local global = 1; print(global)</code> (deu <code>1</code>) e <code>global = 2; print(global)</code> (deu <code>2</code>), sem erro. Mesmo assim, <strong>não use</strong> <code>global</code> como nome: o manual a trata como reservada, e um Lua compilado sem essa opção (ou uma versão futura) vai recusar. Mais em <a href="global.html">A Declaração global</a> e <a href="novidades.html">Novidades do Lua 5.5</a>.</p>
+</div>
+
+<div class="note">
+<strong>Em outras versões</strong>
+<p>No lab, <code>global x = 10</code> deu <code>lua5.4: g1.lua:1: syntax error near 'x'</code> no 5.4 e <code>luajit: g1.lua:1: '=' expected near 'x'</code> no LuaJIT: lá, <code>global</code> é só um nome. E o <code>goto</code> não existe no Lua 5.1: <code>lua5.1</code> deu <code>'=' expected near 'continue'</code> no exemplo do <code>goto continue</code> acima, e aceitou <code>local goto = 1</code>. O LuaJIT tem <code>goto</code> (o exemplo rodou e deu <code>1</code> e <code>3</code>). Veja <a href="versoes.html">As Diferenças entre Versões</a>.</p>
+</div>
+
+<hr>
+
+<h2 id="nao-sao">Parecem reservadas, mas não são</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Nome</th><th>O que é</th><th>Resultado no lab</th><th>Aula</th></tr>
+<tr><td><code>continue</code></td><td><strong>Não existe</strong> no Lua (outras linguagens têm). Use <code>goto continue</code>.</td><td><code>lua -e 'for i = 1, 3 do if i == 2 then continue end print(i) end'</code> deu <code>lua: (command line):1: syntax error near 'end'</code></td><td><a href="goto.html">goto e Rótulos (continue)</a></td></tr>
+<tr><td><code>const</code>, <code>close</code></td><td><strong>Atributos</strong>, escritos entre <code>&lt; &gt;</code> depois do nome: <code>local x &lt;const&gt; = 1</code>. Fora disso, são nomes comuns.</td><td><code>local const, close = 1, 2</code> funcionou; <code>local x &lt;constante&gt; = 1</code> deu <code>unknown attribute 'constante'</code></td><td><a href="const.html">Constantes</a>, <a href="close.html">Fechamento Automático</a></td></tr>
+<tr><td><code>self</code></td><td>Só um nome de parâmetro, criado sozinho quando a função é definida com <code>:</code>.</td><td><code>local self = 2</code> funcionou</td><td><a href="metodos.html">Métodos e o Dois-Pontos</a></td></tr>
+<tr><td><code>_ENV</code>, <code>_G</code>, <code>_VERSION</code></td><td>Nomes com significado especial, mas não reservados. O manual pede para evitar nomes que começam com <code>_</code> seguido de MAIÚSCULAS.</td><td>—</td><td><a href="env.html">_G e _ENV</a></td></tr>
+<tr><td><code>print</code>, <code>type</code>, <code>table</code>, <code>string</code>…</td><td>Funções e tabelas globais. Dá para usar o nome (<code>local type = "pão"</code>), mas aí a função some naquele bloco.</td><td>—</td><td><a href="nomes-variaveis.html">Nomes de Variáveis</a></td></tr>
+<tr><td><code>True</code>, <code>AND</code>, <code>End</code></td><td>Nomes comuns (o Lua diferencia maiúsculas).</td><td><code>local True = 1</code> e <code>local AND, End = 1, 2</code> funcionaram</td><td></td></tr>
+</table>
+</div>
+
+<div class="tip">
+<strong>Uma mensagem estranha: <code>local function = 1</code></strong>
+<p>Com <code>local function</code>, o Lua achou que a Ana estava criando uma função local (<code>local function nome() … end</code>) e esperava o nome dela. Por isso a mensagem fala do <code>=</code>: <code>stdin:1: &lt;name&gt; expected near '='</code>. Já <code>local and = 1</code> deu <code>stdin:1: &lt;name&gt; expected near 'and'</code>. Mais mensagens em <a href="ref-erros.html">Mensagens de Erro Comuns</a>.</p>
+</div>
+
+<hr>
+
+<h2>Experimente</h2>
+
+<div class="trylua" data-goal="out:Olá, Ana! (3);;semerro">
+<p class="try-task"><strong>Missão:</strong> o programa da Ana não roda: ela usou uma palavra reservada como nome de variável. Rode, leia a mensagem de erro e troque o nome <code>repeat</code> por outro (por exemplo, <code>vezes</code>) nas <strong>duas</strong> linhas onde ele aparece. O programa certo termina com <code>Olá, Ana! (3)</code>.</p>
+<pre class="script" data-file="main.lua">local repeat = 3
+for i = 1, repeat do
+  print("Olá, Ana! (" .. i .. ")")
+end
+</pre>
+<pre class="solucao" data-file="main.lua">local vezes = 3
+for i = 1, vezes do
+  print("Olá, Ana! (" .. i .. ")")
+end
+</pre>
+</div>
+
+<div class="trylua">
+<p class="try-task"><strong>Livre:</strong> teste as palavras <code>and</code>, <code>or</code> e <code>not</code> com valores diferentes. Lembre: só <code>nil</code> e <code>false</code> são falsos.</p>
+<pre class="script" data-file="main.lua">print(1 and 2, nil and 2, false or "padrão")
+print(not 0, not nil, not "")
+
+local nome = nil
+print("Olá, " .. (nome or "visitante"))
+
+for i = 1, 5 do
+  if i % 2 == 0 then goto continue end
+  print(i)
+  ::continue::
+end
+</pre>
+</div>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li>O Lua 5.5 tem 23 palavras reservadas: <code>and break do else elseif end false for function global goto if in local nil not or repeat return then true until while</code>.</li>
+  <li>Não podem ser nome de variável nem de função (o erro é <code>&lt;name&gt; expected near '…'</code>); como chave de tabela, use <code>t["end"]</code>.</li>
+  <li>Maiúsculas importam: <code>End</code> e <code>AND</code> são nomes comuns.</li>
+  <li><span class="versao">5.5</span> <code>global</code> é nova; no 5.5.0 oficial ainda é aceita como nome, mas evite.</li>
+  <li><code>continue</code> não existe (use <code>goto continue</code>); <code>const</code> e <code>close</code> são atributos, não palavras reservadas.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
