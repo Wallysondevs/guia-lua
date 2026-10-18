@@ -73,7 +73,7 @@ return M
   <dt>local M = {}</dt><dd>A tabela do módulo, vazia no começo. O nome <code>M</code> (de "módulo") é um costume muito usado: em qualquer arquivo, <code>M.</code> quer dizer "isto vai para fora". Você também pode usar o nome do módulo (<code>local contas = {}</code>), como na aula anterior; as duas formas são comuns.</dd>
   <dt>local function arredondar(valor)</dt><dd>Uma função <strong>privada</strong>: ela é <code>local</code> e <strong>não</strong> foi colocada na tabela <code>M</code>. Só o próprio arquivo <code>contas.lua</code> consegue chamá-la. (Ela arredonda para 2 casas: multiplica por 100, soma 0,5, corta a parte quebrada com <code>math.floor</code> e divide por 100. Veja <a href="math.html">A Biblioteca math</a>.)</dd>
   <dt>function M.somar(a, b)</dt><dd>Uma função <strong>pública</strong>: fica dentro da tabela, no campo <code>somar</code>. Quem fizer <code>require("contas")</code> recebe a tabela e chega nela.</dd>
-  <dt>return arredondar(…)</dt><dd>Uma função pública pode usar a privada à vontade: as duas moram no mesmo arquivo (é um <a href="closures.html">closure</a>).</dd>
+  <dt>return arredondar(…)</dt><dd>Uma função pública pode usar a privada à vontade: as duas moram no mesmo arquivo (é uma <a href="closures.html">closure</a>).</dd>
   <dt>return M</dt><dd>Entrega a gaveta. Sem esta linha, o <code>require</code> devolveria só <code>true</code> (você viu esse erro na aula anterior).</dd>
 </dl>
 
