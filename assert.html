@@ -1,0 +1,436 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua assert — conferir e parar com a mensagem certa | Guia Lua</title>
+<meta name="description" content="A função assert do Lua 5.5 para quem nunca programou: conferir uma condição e parar com assertion failed! ou com a sua mensagem, assert(io.open(...)) mostrando o motivo real do sistema (No such file or directory, Permission denied), assert(tonumber(...)), os valores que o assert devolve, testes simples com assert e as pegadinhas reais (a mensagem calculada antes, o 0 que é verdadeiro).">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">assert</span></h1>
+
+<p class="intro">O <code>assert</code> ("afirmar", "garantir") é a forma mais curta de dizer ao Lua: <strong>"isto tem de ser verdade; se não for, pare aqui"</strong>. Ele recebe um valor; se o valor for <code>false</code> ou <code>nil</code>, lança um erro; se for qualquer outra coisa, deixa o programa seguir e ainda <strong>devolve</strong> o valor. Esse jeitinho de devolver faz dele o parceiro ideal das funções que avisam problemas com <code>nil, "mensagem"</code>, como o <code>io.open</code>: com uma palavra, a mensagem real do sistema vira um erro claro.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>Como usar <code>assert(condição)</code> e <code>assert(condição, "mensagem")</code>, e as mensagens reais que aparecem (<code>assertion failed!</code>).</li>
+  <li>O uso mais famoso: <code>local f = assert(io.open(nome))</code>, que mostra o motivo verdadeiro (<code>No such file or directory</code>, <code>Permission denied</code>).</li>
+  <li>Por que o <code>assert</code> devolve os seus argumentos, e como aproveitar isso (<code>assert(tonumber(texto))</code>).</li>
+  <li>Testes simples com <code>assert</code>: conferir se uma função dá o resultado esperado.</li>
+  <li>As pegadinhas: a mensagem calculada mesmo quando não precisa, o <code>0</code> que conta como verdadeiro, e quando é melhor usar <code>error</code>.</li>
+</ul>
+</div>
+
+<p>Todos os programas desta aula rodaram no <strong>Lua 5.5</strong> da máquina da Ana (usuária <code>ana</code>, computador <code>notebook</code>) com <code>lua arquivo.lua</code>. Antes, convém conhecer <a href="error.html">error</a>.</p>
+
+<hr>
+
+<h2>A ideia: o fiscal da porta</h2>
+<p>Na porta do show, o fiscal confere uma coisa só: "tem ingresso?". Se tem, a pessoa entra, <strong>com o ingresso na mão</strong>, e ele nem fala nada. Se não tem, ele barra na hora e diz o motivo: "sem ingresso não entra".</p>
+<p>O <code>assert</code> é esse fiscal. Ele olha o valor que você entregou: se é "verdadeiro" (qualquer coisa que não seja <code>false</code> nem <code>nil</code>), deixa passar e devolve o próprio valor. Se não, barra o programa com uma mensagem. Ele não faz contas, não decide nada complicado: só confere e barra.</p>
+
+<hr>
+
+<h2>1. O primeiro <code>assert</code></h2>
+
+<pre class="file" data-file="a2.lua">local preco = 10
+assert(preco &gt; 0)
+print("preço ok")
+local estoque = -3
+assert(estoque &gt;= 0)
+print("estoque ok")
+</pre>
+
+<pre class="term">$ lua a2.lua
+preço ok
+lua: a2.lua:5: assertion failed!
+stack traceback:
+	[C]: in global 'assert'
+	a2.lua:5: in main chunk
+	[C]: in ?
+$ echo $?
+1</pre>
+
+<dl class="anatomy">
+  <dt>assert(preco &gt; 0)</dt><dd><code>10 &gt; 0</code> é <code>true</code>: o fiscal deixa passar, e o programa segue para o <code>print("preço ok")</code>.</dd>
+  <dt>assert(estoque &gt;= 0)</dt><dd><code>-3 &gt;= 0</code> é <code>false</code>: o fiscal barra. O programa para ali; o <code>estoque ok</code> nunca aparece.</dd>
+  <dt>lua: a2.lua:5: assertion failed!</dt><dd>"A afirmação falhou!". É a mensagem padrão, quando você não escreve nenhuma. A posição (<code>a2.lua:5:</code>) é a linha do <code>assert</code>.</dd>
+  <dt>[C]: in global 'assert'</dt><dd>O rastro começa no próprio <code>assert</code> (escrito em C), como o <code>error</code> (veja <a href="erros.html">Lendo uma Mensagem de Erro</a>).</dd>
+</dl>
+
+<h3>Com a sua mensagem</h3>
+<p>O <code>assertion failed!</code> diz <strong>onde</strong>, mas não <strong>o quê</strong>. O segundo argumento é a mensagem que aparece no lugar:</p>
+
+<pre class="file" data-file="a3.lua">local estoque = -3
+assert(estoque &gt;= 0, "o estoque não pode ser negativo")
+</pre>
+
+<pre class="term">$ lua a3.lua
+lua: a3.lua:2: o estoque não pode ser negativo
+stack traceback:
+	[C]: in global 'assert'
+	a3.lua:2: in main chunk
+	[C]: in ?</pre>
+
+<p>Na prática, <code>assert(condição, "mensagem")</code> é um atalho para:</p>
+<pre class="file" data-file="atalho.lua">if not (estoque &gt;= 0) then
+  error("o estoque não pode ser negativo")
+end
+</pre>
+<p>Três linhas viram uma. (A diferença: com <code>error</code> você escolhe o <a href="error.html">nível</a> da mensagem; com <code>assert</code>, a posição é sempre a linha do próprio <code>assert</code>.)</p>
+
+<hr>
+
+<h2>2. O uso mais famoso: <code>assert(io.open(…))</code></h2>
+<p>A função <code>io.open</code> abre um arquivo (veja <a href="io-open.html">Abrindo Arquivos</a>). Quando não consegue, ela <strong>não</strong> lança erro: devolve <code>nil</code>, uma mensagem e um código do sistema:</p>
+
+<pre class="file" data-file="a13.lua">local nome = "pasta_que_nao_existe/notas.txt"
+local f, msg, codigo = io.open(nome)
+print(f, msg, codigo)
+local g = assert(io.open(nome, "r"))
+</pre>
+
+<pre class="term">$ lua a13.lua
+nil	pasta_que_nao_existe/notas.txt: No such file or directory	2
+lua: a13.lua:4: pasta_que_nao_existe/notas.txt: No such file or directory
+stack traceback:
+	[C]: in global 'assert'
+	a13.lua:4: in main chunk
+	[C]: in ?</pre>
+
+<p>Repare na mágica da linha 4: o <code>io.open</code> devolveu três valores (<code>nil</code>, a mensagem e o <code>2</code>), e <strong>todos</strong> foram para o <code>assert</code>. Para ele, o primeiro é o valor a conferir (<code>nil</code>: barra!) e o segundo é a mensagem. Resultado: o erro mostra o motivo <strong>real</strong>, escrito pelo sistema: <code>No such file or directory</code>, "arquivo ou pasta inexistente".</p>
+
+<h3>Sem o <code>assert</code>, o erro aparece longe e confuso</h3>
+<pre class="file" data-file="a1b.lua">local f = io.open("compras.txt")
+print(f:read("a"))
+f:close()
+</pre>
+<pre class="term">$ lua a1b.lua
+lua: a1b.lua:2: attempt to index a nil value (local 'f')
+stack traceback:
+	a1b.lua:2: in main chunk
+	[C]: in ?</pre>
+<p>A mensagem diz que o <code>f</code> é <code>nil</code> na linha 2, mas não diz <strong>por quê</strong>. O motivo (o arquivo não existe) se perdeu na linha 1. Com o <code>assert</code>:</p>
+
+<pre class="file" data-file="a1.lua">local f = assert(io.open("compras.txt"))
+print(f:read("a"))
+f:close()
+</pre>
+<pre class="term">$ lua a1.lua
+lua: a1.lua:1: compras.txt: No such file or directory
+stack traceback:
+	[C]: in global 'assert'
+	a1.lua:1: in main chunk
+	[C]: in ?</pre>
+
+<p>Agora o erro aparece na linha certa (a 1, onde está o problema) e com o motivo certo. E quando o arquivo existe, o <code>assert</code> devolve o próprio arquivo, que vai para o <code>f</code>, como se ele nem estivesse ali.</p>
+
+<p>O motivo muda conforme o problema. Tentando criar um arquivo numa pasta em que a Ana não pode escrever (no lab, uma pasta <code>trancada</code> com <code>chmod 555</code>):</p>
+<pre class="term">$ lua a14.lua
+lua: a14.lua:1: trancada/notas.txt: Permission denied
+stack traceback:
+	[C]: in global 'assert'
+	a14.lua:1: in main chunk
+	[C]: in ?</pre>
+<p><code>Permission denied</code>: "permissão negada". (O <code>a14.lua</code> é uma linha só: <code>local f = assert(io.open("trancada/notas.txt", "w"))</code>.) As mensagens vêm do sistema, em inglês, e por isso são tão úteis: dizem exatamente o que houve.</p>
+
+<div class="trylua" data-goal="out:leite;;semerro">
+<p class="try-task"><strong>Missão:</strong> o programa tenta abrir a lista de compras, mas dá erro. Rode, leia a mensagem do <code>assert</code> (ela diz o nome do arquivo que ele procurou) e compare com o nome da aba ao lado. Conserte o nome no código para a lista aparecer.</p>
+<pre class="script" data-file="main.lua">local f = assert(io.open("compra.txt"))
+print(f:read("a"))
+f:close()
+</pre>
+<pre class="script" data-file="compras.txt">pão
+leite
+café
+</pre>
+<pre class="solucao" data-file="main.lua">local f = assert(io.open("compras.txt"))
+print(f:read("a"))
+f:close()
+</pre>
+</div>
+
+<hr>
+
+<h2>3. O <code>assert</code> devolve tudo o que recebeu</h2>
+<p>Quando o primeiro valor passa na conferência, o <code>assert</code> devolve <strong>todos</strong> os seus argumentos, do jeito que vieram:</p>
+
+<pre class="file" data-file="a4.lua">print(assert(10))
+print(assert("Ana", "não usada"))
+print(assert(1, 2, 3))
+local n = assert(tonumber("42"))
+print(n + 1)
+print(assert(0), assert(""), assert({}) ~= nil)
+</pre>
+
+<pre class="term">$ lua a4.lua
+10
+Ana	não usada
+1	2	3
+43
+0		true</pre>
+
+<ul>
+  <li><code>assert(10)</code> devolveu <code>10</code>. Por isso <code>local n = assert(tonumber("42"))</code> funciona: o <code>n</code> recebe o 42.</li>
+  <li><code>assert("Ana", "não usada")</code> devolveu os dois: quando passa, a mensagem também volta (e normalmente é ignorada).</li>
+  <li>A última linha: <code>0</code>, o texto vazio <code>""</code> (por isso o "buraco" entre os dois TABs) e uma tabela <strong>passaram</strong>. No Lua, só <code>false</code> e <code>nil</code> são "falsos"; o zero e o texto vazio são verdadeiros (veja <a href="booleanos.html">Booleanos</a>). Quem vem de outras linguagens se surpreende.</li>
+</ul>
+
+<h3><code>assert(tonumber(…))</code></h3>
+<p>O <code>tonumber</code> devolve <code>nil</code> quando o texto não é um número. Com o <code>assert</code>, isso vira um erro:</p>
+
+<pre class="file" data-file="a6.lua">local texto = "abc"
+local n = assert(tonumber(texto), "não é um número: " .. texto)
+</pre>
+<pre class="term">$ lua a6.lua
+lua: a6.lua:2: não é um número: abc
+stack traceback:
+	[C]: in global 'assert'
+	a6.lua:2: in main chunk
+	[C]: in ?</pre>
+
+<p>Aqui a mensagem é importante: diferente do <code>io.open</code>, o <code>tonumber</code> devolve só o <code>nil</code>, sem explicação. Sem o segundo argumento, sairia apenas <code>lua: a5.lua:2: assertion failed!</code> (conferido no lab, com o mesmo código sem a mensagem).</p>
+
+<div class="trylua">
+<p class="try-task"><strong>Experimente:</strong> rode e confira cada linha. Depois acrescente <code>print(assert(false, "parou"))</code> no fim: a partir de qual linha o programa para? E troque o <code>0</code> por <code>nil</code> na última linha original: o que muda?</p>
+<pre class="script" data-file="main.lua">print(assert(10))
+print(assert("Ana", "não usada"))
+print(assert(1, 2, 3))
+local n = assert(tonumber("42"))
+print(n + 1)
+print(assert(0), assert(""), assert({}) ~= nil)
+</pre>
+</div>
+
+<hr>
+
+<h2>4. Conferindo argumentos e testando funções</h2>
+<p>Dentro de uma função, o <code>assert</code> confere se os argumentos fazem sentido, numa linha cada:</p>
+
+<pre class="file" data-file="a12.lua">local function cadastrar(nome, idade)
+  assert(type(nome) == "string", "o nome precisa ser texto")
+  assert(type(idade) == "number", "a idade precisa ser número")
+  print("Cadastrado: " .. nome .. ", " .. idade)
+end
+cadastrar("Ana", 30)
+cadastrar("Bia", "trinta")
+</pre>
+<pre class="term">$ lua a12.lua
+Cadastrado: Ana, 30
+lua: a12.lua:3: a idade precisa ser número
+stack traceback:
+	[C]: in global 'assert'
+	a12.lua:3: in local 'cadastrar'
+	a12.lua:7: in main chunk
+	[C]: in ?</pre>
+<p>A mensagem aponta a linha 3 (o <code>assert</code>); quem passou o <code>"trinta"</code> é a linha 7, que aparece no rastro. Se você quer que a mensagem já aponte a linha 7, use <code>error(msg, 2)</code> no lugar do <code>assert</code> (veja <a href="error.html">error</a>).</p>
+
+<h3>Testes de verdade com <code>assert</code></h3>
+<p>O <code>assert</code> também é a ferramenta mais simples de <strong>teste</strong>: você escreve o que uma função <em>deveria</em> dar, e o <code>assert</code> confere. Se tudo passar, nada acontece; se algo falhar, o programa para na linha do teste que falhou:</p>
+
+<pre class="file" data-file="a8.lua">local function dobro(x) return x * 2 end
+assert(dobro(2) == 4)
+assert(dobro(0) == 0)
+assert(dobro(-3) == -6)
+assert(dobro(2.5) == 5.0)
+print("Todos os testes passaram!")
+assert(dobro(3) == 7, "dobro(3) deveria dar 7")
+</pre>
+<pre class="term">$ lua a8.lua
+Todos os testes passaram!
+lua: a8.lua:7: dobro(3) deveria dar 7
+stack traceback:
+	[C]: in global 'assert'
+	a8.lua:7: in main chunk
+	[C]: in ?</pre>
+<p>Os quatro primeiros testes passaram em silêncio. O último é um teste errado de propósito (o dobro de 3 é 6, não 7), para você ver como fica uma falha. Testes assim, guardados num arquivo e rodados a cada mudança, avisam na hora quando você estraga algo que funcionava. A aula <a href="testes.html">Testes</a> vai além.</p>
+
+<hr>
+
+<h2 id="formas">Formas diferentes de fazer a mesma coisa</h2>
+<p>Abrir um arquivo e reagir se não der, de três jeitos:</p>
+
+<pre class="file" data-file="formas.lua">-- 1. assert: parar com o motivo real
+local f = assert(io.open("compras.txt"))
+
+-- 2. if: tratar sem parar
+local g, msg = io.open("compras.txt")
+if not g then
+  print("Não consegui abrir: " .. msg)
+end
+
+-- 3. error: parar com a sua mensagem e o nível que você escolher
+local h, motivo = io.open("compras.txt")
+if not h then
+  error("a lista de compras sumiu (" .. motivo .. ")", 2)
+end
+</pre>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Situação</th><th>Qual usar</th></tr>
+<tr><td>Sem aquele arquivo (ou valor), o programa não tem como continuar</td><td><code>assert(io.open(…))</code>: uma palavra, motivo real</td></tr>
+<tr><td>O problema é esperado e o programa pode seguir (perguntar outro nome, usar um padrão)</td><td><code>local f, msg = io.open(…)</code> e um <code>if</code></td></tr>
+<tr><td>Validar argumentos e culpar quem chamou</td><td><code>error(msg, 2)</code></td></tr>
+<tr><td>Conferir resultados de funções (testes)</td><td><code>assert(f(x) == esperado, "mensagem")</code></td></tr>
+<tr><td>Parar sem fechar o programa</td><td><code>assert</code> dentro de um <a href="pcall.html">pcall</a>: <code>pcall(assert, false, "x")</code> devolve <code>false, "x"</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+
+<div class="cenario">
+<strong>A mensagem do <code>assert</code> deu erro antes dele</strong>
+<pre class="file" data-file="a7.lua">local cliente
+assert(cliente, "cliente não encontrado: " .. cliente)
+</pre>
+<pre class="term">$ lua a7.lua
+lua: a7.lua:2: attempt to concatenate a nil value (local 'cliente')
+stack traceback:
+	a7.lua:2: in main chunk
+	[C]: in ?</pre>
+<p>A mensagem que você escreveu nunca apareceu. O Lua calcula <strong>todos</strong> os argumentos de uma função <strong>antes</strong> de chamá-la; para montar o segundo argumento, ele tentou juntar o texto com o <code>cliente</code>, que é <code>nil</code>, e quebrou ali mesmo. Repare: não há <code>[C]: in global 'assert'</code> no rastro, porque o <code>assert</code> nem foi chamado. O pior: justamente quando o valor é <code>nil</code> (o caso que o <code>assert</code> devia pegar), a mensagem é que dá erro. <strong>Como consertar:</strong> não junte o próprio valor conferido na mensagem, ou converta com <code>tostring(cliente)</code>, que transforma <code>nil</code> no texto <code>"nil"</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>O <code>assert</code> deixou passar um <code>0</code> (ou um texto vazio)</strong>
+<p><code>assert(quantidade)</code> com <code>quantidade = 0</code> <strong>passa</strong>: o zero é verdadeiro no Lua (seção 3). Se o que você quer conferir é "maior que zero", escreva a comparação: <code>assert(quantidade &gt; 0, "quantidade precisa ser positiva")</code>. O mesmo vale para o texto vazio: <code>assert(nome ~= "", "nome vazio")</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Só apareceu <code>assertion failed!</code></strong>
+<p>Sem o segundo argumento, a mensagem é genérica. Você sabe a linha, mas quem lê o erro (talvez você mesmo, daqui a um mês) não sabe o que era esperado. Escreva sempre uma mensagem, a não ser no <code>assert(io.open(…))</code>, em que o próprio <code>io.open</code> fornece a mensagem.</p>
+</div>
+
+<div class="cenario">
+<strong>Chamou <code>assert()</code> vazio</strong>
+<pre class="term">$ lua a11.lua
+lua: a11.lua:1: bad argument #1 to 'assert' (value expected)
+stack traceback:
+	[C]: in global 'assert'
+	a11.lua:1: in main chunk
+	[C]: in ?</pre>
+<p>"Argumento ruim nº 1 para o <code>assert</code> (era esperado um valor)". O <code>a11.lua</code> é <code>print(assert())</code>. Acontece quando uma função que você passou para o <code>assert</code> não devolve nada (nem <code>nil</code>): o <code>assert</code> fica sem argumento nenhum. Confira se a função tem um <code>return</code>.</p>
+</div>
+
+<hr>
+
+<h2>Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>O que acontece</th></tr>
+<tr><td><code>assert(v)</code></td><td><code>v</code> é <code>false</code>/<code>nil</code> → erro <code>arquivo:linha: assertion failed!</code>; senão devolve <code>v</code></td></tr>
+<tr><td><code>assert(v, "msg")</code></td><td>Idem, com a sua mensagem</td></tr>
+<tr><td><code>assert(v, a, b)</code></td><td>Se passar, devolve <code>v, a, b</code></td></tr>
+<tr><td><code>local f = assert(io.open(nome))</code></td><td>Abre, ou para com o motivo do sistema (<code>No such file or directory</code>, <code>Permission denied</code>)</td></tr>
+<tr><td><code>local n = assert(tonumber(s), "…")</code></td><td>Converte, ou para (escreva a mensagem: o <code>tonumber</code> não dá uma)</td></tr>
+<tr><td><code>assert(f(x) == esperado, "…")</code></td><td>Um teste</td></tr>
+<tr><td><code>assert(0)</code>, <code>assert("")</code></td><td>Passam: só <code>false</code> e <code>nil</code> são falsos</td></tr>
+<tr><td><code>pcall(assert, false, "x")</code></td><td><code>false, "x"</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. Complete</h3>
+<p>Complete para abrir <code>notas.txt</code> e parar com o motivo real se não der:</p>
+<div class="ex-code">local f = <input data-answer="assert" aria-label="função">(io.open("notas.txt"))</div>
+</div>
+
+<div class="exercise">
+<h3>2. Qual é a mensagem?</h3>
+<p>O arquivo <code>t.lua</code> tem só a linha <code>assert(1 &gt; 2)</code>. Complete a primeira linha da mensagem:</p>
+<div class="ex-code">lua: t.lua:1: <input data-answer="assertion failed!" aria-label="mensagem"></div>
+</div>
+
+<div class="mc" data-answer="3">
+<p class="mc-q">3. Qual destes <code>assert</code> <strong>para</strong> o programa?</p>
+<label><input type="radio" name="q3"> <code>assert(0)</code></label>
+<label><input type="radio" name="q3"> <code>assert("")</code></label>
+<label><input type="radio" name="q3"> <code>assert(nil, "vazio")</code></label>
+<label><input type="radio" name="q3"> <code>assert({})</code></label>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">4. O que <code>local x = assert(tonumber("7"))</code> guarda em <code>x</code>?</p>
+<label><input type="radio" name="q4"> <code>true</code></label>
+<label><input type="radio" name="q4"> <code>7</code></label>
+<label><input type="radio" name="q4"> <code>"7"</code></label>
+<label><input type="radio" name="q4"> <code>nil</code></label>
+</div>
+
+<div class="mc" data-answer="1">
+<p class="mc-q">5. <code>assert(cliente, "não achei " .. cliente)</code> com <code>cliente = nil</code> mostrou <code>attempt to concatenate a nil value</code>. Por quê?</p>
+<label><input type="radio" name="q5"> A mensagem é calculada antes de o <code>assert</code> ser chamado, e juntar texto com <code>nil</code> dá erro</label>
+<label><input type="radio" name="q5"> O <code>assert</code> não aceita mensagens</label>
+<label><input type="radio" name="q5"> O <code>cliente</code> devia ser global</label>
+<label><input type="radio" name="q5"> Faltou o <code>pcall</code></label>
+</div>
+
+<h3>Missão final: os testes da média</h3>
+
+<div class="trylua" data-goal="out:Todos os testes passaram!;;semerro">
+<p class="try-task"><strong>Missão:</strong> a professora escreveu três testes com <code>assert</code> para a função <code>media</code>. Rode: um dos testes falha, e a mensagem diz qual. A função tem um defeito (ela sempre divide por 2). Conserte a <strong>função</strong> (não os testes!) para os três passarem.</p>
+<pre class="script" data-file="main.lua">local function media(lista)
+  local soma = 0
+  for _, n in ipairs(lista) do
+    soma = soma + n
+  end
+  return soma / 2
+end
+
+assert(media({8, 6}) == 7, "a média de 8 e 6 deveria ser 7")
+assert(media({9, 9, 9}) == 9, "a média de três 9 deveria ser 9")
+assert(media({10}) == 10, "a média de um 10 deveria ser 10")
+print("Todos os testes passaram!")
+</pre>
+<pre class="solucao" data-file="main.lua">local function media(lista)
+  local soma = 0
+  for _, n in ipairs(lista) do
+    soma = soma + n
+  end
+  return soma / #lista
+end
+
+assert(media({8, 6}) == 7, "a média de 8 e 6 deveria ser 7")
+assert(media({9, 9, 9}) == 9, "a média de três 9 deveria ser 9")
+assert(media({10}) == 10, "a média de um 10 deveria ser 10")
+print("Todos os testes passaram!")
+</pre>
+</div>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li><code>assert(v, msg)</code> para o programa se <code>v</code> for <code>false</code> ou <code>nil</code>, com <code>msg</code> (ou <code>assertion failed!</code>); senão, devolve todos os argumentos.</li>
+  <li><code>local f = assert(io.open(nome))</code> é o jeito clássico de abrir um arquivo: se falhar, o erro mostra o motivo real do sistema, na linha certa.</li>
+  <li>Com funções que devolvem só <code>nil</code> (como <code>tonumber</code>), escreva a mensagem.</li>
+  <li>A mensagem é calculada antes da conferência: não junte nela um valor que pode ser <code>nil</code> (use <code>tostring</code>).</li>
+  <li>Só <code>false</code> e <code>nil</code> barram; <code>0</code> e <code>""</code> passam.</li>
+  <li>O <code>assert</code> é a ferramenta mais simples de teste. Para escolher o nível da mensagem, use <a href="error.html">error</a>; para não parar o programa, <a href="pcall.html">pcall</a>.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
