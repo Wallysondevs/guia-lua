@@ -1,0 +1,466 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua Os Tipos de Dados — nil, boolean, number, string, table e os outros | Guia Lua</title>
+<meta name="description" content="Os oito tipos de dados do Lua para quem nunca programou: nil, boolean, number (inteiro e float), string, table, function, userdata e thread; o valor tem tipo e a variável não; texto e número não são a mesma coisa (&quot;10&quot; + 1, &quot;10&quot; .. 1, 10 == &quot;10&quot;); só nil e false são falsos; e os erros reais do Lua 5.5 quando o tipo está errado.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">Os Tipos de Dados</span></h1>
+
+<p class="intro">Na aula do <a href="print.html"><code>print</code></a> apareceu a regra "com aspas é texto, sem aspas é valor", e na do <a href="io-read.html"><code>io.read</code></a> o <code>"30"</code> digitado que não era o número 30. Por trás das duas está a mesma ideia: todo valor do Lua é de um <strong>tipo</strong>, e o tipo decide o que dá para fazer com ele. Número se soma, texto se junta, <code>true</code> e <code>false</code> decidem caminhos. O Lua tem só <strong>oito</strong> tipos; esta aula apresenta todos, e cada um ganha depois a sua aula própria.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O que é um tipo de dado, e os oito tipos do Lua: <code>nil</code>, <code>boolean</code>, <code>number</code>, <code>string</code>, <code>table</code>, <code>function</code>, <code>userdata</code> e <code>thread</code>.</li>
+  <li>Que no Lua quem tem tipo é o <strong>valor</strong>, não a variável.</li>
+  <li>Que o tipo <code>number</code> tem dois jeitos: inteiro (<code>10</code>) e float (<code>10.0</code>).</li>
+  <li>Por que <code>"10"</code> e <code>10</code> não são a mesma coisa: <code>"10" + 1</code>, <code>"10" .. 1</code>, <code>10 == "10"</code>.</li>
+  <li>Que só <code>nil</code> e <code>false</code> contam como "falso" (o <code>0</code> e o <code>""</code> contam como verdadeiro).</li>
+  <li>As mensagens de erro que aparecem quando o tipo está errado, e como ler o tipo que elas citam.</li>
+</ul>
+</div>
+
+<p>Todos os programas desta aula foram rodados com o <strong>Lua 5.5</strong> na máquina fictícia da Ana (usuária <code>ana</code>, computador <code>notebook</code>). As caixas "Experimente" rodam o mesmo Lua de verdade, no seu navegador.</p>
+
+<hr>
+
+<h2>A ideia: o que vai em cada pote</h2>
+<p>Na cozinha da padaria, cada coisa tem o seu jeito de ser usada: a farinha se <strong>pesa</strong>, o leite se <strong>mede</strong> em litros, os ovos se <strong>contam</strong>, a receita se <strong>lê</strong>. Ninguém tenta "pesar" uma receita ou "ler" um ovo. O <strong>tipo</strong> de cada coisa diz quais operações fazem sentido.</p>
+
+<p>No Lua é igual. O <code>5</code> é um <strong>número</strong>: dá para somar, multiplicar, comparar. O <code>"Ana"</code> é um <strong>texto</strong>: dá para juntar com outro texto, contar as letras, pôr em maiúsculas. Tente somar <code>"Ana" + 1</code>, e o Lua para o programa: essa operação não existe para esse tipo.</p>
+
+<hr>
+
+<h2>1. Os oito tipos</h2>
+<p>A função <code>type</code> (em inglês, "tipo") diz o tipo de qualquer valor, como um texto. Ela tem aula própria, a próxima (<a href="type.html">Descobrindo o Tipo</a>); aqui, ela só vai mostrar os oito:</p>
+
+<pre class="file" data-file="oito.lua">print(type(nil))
+print(type(true))
+print(type(42))
+print(type(3.5))
+print(type("Ana"))
+print(type({}))
+print(type(print))
+print(type(io.stdout))
+print(type(coroutine.create(print)))
+</pre>
+
+<pre class="term">$ lua oito.lua
+nil
+boolean
+number
+number
+string
+table
+function
+userdata
+thread
+</pre>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Tipo</th><th>O que guarda</th><th>Exemplos</th><th>Aula</th></tr>
+<tr><td><code>nil</code></td><td>"Nada": a ausência de valor. Variável sem valor, nome que ninguém criou</td><td><code>nil</code></td><td><a href="nil.html">O Valor nil</a></td></tr>
+<tr><td><code>boolean</code></td><td>Verdadeiro ou falso (o nome vem do matemático George Boole)</td><td><code>true</code>, <code>false</code></td><td><a href="booleanos.html">Booleanos</a></td></tr>
+<tr><td><code>number</code></td><td>Números, inteiros ou com casas decimais</td><td><code>42</code>, <code>3.5</code>, <code>-7</code>, <code>1e3</code></td><td><a href="numeros.html">Números</a></td></tr>
+<tr><td><code>string</code></td><td>Textos</td><td><code>"Ana"</code>, <code>'Bia'</code>, <code>[[Caio]]</code></td><td><a href="strings.html">Strings</a></td></tr>
+<tr><td><code>table</code></td><td>Uma coleção de valores: listas, fichas, cadastros. É <strong>a</strong> estrutura do Lua</td><td><code>{}</code>, <code>{"pão", "leite"}</code></td><td><a href="tabelas.html">Tabelas</a></td></tr>
+<tr><td><code>function</code></td><td>Um pedaço de programa com nome, que se chama com <code>()</code></td><td><code>print</code>, <code>type</code>, as suas funções</td><td><a href="funcoes.html">Funções</a></td></tr>
+<tr><td><code>userdata</code></td><td>Coisas que vêm de fora do Lua (escritas em C), como um arquivo aberto</td><td><code>io.stdout</code>, o que o <code>io.open</code> devolve</td><td><a href="io-open.html">io.open</a></td></tr>
+<tr><td><code>thread</code></td><td>Uma corrotina: um pedaço do programa que pode pausar e continuar</td><td><code>coroutine.create(...)</code></td><td><a href="corrotinas.html">Corrotinas</a></td></tr>
+</table>
+</div>
+
+<p>No começo do curso, você vai usar quase só os quatro primeiros. A <code>table</code> chega no Nível 2 e muda tudo; <code>function</code> também. <code>userdata</code> e <code>thread</code> você vai encontrar mais tarde, sem pressa.</p>
+
+<h3>Como cada um aparece na tela</h3>
+
+<pre class="file" data-file="valores.lua">print(nil, false, true)
+print(42, 3.5, -7, 1e3)
+print("Ana", 'Bia', [[Caio]])
+</pre>
+
+<pre class="term">$ lua valores.lua
+nil	false	true
+42	3.5	-7	1000.0
+Ana	Bia	Caio
+</pre>
+
+<p>O <code>1e3</code> é a notação científica, "1 vezes 10 elevado a 3": mil. Ele saiu <code>1000.0</code>, com <code>.0</code>, e isso tem a ver com a seção 3. E as três formas de escrever texto (aspas duplas, simples e colchetes duplos) dão o mesmo tipo, <code>string</code>.</p>
+
+<p>Já tabelas e funções não têm um jeito "bonito" de aparecer: o <code>print</code> mostra o tipo e um <strong>endereço de memória</strong>, que muda a cada vez que o programa roda. Na máquina da Ana, duas rodadas seguidas do mesmo programa deram:</p>
+
+<pre class="term">$ lua print-tabela.lua
+table: 0x5638cb40a530
+function: 0x5638998fac40
+$ lua print-tabela.lua
+table: 0x558dfcd65530
+function: 0x558dd0f03c40
+</pre>
+
+<p>(O programa é só <code>print({})</code> e <code>print(print)</code>.) Para ver o que tem dentro de uma tabela, é preciso percorrê-la: aula <a href="pairs.html">pairs</a>.</p>
+
+<hr>
+
+<h2>2. O valor tem tipo; a variável, não</h2>
+<p>Em algumas linguagens, você declara "esta variável é de números" e ela nunca mais aceita outra coisa. No Lua, não: a variável é só uma etiqueta, e quem tem tipo é o valor que está nela <strong>naquele momento</strong>:</p>
+
+<pre class="file" data-file="mudar.lua">local caixa = 10
+print(type(caixa))
+caixa = "dez"
+print(type(caixa))
+caixa = nil
+print(type(caixa))
+</pre>
+
+<pre class="term">$ lua mudar.lua
+number
+string
+nil
+</pre>
+
+<p>A mesma <code>caixa</code> foi <code>number</code>, <code>string</code> e <code>nil</code>. Por isso se diz que o Lua tem <strong>tipagem dinâmica</strong>: o tipo é conferido na hora em que o programa roda, e não antes. A vantagem é a liberdade; o preço é que um erro de tipo só aparece quando a linha errada roda (às vezes, só no dia em que a pessoa digita a coisa "errada").</p>
+
+<div class="trylua" data-goal="outre:^number\s+string\s+boolean\n$">
+<p class="try-task"><strong>Missão:</strong> mude só os <strong>valores</strong> da primeira linha (as aspas!) para que o programa mostre <code>number</code>, <code>string</code> e <code>boolean</code>, nessa ordem.</p>
+<pre class="script" data-file="main.lua">local a, b, c = "5", 5, "true"
+print(type(a), type(b), type(c))
+</pre>
+<pre class="solucao" data-file="main.lua">local a, b, c = 5, "5", true
+print(type(a), type(b), type(c))
+</pre>
+</div>
+
+<hr>
+
+<h2>3. Um tipo, dois jeitos de número: inteiro e float</h2>
+<p>Para o <code>type</code>, todo número é <code>number</code>. Por dentro, porém, o Lua 5.5 guarda os números de dois jeitos: <strong>inteiro</strong> (<em>integer</em>, sem casa decimal) e <strong>float</strong> (com casa decimal; o nome vem de "ponto flutuante"). A função <code>math.type</code> mostra qual:</p>
+
+<pre class="file" data-file="numeros.lua">print(10, 10.0, 10 == 10.0)
+print(math.type(10), math.type(10.0), math.type("10"))
+print(7 / 2, 7 // 2, 2^3)
+</pre>
+
+<pre class="term">$ lua numeros.lua
+10	10.0	true
+integer	float	nil
+3.5	3	8.0
+</pre>
+
+<dl class="anatomy">
+  <dt>10 e 10.0</dt><dd>O mesmo número, guardado de dois jeitos. O <code>print</code> mostra a diferença (o <code>.0</code>), mas para comparar eles são iguais: <code>10 == 10.0</code> dá <code>true</code>.</dd>
+  <dt>integer float nil</dt><dd><code>math.type</code> diz <code>integer</code> ou <code>float</code>; para algo que não é número, como o texto <code>"10"</code>, devolve <code>nil</code>.</dd>
+  <dt>7 / 2 → 3.5, 7 // 2 → 3, 2^3 → 8.0</dt><dd>A divisão <code>/</code> e a potência <code>^</code> sempre dão float; a divisão inteira <code>//</code> dá inteiro. Detalhes em <a href="divisao.html">Divisão</a> e <a href="numeros.html">Números</a>.</dd>
+</dl>
+
+<div class="note">
+<strong>No Lua 5.1 e no LuaJIT, não há essa divisão</strong>
+<p>Até o Lua 5.2 (e no LuaJIT, que segue o 5.1), todo número era float, não existia <code>math.type</code> e o <code>10 / 2</code> aparecia como <code>5</code>. Nem o <code>//</code> existia: o mesmo <code>numeros.lua</code>, no <code>lua5.1</code> da Ana, nem rodou: <code>lua5.1: numeros.lua:3: unexpected symbol near '/'</code>. Mais em <a href="versoes.html">Lua 5.1, LuaJIT, 5.4 e 5.5</a>.</p>
+</div>
+
+<hr>
+
+<h2>4. Texto que parece número não é número</h2>
+<p>O <code>"10"</code> (entre aspas) é uma <code>string</code> com dois caracteres; o <code>10</code> é um <code>number</code>. Às vezes o Lua converte um no outro sozinho (a <strong>coerção</strong>), às vezes não, e é isso que confunde:</p>
+
+<pre class="file" data-file="texto-numero.lua">print("10" + 1)
+print("10" .. 1)
+print(10 .. "")
+print(10 == "10")
+print("3" * "4")
+</pre>
+
+<pre class="term">$ lua texto-numero.lua
+11
+101
+10
+false
+12
+</pre>
+
+<dl class="anatomy">
+  <dt>"10" + 1 → 11</dt><dd>O <code>+</code> é só para números, então o Lua tenta converter o texto <code>"10"</code> em número, e consegue.</dd>
+  <dt>"10" .. 1 → 101</dt><dd>O <code>..</code> é só para textos, então o Lua converte o <code>1</code> em texto e junta: <code>"101"</code>.</dd>
+  <dt>10 .. "" → 10</dt><dd>Juntar um número com um texto vazio é um truque para transformar número em texto (o jeito claro é <code>tostring(10)</code>).</dd>
+  <dt>10 == "10" → false</dt><dd>Para <strong>comparar igualdade</strong>, o Lua <strong>não</strong> converte: um número e um texto nunca são iguais, mesmo "parecendo" iguais.</dd>
+  <dt>"3" * "4" → 12</dt><dd>Contas convertem os dois lados.</dd>
+</dl>
+
+<p>E para comparar <strong>maior e menor</strong>, também não há conversão: aí o erro aparece.</p>
+
+<pre class="file" data-file="comparar.lua">local idade = "30"
+print(idade &gt; 18)
+</pre>
+
+<pre class="term">$ lua comparar.lua
+lua: comparar.lua:2: attempt to compare number with string
+stack traceback:
+	comparar.lua:2: in main chunk
+	[C]: in ?
+</pre>
+
+<p>"Tentativa de comparar número com string". (A mensagem diz "number with string", na ordem contrária à do código, porque o Lua transforma <code>idade &gt; 18</code> em <code>18 &lt; idade</code> antes de comparar.) É exatamente o que acontece com uma resposta do <code>io.read()</code>. <strong>Como consertar:</strong> converta o texto com <code>tonumber</code> antes (aula <a href="conversao.html">Conversão</a>): com <code>local idade = tonumber("30")</code>, o mesmo <code>print</code> mostra <code>true</code>.</p>
+
+<div class="tip">
+<strong>A regra prática</strong>
+<p>Não conte com a coerção. Se um valor é número, guarde-o como número (<code>tonumber</code> logo que ele chega); se é texto para mostrar, monte o texto com <code>..</code> ou <code>string.format</code>. Cada valor com o seu tipo certo, desde o começo.</p>
+</div>
+
+<div class="trylua" data-stdin="30" data-goal="out:true;;semerro">
+<p class="try-task"><strong>Missão:</strong> a resposta do <code>io.read()</code> é texto, e a comparação quebra. Converta a resposta com <code>tonumber(...)</code> para que o programa mostre <code>Maior de idade?</code> e <code>true</code>. A entrada já vem pronta: <code>30</code>.</p>
+<pre class="script" data-file="main.lua">io.write("Idade: ")
+local idade = io.read()
+print("Maior de idade?", idade &gt;= 18)
+</pre>
+<pre class="solucao" data-file="main.lua">io.write("Idade: ")
+local idade = tonumber(io.read())
+print("Maior de idade?", idade &gt;= 18)
+</pre>
+</div>
+
+<hr>
+
+<h2>5. Verdadeiro e falso: só <code>nil</code> e <code>false</code> são falsos</h2>
+<p>Quando o Lua precisa decidir "sim ou não" (num <a href="if.html"><code>if</code></a>, num <code>not</code>), ele aceita <strong>qualquer</strong> valor. A regra é curta: <code>nil</code> e <code>false</code> contam como falso; <strong>todo o resto</strong> conta como verdadeiro. O <code>not</code> ("não") mostra isso, porque inverte:</p>
+
+<pre class="file" data-file="verdade.lua">print(not nil, not false)
+print(not 0, not "", not "false")
+</pre>
+
+<pre class="term">$ lua verdade.lua
+true	true
+false	false	false
+</pre>
+
+<p>O <code>not nil</code> deu <code>true</code>: <code>nil</code> conta como falso. Já <code>not 0</code> deu <code>false</code>: o <strong>zero conta como verdadeiro</strong>, assim como o texto vazio <code>""</code> e até o texto <code>"false"</code>. Quem vem de outras linguagens (onde o 0 e o texto vazio são falsos) tropeça nisso. A história completa está em <a href="booleanos.html">Booleanos</a> e em <a href="operadores-logicos.html">and, or e not</a>.</p>
+
+<hr>
+
+<h2>6. Um gostinho de <code>table</code></h2>
+<p>Os sete outros tipos guardam um valor só; a <code>table</code> guarda <strong>vários</strong>. É com ela que o Lua faz listas, cadastros, fichas, e até as próprias bibliotecas (<code>io</code>, <code>string</code> e <code>math</code> são tabelas):</p>
+
+<pre class="file" data-file="tabela.lua">local compras = {"pão", "leite", "café"}
+print(compras[1], #compras)
+print(type(compras))
+</pre>
+
+<pre class="term">$ lua tabela.lua
+pão	3
+table
+</pre>
+
+<p>O <code>compras[1]</code> pega o 1º item, e o <code>#</code> conta quantos são. É só um aperitivo: o Nível 2 começa com <a href="tabelas.html">Tabelas: a Estrutura de Tudo</a>.</p>
+
+<hr>
+
+<h2>Formas de descobrir e escolher o tipo</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Quero...</th><th>Use</th></tr>
+<tr><td>Saber o tipo de um valor</td><td><code>type(x)</code> → <code>"number"</code>, <code>"string"</code>... (aula <a href="type.html">type</a>)</td></tr>
+<tr><td>Saber se um número é inteiro ou float</td><td><code>math.type(x)</code> → <code>"integer"</code>, <code>"float"</code> ou <code>nil</code></td></tr>
+<tr><td>Transformar texto em número</td><td><code>tonumber("30")</code> → <code>30</code> (ou <code>nil</code>, se não for número)</td></tr>
+<tr><td>Transformar qualquer valor em texto</td><td><code>tostring(x)</code> → <code>"30"</code>, <code>"true"</code>, <code>"nil"</code></td></tr>
+<tr><td>Escrever um valor do tipo certo</td><td>Número sem aspas (<code>30</code>), texto com aspas (<code>"30"</code>), booleano sem aspas (<code>true</code>)</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2 id="errado">Quando dá errado: o tipo na mensagem</h2>
+<p>Quase todo erro de tipo tem o mesmo formato: <code>attempt to</code> ("tentativa de") + a operação + <code>a ... value</code> (o <strong>tipo</strong> do valor que atrapalhou) + entre parênteses, de onde veio o valor. Aprender a ler o tipo na mensagem resolve metade dos problemas.</p>
+
+<div class="cenario">
+<strong>Conta com uma tabela</strong>
+<pre class="file" data-file="erro-tabela.lua">local compras = {"pão", "leite"}
+print(compras + 1)
+</pre>
+<pre class="term">$ lua erro-tabela.lua
+lua: erro-tabela.lua:2: attempt to perform arithmetic on a table value (local 'compras')
+stack traceback:
+	erro-tabela.lua:2: in main chunk
+	[C]: in ?
+</pre>
+<p>"Tentativa de fazer conta com um valor <strong>table</strong> (a local <code>compras</code>)". Uma lista não se soma. Talvez você quisesse a quantidade de itens: <code>#compras + 1</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Juntar texto com booleano ou tabela</strong>
+<pre class="file" data-file="erro-concat.lua">local pago = true
+print("Pago: " .. pago)
+</pre>
+<pre class="term">$ lua erro-concat.lua
+lua: erro-concat.lua:2: attempt to concatenate a boolean value (local 'pago')
+stack traceback:
+	erro-concat.lua:2: in main chunk
+	[C]: in ?
+</pre>
+<p>O <code>..</code> converte números sozinho, mas não booleanos. Com uma tabela, a mensagem diz <code>a table value</code>:</p>
+<pre class="term">$ lua erro-concat2.lua
+lua: erro-concat2.lua:2: attempt to concatenate a table value (local 'compras')
+stack traceback:
+	erro-concat2.lua:2: in main chunk
+	[C]: in ?
+</pre>
+<p><strong>Como consertar:</strong> <code>"Pago: " .. tostring(pago)</code>. Para a tabela, junte os itens com <a href="table-concat.html"><code>table.concat</code></a>.</p>
+</div>
+
+<div class="cenario">
+<strong>Chamar um número como se fosse função</strong>
+<pre class="file" data-file="erro-chamar.lua">local preco = 5
+preco()
+</pre>
+<pre class="term">$ lua erro-chamar.lua
+lua: erro-chamar.lua:2: attempt to call a number value (local 'preco')
+stack traceback:
+	erro-chamar.lua:2: in main chunk
+	[C]: in ?
+</pre>
+<p>Os parênteses <code>()</code> são para chamar funções; <code>preco</code> é um <code>number</code>. É a mesma mensagem do <code>Print</code> errado (<code>attempt to call a nil value</code>), agora com outro tipo.</p>
+</div>
+
+<div class="cenario">
+<strong>Usar o ponto num número</strong>
+<pre class="file" data-file="erro-indexar.lua">local preco = 5
+print(preco.valor)
+</pre>
+<pre class="term">$ lua erro-indexar.lua
+lua: erro-indexar.lua:2: attempt to index a number value (local 'preco')
+stack traceback:
+	erro-indexar.lua:2: in main chunk
+	[C]: in ?
+</pre>
+<p><strong>Indexar</strong> é pegar um campo de dentro de alguma coisa, com <code>.</code> ou <code>[ ]</code>; só tabelas (e strings, para as funções delas) têm campos. Você vai ver muito o irmão deste erro, <code>attempt to index a nil value</code>, quando uma tabela que você esperava não existe.</p>
+</div>
+
+<div class="cenario">
+<strong>Comparar texto com número</strong>
+<p>Seção 4: <code>attempt to compare number with string</code>. Converta com <code>tonumber</code> antes de comparar.</p>
+</div>
+
+<hr>
+
+<h2>Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Tipo</th><th>Valores</th><th>Conta como</th></tr>
+<tr><td><code>nil</code></td><td><code>nil</code></td><td>falso</td></tr>
+<tr><td><code>boolean</code></td><td><code>true</code>, <code>false</code></td><td><code>false</code> é falso; <code>true</code>, verdadeiro</td></tr>
+<tr><td><code>number</code></td><td><code>10</code> (integer), <code>10.0</code>, <code>3.5</code>, <code>1e3</code> (float)</td><td>verdadeiro (até o <code>0</code>)</td></tr>
+<tr><td><code>string</code></td><td><code>"Ana"</code>, <code>'Ana'</code>, <code>[[Ana]]</code>, <code>""</code></td><td>verdadeiro (até o <code>""</code>)</td></tr>
+<tr><td><code>table</code></td><td><code>{}</code>, <code>{"pão", "leite"}</code></td><td>verdadeiro</td></tr>
+<tr><td><code>function</code></td><td><code>print</code>, as suas funções</td><td>verdadeiro</td></tr>
+<tr><td><code>userdata</code></td><td><code>io.stdout</code>, arquivos abertos</td><td>verdadeiro</td></tr>
+<tr><td><code>thread</code></td><td>corrotinas</td><td>verdadeiro</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>Resultado</th></tr>
+<tr><td><code>"10" + 1</code></td><td><code>11</code> (coerção para número)</td></tr>
+<tr><td><code>"10" .. 1</code></td><td><code>"101"</code> (coerção para texto)</td></tr>
+<tr><td><code>10 == "10"</code></td><td><code>false</code> (sem coerção)</td></tr>
+<tr><td><code>"30" &gt; 18</code></td><td>Erro: <code>attempt to compare number with string</code></td></tr>
+<tr><td><code>10 == 10.0</code></td><td><code>true</code></td></tr>
+<tr><td><code>math.type(10)</code> / <code>math.type(10.0)</code></td><td><code>integer</code> / <code>float</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. Qual é o tipo?</h3>
+<p>O que mostra <code>print(type("42"))</code>?</p>
+<div class="ex-code">Saída: <input data-answer="string" aria-label="saída"></div>
+</div>
+
+<div class="exercise">
+<h3>2. Quantos tipos?</h3>
+<p>Quantos tipos de dados o Lua tem?</p>
+<div class="ex-code">Tipos: <input data-answer="8|oito" aria-label="quantidade"></div>
+</div>
+
+<div class="exercise">
+<h3>3. Junta ou soma?</h3>
+<p>O que mostra <code>print("5" .. 5)</code>?</p>
+<div class="ex-code">Saída: <input data-answer="55" aria-label="saída"></div>
+</div>
+
+<div class="mc" data-answer="3">
+<p class="mc-q">4. O que mostra <code>print(5 == "5")</code>?</p>
+<label><input type="radio" name="q4"> <code>true</code></label>
+<label><input type="radio" name="q4"> Um erro <code>attempt to compare</code></label>
+<label><input type="radio" name="q4"> <code>false</code></label>
+<label><input type="radio" name="q4"> <code>nil</code></label>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">5. Quais valores contam como <strong>falso</strong> no Lua?</p>
+<label><input type="radio" name="q5"> <code>0</code>, <code>""</code>, <code>nil</code> e <code>false</code></label>
+<label><input type="radio" name="q5"> Só <code>nil</code> e <code>false</code></label>
+<label><input type="radio" name="q5"> Só <code>false</code></label>
+<label><input type="radio" name="q5"> <code>0</code> e <code>false</code></label>
+</div>
+
+<div class="mc" data-answer="4">
+<p class="mc-q">6. A mensagem diz <code>attempt to concatenate a boolean value (local 'ativo')</code>. Qual é o problema?</p>
+<label><input type="radio" name="q6"> A variável <code>ativo</code> não existe</label>
+<label><input type="radio" name="q6"> Faltou o <code>local</code></label>
+<label><input type="radio" name="q6"> O <code>..</code> não funciona com números</label>
+<label><input type="radio" name="q6"> A variável <code>ativo</code> guarda <code>true</code> ou <code>false</code>, e o <code>..</code> só junta textos e números</label>
+</div>
+
+<h3>Missão final: a ficha da cliente</h3>
+
+<div class="trylua" data-goal="outre:^string\s+number\s+boolean\s+nil\n$">
+<p class="try-task"><strong>Missão:</strong> a ficha da cliente foi preenchida com os tipos errados. Mude os valores para que o <code>nome</code> seja um texto (<code>"Ana"</code>), a <code>idade</code> um número (<code>30</code>), o <code>vip</code> um booleano (<code>true</code>) e o <code>apelido</code> fique sem valor (<code>nil</code>). O programa deve mostrar <code>string</code>, <code>number</code>, <code>boolean</code> e <code>nil</code>.</p>
+<pre class="script" data-file="main.lua">local nome = Ana
+local idade = "30"
+local vip = "true"
+local apelido = "nil"
+print(type(nome), type(idade), type(vip), type(apelido))
+</pre>
+<pre class="solucao" data-file="main.lua">local nome = "Ana"
+local idade = 30
+local vip = true
+local apelido = nil
+print(type(nome), type(idade), type(vip), type(apelido))
+</pre>
+</div>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li>Todo valor tem um tipo, e o tipo decide o que dá para fazer com ele. O Lua tem oito: <code>nil</code>, <code>boolean</code>, <code>number</code>, <code>string</code>, <code>table</code>, <code>function</code>, <code>userdata</code>, <code>thread</code>.</li>
+  <li>Quem tem tipo é o valor; a mesma variável pode guardar valores de tipos diferentes (tipagem dinâmica).</li>
+  <li><code>number</code> tem dois jeitos: inteiro (<code>10</code>) e float (<code>10.0</code>); <code>math.type</code> diz qual. <code>10 == 10.0</code> é <code>true</code>.</li>
+  <li><code>"10"</code> é texto. Contas e <code>..</code> convertem sozinhos; <code>==</code> não converte (<code>10 == "10"</code> é <code>false</code>), e <code>&lt;</code>/<code>&gt;</code> entre texto e número dá erro. Converta com <code>tonumber</code>/<code>tostring</code>.</li>
+  <li>Só <code>nil</code> e <code>false</code> são falsos; <code>0</code> e <code>""</code> são verdadeiros.</li>
+  <li>Nas mensagens <code>attempt to ... a TIPO value (...)</code>, o tipo citado é a pista do que estava errado.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
