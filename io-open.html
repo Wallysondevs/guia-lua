@@ -487,7 +487,7 @@ $ cat compras.txt
 pão
 leite
 café</pre>
-<p>Sem modo, o <code>io.open</code> abriu para <strong>ler</strong> (<code>"r"</code>). O <code>write</code> não parou o programa: ele devolveu <code>nil</code>, a mensagem <code>Bad file descriptor</code> ("descritor de arquivo ruim", o jeito do Linux de dizer "este arquivo não foi aberto para isso"), o código 9 e, no Lua 5.5, um quarto valor: quantos bytes chegaram a ser escritos (0). Os <code>ovos</code> não entraram na lista. Como o <code>write</code> não para o programa, esse erro passa despercebido se você não olhar o que ele devolve. <strong>Como consertar:</strong> abra com o modo de escrita que você quer: <code>"a"</code> para acrescentar no fim, <code>"w"</code> para recomeçar o arquivo.</p>
+<p>Sem modo, o <code>io.open</code> abriu para <strong>ler</strong> (<code>"r"</code>). O <code>write</code> não parou o programa: ele devolveu <code>nil</code>, a mensagem <code>Bad file descriptor</code> ("descritor de arquivo ruim", o jeito do Linux de dizer "este arquivo não foi aberto para isso"), o código 9 e, no Lua 5.5, um quarto valor: quantos bytes chegaram a ser escritos (0). Os <code>ovos</code> não entraram na lista. (No editor do guia, a resposta é outra, <code>nil	(no extra info)	0	0</code>, sem a mensagem do Linux; mas o resultado é o mesmo: nada foi gravado.) Como o <code>write</code> não para o programa, esse erro passa despercebido se você não olhar o que ele devolve. <strong>Como consertar:</strong> abra com o modo de escrita que você quer: <code>"a"</code> para acrescentar no fim, <code>"w"</code> para recomeçar o arquivo.</p>
 </div>
 
 <div class="cenario">
@@ -538,7 +538,7 @@ stack traceback:
 <tr><td><code>attempt to index a nil value (local 'f')</code></td><td>O <code>io.open</code> falhou (devolveu <code>nil</code>) e o programa usou o <code>f</code> mesmo assim</td></tr>
 <tr><td><code>bad argument #2 to 'open' (invalid mode)</code></td><td>Modo que não existe, como <code>"rw"</code> ou <code>"x"</code></td></tr>
 <tr><td><code>attempt to use a closed file</code></td><td>Usou (ou fechou de novo) um arquivo depois do <code>close</code></td></tr>
-<tr><td><code>nil	Bad file descriptor	9</code> no <code>write</code></td><td>O arquivo foi aberto só para ler</td></tr>
+<tr><td><code>nil	Bad file descriptor	9</code> no <code>write</code></td><td>O arquivo foi aberto só para ler (no editor do guia, sai <code>nil	(no extra info)	0</code>)</td></tr>
 </table>
 </div>
 
