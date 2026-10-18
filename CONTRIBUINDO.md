@@ -101,7 +101,81 @@ No `.exercise`, `data-answer="a|b"` aceita respostas alternativas (a comparaçã
 ## 4. O editor do guia: o Lua real no navegador (`assets/luasim.js`)
 > **Esta seção é mantida pelo agente do simulador.** Antes de escrever uma frase do tipo "no editor…" que não esteja aqui, confira com as ferramentas dele (`tools/sim.js`).
 
-(em construção: o que funciona e o que não funciona — `os.execute`, `io.popen`, `require` de módulos em C, LuaRocks —, diferenças editor × lab, as ferramentas `tools/testar-missoes.js` e `tools/sim.js`.)
+### 4.1 O que é
+- **Editor = Lua 5.5.0**: o interpretador oficial (o `lua.c` e a biblioteca de lua.org, `lua-5.5.0.tar.gz`) compilado para WebAssembly (`assets/lua/lua.wasm`, **340 KB**, baixado no 1º Rodar e guardado pelo navegador). **Lab = `lua5.5` 5.5.0-3ubuntu0.1** do Ubuntu 26.04: o mesmo código-fonte. O `luaconf.h` recebeu o mesmo remendo do pacote do Ubuntu, então `package.path`/`package.cpath` e a lista do `module 'x' not found:` saem **iguais** às do lab. Detalhes em `assets/lua/VERSAO.txt` e em `tools/construir-lua.sh`.
+- As mensagens de erro, o `stack traceback:`, `_VERSION` (`Lua 5.5`), o jeito de escrever números (`3.5`, `1e+100`, `0.30000000000000004`, `9007199254740992.0`, `-nan`), `string.format`, `%q`, `utf8`, `goto`, `global`, `<const>`, `<close>` e as corrotinas saem **iguais** às do lab (conferido com o `tools/testar-missoes.js --nativo` e com dezenas de programas de teste).
+- Roda num Web Worker: a página não trava. Cada **Rodar** é um `lua main.lua` novo: memória nova, variáveis zeradas, `/home/ana` só com os arquivos das abas. O que o programa cria (`io.open("x.txt", "w")`) existe até o fim daquele Rodar (a meta `arquivo:` enxerga).
+- O terminal da caixa mostra `ana@notebook:~$ lua main.lua` (+ `data-args`), a saída (stderr e a mensagem de erro em **vermelho**; cores ANSI como `"\27[31m"` desenhadas) e, no fim, `[código de saída: N]`.
+- Metas: o `data-goal` é lido **já decodificado** (`&lt;`/`&quot;` viram `<`/`"`) e só então separado nos `;;` — no editor e no testador.
+
+### 4.2 Números fixos (não mudam sem aviso)
+| O quê | Valor |
+|---|---|
+| Tempo máximo rodando | **10 s** (sem contar a espera pelo teclado). Passou: `(o editor parou o programa: ele rodou mais de 10 segundos sem terminar — laço infinito?)` e `[programa interrompido]` |
+| Botão **■ Parar** (o Rodar vira Parar) e **Ctrl+C** no campo de entrada | encerram na hora: mostra `^C` e `[programa interrompido]`. **Não** aparece `lua: interrupted!` (no lab, Ctrl+C mostra `lua: interrupted!` + `stack traceback:` e o código de saída é 1) |
+| Saída máxima | **2 milhões de caracteres** (passou: `(o programa escreveu demais…)` e `[programa interrompido]`); o terminal desenha as primeiras **3000 linhas** e as últimas 40 (as metas veem tudo) |
+| Memória | no máximo **256 MB**: passou disso, `not enough memory` (no lab o limite é a memória da máquina) |
+| Pilha | igual ao lab: recursão infinita em Lua dá `stack overflow` (depois de ~1 milhão de chamadas, nos dois); funções C aninhadas (`pcall` dentro de `pcall`…) param em ~200 com `C stack overflow` |
+| Velocidade | ~1,6× mais lento que o lab (`fib(30)` + 200 mil `tostring` + 100 mil chaves: 0,33 s × 0,20 s) |
+| Primeiro Rodar | baixa (340 KB) e prepara o Lua; no teste local, ~0,1 s. Depois, cada Rodar leva ~30 ms |
+
+### 4.3 Entrada (`io.read`)
+- **Com `data-stdin`**: `io.read()`, `io.read("n")`, `io.read("l")`, `io.read("L")`, `io.read("a")`, `io.read(5)`, `io.lines()` e `io.stdin:read` leem dali (uma linha por `\n`); a caixa ganha um campo **Entrada** editável. A linha lida aparece no terminal em branco, como se fosse digitada, mas **não entra no `out:`** (a saída do programa é a mesma de `lua main.lua < entrada.txt` no lab). Acabou o texto → `io.read()` devolve `nil`.
+- **Sem `data-stdin`**: o programa para no `io.read` e o leitor **digita no terminal da caixa** (Enter envia; **Ctrl+D** = fim da entrada, o `io.read()` devolve `nil`; Ctrl+C = Parar). Funciona em laços, com `io.read("n")` (o resto da linha fica para o próximo `io.read`, como no lab), `io.lines()` e `io.read("a")`. O `io.write("Nome: ")` sem `\n` aparece **antes** de esperar, como no terminal do lab.
+- Como: no **Chrome/Edge** (e onde houver JSPI) o programa fica de fato parado esperando. Nos navegadores sem JSPI (Safari e, conforme a versão, Firefox) o editor usa o modo **por repetição**: roda até o `io.read`, o leitor digita, e roda **de novo do começo** com as linhas já digitadas, mostrando só o que é novo — parece contínuo. Nesse modo o relógio (`os.time`) começa igual a cada repetição e `math.random` (mesmo sem `math.randomseed`) e a ordem do `pairs` se repetem, para a saída não mudar no meio; um programa lento fica lento a cada linha.
+- **Missão que lê o teclado**: use `data-stdin` (o mais simples) ou, se o leitor deve **digitar**, **`data-digitar="Bia\n30"`**: o editor ignora esse atributo (o leitor digita), mas o testador e o `testar-navegador.js` digitam essas linhas quando o programa pede. Sem nenhum dos dois, o testador manda "fim de entrada" (`nil`) e avisa.
+- **Laço infinito de propósito** (para mostrar o ■ Parar): ponha **`data-sem-fim`** na `div.trylua`. O testador confere que ele de fato não termina (FALHA se terminar). Sem o atributo, uma caixa que passa de 10 s é FALHA.
+
+### 4.4 O que funciona e o que não funciona no editor (conferido com `tools/sim.js` e no Chromium)
+| Recurso | No editor |
+|---|---|
+| `print`, `io.write`, `string.*`, `table.*`, `math.*`, `utf8.*`, `coroutine.*`, `debug.traceback`, metatabelas, `pcall`/`error`/`xpcall`, `load`, `goto`, `global`, `<const>`, `<close>` | ✔ iguais ao lab |
+| Arquivos: `io.open` (ler, `"w"`, `"a"`), `f:read/write/seek/lines`, `io.lines("x.txt")`, `io.output`, `io.tmpfile`, `os.remove`, `os.rename`, `os.tmpname` (`/tmp/lua_XXXXXX`) | ✔ na `/home/ana` da caixa (some no próximo Rodar). As abas extras (`data-file="precos.txt"`) já estão lá. Erros iguais aos do lab: `nil  nada.txt: No such file or directory  2` |
+| Módulo próprio: `require "contas"` com a aba `contas.lua` | ✔ (acha `./contas.lua`; sem a aba, a mensagem `module 'contas' not found:` lista os mesmos caminhos do lab) |
+| `arg`, `...` do arquivo principal (`data-args`) | ✔ `arg[0]` = `main.lua`, `arg[-1]` = `lua` |
+| `os.exit(n)`, `os.exit(true/false)` | ✔ o código de saída aparece na caixa (`exit:N`); o que estava no buffer (`io.write` sem `\n`) é escrito antes, como no lab |
+| `os.time`, `os.date`, `os.clock`, `os.difftime` | ✔ com o **relógio e o fuso do navegador do leitor** (`os.date("%z %Z")` = `-0300 -03` em São Paulo). `os.clock()` conta o tempo rodando, sem a espera pelo teclado |
+| `os.getenv` | ✔ `HOME`=`/home/ana`, `USER`=`ana`, `LANG`=`pt_BR.UTF-8`, `TERM`, `SHELL`, `PATH` |
+| `math.random` | ✔ sem `math.randomseed` sorteia diferente a cada Rodar (como no lab); `math.randomseed(42)` dá **os mesmos números do lab** |
+| `os.execute("ls")`, `io.popen("date")` | **✘** no navegador não há shell nem outros programas: o comando responde como num Linux em que ele não existe — `sh: 1: ls: not found` (no stderr) e `nil  exit  127`; `io.popen(...)` lê `""` e o `:close()` dá `nil  exit  127`. Só `os.execute()` (= `true`), `"true"`, `"false"` e `"exit N"` funcionam. Mostre comandos do sistema no lab |
+| `require` de módulo em C (`.so`), `package.loadlib`, LuaRocks | **✘** não há bibliotecas dinâmicas no navegador: `module 'x' not found:` (igual ao lab quando o módulo não está instalado) ou `x.so: cannot open shared object file: No such file or directory`. Ensine LuaRocks no lab |
+| `os.setlocale("pt_BR.UTF-8")` | **✘** aceita (devolve o nome), mas nada muda: números continuam com ponto e `os.date("%c")` em inglês (no lab: `3,5` e `qua 31 dez 1969 21:00:00`) |
+| Arquivos do sistema (`/etc/passwd`, `/usr/share/…`) | **✘** o disco do editor só tem `/home/ana`, `/tmp` e `/etc/hostname` (`notebook`) |
+| O modo interativo (`lua` sem arquivo, `> `), `lua -i`, `lua -e`, `luac` | **✘** o editor roda arquivos (`lua main.lua`); o `> ` se mostra com `pre.term` colhido no lab (`-t`) |
+
+### 4.5 Diferenças editor × lab (com o mesmo programa)
+| Assunto | Editor | Lab (`lua`) |
+|---|---|---|
+| Endereços: `print({})`, `tostring(print)`, `coroutine.running()` | curtos e costumam repetir a cada Rodar: `table: 0x80dd70` | longos e mudam a cada execução: `table: 0x56503425a5e0` |
+| Ordem do `pairs`/`next` com chaves de texto | muda de um Rodar para outro (com o relógio) | muda a cada execução — **nunca** use essa ordem em meta (§3); ordene as chaves |
+| `math.random` sem `math.randomseed(N)` | números diferentes dos do lab | sorteio novo a cada execução |
+| Hora e fuso (`os.time`, `os.date`) | o **relógio e o fuso do leitor** | `America/Sao_Paulo` (`-03`) |
+| `os.execute`, `io.popen` | `sh: 1: ls: not found`, `nil exit 127` | rodam o comando de verdade |
+| `os.setlocale("pt_BR.UTF-8")` + números/datas | nada muda (`3.5`, datas em inglês) | `3,5`, datas em português |
+| `string.packsize("l")`, `("L")`, `("T")` (`long`, `size_t`) | `4` (o WebAssembly é de 32 bits) | `8`. Os outros formatos (`i`, `j`, `n`, `d`, `s`…) são iguais |
+| `string.rep("x", 1 << 40)` (texto gigante) | `resulting string too large` | `not enough memory` |
+| Memória cheia (laço que guarda sem parar) | `not enough memory` ao passar de 256 MB | continua até a memória da máquina acabar |
+| `0/0` | `-nan` no PC; pode sair `nan` em aparelhos com outro processador | `-nan` |
+| Ctrl+C | Parar: `^C`, sem mensagem | `lua: interrupted!` + `stack traceback:`, código 1 |
+| Desempenho | ~1,6× mais lento | — |
+
+Por isso: **meta e texto da aula não podem depender** de nada da tabela acima (§3). Diga "no editor…" só com o que está nesta seção; o resto, mostre no lab.
+
+### 4.6 As ferramentas (na VPS, dentro de `~/guia-lua`; Node 24: `. ~/.profile` antes)
+- **`tools/sim.js`** — roda um programa **como o editor** (o mesmo `lua.wasm` e o mesmo motor):
+  ```
+  timeout 60 node tools/sim.js main.lua [contas.lua precos.txt] [--stdin "Ana\n30"] [--args "a 'b c'"] [--goal "out:Olá;;semerro"]
+  timeout 60 node tools/sim.js - < programa.lua          (o programa vem da entrada; vira main.lua)
+  timeout 60 node tools/sim.js -e 'print(10 // 3)'
+  timeout 60 node tools/sim.js main.lua --digitar "Ana\n30"   (o leitor digitando, sem data-stdin; --repeticao força o modo por repetição)
+  ```
+  Mostra o terminal da caixa e `[código de saída: N]`; com `--goal`, diz se a missão passaria e qual meta falhou. `--json` dá tudo em JSON. Sem `--stdin`/`--digitar`, o `io.read()` recebe fim de entrada (`nil`). O fuso do `sim.js` é `America/Sao_Paulo` (o do lab); outro: `TZ=Europe/Lisbon node tools/sim.js …`.
+- **`tools/testar-missoes.js`** (ou, do notebook, `~/guia-lua-lab/testar pagina.html`) — confere a página: contrato das caixas, metas, **inicial falha e solução passa**, `data-sem-fim`, `data-digitar`, `<`/`&` sem escape em `pre`, links fora da NIVEIS (aviso), privacidade (FALHA; inclui a lista de `~/.guia-proibido`):
+  ```
+  timeout 300 node tools/testar-missoes.js pagina.html [-q]
+  timeout 600 node tools/testar-missoes.js --nativo pagina.html   (+ roda inicial e solução no lua do lab; diferenças em tools/DIFERENCAS.md)
+  ```
+- **`tools/testar-navegador.js`** — a página num Chromium de verdade (Rodar em todas as caixas, erros de console). Ver `tools/ESTADO.md`.
 
 ## 5. Fidelidade: o laboratório (`~/guia-lua-lab/lab`, na VPS)
 É a máquina da Ana (usuária `ana`, computador `notebook`, `/home/ana`, pt_BR, Ubuntu 26.04) com o **Lua 5.5 do Ubuntu, de verdade**. Toda saída de terminal mostrada numa aula vem de lá (detalhes em `~/guia-lua-lab/COMO-USAR.md`):
