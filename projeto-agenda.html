@@ -1,0 +1,1783 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua Projeto Agenda de Contatos — dicionário, ordem alfabética, %q, dofile e loadfile passo a passo | Guia Lua</title>
+<meta name="description" content="Projeto passo a passo: uma agenda de contatos de terminal em Lua 5.5. Os contatos num dicionário (tabela com chave de texto), listados em ordem com table.sort (nunca pela ordem do pairs), um menu, a agenda salva como um arquivo Lua com string.format %q e lida com dofile, e depois com loadfile num ambiente vazio e pcall, para um arquivo estragado ou malicioso não derrubar nem invadir o programa. Quatro versões com sessões reais e missões no editor.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Projeto <span class="hl">Agenda de Contatos</span></h1>
+
+<p class="intro">A Ana quer os telefones dos amigos num lugar só, no terminal: listar em ordem alfabética, adicionar, buscar por um pedaço do nome e remover, com tudo guardado num arquivo. O projeto mostra o jeito mais "Lua" de guardar dados: escrever o arquivo <strong>como um programa Lua</strong>, que devolve a tabela, e lê-lo de volta com o próprio Lua.</p>
+
+<div class="note">
+<strong>Você vai praticar</strong>
+<ul>
+  <li>Guardar os contatos num <a href="dicionarios.html">dicionário</a>: uma tabela em que a chave é o nome.</li>
+  <li>Listar em ordem com <a href="table-sort.html">table.sort</a>, e entender por que a ordem do <a href="pairs.html">pairs</a> não serve.</li>
+  <li>Montar um menu com <a href="funcoes.html">funções</a>, como na <a href="projeto-tarefas.html">Lista de Tarefas</a>.</li>
+  <li>Gravar textos com segurança com <code>%q</code> de <a href="string-format.html">string.format</a>.</li>
+  <li>Ler o arquivo com <a href="load.html">dofile e loadfile</a>, e se proteger com <a href="pcall.html">pcall</a> e um ambiente vazio.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>O que vamos construir</h2>
+<p>A agenda pronta. <strong>O que vem depois dos dois-pontos de cada pergunta foi digitado pela Ana.</strong> A agenda já tinha dois contatos, gravados numa execução anterior:</p>
+
+<pre class="term" data-cwd="~/projetos/agenda">$ lua agenda.lua
+=== Agenda da Ana ===
+
+1) Listar  2) Adicionar  3) Buscar  4) Remover  0) Sair
+Escolha: 2
+Nome: Davi Rocha
+Telefone: 41 95555-4321
+E-mail: davi@exemplo.com
+Guardado: Davi Rocha
+
+1) Listar  2) Adicionar  3) Buscar  4) Remover  0) Sair
+Escolha: 3
+Buscar por: LI                                      « pedaço do nome, maiúsculo ou não
+Carlos "Cacá" Lima 21 97777-5678  carlos@exemplo.com
+1 encontrado(s).
+
+1) Listar  2) Adicionar  3) Buscar  4) Remover  0) Sair
+Escolha: 4
+Nome exato para remover: Bia Souza
+Removido: Bia Souza
+
+1) Listar  2) Adicionar  3) Buscar  4) Remover  0) Sair
+Escolha: 1
+Carlos "Cacá" Lima 21 97777-5678  carlos@exemplo.com
+Davi Rocha   41 95555-4321  davi@exemplo.com
+2 contato(s).
+
+1) Listar  2) Adicionar  3) Buscar  4) Remover  0) Sair
+Escolha: 0
+Até logo!
+$ cat contatos.lua
+return {
+  ["Carlos \"Cacá\" Lima"] = { telefone = "21 97777-5678", email = "carlos@exemplo.com" },
+  ["Davi Rocha"] = { telefone = "41 95555-4321", email = "davi@exemplo.com" },
+}</pre>
+
+<p>O arquivo <code>contatos.lua</code> é um pedacinho de programa Lua: <code>return</code> e uma tabela. Quatro versões até lá:</p>
+
+<ol class="passo">
+  <li><a href="#versao1">Os contatos na memória</a> (dicionário, <code>table.sort</code>).</li>
+  <li><a href="#versao2">O menu</a> (funções, procurar pelo nome).</li>
+  <li><a href="#versao3">Salvar e carregar</a> (<code>%q</code>, <code>dofile</code>).</li>
+  <li><a href="#versao4">Buscar, remover e tratar os erros</a> (<code>find</code>, <code>loadfile</code> num ambiente vazio, <code>pcall</code>).</li>
+</ol>
+
+<h3>Antes de começar</h3>
+<p>Este projeto usa o que você viu na <a href="projeto-tarefas.html">Lista de Tarefas</a> (menu, funções, <code>io.open</code>). Crie a pasta; o programa vai se chamar <code>agenda.lua</code>:</p>
+
+<pre class="term">$ mkdir -p projetos/agenda
+$ cd projetos/agenda</pre>
+
+<hr>
+
+<h2 id="versao1">Versão 1 · Os contatos na memória</h2>
+<p>Na <a href="projeto-tarefas.html">Lista de Tarefas</a>, as tarefas ficavam numa <strong>lista</strong>: <code>tarefas[1]</code>, <code>tarefas[2]</code>… Para uma agenda, o natural é procurar <strong>pelo nome</strong>, e não por um número. Então a chave da tabela é o próprio nome: <code>agenda["Bia Souza"]</code>. É uma tabela usada como <a href="dicionarios.html">dicionário</a>, como uma agenda de papel, em que a gente vai direto na letra B.</p>
+
+<pre class="file" data-file="agenda.lua">local agenda = {
+  ["Bia Souza"] = { telefone = "11 98888-1234", email = "bia@exemplo.com" },
+  ["Carlos Lima"] = { telefone = "21 97777-5678", email = "carlos@exemplo.com" },
+  ["Ana Paula"] = { telefone = "31 96666-0000", email = "anapaula@exemplo.com" },
+}
+
+-- Um contato, pelo nome:
+local bia = agenda["Bia Souza"]
+print("Telefone da Bia: " .. bia.telefone)
+
+-- Um contato novo:
+agenda["Davi Rocha"] = { telefone = "41 95555-4321", email = "davi@exemplo.com" }
+
+-- Todos, em ordem alfabética:
+local nomes = {}
+for nome in pairs(agenda) do
+  nomes[#nomes + 1] = nome
+end
+table.sort(nomes)
+
+print()
+for _, nome in ipairs(nomes) do
+  local contato = agenda[nome]
+  print(string.format("%-12s %-14s %s", nome, contato.telefone, contato.email))
+end
+</pre>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Peça</th><th>O que faz</th></tr>
+<tr><td><code>["Bia Souza"] = { telefone = …, email = … }</code></td><td>Uma entrada do dicionário: a chave é o texto <code>"Bia Souza"</code> (entre colchetes, porque tem espaço e não pode ser escrita como <code>Bia Souza = …</code>), e o valor é outra tabela, com os dados dela.</td></tr>
+<tr><td><code>agenda["Bia Souza"]</code></td><td>Vai direto ao contato, sem percorrer nada. Se o nome não existir, dá <code>nil</code>.</td></tr>
+<tr><td><code>agenda["Davi Rocha"] = { … }</code></td><td>Acrescentar é só dar valor a uma chave nova. (E se a chave já existir, o contato antigo é <strong>trocado</strong>.)</td></tr>
+<tr><td><code>for nome in pairs(agenda) do</code></td><td>Percorre todas as chaves (veja <a href="pairs.html">pairs</a>). Aqui, só para copiar os nomes para uma lista.</td></tr>
+<tr><td><code>table.sort(nomes)</code></td><td>Põe a lista de nomes em ordem alfabética (veja <a href="table-sort.html">table.sort</a>).</td></tr>
+<tr><td><code>string.format("%-12s %-14s %s", …)</code></td><td><code>%-12s</code> = um texto ocupando 12 posições, alinhado à esquerda (sobra espaço à direita). Assim as colunas ficam alinhadas.</td></tr>
+</table>
+</div>
+
+<pre class="term" data-cwd="~/projetos/agenda">$ lua agenda.lua
+Telefone da Bia: 11 98888-1234
+
+Ana Paula    31 96666-0000  anapaula@exemplo.com
+Bia Souza    11 98888-1234  bia@exemplo.com
+Carlos Lima  21 97777-5678  carlos@exemplo.com
+Davi Rocha   41 95555-4321  davi@exemplo.com</pre>
+
+<div class="cenario">
+<strong>Listar direto pelo <code>pairs</code>: a ordem muda a cada execução</strong>
+<p>Por que copiar os nomes e ordenar, em vez de mostrar direto no <code>pairs</code>? Este teste (<code>ordem.lua</code>) faz isso, com os quatro contatos:</p>
+<pre class="file" data-file="ordem.lua">local agenda = {
+  ["Bia Souza"] = { telefone = "11 98888-1234" },
+  ["Carlos Lima"] = { telefone = "21 97777-5678" },
+  ["Ana Paula"] = { telefone = "31 96666-0000" },
+  ["Davi Rocha"] = { telefone = "41 95555-4321" },
+}
+for nome, contato in pairs(agenda) do
+  print(nome, contato.telefone)
+end
+</pre>
+<pre class="term" data-cwd="~/projetos/agenda">$ lua ordem.lua
+Davi Rocha      41 95555-4321
+Carlos Lima     21 97777-5678
+Ana Paula       31 96666-0000
+Bia Souza       11 98888-1234
+$ lua ordem.lua
+Ana Paula       31 96666-0000
+Carlos Lima     21 97777-5678
+Davi Rocha      41 95555-4321
+Bia Souza       11 98888-1234</pre>
+<p>O mesmo programa, rodado duas vezes seguidas, mostrou os contatos em ordens diferentes. Não é defeito: o <code>pairs</code> passa pelas chaves na ordem em que elas estão guardadas por dentro da tabela, e, para chaves de texto, essa arrumação depende de detalhes que mudam a cada vez que o Lua começa. <strong>A ordem do <code>pairs</code> não é alfabética, nem a de inserção, nem a mesma de ontem.</strong> Sempre que a ordem importar, copie as chaves para uma lista e use <code>table.sort</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Um nome que não existe: <code>attempt to index a nil value (field 'Zeca Lima')</code></strong>
+<pre class="term">$ lua -e 'local agenda = {} print(agenda["Zeca Lima"].telefone)'
+lua: (command line):1: attempt to index a nil value (field 'Zeca Lima')
+stack traceback:
+        (command line):1: in main chunk
+        [C]: in ?</pre>
+<p><code>agenda["Zeca Lima"]</code> é <code>nil</code>, e o <code>.telefone</code> tenta olhar dentro de <code>nil</code>. Como a chave estava escrita no código, o Lua até diz o nome do campo que deu <code>nil</code>. A versão 2 confere antes: <code>if contato then</code>.</p>
+</div>
+
+<div class="note">
+<strong>Nomes com acento desalinham as colunas</strong>
+<pre class="term">$ lua -e 'print(string.format("[%-12s]", "Davi Rocha")) print(string.format("[%-12s]", "João Simões"))'
+[Davi Rocha  ]
+[João Simões]</pre>
+<p>O <code>%-12s</code> conta <strong>bytes</strong>, e "João Simões" tem 11 letras mas 13 bytes (o <code>ã</code> e o <code>õ</code> ocupam 2 cada; veja <a href="utf8.html">Acentos e a Biblioteca utf8</a>). Já passou de 12, então não sobra espaço nenhum. Nesta agenda, isso só estraga o alinhamento; os dados ficam certos. O mesmo acontece com nomes compridos, como <code>Carlos "Cacá" Lima</code>, lá em cima.</p>
+</div>
+
+<div class="trylua" data-goal="outre:Ana Paula[^\n]*\nBia Souza[^\n]*\nCarlos Lima[^\n]*\nDavi Rocha;;src:table\.sort">
+<p class="try-task"><strong>Missão (versão 1):</strong> o programa junta os nomes numa lista, mas não ordena, e a lista sai na ordem do <code>pairs</code> (que muda). No lugar do comentário, ponha os nomes em ordem alfabética com <code>table.sort</code>.</p>
+<pre class="script" data-file="agenda.lua">local agenda = {
+  ["Bia Souza"] = { telefone = "11 98888-1234", email = "bia@exemplo.com" },
+  ["Carlos Lima"] = { telefone = "21 97777-5678", email = "carlos@exemplo.com" },
+  ["Ana Paula"] = { telefone = "31 96666-0000", email = "anapaula@exemplo.com" },
+}
+
+-- Um contato, pelo nome:
+local bia = agenda["Bia Souza"]
+print("Telefone da Bia: " .. bia.telefone)
+
+-- Um contato novo:
+agenda["Davi Rocha"] = { telefone = "41 95555-4321", email = "davi@exemplo.com" }
+
+-- Todos, em ordem alfabética:
+local nomes = {}
+for nome in pairs(agenda) do
+  nomes[#nomes + 1] = nome
+end
+-- ponha os nomes em ordem aqui
+
+print()
+for _, nome in ipairs(nomes) do
+  local contato = agenda[nome]
+  print(string.format("%-12s %-14s %s", nome, contato.telefone, contato.email))
+end
+</pre>
+<pre class="solucao" data-file="agenda.lua">local agenda = {
+  ["Bia Souza"] = { telefone = "11 98888-1234", email = "bia@exemplo.com" },
+  ["Carlos Lima"] = { telefone = "21 97777-5678", email = "carlos@exemplo.com" },
+  ["Ana Paula"] = { telefone = "31 96666-0000", email = "anapaula@exemplo.com" },
+}
+
+-- Um contato, pelo nome:
+local bia = agenda["Bia Souza"]
+print("Telefone da Bia: " .. bia.telefone)
+
+-- Um contato novo:
+agenda["Davi Rocha"] = { telefone = "41 95555-4321", email = "davi@exemplo.com" }
+
+-- Todos, em ordem alfabética:
+local nomes = {}
+for nome in pairs(agenda) do
+  nomes[#nomes + 1] = nome
+end
+table.sort(nomes)
+
+print()
+for _, nome in ipairs(nomes) do
+  local contato = agenda[nome]
+  print(string.format("%-12s %-14s %s", nome, contato.telefone, contato.email))
+end
+</pre>
+</div>
+
+<hr>
+
+<h2 id="versao2">Versão 2 · O menu</h2>
+<p>A agenda agora conversa com a Ana: um menu para listar, adicionar e procurar. Cada opção é uma função, como na Lista de Tarefas, e a parte de ordenar os nomes virou a função <code>nomes_em_ordem</code>, porque mais de uma opção precisa dela.</p>
+
+<pre class="file" data-file="agenda.lua">-- Agenda de Contatos da Ana, versão 2: o menu
+
+local function perguntar(texto)
+  io.write(texto)
+  local resposta = io.read()
+  if resposta == nil then
+    return nil
+  end
+  return resposta:match("^%s*(.-)%s*$")
+end
+
+-- Os nomes da agenda em ordem alfabética.
+local function nomes_em_ordem(agenda)
+  local nomes = {}
+  for nome in pairs(agenda) do
+    nomes[#nomes + 1] = nome
+  end
+  table.sort(nomes)
+  return nomes
+end
+
+local function mostrar(nome, contato)
+  print(string.format("%-12s %-14s %s", nome, contato.telefone, contato.email))
+end
+
+local function listar(agenda)
+  local nomes = nomes_em_ordem(agenda)
+  if #nomes == 0 then
+    print("A agenda está vazia.")
+    return
+  end
+  for _, nome in ipairs(nomes) do
+    mostrar(nome, agenda[nome])
+  end
+  print(#nomes .. " contato(s).")
+end
+
+local function adicionar(agenda)
+  local nome = perguntar("Nome: ")
+  if nome == nil or nome == "" then
+    print("Sem nome, sem contato.")
+    return
+  end
+  local telefone = perguntar("Telefone: ") or ""
+  local email = perguntar("E-mail: ") or ""
+  agenda[nome] = { telefone = telefone, email = email }
+  print("Guardado: " .. nome)
+end
+
+local function procurar(agenda)
+  local nome = perguntar("Nome exato: ")
+  local contato = agenda[nome or ""]
+  if contato then
+    mostrar(nome, contato)
+  else
+    print("Não achei ninguém com esse nome.")
+  end
+end
+
+local agenda = {}
+print("=== Agenda da Ana ===")
+
+while true do
+  print()
+  print("1) Listar  2) Adicionar  3) Procurar  0) Sair")
+  local opcao = perguntar("Escolha: ")
+  if opcao == "1" then
+    listar(agenda)
+  elseif opcao == "2" then
+    adicionar(agenda)
+  elseif opcao == "3" then
+    procurar(agenda)
+  elseif opcao == "0" or opcao == nil then
+    print("Até logo!")
+    break
+  else
+    print("Opção inválida: " .. opcao)
+  end
+end
+</pre>
+
+<dl class="anatomy">
+  <dt>nomes_em_ordem(agenda)</dt><dd>As linhas do <code>pairs</code> e do <code>table.sort</code> da versão 1, numa função que <strong>devolve</strong> a lista ordenada.</dd>
+  <dt>agenda[nome] = { telefone = telefone, email = email }</dt><dd>Guarda o contato com o nome como chave. Se a Ana adicionar a "Bia Souza" de novo, o telefone antigo é trocado pelo novo (às vezes é o que ela quer: atualizar).</dd>
+  <dt>perguntar("Telefone: ") or ""</dt><dd>Se a entrada acabar no meio, guarda um texto vazio em vez de <code>nil</code>, para o <code>mostrar</code> não quebrar depois.</dd>
+  <dt>agenda[nome or ""]</dt><dd>Em <code>procurar</code>: com <code>nil</code> como chave, o <code>agenda[nil]</code> só daria <code>nil</code>, mas o <code>or ""</code> deixa claro que o caso foi pensado.</dd>
+  <dt>if contato then … else print("Não achei…")</dt><dd>Confere antes de usar, para não repetir o erro do cenário da versão 1.</dd>
+</dl>
+
+<pre class="term" data-cwd="~/projetos/agenda">$ lua agenda.lua
+=== Agenda da Ana ===
+
+1) Listar  2) Adicionar  3) Procurar  0) Sair
+Escolha: 2
+Nome: Bia Souza
+Telefone: 11 98888-1234
+E-mail: bia@exemplo.com
+Guardado: Bia Souza
+
+1) Listar  2) Adicionar  3) Procurar  0) Sair
+Escolha: 2
+Nome: Carlos Lima
+Telefone: 21 97777-5678
+E-mail: carlos@exemplo.com
+Guardado: Carlos Lima
+
+1) Listar  2) Adicionar  3) Procurar  0) Sair
+Escolha: 1
+Bia Souza    11 98888-1234  bia@exemplo.com
+Carlos Lima  21 97777-5678  carlos@exemplo.com
+2 contato(s).
+
+1) Listar  2) Adicionar  3) Procurar  0) Sair
+Escolha: 3
+Nome exato: bia souza
+Não achei ninguém com esse nome.                    « minúsculas: é outra chave
+
+1) Listar  2) Adicionar  3) Procurar  0) Sair
+Escolha: 3
+Nome exato: Bia Souza
+Bia Souza    11 98888-1234  bia@exemplo.com
+
+1) Listar  2) Adicionar  3) Procurar  0) Sair
+Escolha: 0
+Até logo!</pre>
+
+<p>Para o dicionário, <code>"bia souza"</code> e <code>"Bia Souza"</code> são chaves diferentes: a chave precisa ser idêntica, letra por letra. A versão 4 ganha uma busca que não liga para maiúsculas.</p>
+
+<div class="trylua" data-stdin="2\nBia Souza\n11 98888-1234\nbia@exemplo.com\n3\nBia Souza\n3\nZeca\n0" data-goal="out:11 98888-1234  bia@exemplo.com;;out:Não achei ninguém com esse nome.">
+<p class="try-task"><strong>Missão (versão 2):</strong> a função <code>procurar</code> pergunta o nome e não faz mais nada. Complete: pegue <code>agenda[nome or ""]</code>; se achar, mostre com <code>mostrar(nome, contato)</code>; se não, mostre <code>Não achei ninguém com esse nome.</code>. A entrada adiciona a Bia, procura <code>Bia Souza</code> e depois <code>Zeca</code>.</p>
+<pre class="script" data-file="agenda.lua">-- Agenda de Contatos da Ana, versão 2: o menu
+
+local function perguntar(texto)
+  io.write(texto)
+  local resposta = io.read()
+  if resposta == nil then
+    return nil
+  end
+  return resposta:match("^%s*(.-)%s*$")
+end
+
+-- Os nomes da agenda em ordem alfabética.
+local function nomes_em_ordem(agenda)
+  local nomes = {}
+  for nome in pairs(agenda) do
+    nomes[#nomes + 1] = nome
+  end
+  table.sort(nomes)
+  return nomes
+end
+
+local function mostrar(nome, contato)
+  print(string.format("%-12s %-14s %s", nome, contato.telefone, contato.email))
+end
+
+local function listar(agenda)
+  local nomes = nomes_em_ordem(agenda)
+  if #nomes == 0 then
+    print("A agenda está vazia.")
+    return
+  end
+  for _, nome in ipairs(nomes) do
+    mostrar(nome, agenda[nome])
+  end
+  print(#nomes .. " contato(s).")
+end
+
+local function adicionar(agenda)
+  local nome = perguntar("Nome: ")
+  if nome == nil or nome == "" then
+    print("Sem nome, sem contato.")
+    return
+  end
+  local telefone = perguntar("Telefone: ") or ""
+  local email = perguntar("E-mail: ") or ""
+  agenda[nome] = { telefone = telefone, email = email }
+  print("Guardado: " .. nome)
+end
+
+local function procurar(agenda)
+  local nome = perguntar("Nome exato: ")
+  -- procure o contato na agenda; se achar, mostre; se não, avise
+end
+
+local agenda = {}
+print("=== Agenda da Ana ===")
+
+while true do
+  print()
+  print("1) Listar  2) Adicionar  3) Procurar  0) Sair")
+  local opcao = perguntar("Escolha: ")
+  if opcao == "1" then
+    listar(agenda)
+  elseif opcao == "2" then
+    adicionar(agenda)
+  elseif opcao == "3" then
+    procurar(agenda)
+  elseif opcao == "0" or opcao == nil then
+    print("Até logo!")
+    break
+  else
+    print("Opção inválida: " .. opcao)
+  end
+end
+</pre>
+<pre class="solucao" data-file="agenda.lua">-- Agenda de Contatos da Ana, versão 2: o menu
+
+local function perguntar(texto)
+  io.write(texto)
+  local resposta = io.read()
+  if resposta == nil then
+    return nil
+  end
+  return resposta:match("^%s*(.-)%s*$")
+end
+
+-- Os nomes da agenda em ordem alfabética.
+local function nomes_em_ordem(agenda)
+  local nomes = {}
+  for nome in pairs(agenda) do
+    nomes[#nomes + 1] = nome
+  end
+  table.sort(nomes)
+  return nomes
+end
+
+local function mostrar(nome, contato)
+  print(string.format("%-12s %-14s %s", nome, contato.telefone, contato.email))
+end
+
+local function listar(agenda)
+  local nomes = nomes_em_ordem(agenda)
+  if #nomes == 0 then
+    print("A agenda está vazia.")
+    return
+  end
+  for _, nome in ipairs(nomes) do
+    mostrar(nome, agenda[nome])
+  end
+  print(#nomes .. " contato(s).")
+end
+
+local function adicionar(agenda)
+  local nome = perguntar("Nome: ")
+  if nome == nil or nome == "" then
+    print("Sem nome, sem contato.")
+    return
+  end
+  local telefone = perguntar("Telefone: ") or ""
+  local email = perguntar("E-mail: ") or ""
+  agenda[nome] = { telefone = telefone, email = email }
+  print("Guardado: " .. nome)
+end
+
+local function procurar(agenda)
+  local nome = perguntar("Nome exato: ")
+  local contato = agenda[nome or ""]
+  if contato then
+    mostrar(nome, contato)
+  else
+    print("Não achei ninguém com esse nome.")
+  end
+end
+
+local agenda = {}
+print("=== Agenda da Ana ===")
+
+while true do
+  print()
+  print("1) Listar  2) Adicionar  3) Procurar  0) Sair")
+  local opcao = perguntar("Escolha: ")
+  if opcao == "1" then
+    listar(agenda)
+  elseif opcao == "2" then
+    adicionar(agenda)
+  elseif opcao == "3" then
+    procurar(agenda)
+  elseif opcao == "0" or opcao == nil then
+    print("Até logo!")
+    break
+  else
+    print("Opção inválida: " .. opcao)
+  end
+end
+</pre>
+</div>
+
+<hr>
+
+<h2 id="versao3">Versão 3 · Salvar e carregar</h2>
+<p>Para a agenda sobreviver ao fim do programa, ela vai para um arquivo. Muitas linguagens usam o formato <strong>JSON</strong> para isso, mas o Lua não traz JSON pronto (e, no Ubuntu 26.04, a biblioteca <code>lua-dkjson</code> do apt só funciona com o Lua 5.1, 5.3 e 5.4, não com o 5.5; veja <a href="luarocks.html">LuaRocks</a>). E o Lua tem um jeito próprio, sem biblioteca nenhuma: escrever o arquivo <strong>como código Lua</strong>.</p>
+
+<pre class="file" data-file="contatos.lua">return {
+  ["Bia Souza"] = { telefone = "11 98888-1234", email = "bia@exemplo.com" },
+  ["Carlos Lima"] = { telefone = "21 97777-5678", email = "carlos@exemplo.com" },
+}
+</pre>
+
+<p>Isso é um programa Lua de verdade: uma tabela e um <code>return</code> que a devolve. Para ler, basta rodar esse "programa" com <code>dofile</code> ("faça o arquivo"), que devolve o que o arquivo devolveu. O Lua nasceu justamente para isso: descrever dados em arquivos de configuração. Duas funções novas, e o resto é a versão 2:</p>
+
+<pre class="file" data-file="agenda.lua">-- Agenda de Contatos da Ana, versão 3: salvar e carregar
+
+local ARQUIVO = "contatos.lua"
+
+local function perguntar(texto)
+  io.write(texto)
+  local resposta = io.read()
+  if resposta == nil then
+    return nil
+  end
+  return resposta:match("^%s*(.-)%s*$")
+end
+
+-- Os nomes da agenda em ordem alfabética.
+local function nomes_em_ordem(agenda)
+  local nomes = {}
+  for nome in pairs(agenda) do
+    nomes[#nomes + 1] = nome
+  end
+  table.sort(nomes)
+  return nomes
+end
+
+local function mostrar(nome, contato)
+  print(string.format("%-12s %-14s %s", nome, contato.telefone, contato.email))
+end
+
+local function listar(agenda)
+  local nomes = nomes_em_ordem(agenda)
+  if #nomes == 0 then
+    print("A agenda está vazia.")
+    return
+  end
+  for _, nome in ipairs(nomes) do
+    mostrar(nome, agenda[nome])
+  end
+  print(#nomes .. " contato(s).")
+end
+
+-- Grava a agenda como um programa Lua: "return { ... }".
+local function salvar(agenda)
+  local arquivo = assert(io.open(ARQUIVO, "w"))
+  arquivo:write("return {\n")
+  for _, nome in ipairs(nomes_em_ordem(agenda)) do
+    local c = agenda[nome]
+    arquivo:write(string.format("  [%q] = { telefone = %q, email = %q },\n",
+      nome, c.telefone, c.email))
+  end
+  arquivo:write("}\n")
+  arquivo:close()
+end
+
+-- Lê a agenda gravada (ou começa vazia, se ainda não há arquivo).
+local function carregar()
+  local arquivo = io.open(ARQUIVO, "r")
+  if not arquivo then
+    return {}
+  end
+  arquivo:close()
+  return dofile(ARQUIVO)
+end
+
+local function adicionar(agenda)
+  local nome = perguntar("Nome: ")
+  if nome == nil or nome == "" then
+    print("Sem nome, sem contato.")
+    return
+  end
+  local telefone = perguntar("Telefone: ") or ""
+  local email = perguntar("E-mail: ") or ""
+  agenda[nome] = { telefone = telefone, email = email }
+  print("Guardado: " .. nome)
+end
+
+local function procurar(agenda)
+  local nome = perguntar("Nome exato: ")
+  local contato = agenda[nome or ""]
+  if contato then
+    mostrar(nome, contato)
+  else
+    print("Não achei ninguém com esse nome.")
+  end
+end
+
+local agenda = carregar()
+print("=== Agenda da Ana ===")
+
+while true do
+  print()
+  print("1) Listar  2) Adicionar  3) Procurar  0) Sair")
+  local opcao = perguntar("Escolha: ")
+  if opcao == "1" then
+    listar(agenda)
+  elseif opcao == "2" then
+    adicionar(agenda)
+    salvar(agenda)
+  elseif opcao == "3" then
+    procurar(agenda)
+  elseif opcao == "0" or opcao == nil then
+    print("Até logo!")
+    break
+  else
+    print("Opção inválida: " .. opcao)
+  end
+end
+</pre>
+
+<dl class="anatomy">
+  <dt>arquivo:write("return {\n")</dt><dd>A primeira linha do arquivo. Depois vem uma linha por contato e, no fim, o <code>}</code> que fecha a tabela.</dd>
+  <dt>string.format("  [%q] = { telefone = %q, email = %q },\n", …)</dt><dd>O <code>%q</code> ("<em>quoted</em>", entre aspas) escreve o texto <strong>como ele seria escrito num programa Lua</strong>: entre aspas, e com uma barra antes das aspas e de outros caracteres especiais que estiverem dentro. É o que garante que o arquivo volte a ser lido certo (veja o cenário).</dd>
+  <dt>ipairs(nomes_em_ordem(agenda))</dt><dd>Grava em ordem alfabética: assim o arquivo é fácil de ler, e não muda de ordem cada vez que é salvo (o que aconteceria com o <code>pairs</code>).</dd>
+  <dt>io.open(ARQUIVO, "r") … arquivo:close()</dt><dd>Em <code>carregar</code>, só para saber se o arquivo existe. Se não existe (primeira vez), a agenda começa vazia.</dd>
+  <dt>return dofile(ARQUIVO)</dt><dd>Roda o <code>contatos.lua</code> e devolve a tabela que ele devolveu.</dd>
+</dl>
+
+<p>Conferindo o <code>%q</code> no modo interativo:</p>
+
+<pre class="term">$ lua
+Lua 5.5.0  Copyright (C) 1994-2025 Lua.org, PUC-Rio
+&gt; print(string.format("%q", 'Carlos "Cacá" Lima'))
+"Carlos \"Cacá\" Lima"
+&gt; print(string.format("[%q] = %q", "Bia Souza", "11 98888-1234"))
+["Bia Souza"] = "11 98888-1234"
+&gt; print(string.format("%q", 42))
+42
+&gt; os.exit()</pre>
+
+<p>As aspas de dentro do apelido ganharam uma barra (<code>\"</code>): é assim que se escreve uma aspa dentro de um texto entre aspas (veja <a href="strings-escape.html">Caracteres de Escape</a>). Um número sai sem aspas. Agora, duas execuções:</p>
+
+<pre class="term" data-cwd="~/projetos/agenda">$ lua agenda.lua
+=== Agenda da Ana ===
+
+1) Listar  2) Adicionar  3) Procurar  0) Sair
+Escolha: 2
+Nome: Bia Souza
+Telefone: 11 98888-1234
+E-mail: bia@exemplo.com
+Guardado: Bia Souza
+
+1) Listar  2) Adicionar  3) Procurar  0) Sair
+Escolha: 2
+Nome: Carlos "Cacá" Lima
+Telefone: 21 97777-5678
+E-mail: carlos@exemplo.com
+Guardado: Carlos "Cacá" Lima
+
+1) Listar  2) Adicionar  3) Procurar  0) Sair
+Escolha: 0
+Até logo!
+$ cat contatos.lua
+return {
+  ["Bia Souza"] = { telefone = "11 98888-1234", email = "bia@exemplo.com" },
+  ["Carlos \"Cacá\" Lima"] = { telefone = "21 97777-5678", email = "carlos@exemplo.com" },
+}
+$ lua agenda.lua
+=== Agenda da Ana ===
+
+1) Listar  2) Adicionar  3) Procurar  0) Sair
+Escolha: 1
+Bia Souza    11 98888-1234  bia@exemplo.com
+Carlos "Cacá" Lima 21 97777-5678  carlos@exemplo.com
+2 contato(s).
+
+1) Listar  2) Adicionar  3) Procurar  0) Sair
+Escolha: 0
+Até logo!</pre>
+
+<div class="cenario">
+<strong>Gravar sem o <code>%q</code>: o arquivo não volta</strong>
+<p>Uma versão "ingênua" do <code>salvar</code> junta as aspas à mão: <code>'  ["' .. nome .. '"] = { telefone = "' .. c.telefone .. …</code>. Funciona com "Bia Souza". Com o apelido entre aspas:</p>
+<pre class="term" data-cwd="~/projetos/agenda">$ cat contatos.lua
+return {
+  ["Carlos "Cacá" Lima"] = { telefone = "21 97777-5678", email = "carlos@exemplo.com" },
+}
+$ lua ingenuo.lua
+lua: contatos.lua:2: ']' expected near 'Cac'
+stack traceback:
+        [C]: in global 'dofile'
+        ingenuo.lua:60: in local 'carregar'
+        ingenuo.lua:85: in main chunk
+        [C]: in ?</pre>
+<p>Gravar deu certo; o problema aparece na <strong>próxima</strong> vez, ao carregar. Para o Lua, o texto <code>"Carlos "</code> termina na segunda aspa, e depois dele vem <code>Cacá</code> solto, onde ele esperava o <code>]</code> que fecha a chave: "<code>]</code> esperado perto de <code>'Cac'</code>" (ele para no <code>á</code>, que não pode fazer parte de um nome). O traceback mostra o caminho: o programa principal (linha 85) chamou <code>carregar</code>, que na linha 60 chamou o <code>dofile</code>, onde estourou. A agenda inteira ficou inacessível por causa de um apelido. Com o <code>%q</code>, as aspas viram <code>\"</code> e o arquivo volta sempre.</p>
+</div>
+
+<div class="cenario">
+<strong>O perigo do <code>dofile</code>: o arquivo é um programa</strong>
+<p>Como <code>contatos.lua</code> é código, o <code>dofile</code> roda <strong>tudo</strong> o que estiver nele. A Ana acrescentou uma linha no topo do arquivo, para testar:</p>
+<pre class="term" data-cwd="~/projetos/agenda">$ cat contatos.lua
+print("Este arquivo é um programa! Eu poderia apagar seus arquivos.")
+return {
+  ["Bia Souza"] = { telefone = "11 98888-1234", email = "bia@exemplo.com" },
+  ["Carlos \"Cacá\" Lima"] = { telefone = "21 97777-5678", email = "carlos@exemplo.com" },
+}
+$ lua agenda.lua
+Este arquivo é um programa! Eu poderia apagar seus arquivos.
+=== Agenda da Ana ===
+
+1) Listar  2) Adicionar  3) Procurar  0) Sair
+Escolha: 0
+Até logo!</pre>
+<p>A linha rodou. No lugar do <code>print</code> poderia estar um <code>os.remove</code>, que apaga arquivos. Para um arquivo que só o seu programa escreve, no seu computador, o <code>dofile</code> é aceitável. Mas, se o arquivo puder vir de outra pessoa (baixado, recebido por e-mail), ele pode fazer qualquer coisa. A versão 4 resolve com <code>loadfile</code> e um ambiente vazio.</p>
+</div>
+
+<div class="trylua" data-stdin="1\n0" data-goal="out:Bia Souza    11 98888-1234;;out:2 contato(s).;;src:dofile">
+<p class="try-task"><strong>Missão (versão 3):</strong> a caixa tem duas abas: o programa e um <code>contatos.lua</code> já gravado. A função <code>carregar</code> confere se o arquivo existe, mas sempre devolve uma agenda vazia. Troque o <code>return {}</code> marcado por <code>return dofile(ARQUIVO)</code>. A entrada escolhe <code>1</code> (listar): devem aparecer os 2 contatos do arquivo.</p>
+<pre class="script" data-file="agenda.lua">-- Agenda de Contatos da Ana, versão 3: salvar e carregar
+
+local ARQUIVO = "contatos.lua"
+
+local function perguntar(texto)
+  io.write(texto)
+  local resposta = io.read()
+  if resposta == nil then
+    return nil
+  end
+  return resposta:match("^%s*(.-)%s*$")
+end
+
+-- Os nomes da agenda em ordem alfabética.
+local function nomes_em_ordem(agenda)
+  local nomes = {}
+  for nome in pairs(agenda) do
+    nomes[#nomes + 1] = nome
+  end
+  table.sort(nomes)
+  return nomes
+end
+
+local function mostrar(nome, contato)
+  print(string.format("%-12s %-14s %s", nome, contato.telefone, contato.email))
+end
+
+local function listar(agenda)
+  local nomes = nomes_em_ordem(agenda)
+  if #nomes == 0 then
+    print("A agenda está vazia.")
+    return
+  end
+  for _, nome in ipairs(nomes) do
+    mostrar(nome, agenda[nome])
+  end
+  print(#nomes .. " contato(s).")
+end
+
+-- Grava a agenda como um programa Lua: "return { ... }".
+local function salvar(agenda)
+  local arquivo = assert(io.open(ARQUIVO, "w"))
+  arquivo:write("return {\n")
+  for _, nome in ipairs(nomes_em_ordem(agenda)) do
+    local c = agenda[nome]
+    arquivo:write(string.format("  [%q] = { telefone = %q, email = %q },\n",
+      nome, c.telefone, c.email))
+  end
+  arquivo:write("}\n")
+  arquivo:close()
+end
+
+-- Lê a agenda gravada (ou começa vazia, se ainda não há arquivo).
+local function carregar()
+  local arquivo = io.open(ARQUIVO, "r")
+  if not arquivo then
+    return {}
+  end
+  arquivo:close()
+  return {}   -- troque por: rode o arquivo e devolva o que ele devolve
+end
+
+local function adicionar(agenda)
+  local nome = perguntar("Nome: ")
+  if nome == nil or nome == "" then
+    print("Sem nome, sem contato.")
+    return
+  end
+  local telefone = perguntar("Telefone: ") or ""
+  local email = perguntar("E-mail: ") or ""
+  agenda[nome] = { telefone = telefone, email = email }
+  print("Guardado: " .. nome)
+end
+
+local function procurar(agenda)
+  local nome = perguntar("Nome exato: ")
+  local contato = agenda[nome or ""]
+  if contato then
+    mostrar(nome, contato)
+  else
+    print("Não achei ninguém com esse nome.")
+  end
+end
+
+local agenda = carregar()
+print("=== Agenda da Ana ===")
+
+while true do
+  print()
+  print("1) Listar  2) Adicionar  3) Procurar  0) Sair")
+  local opcao = perguntar("Escolha: ")
+  if opcao == "1" then
+    listar(agenda)
+  elseif opcao == "2" then
+    adicionar(agenda)
+    salvar(agenda)
+  elseif opcao == "3" then
+    procurar(agenda)
+  elseif opcao == "0" or opcao == nil then
+    print("Até logo!")
+    break
+  else
+    print("Opção inválida: " .. opcao)
+  end
+end
+</pre>
+<pre class="script" data-file="contatos.lua">return {
+  ["Bia Souza"] = { telefone = "11 98888-1234", email = "bia@exemplo.com" },
+  ["Carlos Lima"] = { telefone = "21 97777-5678", email = "carlos@exemplo.com" },
+}
+</pre>
+<pre class="solucao" data-file="agenda.lua">-- Agenda de Contatos da Ana, versão 3: salvar e carregar
+
+local ARQUIVO = "contatos.lua"
+
+local function perguntar(texto)
+  io.write(texto)
+  local resposta = io.read()
+  if resposta == nil then
+    return nil
+  end
+  return resposta:match("^%s*(.-)%s*$")
+end
+
+-- Os nomes da agenda em ordem alfabética.
+local function nomes_em_ordem(agenda)
+  local nomes = {}
+  for nome in pairs(agenda) do
+    nomes[#nomes + 1] = nome
+  end
+  table.sort(nomes)
+  return nomes
+end
+
+local function mostrar(nome, contato)
+  print(string.format("%-12s %-14s %s", nome, contato.telefone, contato.email))
+end
+
+local function listar(agenda)
+  local nomes = nomes_em_ordem(agenda)
+  if #nomes == 0 then
+    print("A agenda está vazia.")
+    return
+  end
+  for _, nome in ipairs(nomes) do
+    mostrar(nome, agenda[nome])
+  end
+  print(#nomes .. " contato(s).")
+end
+
+-- Grava a agenda como um programa Lua: "return { ... }".
+local function salvar(agenda)
+  local arquivo = assert(io.open(ARQUIVO, "w"))
+  arquivo:write("return {\n")
+  for _, nome in ipairs(nomes_em_ordem(agenda)) do
+    local c = agenda[nome]
+    arquivo:write(string.format("  [%q] = { telefone = %q, email = %q },\n",
+      nome, c.telefone, c.email))
+  end
+  arquivo:write("}\n")
+  arquivo:close()
+end
+
+-- Lê a agenda gravada (ou começa vazia, se ainda não há arquivo).
+local function carregar()
+  local arquivo = io.open(ARQUIVO, "r")
+  if not arquivo then
+    return {}
+  end
+  arquivo:close()
+  return dofile(ARQUIVO)
+end
+
+local function adicionar(agenda)
+  local nome = perguntar("Nome: ")
+  if nome == nil or nome == "" then
+    print("Sem nome, sem contato.")
+    return
+  end
+  local telefone = perguntar("Telefone: ") or ""
+  local email = perguntar("E-mail: ") or ""
+  agenda[nome] = { telefone = telefone, email = email }
+  print("Guardado: " .. nome)
+end
+
+local function procurar(agenda)
+  local nome = perguntar("Nome exato: ")
+  local contato = agenda[nome or ""]
+  if contato then
+    mostrar(nome, contato)
+  else
+    print("Não achei ninguém com esse nome.")
+  end
+end
+
+local agenda = carregar()
+print("=== Agenda da Ana ===")
+
+while true do
+  print()
+  print("1) Listar  2) Adicionar  3) Procurar  0) Sair")
+  local opcao = perguntar("Escolha: ")
+  if opcao == "1" then
+    listar(agenda)
+  elseif opcao == "2" then
+    adicionar(agenda)
+    salvar(agenda)
+  elseif opcao == "3" then
+    procurar(agenda)
+  elseif opcao == "0" or opcao == nil then
+    print("Até logo!")
+    break
+  else
+    print("Opção inválida: " .. opcao)
+  end
+end
+</pre>
+</div>
+
+<div class="trylua" data-stdin="2\nCarlos &quot;Cacá&quot; Lima\n21 97777-5678\ncarlos@exemplo.com\n0" data-goal="arquivo:contatos.lua~\&quot;Cacá\&quot;;;semerro">
+<p class="try-task"><strong>Missão (salvar com <code>%q</code>):</strong> este <code>salvar</code> é o "ingênuo" do cenário: junta as aspas à mão, e o apelido entre aspas estraga o arquivo. Troque o <code>arquivo:write</code> de dentro do laço por um com <code>string.format</code> e <code>%q</code> (um <code>%q</code> para o nome, um para o telefone e um para o e-mail). A entrada adiciona o <code>Carlos "Cacá" Lima</code>; no arquivo, as aspas do apelido devem aparecer como <code>\"Cacá\"</code>.</p>
+<pre class="script" data-file="agenda.lua">-- Agenda de Contatos da Ana, versão 3: salvar e carregar
+
+local ARQUIVO = "contatos.lua"
+
+local function perguntar(texto)
+  io.write(texto)
+  local resposta = io.read()
+  if resposta == nil then
+    return nil
+  end
+  return resposta:match("^%s*(.-)%s*$")
+end
+
+-- Os nomes da agenda em ordem alfabética.
+local function nomes_em_ordem(agenda)
+  local nomes = {}
+  for nome in pairs(agenda) do
+    nomes[#nomes + 1] = nome
+  end
+  table.sort(nomes)
+  return nomes
+end
+
+local function mostrar(nome, contato)
+  print(string.format("%-12s %-14s %s", nome, contato.telefone, contato.email))
+end
+
+local function listar(agenda)
+  local nomes = nomes_em_ordem(agenda)
+  if #nomes == 0 then
+    print("A agenda está vazia.")
+    return
+  end
+  for _, nome in ipairs(nomes) do
+    mostrar(nome, agenda[nome])
+  end
+  print(#nomes .. " contato(s).")
+end
+
+-- Grava a agenda como um programa Lua: "return { ... }".
+local function salvar(agenda)
+  local arquivo = assert(io.open(ARQUIVO, "w"))
+  arquivo:write("return {\n")
+  for _, nome in ipairs(nomes_em_ordem(agenda)) do
+    local c = agenda[nome]
+    arquivo:write('  ["' .. nome .. '"] = { telefone = "' .. c.telefone ..
+      '", email = "' .. c.email .. '" },\n')
+  end
+  arquivo:write("}\n")
+  arquivo:close()
+end
+
+-- Lê a agenda gravada (ou começa vazia, se ainda não há arquivo).
+local function carregar()
+  local arquivo = io.open(ARQUIVO, "r")
+  if not arquivo then
+    return {}
+  end
+  arquivo:close()
+  return dofile(ARQUIVO)
+end
+
+local function adicionar(agenda)
+  local nome = perguntar("Nome: ")
+  if nome == nil or nome == "" then
+    print("Sem nome, sem contato.")
+    return
+  end
+  local telefone = perguntar("Telefone: ") or ""
+  local email = perguntar("E-mail: ") or ""
+  agenda[nome] = { telefone = telefone, email = email }
+  print("Guardado: " .. nome)
+end
+
+local function procurar(agenda)
+  local nome = perguntar("Nome exato: ")
+  local contato = agenda[nome or ""]
+  if contato then
+    mostrar(nome, contato)
+  else
+    print("Não achei ninguém com esse nome.")
+  end
+end
+
+local agenda = carregar()
+print("=== Agenda da Ana ===")
+
+while true do
+  print()
+  print("1) Listar  2) Adicionar  3) Procurar  0) Sair")
+  local opcao = perguntar("Escolha: ")
+  if opcao == "1" then
+    listar(agenda)
+  elseif opcao == "2" then
+    adicionar(agenda)
+    salvar(agenda)
+  elseif opcao == "3" then
+    procurar(agenda)
+  elseif opcao == "0" or opcao == nil then
+    print("Até logo!")
+    break
+  else
+    print("Opção inválida: " .. opcao)
+  end
+end
+</pre>
+<pre class="solucao" data-file="agenda.lua">-- Agenda de Contatos da Ana, versão 3: salvar e carregar
+
+local ARQUIVO = "contatos.lua"
+
+local function perguntar(texto)
+  io.write(texto)
+  local resposta = io.read()
+  if resposta == nil then
+    return nil
+  end
+  return resposta:match("^%s*(.-)%s*$")
+end
+
+-- Os nomes da agenda em ordem alfabética.
+local function nomes_em_ordem(agenda)
+  local nomes = {}
+  for nome in pairs(agenda) do
+    nomes[#nomes + 1] = nome
+  end
+  table.sort(nomes)
+  return nomes
+end
+
+local function mostrar(nome, contato)
+  print(string.format("%-12s %-14s %s", nome, contato.telefone, contato.email))
+end
+
+local function listar(agenda)
+  local nomes = nomes_em_ordem(agenda)
+  if #nomes == 0 then
+    print("A agenda está vazia.")
+    return
+  end
+  for _, nome in ipairs(nomes) do
+    mostrar(nome, agenda[nome])
+  end
+  print(#nomes .. " contato(s).")
+end
+
+-- Grava a agenda como um programa Lua: "return { ... }".
+local function salvar(agenda)
+  local arquivo = assert(io.open(ARQUIVO, "w"))
+  arquivo:write("return {\n")
+  for _, nome in ipairs(nomes_em_ordem(agenda)) do
+    local c = agenda[nome]
+    arquivo:write(string.format("  [%q] = { telefone = %q, email = %q },\n",
+      nome, c.telefone, c.email))
+  end
+  arquivo:write("}\n")
+  arquivo:close()
+end
+
+-- Lê a agenda gravada (ou começa vazia, se ainda não há arquivo).
+local function carregar()
+  local arquivo = io.open(ARQUIVO, "r")
+  if not arquivo then
+    return {}
+  end
+  arquivo:close()
+  return dofile(ARQUIVO)
+end
+
+local function adicionar(agenda)
+  local nome = perguntar("Nome: ")
+  if nome == nil or nome == "" then
+    print("Sem nome, sem contato.")
+    return
+  end
+  local telefone = perguntar("Telefone: ") or ""
+  local email = perguntar("E-mail: ") or ""
+  agenda[nome] = { telefone = telefone, email = email }
+  print("Guardado: " .. nome)
+end
+
+local function procurar(agenda)
+  local nome = perguntar("Nome exato: ")
+  local contato = agenda[nome or ""]
+  if contato then
+    mostrar(nome, contato)
+  else
+    print("Não achei ninguém com esse nome.")
+  end
+end
+
+local agenda = carregar()
+print("=== Agenda da Ana ===")
+
+while true do
+  print()
+  print("1) Listar  2) Adicionar  3) Procurar  0) Sair")
+  local opcao = perguntar("Escolha: ")
+  if opcao == "1" then
+    listar(agenda)
+  elseif opcao == "2" then
+    adicionar(agenda)
+    salvar(agenda)
+  elseif opcao == "3" then
+    procurar(agenda)
+  elseif opcao == "0" or opcao == nil then
+    print("Até logo!")
+    break
+  else
+    print("Opção inválida: " .. opcao)
+  end
+end
+</pre>
+</div>
+
+<hr>
+
+<h2 id="versao4">Versão 4 · Buscar, remover e tratar os erros</h2>
+<p>A última versão traz três coisas: a <strong>busca por um pedaço do nome</strong>, sem ligar para maiúsculas (no lugar do "nome exato"); a opção de <strong>remover</strong>; e uma leitura do arquivo que <strong>não quebra</strong> com um arquivo estragado e <strong>não deixa</strong> o arquivo fazer nada além de devolver a tabela.</p>
+
+<pre class="file" data-file="agenda.lua">-- Agenda de Contatos da Ana, versão 4: buscar, remover e tratar os erros
+
+local ARQUIVO = "contatos.lua"
+
+local function perguntar(texto)
+  io.write(texto)
+  local resposta = io.read()
+  if resposta == nil then
+    return nil
+  end
+  return resposta:match("^%s*(.-)%s*$")
+end
+
+-- Os nomes da agenda em ordem alfabética.
+local function nomes_em_ordem(agenda)
+  local nomes = {}
+  for nome in pairs(agenda) do
+    nomes[#nomes + 1] = nome
+  end
+  table.sort(nomes)
+  return nomes
+end
+
+local function mostrar(nome, contato)
+  print(string.format("%-12s %-14s %s", nome, contato.telefone, contato.email))
+end
+
+local function listar(agenda)
+  local nomes = nomes_em_ordem(agenda)
+  if #nomes == 0 then
+    print("A agenda está vazia.")
+    return
+  end
+  for _, nome in ipairs(nomes) do
+    mostrar(nome, agenda[nome])
+  end
+  print(#nomes .. " contato(s).")
+end
+
+-- Grava a agenda como um programa Lua: "return { ... }".
+local function salvar(agenda)
+  local arquivo = assert(io.open(ARQUIVO, "w"))
+  arquivo:write("return {\n")
+  for _, nome in ipairs(nomes_em_ordem(agenda)) do
+    local c = agenda[nome]
+    arquivo:write(string.format("  [%q] = { telefone = %q, email = %q },\n",
+      nome, c.telefone, c.email))
+  end
+  arquivo:write("}\n")
+  arquivo:close()
+end
+
+-- Lê a agenda gravada. Devolve a tabela, ou nil e o motivo.
+local function carregar()
+  local arquivo = io.open(ARQUIVO, "r")
+  if not arquivo then
+    return {}                   -- primeira vez: ainda não há arquivo
+  end
+  arquivo:close()
+  -- "t": só texto; {}: o arquivo roda sem acesso a nada (nem os, nem io)
+  local pedaco, erro = loadfile(ARQUIVO, "t", {})
+  if not pedaco then
+    return nil, erro            -- erro de sintaxe no arquivo
+  end
+  local ok, agenda = pcall(pedaco)
+  if not ok then
+    return nil, agenda          -- erro ao rodar o arquivo
+  end
+  if type(agenda) ~= "table" then
+    return nil, ARQUIVO .. " não devolveu uma tabela"
+  end
+  return agenda
+end
+
+local function adicionar(agenda)
+  local nome = perguntar("Nome: ")
+  if nome == nil or nome == "" then
+    print("Sem nome, sem contato.")
+    return
+  end
+  local telefone = perguntar("Telefone: ") or ""
+  local email = perguntar("E-mail: ") or ""
+  agenda[nome] = { telefone = telefone, email = email }
+  print("Guardado: " .. nome)
+end
+
+-- Mostra todos os contatos cujo nome contém o texto (sem ligar para maiúsculas).
+local function buscar(agenda)
+  local parte = (perguntar("Buscar por: ") or ""):lower()
+  local achados = 0
+  for _, nome in ipairs(nomes_em_ordem(agenda)) do
+    if nome:lower():find(parte, 1, true) then
+      mostrar(nome, agenda[nome])
+      achados = achados + 1
+    end
+  end
+  print(achados .. " encontrado(s).")
+end
+
+local function remover(agenda)
+  local nome = perguntar("Nome exato para remover: ") or ""
+  if agenda[nome] == nil then
+    print("Não achei ninguém com esse nome.")
+    return false
+  end
+  agenda[nome] = nil
+  print("Removido: " .. nome)
+  return true
+end
+
+local agenda, erro = carregar()
+if not agenda then
+  print("Não consegui ler " .. ARQUIVO .. ":")
+  print(erro)
+  print("Conserte (ou apague) o arquivo e rode de novo. Nada foi mudado.")
+  os.exit(1)
+end
+print("=== Agenda da Ana ===")
+
+while true do
+  print()
+  print("1) Listar  2) Adicionar  3) Buscar  4) Remover  0) Sair")
+  local opcao = perguntar("Escolha: ")
+  if opcao == "1" then
+    listar(agenda)
+  elseif opcao == "2" then
+    adicionar(agenda)
+    salvar(agenda)
+  elseif opcao == "3" then
+    buscar(agenda)
+  elseif opcao == "4" then
+    if remover(agenda) then
+      salvar(agenda)
+    end
+  elseif opcao == "0" or opcao == nil then
+    print("Até logo!")
+    break
+  else
+    print("Opção inválida: " .. opcao)
+  end
+end
+</pre>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Peça</th><th>O que faz</th></tr>
+<tr><td><code>loadfile(ARQUIVO, "t", {})</code></td><td>Lê o arquivo e o transforma numa função, <strong>sem rodar</strong> (veja <a href="load.html">load, loadfile e dofile</a>). O <code>"t"</code> aceita só texto (nada de código pré-compilado). O <code>{}</code> é o <strong>ambiente</strong>: a tabela onde o código do arquivo procura os nomes globais. Vazia, quer dizer que lá dentro não existem <code>print</code>, <code>os</code>, <code>io</code>, nada (veja <a href="env.html">_G e _ENV</a>). Uma tabela com <code>return</code> não precisa de nada disso.</td></tr>
+<tr><td><code>if not pedaco then return nil, erro end</code></td><td>Erro de sintaxe no arquivo (um <code>}</code> faltando): o <code>loadfile</code> devolve <code>nil</code> e a mensagem, sem parar o programa.</td></tr>
+<tr><td><code>pcall(pedaco)</code></td><td>Roda a função "protegida" (veja <a href="pcall.html">pcall</a>): se ela der erro, o <code>pcall</code> devolve <code>false</code> e a mensagem, em vez de parar tudo. Se der certo, <code>true</code> e o que ela devolveu (a tabela).</td></tr>
+<tr><td><code>type(agenda) ~= "table"</code></td><td>O arquivo rodou, mas não devolveu uma tabela (alguém apagou o <code>return</code>, por exemplo).</td></tr>
+<tr><td><code>os.exit(1)</code> no programa principal</td><td>Com o arquivo estragado, o programa <strong>para</strong> antes do menu. Se continuasse com uma agenda vazia, o próximo <code>salvar</code> regravaria o arquivo vazio, e os contatos se perderiam de vez.</td></tr>
+<tr><td><code>nome:lower():find(parte, 1, true)</code></td><td>Na busca: o nome em minúsculas contém o pedaço (também em minúsculas)? O <code>true</code> procura como texto simples (veja a <a href="projeto-forca.html">Forca</a>).</td></tr>
+<tr><td><code>agenda[nome] = nil</code></td><td>Remover de um dicionário é dar <code>nil</code> à chave: ela deixa de existir, e o <code>pairs</code> não a vê mais.</td></tr>
+<tr><td><code>if remover(agenda) then salvar(agenda) end</code></td><td>O <code>remover</code> devolve <code>true</code> só se removeu alguém; só então vale a pena regravar o arquivo.</td></tr>
+</table>
+</div>
+
+<p>A sessão do começo da página é desta versão. Agora, o que acontece com os dois arquivos problemáticos da versão 3. O que tem o <code>print</code> no topo:</p>
+
+<pre class="term" data-cwd="~/projetos/agenda">$ lua agenda.lua
+Não consegui ler contatos.lua:
+contatos.lua:1: attempt to call a nil value (global 'print')
+Conserte (ou apague) o arquivo e rode de novo. Nada foi mudado.
+$ echo $?
+1</pre>
+
+<p>No ambiente vazio, <code>print</code> não existe: "tentativa de chamar um valor nil (a global <code>print</code>)", na linha 1 do <code>contatos.lua</code>. O <code>pcall</code> pegou o erro, e o programa explicou e saiu sem tocar no arquivo. Um <code>os.remove</code> ali daria o mesmo tipo de erro (<code>os</code> também não existe), sem apagar nada. E um arquivo com o <code>}</code> do fim apagado:</p>
+
+<pre class="term" data-cwd="~/projetos/agenda">$ lua agenda.lua
+Não consegui ler contatos.lua:
+contatos.lua:5: unexpected symbol near &lt;eof&gt;
+Conserte (ou apague) o arquivo e rode de novo. Nada foi mudado.</pre>
+
+<p>"Símbolo inesperado perto do fim do arquivo" (<code>&lt;eof&gt;</code>, de <em>end of file</em>): o arquivo acabou com a tabela ainda aberta. Desta vez quem achou o problema foi o <code>loadfile</code>, antes de rodar qualquer coisa.</p>
+
+<div class="trylua" data-stdin="3\nli\n0" data-goal="out:Lia Mendes;;out:2 encontrado(s).">
+<p class="try-task"><strong>Missão (versão 4):</strong> a busca ainda só acha o nome exato, e <code>li</code> não acha ninguém. Troque a comparação <code>nome == parte</code> por uma busca do pedaço dentro do nome em minúsculas: <code>nome:lower():find(parte, 1, true)</code>. O <code>contatos.lua</code> da segunda aba tem 4 contatos; com a entrada <code>li</code>, devem aparecer o Carlos Lima e a Lia Mendes.</p>
+<pre class="script" data-file="agenda.lua">-- Agenda de Contatos da Ana, versão 4: buscar, remover e tratar os erros
+
+local ARQUIVO = "contatos.lua"
+
+local function perguntar(texto)
+  io.write(texto)
+  local resposta = io.read()
+  if resposta == nil then
+    return nil
+  end
+  return resposta:match("^%s*(.-)%s*$")
+end
+
+-- Os nomes da agenda em ordem alfabética.
+local function nomes_em_ordem(agenda)
+  local nomes = {}
+  for nome in pairs(agenda) do
+    nomes[#nomes + 1] = nome
+  end
+  table.sort(nomes)
+  return nomes
+end
+
+local function mostrar(nome, contato)
+  print(string.format("%-12s %-14s %s", nome, contato.telefone, contato.email))
+end
+
+local function listar(agenda)
+  local nomes = nomes_em_ordem(agenda)
+  if #nomes == 0 then
+    print("A agenda está vazia.")
+    return
+  end
+  for _, nome in ipairs(nomes) do
+    mostrar(nome, agenda[nome])
+  end
+  print(#nomes .. " contato(s).")
+end
+
+-- Grava a agenda como um programa Lua: "return { ... }".
+local function salvar(agenda)
+  local arquivo = assert(io.open(ARQUIVO, "w"))
+  arquivo:write("return {\n")
+  for _, nome in ipairs(nomes_em_ordem(agenda)) do
+    local c = agenda[nome]
+    arquivo:write(string.format("  [%q] = { telefone = %q, email = %q },\n",
+      nome, c.telefone, c.email))
+  end
+  arquivo:write("}\n")
+  arquivo:close()
+end
+
+-- Lê a agenda gravada. Devolve a tabela, ou nil e o motivo.
+local function carregar()
+  local arquivo = io.open(ARQUIVO, "r")
+  if not arquivo then
+    return {}                   -- primeira vez: ainda não há arquivo
+  end
+  arquivo:close()
+  -- "t": só texto; {}: o arquivo roda sem acesso a nada (nem os, nem io)
+  local pedaco, erro = loadfile(ARQUIVO, "t", {})
+  if not pedaco then
+    return nil, erro            -- erro de sintaxe no arquivo
+  end
+  local ok, agenda = pcall(pedaco)
+  if not ok then
+    return nil, agenda          -- erro ao rodar o arquivo
+  end
+  if type(agenda) ~= "table" then
+    return nil, ARQUIVO .. " não devolveu uma tabela"
+  end
+  return agenda
+end
+
+local function adicionar(agenda)
+  local nome = perguntar("Nome: ")
+  if nome == nil or nome == "" then
+    print("Sem nome, sem contato.")
+    return
+  end
+  local telefone = perguntar("Telefone: ") or ""
+  local email = perguntar("E-mail: ") or ""
+  agenda[nome] = { telefone = telefone, email = email }
+  print("Guardado: " .. nome)
+end
+
+-- Mostra todos os contatos cujo nome contém o texto (sem ligar para maiúsculas).
+local function buscar(agenda)
+  local parte = (perguntar("Buscar por: ") or ""):lower()
+  local achados = 0
+  for _, nome in ipairs(nomes_em_ordem(agenda)) do
+    if nome == parte then
+      mostrar(nome, agenda[nome])
+      achados = achados + 1
+    end
+  end
+  print(achados .. " encontrado(s).")
+end
+
+local function remover(agenda)
+  local nome = perguntar("Nome exato para remover: ") or ""
+  if agenda[nome] == nil then
+    print("Não achei ninguém com esse nome.")
+    return false
+  end
+  agenda[nome] = nil
+  print("Removido: " .. nome)
+  return true
+end
+
+local agenda, erro = carregar()
+if not agenda then
+  print("Não consegui ler " .. ARQUIVO .. ":")
+  print(erro)
+  print("Conserte (ou apague) o arquivo e rode de novo. Nada foi mudado.")
+  os.exit(1)
+end
+print("=== Agenda da Ana ===")
+
+while true do
+  print()
+  print("1) Listar  2) Adicionar  3) Buscar  4) Remover  0) Sair")
+  local opcao = perguntar("Escolha: ")
+  if opcao == "1" then
+    listar(agenda)
+  elseif opcao == "2" then
+    adicionar(agenda)
+    salvar(agenda)
+  elseif opcao == "3" then
+    buscar(agenda)
+  elseif opcao == "4" then
+    if remover(agenda) then
+      salvar(agenda)
+    end
+  elseif opcao == "0" or opcao == nil then
+    print("Até logo!")
+    break
+  else
+    print("Opção inválida: " .. opcao)
+  end
+end
+</pre>
+<pre class="script" data-file="contatos.lua">return {
+  ["Ana Paula"] = { telefone = "31 96666-0000", email = "anapaula@exemplo.com" },
+  ["Bia Souza"] = { telefone = "11 98888-1234", email = "bia@exemplo.com" },
+  ["Carlos Lima"] = { telefone = "21 97777-5678", email = "carlos@exemplo.com" },
+  ["Lia Mendes"] = { telefone = "51 94444-2222", email = "lia@exemplo.com" },
+}
+</pre>
+<pre class="solucao" data-file="agenda.lua">-- Agenda de Contatos da Ana, versão 4: buscar, remover e tratar os erros
+
+local ARQUIVO = "contatos.lua"
+
+local function perguntar(texto)
+  io.write(texto)
+  local resposta = io.read()
+  if resposta == nil then
+    return nil
+  end
+  return resposta:match("^%s*(.-)%s*$")
+end
+
+-- Os nomes da agenda em ordem alfabética.
+local function nomes_em_ordem(agenda)
+  local nomes = {}
+  for nome in pairs(agenda) do
+    nomes[#nomes + 1] = nome
+  end
+  table.sort(nomes)
+  return nomes
+end
+
+local function mostrar(nome, contato)
+  print(string.format("%-12s %-14s %s", nome, contato.telefone, contato.email))
+end
+
+local function listar(agenda)
+  local nomes = nomes_em_ordem(agenda)
+  if #nomes == 0 then
+    print("A agenda está vazia.")
+    return
+  end
+  for _, nome in ipairs(nomes) do
+    mostrar(nome, agenda[nome])
+  end
+  print(#nomes .. " contato(s).")
+end
+
+-- Grava a agenda como um programa Lua: "return { ... }".
+local function salvar(agenda)
+  local arquivo = assert(io.open(ARQUIVO, "w"))
+  arquivo:write("return {\n")
+  for _, nome in ipairs(nomes_em_ordem(agenda)) do
+    local c = agenda[nome]
+    arquivo:write(string.format("  [%q] = { telefone = %q, email = %q },\n",
+      nome, c.telefone, c.email))
+  end
+  arquivo:write("}\n")
+  arquivo:close()
+end
+
+-- Lê a agenda gravada. Devolve a tabela, ou nil e o motivo.
+local function carregar()
+  local arquivo = io.open(ARQUIVO, "r")
+  if not arquivo then
+    return {}                   -- primeira vez: ainda não há arquivo
+  end
+  arquivo:close()
+  -- "t": só texto; {}: o arquivo roda sem acesso a nada (nem os, nem io)
+  local pedaco, erro = loadfile(ARQUIVO, "t", {})
+  if not pedaco then
+    return nil, erro            -- erro de sintaxe no arquivo
+  end
+  local ok, agenda = pcall(pedaco)
+  if not ok then
+    return nil, agenda          -- erro ao rodar o arquivo
+  end
+  if type(agenda) ~= "table" then
+    return nil, ARQUIVO .. " não devolveu uma tabela"
+  end
+  return agenda
+end
+
+local function adicionar(agenda)
+  local nome = perguntar("Nome: ")
+  if nome == nil or nome == "" then
+    print("Sem nome, sem contato.")
+    return
+  end
+  local telefone = perguntar("Telefone: ") or ""
+  local email = perguntar("E-mail: ") or ""
+  agenda[nome] = { telefone = telefone, email = email }
+  print("Guardado: " .. nome)
+end
+
+-- Mostra todos os contatos cujo nome contém o texto (sem ligar para maiúsculas).
+local function buscar(agenda)
+  local parte = (perguntar("Buscar por: ") or ""):lower()
+  local achados = 0
+  for _, nome in ipairs(nomes_em_ordem(agenda)) do
+    if nome:lower():find(parte, 1, true) then
+      mostrar(nome, agenda[nome])
+      achados = achados + 1
+    end
+  end
+  print(achados .. " encontrado(s).")
+end
+
+local function remover(agenda)
+  local nome = perguntar("Nome exato para remover: ") or ""
+  if agenda[nome] == nil then
+    print("Não achei ninguém com esse nome.")
+    return false
+  end
+  agenda[nome] = nil
+  print("Removido: " .. nome)
+  return true
+end
+
+local agenda, erro = carregar()
+if not agenda then
+  print("Não consegui ler " .. ARQUIVO .. ":")
+  print(erro)
+  print("Conserte (ou apague) o arquivo e rode de novo. Nada foi mudado.")
+  os.exit(1)
+end
+print("=== Agenda da Ana ===")
+
+while true do
+  print()
+  print("1) Listar  2) Adicionar  3) Buscar  4) Remover  0) Sair")
+  local opcao = perguntar("Escolha: ")
+  if opcao == "1" then
+    listar(agenda)
+  elseif opcao == "2" then
+    adicionar(agenda)
+    salvar(agenda)
+  elseif opcao == "3" then
+    buscar(agenda)
+  elseif opcao == "4" then
+    if remover(agenda) then
+      salvar(agenda)
+    end
+  elseif opcao == "0" or opcao == nil then
+    print("Até logo!")
+    break
+  else
+    print("Opção inválida: " .. opcao)
+  end
+end
+</pre>
+</div>
+
+<hr>
+
+<h2>Formas diferentes de fazer a mesma coisa</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Para</th><th>Forma</th><th>Quando usar</th></tr>
+<tr><td rowspan="2">Guardar os contatos</td><td>Dicionário: <code>agenda["Bia Souza"] = { … }</code> (este projeto)</td><td>Quando se procura pelo nome e não há dois contatos com o mesmo nome.</td></tr>
+<tr><td>Lista: <code>{ { nome = "Bia Souza", … }, … }</code></td><td>Quando a ordem de cadastro importa ou pode haver nomes repetidos. Procurar exige percorrer a lista.</td></tr>
+<tr><td rowspan="3">Ler o arquivo</td><td><code>dofile(nome)</code></td><td>Arquivo seu, escrito pelo seu programa. O mais curto; um erro no arquivo para o programa.</td></tr>
+<tr><td><code>loadfile(nome, "t", {})</code> + <code>pcall</code></td><td>Sempre que der: o arquivo não acessa nada, e os erros viram mensagens.</td></tr>
+<tr><td>Um formato de texto próprio (<code>Bia Souza;11 98888-1234;bia@…</code>)</td><td>Quando o arquivo vai ser lido por outros programas ou planilhas. Precisa escrever o leitor e cuidar do separador dentro dos textos (veja <a href="projeto-tarefas.html">Lista de Tarefas</a> e <a href="projeto-notas.html">Notas da Turma</a>).</td></tr>
+<tr><td>Gravar os textos</td><td><code>%q</code> sempre</td><td>Juntar aspas à mão quebra com o primeiro apelido entre aspas.</td></tr>
+</table>
+</div>
+
+<h2 id="ideias">Ideias para continuar</h2>
+<ul>
+  <li>Ao adicionar um nome que já existe, perguntar "Já existe. Trocar? (s/n)" antes de sobrescrever.</li>
+  <li>Guardar um aniversário (<code>aniversario = "18/10"</code>) e uma opção "Aniversariantes do mês", com <a href="os-date-time.html">os.date</a>.</li>
+  <li>Aceitar vários telefones por contato: o campo <code>telefones</code> vira uma lista, e o <code>salvar</code> precisa escrever uma tabela dentro da outra.</li>
+</ul>
+
+<hr>
+
+<h2>Referência rápida do projeto</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>Para que serviu</th></tr>
+<tr><td><code>agenda[nome] = { telefone = t, email = e }</code></td><td>Guardar (ou trocar) um contato</td></tr>
+<tr><td><code>agenda[nome]</code> / <code>agenda[nome] = nil</code></td><td>Achar / remover pelo nome</td></tr>
+<tr><td><code>for nome in pairs(agenda) do</code> + <code>table.sort</code></td><td>Os nomes em ordem (o <code>pairs</code> sozinho não tem ordem)</td></tr>
+<tr><td><code>string.format("%-12s", nome)</code></td><td>Uma coluna de 12 posições (em bytes)</td></tr>
+<tr><td><code>string.format("%q", texto)</code></td><td>O texto escrito como em código Lua, com as aspas protegidas</td></tr>
+<tr><td><code>return { … }</code> num arquivo + <code>dofile(nome)</code></td><td>Gravar e ler dados como código Lua</td></tr>
+<tr><td><code>loadfile(nome, "t", {})</code> + <code>pcall(pedaco)</code></td><td>Ler o arquivo sem dar acesso a nada e sem quebrar com erros</td></tr>
+<tr><td><code>nome:lower():find(parte, 1, true)</code></td><td>Buscar por um pedaço, sem ligar para maiúsculas</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Sintoma</th><th>Causa provável</th></tr>
+<tr><td>A lista sai cada vez numa ordem</td><td>Listou direto pelo <code>pairs</code>: ordene os nomes</td></tr>
+<tr><td><code>attempt to index a nil value (field '…')</code></td><td>O nome não está na agenda: confira com <code>if contato then</code></td></tr>
+<tr><td>"Não achei" com o nome certo</td><td>Maiúsculas/minúsculas ou espaço sobrando: a chave tem de ser idêntica</td></tr>
+<tr><td><code>']' expected near …</code> ao carregar</td><td>Texto gravado sem <code>%q</code>, com aspas dentro</td></tr>
+<tr><td><code>unexpected symbol near &lt;eof&gt;</code></td><td>O arquivo foi cortado ou editado e ficou sem o <code>}</code> do fim</td></tr>
+<tr><td><code>attempt to call a nil value (global 'print')</code> ao carregar</td><td>O arquivo tenta rodar código, e o ambiente vazio não deixa (é a proteção funcionando)</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. Remover do dicionário</h3>
+<p>Complete para remover a Bia da agenda:</p>
+<div class="ex-code">agenda["Bia Souza"] = <input data-answer="nil" aria-label="valor"></div>
+</div>
+
+<div class="exercise">
+<h3>2. Ordem alfabética</h3>
+<p>Complete para ordenar a lista de nomes:</p>
+<div class="ex-code">table.<input data-answer="sort" aria-label="função">(nomes)</div>
+</div>
+
+<div class="exercise">
+<h3>3. O formato que protege as aspas</h3>
+<p>Complete o código de formato:</p>
+<div class="ex-code">string.format("[%<input data-answer="q" aria-label="letra">] = true", nome)</div>
+</div>
+
+<div class="exercise">
+<h3>4. Rodar o arquivo de dados</h3>
+<p>Complete a função que roda um arquivo Lua e devolve o que ele devolveu:</p>
+<div class="ex-code">local agenda = <input data-answer="dofile" aria-label="função">("contatos.lua")</div>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">5. Por que a agenda não lista os contatos direto com <code>for nome, c in pairs(agenda)</code>?</p>
+<label><input type="radio" name="q5"> Porque o <code>pairs</code> não funciona com chaves de texto</label>
+<label><input type="radio" name="q5"> Porque a ordem do <code>pairs</code> não é alfabética e pode mudar de uma execução para outra</label>
+<label><input type="radio" name="q5"> Porque o <code>pairs</code> pula o último contato</label>
+<label><input type="radio" name="q5"> Porque o <code>pairs</code> é mais lento que o <code>ipairs</code></label>
+</div>
+
+<div class="mc" data-answer="4">
+<p class="mc-q">6. Para que serve o <code>{}</code> em <code>loadfile(ARQUIVO, "t", {})</code>?</p>
+<label><input type="radio" name="q6"> É a tabela onde os contatos vão ser guardados</label>
+<label><input type="radio" name="q6"> É o valor devolvido se o arquivo não existir</label>
+<label><input type="radio" name="q6"> Diz que o arquivo está vazio</label>
+<label><input type="radio" name="q6"> É o ambiente do arquivo: lá dentro não existem <code>print</code>, <code>os</code>, <code>io</code> nem nenhum outro nome global</label>
+</div>
+
+<div class="mc" data-answer="1">
+<p class="mc-q">7. Com o arquivo estragado, por que a versão 4 sai com <code>os.exit(1)</code> em vez de continuar com a agenda vazia?</p>
+<label><input type="radio" name="q7"> Porque o próximo <code>salvar</code> regravaria o arquivo vazio, e os contatos se perderiam</label>
+<label><input type="radio" name="q7"> Porque o Lua não permite tabelas vazias</label>
+<label><input type="radio" name="q7"> Porque o <code>pcall</code> exige o <code>os.exit</code></label>
+<label><input type="radio" name="q7"> Porque o menu não funciona sem contatos</label>
+</div>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li>Uma tabela com o nome como chave é um dicionário: achar, trocar e remover (<code>= nil</code>) é direto, sem percorrer.</li>
+  <li>A ordem do <code>pairs</code> não vale nada: para listar em ordem, copie as chaves para uma lista e use <code>table.sort</code>.</li>
+  <li>O jeito Lua de gravar dados é escrever um arquivo Lua (<code>return { … }</code>), com <code>%q</code> em todo texto, e ler com <code>dofile</code>.</li>
+  <li>O arquivo de dados é código: prefira <code>loadfile(nome, "t", {})</code> (sem acesso a nada) e rode com <code>pcall</code>.</li>
+  <li>Se não deu para ler o arquivo, pare sem regravar: senão os dados se perdem.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
