@@ -1,0 +1,438 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua # — o operador de tamanho | Guia Lua</title>
+<meta name="description" content="O operador # do Lua para quem nunca programou: o tamanho de um texto (que conta bytes, por isso #&quot;ação&quot; dá 6), o tamanho de uma lista, como pegar o último item e acrescentar no fim, por que # não funciona em dicionários, e os erros reais attempt to get length do Lua 5.5.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">#</span> (tamanho)</h1>
+
+<p class="intro">"Quantas letras tem esse nome?", "a senha tem pelo menos 8 caracteres?", "quantos itens tem a lista de compras?". Perguntas sobre <strong>tamanho</strong> aparecem o tempo todo. No Lua, a resposta vem de um único símbolo, o <code>#</code> (chamado de "cerquilha", "jogo da velha" ou, em inglês, <em>hash</em>), escrito <strong>antes</strong> do valor: <code>#nome</code>.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>Como medir o tamanho de um texto com <code>#</code>.</li>
+  <li>Por que <code>#"ação"</code> dá <strong>6</strong>, e não 4: o <code>#</code> conta <strong>bytes</strong>, e letras com acento ocupam mais de um.</li>
+  <li>Como contar os itens de uma lista, pegar o <strong>último</strong> item e acrescentar um item <strong>no fim</strong>.</li>
+  <li>Por que o <code>#</code> dá 0 numa tabela com nomes (<code>{nome = "Ana"}</code>).</li>
+  <li>Os erros reais: <code>attempt to get length of a number value</code> e de um valor <code>nil</code>.</li>
+  <li>As outras formas de medir: <code>string.len</code>, <code>texto:len()</code> e <code>utf8.len</code>.</li>
+</ul>
+</div>
+
+<p>Todos os programas desta aula rodaram no <strong>Lua 5.5</strong> da máquina da Ana (usuária <code>ana</code>, computador <code>notebook</code>), salvos na pasta pessoal dela e executados com <code>lua arquivo.lua</code> (veja <a href="executar.html">Rodando um Programa</a>). Você pode rodar cada um no editor do guia.</p>
+
+<hr>
+
+<h2>A ideia: a fita métrica</h2>
+<p>Pense no <code>#</code> como uma <strong>fita métrica</strong>: você encosta no valor e ela diz um número. Para um texto, ela conta quantos "quadradinhos" de memória o texto ocupa. Para uma lista de compras, ela conta quantos itens estão enfileirados, do primeiro até o último.</p>
+<p>A fita sempre devolve um <strong>número inteiro</strong>: 0, 3, 10… Ela não muda o valor medido; só mede. E ela só serve para duas coisas: <strong>textos</strong> e <strong>tabelas</strong>. Tentar medir um número ou um <code>nil</code> é erro, como você vai ver.</p>
+
+<hr>
+
+<h2>1. O tamanho de um texto</h2>
+
+<pre class="file" data-file="tamanho.lua">local nome = "Ana"
+print(#nome)
+print(#"Ana Lima")
+print(#"")
+print(#" ")
+local senha = "padaria123"
+print("A senha tem " .. #senha .. " caracteres")
+</pre>
+
+<dl class="anatomy">
+  <dt>#nome</dt><dd>O <code>#</code> vem <strong>antes</strong> do valor, encostado nele (um espaço no meio, <code># nome</code>, também funciona, mas ninguém escreve assim). Ele devolve o tamanho do texto guardado em <code>nome</code>: 3.</dd>
+  <dt>#"Ana Lima"</dt><dd>Funciona com um texto escrito direto, entre aspas. O <strong>espaço conta</strong>: são 3 + 1 + 4 = 8.</dd>
+  <dt>#""</dt><dd>O texto <strong>vazio</strong> (duas aspas sem nada dentro) tem tamanho 0.</dd>
+  <dt>#" "</dt><dd>Um texto com só um espaço não é vazio: tem tamanho 1.</dd>
+  <dt>"A senha tem " .. #senha .. " caracteres"</dt><dd>O resultado do <code>#</code> é um número como outro qualquer: dá para fazer conta com ele, guardar numa variável ou colar num texto com <code>..</code> (veja <a href="concatenacao.html">Juntando Textos</a>).</dd>
+</dl>
+
+<pre class="term">$ lua tamanho.lua
+3
+8
+0
+1
+A senha tem 10 caracteres</pre>
+
+<h3>No modo interativo</h3>
+<pre class="term">$ lua
+Lua 5.5.0  Copyright (C) 1994-2025 Lua.org, PUC-Rio
+&gt; #"Ana"
+3
+&gt; #{"a", "b", "c"}
+3
+&gt; #{}
+0
+&gt; os.exit()</pre>
+
+<p>A segunda e a terceira linhas mediram <strong>tabelas</strong> (a lista <code>{"a", "b", "c"}</code> e a tabela vazia <code>{}</code>). Elas aparecem na seção 3.</p>
+
+<div class="trylua" data-goal="out:Sua senha tem 6 caracteres;;src:#\s*senha">
+<p class="try-task"><strong>Missão:</strong> troque o <code>?</code> pelo tamanho de verdade da senha, usando <code>#senha</code> e <code>..</code>. Depois, invente uma senha maior e rode de novo.</p>
+<pre class="script" data-file="main.lua">local senha = "pao123"
+print("Sua senha tem ? caracteres")
+</pre>
+<pre class="solucao" data-file="main.lua">local senha = "pao123"
+print("Sua senha tem " .. #senha .. " caracteres")
+</pre>
+</div>
+
+<hr>
+
+<h2>2. Acentos: o <code>#</code> conta bytes, não letras</h2>
+<p>Aqui mora a grande surpresa do <code>#</code>. Olhe:</p>
+
+<pre class="file" data-file="acentos.lua">print(#"pao", #"pão")
+print(#"ação")
+print(utf8.len("ação"))
+print(#"€", #"😀")
+</pre>
+
+<pre class="term">$ lua acentos.lua
+3	4
+6
+4
+3	4</pre>
+
+<p>"pão" tem 3 letras, mas o <code>#</code> disse <strong>4</strong>. "ação" tem 4 letras, e ele disse <strong>6</strong>. O <code>#</code> não está errado: ele conta <strong>bytes</strong>, não letras.</p>
+
+<ul>
+  <li>Um <strong>byte</strong> é o "quadradinho" de memória do computador: cabe um número de 0 a 255.</li>
+  <li>Os textos do Lua são guardados em <strong>UTF-8</strong>, o jeito mais usado hoje de escrever qualquer letra do mundo em bytes. No UTF-8, as letras sem acento (de <code>a</code> a <code>z</code>, os números, o espaço) ocupam <strong>1 byte</strong> cada.</li>
+  <li>Letras com acento, como <code>ã</code> e <code>ç</code>, ocupam <strong>2 bytes</strong>. Por isso "ação" = a (1) + ç (2) + ã (2) + o (1) = 6.</li>
+  <li>Outros símbolos ocupam ainda mais: o <code>€</code> ocupa 3 bytes, e um emoji como 😀, 4.</li>
+</ul>
+
+<p>Para contar <strong>letras</strong> (os programadores dizem "caracteres"), use <code>utf8.len</code>, da biblioteca <code>utf8</code> que já vem com o Lua: <code>utf8.len("ação")</code> deu 4. A aula <a href="utf8.html">Acentos e a Biblioteca utf8</a> mostra o resto dessa biblioteca.</p>
+
+<p>No modo interativo, a mesma coisa:</p>
+<pre class="term">$ lua
+Lua 5.5.0  Copyright (C) 1994-2025 Lua.org, PUC-Rio
+&gt; #"ação"
+6
+&gt; os.exit()</pre>
+
+<div class="warning">
+<strong>Quando isso importa</strong>
+<p>Se o programa verifica "o nome tem no máximo 10 letras" com <code>#</code>, o nome <code>João</code> conta como 5, e <code>Conceição</code>, como 11 (são 9 letras). Para textos com acento que o leitor vai ler (nomes, palavras), prefira <code>utf8.len</code>. O <code>#</code> é o certo quando você quer o tamanho em bytes: ao gravar num arquivo, mandar pela rede, ou quando o texto só tem letras sem acento.</p>
+</div>
+
+<hr>
+
+<h2>3. O tamanho de uma lista</h2>
+<p>Uma <strong>lista</strong> no Lua é uma tabela com os itens numerados a partir de 1: o 1º item, o 2º, o 3º… (veja <a href="tabelas.html">Tabelas</a> e <a href="listas.html">Tabelas como Listas</a>). O <code>#</code> diz quantos itens ela tem:</p>
+
+<pre class="file" data-file="lista.lua">local compras = {"pão", "leite", "café"}
+print(#compras)
+print("Último item: " .. compras[#compras])
+compras[#compras + 1] = "ovos"
+print(#compras)
+print("Último item: " .. compras[#compras])
+print(#{})
+</pre>
+
+<pre class="term">$ lua lista.lua
+3
+Último item: café
+4
+Último item: ovos
+0</pre>
+
+<dl class="anatomy">
+  <dt>#compras</dt><dd>A lista tem 3 itens. Repare que o <code>#</code> conta <strong>itens</strong>, não letras: <code>"leite"</code> tem 5 letras, mas é um item só.</dd>
+  <dt>compras[#compras]</dt><dd>O <strong>último</strong> item. Como os itens são numerados de 1 até o tamanho, o último está na posição <code>#compras</code>, que aqui é <code>compras[3]</code>: <code>café</code>.</dd>
+  <dt>compras[#compras + 1] = "ovos"</dt><dd>Acrescenta um item <strong>no fim</strong>: a próxima posição livre é o tamanho + 1 (aqui, 4). É um dos usos mais comuns do <code>#</code> em programas de Lua. Outro jeito de fazer o mesmo, com uma função pronta, está em <a href="table-insert-remove.html">table.insert e table.remove</a>.</dd>
+  <dt>print(#compras)</dt><dd>Agora são 4, e o último item passou a ser <code>ovos</code>.</dd>
+  <dt>#{}</dt><dd>A tabela vazia tem tamanho 0.</dd>
+</dl>
+
+<div class="trylua" data-goal="out:Último: ovos;;src:#\s*compras\s*\+\s*1">
+<p class="try-task"><strong>Missão:</strong> acrescente <code>"ovos"</code> no fim da lista com <code>compras[#compras + 1] = "ovos"</code>, <strong>antes</strong> do <code>print</code>, para o programa mostrar <code>Último: ovos</code> e <code>Itens: 4</code>.</p>
+<pre class="script" data-file="main.lua">local compras = {"pão", "leite", "café"}
+print("Itens: " .. #compras)
+print("Último: " .. compras[#compras])
+</pre>
+<pre class="solucao" data-file="main.lua">local compras = {"pão", "leite", "café"}
+compras[#compras + 1] = "ovos"
+print("Itens: " .. #compras)
+print("Último: " .. compras[#compras])
+</pre>
+</div>
+
+<h3>Tabela com nomes: o <code>#</code> não conta</h3>
+<p>Uma tabela também pode guardar valores com <strong>nomes</strong> em vez de números, como uma ficha (<code>nome = "Ana"</code>, <code>idade = 30</code>; veja <a href="dicionarios.html">Tabelas como Dicionários</a>). O <code>#</code> só enxerga a parte <strong>numerada</strong>:</p>
+
+<pre class="file" data-file="dicionario.lua">local cliente = {nome = "Ana", idade = 30}
+print(#cliente)
+local misto = {"pão", "leite", preco = 4.5}
+print(#misto)
+</pre>
+
+<pre class="term">$ lua dicionario.lua
+0
+2</pre>
+
+<p>A ficha da cliente tem dois campos, mas nenhum é numerado: o <code>#</code> dá 0. Na tabela <code>misto</code>, ele conta só <code>"pão"</code> e <code>"leite"</code> (as posições 1 e 2) e ignora o <code>preco</code>. Para contar os campos com nome é preciso percorrê-los um a um, com o <code>pairs</code> (aula <a href="pairs.html">Percorrendo Chaves</a>).</p>
+
+<div class="note">
+<strong>Listas com buracos</strong>
+<p>O <code>#</code> só é confiável numa lista <strong>sem buracos</strong>: itens nas posições 1, 2, 3… até o fim, sem nenhum <code>nil</code> no meio. Se você apagar um item do meio com <code>lista[2] = nil</code>, o resultado do <code>#</code> deixa de ser garantido (o manual do Lua permite mais de uma resposta). Esse assunto tem aula própria: <a href="sequencias.html">Sequências e Buracos</a>.</p>
+</div>
+
+<hr>
+
+<h2>4. <code>#</code> no meio de uma conta</h2>
+<p>O <code>#</code> "gruda" no valor que vem logo depois dele, antes de qualquer conta ou <code>..</code>:</p>
+
+<pre class="file" data-file="precedencia_tam.lua">local nome = "Ana"
+print(#nome + 1)
+print(#nome .. "!")
+print(#(nome .. "!"))
+print(#nome * 2)
+</pre>
+
+<pre class="term">$ lua precedencia_tam.lua
+4
+3!
+4
+6</pre>
+
+<ul>
+  <li><code>#nome + 1</code>: primeiro o tamanho (3), depois a soma: 4.</li>
+  <li><code>#nome .. "!"</code>: primeiro o tamanho (3), depois o <code>..</code>: o texto <code>3!</code>.</li>
+  <li><code>#(nome .. "!")</code>: com parênteses, o Lua monta <code>"Ana!"</code> primeiro e mede depois: 4.</li>
+  <li><code>#nome * 2</code>: 3 × 2 = 6.</li>
+</ul>
+<p>Os operadores que vêm "colados na frente" de um valor (<code>#</code>, o <code>-</code> de número negativo, o <code>not</code>) têm prioridade sobre quase todos os outros. A tabela completa está em <a href="precedencia.html">Precedência dos Operadores</a>.</p>
+
+<hr>
+
+<h2 id="formas">Formas diferentes de fazer a mesma coisa</h2>
+<p>Para textos, o <code>#</code> tem três "irmãos":</p>
+
+<pre class="file" data-file="formas_tam.lua">local nome = "Ana Lima"
+print(#nome)
+print(string.len(nome))
+print(nome:len())
+print(utf8.len(nome))
+</pre>
+
+<pre class="term">$ lua formas_tam.lua
+8
+8
+8
+8</pre>
+
+<dl class="anatomy">
+  <dt>#nome</dt><dd>O operador: curto, rápido e o mais usado.</dd>
+  <dt>string.len(nome)</dt><dd>A função <code>len</code> ("<em>length</em>", comprimento) da biblioteca <code>string</code>. Dá o mesmo resultado que o <code>#</code>: conta bytes.</dd>
+  <dt>nome:len()</dt><dd>A mesma função, escrita com dois-pontos: o <code>nome:</code> na frente quer dizer "aplique ao <code>nome</code>". Esse jeito de chamar funções de texto aparece em <a href="string-metodos.html">Funções de Texto</a>.</dd>
+  <dt>utf8.len(nome)</dt><dd>Conta <strong>caracteres</strong>. Como "Ana Lima" não tem acento, deu 8, igual aos outros. Com <code>"ação"</code>, daria 4 contra os 6 dos outros três.</dd>
+</dl>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Situação</th><th>Qual usar</th></tr>
+<tr><td>Tamanho de um texto sem acento, ou em bytes</td><td><code>#texto</code></td></tr>
+<tr><td>Quantas <strong>letras</strong> tem um texto com acento</td><td><code>utf8.len(texto)</code></td></tr>
+<tr><td>Quantos itens tem uma lista (sem buracos)</td><td><code>#lista</code></td></tr>
+<tr><td>O último item / acrescentar no fim</td><td><code>lista[#lista]</code> / <code>lista[#lista + 1] = valor</code></td></tr>
+<tr><td>Quantos campos com nome tem uma tabela</td><td>Contar com <code>pairs</code> (o <code>#</code> não serve)</td></tr>
+<tr><td>Código que já usa as funções da biblioteca <code>string</code></td><td><code>string.len(texto)</code> ou <code>texto:len()</code> (mesmo resultado que o <code>#</code>)</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+<p>O <code>#</code> só mede <strong>textos e tabelas</strong>. Qualquer outra coisa para o programa com <code>attempt to get length of …</code> ("tentativa de obter o tamanho de…").</p>
+
+<div class="cenario">
+<strong>Mediu um número</strong>
+<p>A Ana quer saber quantos dígitos tem o telefone, guardado como número:</p>
+<pre class="file" data-file="erro_num.lua">local telefone = 99887766
+print(#telefone)
+</pre>
+<pre class="term">$ lua erro_num.lua
+lua: erro_num.lua:2: attempt to get length of a number value (local 'telefone')
+stack traceback:
+	erro_num.lua:2: in main chunk
+	[C]: in ?</pre>
+<p>Linha por linha:</p>
+<dl class="anatomy">
+  <dt>lua: erro_num.lua:2:</dt><dd>O erro está no arquivo <code>erro_num.lua</code>, na <strong>linha 2</strong>.</dd>
+  <dt>attempt to get length of a number value</dt><dd>"Tentativa de obter o tamanho de um valor do tipo número". Para o Lua, um número não tem "tamanho": 99887766 é uma quantidade, não uma fileira de dígitos.</dd>
+  <dt>(local 'telefone')</dt><dd>O valor problemático estava na variável local <code>telefone</code>.</dd>
+  <dt>stack traceback: …</dt><dd>O rastro: linha 2 do programa principal (<code>main chunk</code>), chamado pelo <code>lua</code> (<code>[C]: in ?</code>). Mais em <a href="erros.html">Lendo uma Mensagem de Erro</a>.</dd>
+</dl>
+<p><strong>Como consertar:</strong> transforme o número em texto antes de medir, com <code>tostring</code> (veja <a href="conversao.html">Conversão</a>):</p>
+<pre class="file" data-file="erro_num2.lua">local telefone = 99887766
+print(#tostring(telefone))
+</pre>
+<pre class="term">$ lua erro_num2.lua
+8</pre>
+<p>Melhor ainda: telefones, CEPs e documentos devem ser guardados como <strong>texto</strong> desde o começo (<code>"99887766"</code>), porque ninguém faz contas com eles, e um zero à esquerda (<code>"01310100"</code>) sumiria num número.</p>
+</div>
+
+<div class="cenario">
+<strong>Mediu uma variável que não existe (<code>nil</code>)</strong>
+<pre class="file" data-file="erro_nil.lua">local compras = {"pão", "leite"}
+print(#compra)
+</pre>
+<pre class="term">$ lua erro_nil.lua
+lua: erro_nil.lua:2: attempt to get length of a nil value (global 'compra')
+stack traceback:
+	erro_nil.lua:2: in main chunk
+	[C]: in ?</pre>
+<p>"Tentativa de obter o tamanho de um valor <code>nil</code> (a global <code>compra</code>)". A variável se chama <code>compras</code>, com <strong>s</strong>; a linha 2 escreveu <code>compra</code>, que nunca foi criada e por isso vale <code>nil</code> (veja <a href="nil.html">O Valor nil</a>). <strong>Como consertar:</strong> corrija o nome. Com um campo de tabela que não existe, a mensagem termina com <code>(field '…')</code>:</p>
+<pre class="file" data-file="erro_campo.lua">local cliente = {nome = "Ana"}
+print(#cliente.sobrenome)
+</pre>
+<pre class="term">$ lua erro_campo.lua
+lua: erro_campo.lua:2: attempt to get length of a nil value (field 'sobrenome')
+stack traceback:
+	erro_campo.lua:2: in main chunk
+	[C]: in ?</pre>
+</div>
+
+<div class="cenario">
+<strong>Mediu <code>true</code> ou <code>false</code></strong>
+<pre class="file" data-file="erro_bool.lua">local ativo = true
+print(#ativo)
+</pre>
+<pre class="term">$ lua erro_bool.lua
+lua: erro_bool.lua:2: attempt to get length of a boolean value (local 'ativo')
+stack traceback:
+	erro_bool.lua:2: in main chunk
+	[C]: in ?</pre>
+<p>Um booleano (veja <a href="booleanos.html">Booleanos</a>) não tem tamanho. Normalmente esse erro aparece quando uma variável que deveria guardar um texto acabou recebendo <code>true</code> ou <code>false</code> por engano: confira de onde veio o valor.</p>
+</div>
+
+<div class="cenario">
+<strong>O <code>#</code> deu um número "a mais"</strong>
+<p>Não é uma mensagem de erro, mas confunde muita gente: <code>#"João"</code> dá 5. É o acento (seção 2). <strong>Como consertar:</strong> para contar letras, <code>utf8.len("João")</code>.</p>
+</div>
+
+<div class="note">
+<strong>Para quem quer ir além</strong>
+<p>Uma tabela pode "ensinar" o <code>#</code> a medir de outro jeito, com o metamétodo <code>__len</code>. É assunto avançado: <a href="tostring-call-len.html">__tostring, __call e __len</a>.</p>
+</div>
+
+<hr>
+
+<h2>Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>Resultado</th><th>Observação</th></tr>
+<tr><td><code>#"Ana"</code></td><td><code>3</code></td><td>Tamanho de um texto</td></tr>
+<tr><td><code>#""</code></td><td><code>0</code></td><td>Texto vazio</td></tr>
+<tr><td><code>#"ação"</code></td><td><code>6</code></td><td>Conta <strong>bytes</strong>: acentos ocupam 2</td></tr>
+<tr><td><code>utf8.len("ação")</code></td><td><code>4</code></td><td>Conta caracteres</td></tr>
+<tr><td><code>#{"a", "b", "c"}</code></td><td><code>3</code></td><td>Itens de uma lista</td></tr>
+<tr><td><code>#{}</code></td><td><code>0</code></td><td>Tabela vazia</td></tr>
+<tr><td><code>#{nome = "Ana"}</code></td><td><code>0</code></td><td>Campos com nome não contam</td></tr>
+<tr><td><code>lista[#lista]</code></td><td>o último item</td><td></td></tr>
+<tr><td><code>lista[#lista + 1] = v</code></td><td>acrescenta no fim</td><td></td></tr>
+<tr><td><code>string.len(s)</code>, <code>s:len()</code></td><td>igual a <code>#s</code></td><td></td></tr>
+<tr><td><code>#10</code></td><td>erro</td><td><code>attempt to get length of a number value</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. Quanto dá?</h3>
+<p>Responda com um número.</p>
+<div class="ex-code"><code>#"padaria"</code> dá <input data-answer="7" aria-label="tamanho de padaria"><br><code>#"Bom dia"</code> dá <input data-answer="7" aria-label="tamanho de Bom dia"><br><code>#{"arroz", "feijão"}</code> dá <input data-answer="2" aria-label="tamanho da lista"></div>
+</div>
+
+<div class="exercise">
+<h3>2. O último item</h3>
+<p>Complete para mostrar o último item da lista <code>notas</code>, qualquer que seja o tamanho dela:</p>
+<div class="ex-code">print(notas[<input data-answer="#notas|# notas" aria-label="posição do último">])</div>
+</div>
+
+<div class="mc" data-answer="3">
+<p class="mc-q">3. Quanto dá <code>#"pão"</code>?</p>
+<label><input type="radio" name="q3"> 3</label>
+<label><input type="radio" name="q3"> 2</label>
+<label><input type="radio" name="q3"> 4</label>
+<label><input type="radio" name="q3"> Dá erro, por causa do acento</label>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">4. Quanto dá <code>#{nome = "Ana", idade = 30}</code>?</p>
+<label><input type="radio" name="q4"> 2</label>
+<label><input type="radio" name="q4"> 0</label>
+<label><input type="radio" name="q4"> 3</label>
+<label><input type="radio" name="q4"> Dá erro</label>
+</div>
+
+<div class="mc" data-answer="1">
+<p class="mc-q">5. Qual linha acrescenta <code>"ovos"</code> no fim da lista <code>compras</code>?</p>
+<label><input type="radio" name="q5"> <code>compras[#compras + 1] = "ovos"</code></label>
+<label><input type="radio" name="q5"> <code>compras[#compras] = "ovos"</code></label>
+<label><input type="radio" name="q5"> <code>#compras = "ovos"</code></label>
+<label><input type="radio" name="q5"> <code>compras = compras .. "ovos"</code></label>
+</div>
+
+<div class="mc" data-answer="4">
+<p class="mc-q">6. O programa parou com <code>attempt to get length of a number value</code>. O que aconteceu?</p>
+<label><input type="radio" name="q6"> O texto tinha acento</label>
+<label><input type="radio" name="q6"> A lista estava vazia</label>
+<label><input type="radio" name="q6"> Faltou um espaço depois do <code>#</code></label>
+<label><input type="radio" name="q6"> O <code>#</code> foi usado num número; use <code>tostring</code> antes</label>
+</div>
+
+<h3>Missão final: letras e bytes</h3>
+
+<div class="trylua" data-goal="out:coração: 7 letras, 9 bytes">
+<p class="try-task"><strong>Missão:</strong> o programa deveria mostrar <code>coração: 7 letras, 9 bytes</code>, mas usa <code>#</code> nas duas contas e mostra 9 letras. Conserte a conta das <strong>letras</strong> com <code>utf8.len</code>.</p>
+<pre class="script" data-file="main.lua">local palavra = "coração"
+local letras = #palavra
+local bytes = #palavra
+print(palavra .. ": " .. letras .. " letras, " .. bytes .. " bytes")
+</pre>
+<pre class="solucao" data-file="main.lua">local palavra = "coração"
+local letras = utf8.len(palavra)
+local bytes = #palavra
+print(palavra .. ": " .. letras .. " letras, " .. bytes .. " bytes")
+</pre>
+</div>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li><code>#valor</code> devolve o tamanho de um <strong>texto</strong> ou de uma <strong>tabela</strong>, sempre um número inteiro.</li>
+  <li>Em texto, o <code>#</code> conta <strong>bytes</strong>: letras sem acento valem 1, letras com acento valem 2 (<code>#"ação"</code> = 6). Para contar letras, <code>utf8.len</code>.</li>
+  <li>Numa lista, <code>#lista</code> é o número de itens; <code>lista[#lista]</code> é o último; <code>lista[#lista + 1] = v</code> acrescenta no fim.</li>
+  <li>Campos com nome (<code>{nome = "Ana"}</code>) não entram no <code>#</code>, e listas com buracos (<code>nil</code> no meio) dão resultado não garantido: veja <a href="sequencias.html">Sequências e Buracos</a>.</li>
+  <li>O <code>#</code> vem antes das contas: <code>#nome + 1</code> é o tamanho mais 1.</li>
+  <li>Número, <code>nil</code> ou booleano no <code>#</code> param o programa com <code>attempt to get length of a … value</code>.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
