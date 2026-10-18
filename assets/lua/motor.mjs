@@ -136,6 +136,7 @@ function veraoDe(t) {
 }
 const p2 = (n) => String(n).padStart(2, "0");
 let fmtFuso = null;
+const coladores = {};
 function nomeFusoDe(t) {
   const off = fusoDe(t);
   let n = "";
@@ -464,6 +465,13 @@ export async function rodarLua(modulo, opts) {
     erro() { erro = true; },
     fuso: (t) => fusoDe(t),
     verao: (t) => veraoDe(t),
+    // os.setlocale(…, "collate") com pt_BR/pt_PT (2) ou en_US (1): a ordem do idioma (como o glibc)
+    comparar(pa, la, pb, lb, id) {
+      const d = new TextDecoder();
+      const a = d.decode(bytes().subarray(pa, pa + la)), b = d.decode(bytes().subarray(pb, pb + lb));
+      const c = coladores[id] || (coladores[id] = new Intl.Collator(id === 2 ? "pt-BR" : "en-US", { ignorePunctuation: true }));
+      return c.compare(a, b);
+    },
     fuso_nome(t, p, n) { const b = enc.encode(nomeFusoDe(t)).subarray(0, n - 1); bytes().set(b, p); bytes()[p + b.length] = 0; },
   };
   const imports = { wasi_snapshot_preview1: {}, guia };

@@ -138,7 +138,11 @@ time_t __wrap_mktime(struct tm *tm) {
 }
 /* %Z (nome do fuso): a strftime da wasi-libc só conhece o UTC */
 size_t __real_strftime(char *restrict s, size_t n, const char *restrict f, const struct tm *restrict tm);
-size_t __wrap_strftime(char *restrict s, size_t n, const char *restrict f, const struct tm *restrict tm) {
+static void expandir_tempo(const char *f, const struct tm *tm, char *g, size_t cap);
+size_t __wrap_strftime(char *restrict s, size_t n, const char *restrict f0, const struct tm *restrict tm) {
+    char e[512];
+    expandir_tempo(f0, tm, e, sizeof e);
+    const char *f = e;
     if (!strstr(f, "%Z") || !tm->tm_zone) return __real_strftime(s, n, f, tm);
     char g[512];
     size_t o = 0;
@@ -250,3 +254,189 @@ void *dlsym(void *restrict h, const char *restrict nome) {
     return NULL;
 }
 int dlclose(void *h) { (void)h; return 0; }
+
+/* ---- 9. os.setlocale: os locales do lab (C, POSIX, C.UTF-8, en_US, pt_BR e pt_PT .UTF-8) ----
+   A wasi-libc só tem o locale "C". O editor imita o glibc do lab no que o Lua usa:
+   - o nome devolvido, o "" (= $LANG, pt_BR.UTF-8), o nome composto "LC_CTYPE=…;LC_NUMERIC=…";
+   - LC_NUMERIC pt_BR/pt_PT: vírgula decimal ao escrever (snprintf) e ao ler (strtod) números: 3,5;
+   - LC_TIME: nomes de dias e meses, %c, %x, %X, %p, %r (pt: "qui 05 mar 2026 14:07:09");
+   - LC_COLLATE pt_BR/pt_PT/en_US: comparar textos (<, table.sort) com a ordem do idioma (Intl.Collator,
+     ignorando pontuação e espaço, como o glibc; empate = ordem dos bytes). */
+#include <locale.h>
+#include <stdarg.h>
+#include <ctype.h>
+GUIA("comparar") int guia_comparar(const char *a, int la, const char *b, int lb, int idioma);
+
+#define NCATS 12
+static const char *const NOMES_CATS[NCATS] = { "LC_CTYPE", "LC_NUMERIC", "LC_TIME", "LC_COLLATE", "LC_MONETARY", "LC_MESSAGES",
+    "LC_PAPER", "LC_NAME", "LC_ADDRESS", "LC_TELEPHONE", "LC_MEASUREMENT", "LC_IDENTIFICATION" };
+static char cats[NCATS][64] = { "C", "C", "C", "C", "C", "C", "C", "C", "C", "C", "C", "C" };
+static char composto[NCATS * 80];
+
+enum { ID_C = 0, ID_EN = 1, ID_PT = 2 };
+/* qual idioma o nome indica; -1 = não existe no lab */
+static int idioma_de(const char *n) {
+    char lingua[16], cod[16];
+    const char *p = strchr(n, '.');
+    size_t ll = p ? (size_t)(p - n) : strlen(n);
+    if (ll >= sizeof lingua || strchr(n, '@')) return -1;
+    memcpy(lingua, n, ll); lingua[ll] = '\0';
+    size_t k = 0;
+    if (p) for (p++; *p && k < sizeof cod - 1; p++) if (isalnum((unsigned char)*p)) cod[k++] = (char)tolower((unsigned char)*p);
+    cod[k] = '\0';
+    if (!strcmp(lingua, "C") || !strcmp(lingua, "POSIX")) return (!p || !strcmp(cod, "utf8")) ? ID_C : -1;
+    if (!p || strcmp(cod, "utf8")) return -1;
+    if (!strcmp(lingua, "en_US")) return ID_EN;
+    if (!strcmp(lingua, "pt_BR") || !strcmp(lingua, "pt_PT")) return ID_PT;
+    return -1;
+}
+static int idioma_cat(int c) { int i = idioma_de(cats[c]); return i < 0 ? ID_C : i; }
+static int virgula(void) { return idioma_cat(LC_NUMERIC) == ID_PT; }
+
+static const char *do_ambiente(int cat) {
+    const char *v = getenv("LC_ALL");
+    if (v && *v) return v;
+    if (cat >= 0 && cat < 6) { char nome[32]; snprintf(nome, sizeof nome, "%s", NOMES_CATS[cat]); v = getenv(nome); if (v && *v) return v; }
+    v = getenv("LANG");
+    return (v && *v) ? v : "C";
+}
+
+char *__real_setlocale(int cat, const char *nome);
+char *__wrap_setlocale(int cat, const char *nome) {
+    if (cat < 0 || cat > LC_ALL) { errno = EINVAL; return NULL; }
+    if (!nome) {
+        if (cat != LC_ALL) return cats[cat];
+        int iguais = 1;
+        for (int i = 1; i < NCATS; i++) if (strcmp(cats[i], cats[0])) iguais = 0;
+        if (iguais) return cats[0];
+        size_t o = 0;
+        for (int i = 0; i < NCATS; i++) o += (size_t)snprintf(composto + o, sizeof composto - o, "%s%s=%s", i ? ";" : "", NOMES_CATS[i], cats[i]);
+        return composto;
+    }
+    if (cat == LC_ALL && strchr(nome, '=')) {          /* o nome composto que o próprio setlocale devolveu */
+        char novos[NCATS][64];
+        memcpy(novos, cats, sizeof novos);
+        const char *p = nome;
+        while (*p) {
+            const char *ig = strchr(p, '='), *fim = strchr(p, ';');
+            if (!ig) return NULL;
+            if (!fim) fim = p + strlen(p);
+            int achou = -1;
+            for (int i = 0; i < NCATS; i++) if ((size_t)(ig - p) == strlen(NOMES_CATS[i]) && !strncmp(p, NOMES_CATS[i], (size_t)(ig - p))) achou = i;
+            size_t lv = (size_t)(fim - ig - 1);
+            if (achou < 0 || lv >= 64) return NULL;
+            memcpy(novos[achou], ig + 1, lv); novos[achou][lv] = '\0';
+            if (idioma_de(novos[achou]) < 0) return NULL;
+            p = *fim ? fim + 1 : fim;
+        }
+        memcpy(cats, novos, sizeof novos);
+        return __wrap_setlocale(LC_ALL, NULL);
+    }
+    const char *n = *nome ? nome : do_ambiente(cat);
+    if (strlen(n) >= 64 || idioma_de(n) < 0) return NULL;
+    if (!strcmp(n, "POSIX")) n = "C";
+    if (cat == LC_ALL) { for (int i = 0; i < NCATS; i++) strcpy(cats[i], n); return cats[0]; }
+    strcpy(cats[cat], n);
+    return cats[cat];
+}
+
+struct lconv *__real_localeconv(void);
+struct lconv *__wrap_localeconv(void) {
+    static struct lconv l;
+    l = *__real_localeconv();
+    if (virgula()) { l.decimal_point = ","; l.thousands_sep = "."; }
+    return &l;
+}
+
+/* a conversão (a última de "%…X") é de número com vírgula? */
+static int conv_real(const char *f) {
+    const char *p = strrchr(f, '%');
+    if (!p) return 0;
+    while (*++p && strchr("0123456789.-+ #*'lLhqjzt", *p)) ;
+    return *p && strchr("aAeEfFgG", *p);
+}
+int __wrap_snprintf(char *restrict s, size_t n, const char *restrict f, ...) {
+    va_list ap;
+    va_start(ap, f);
+    int r = vsnprintf(s, n, f, ap);
+    va_end(ap);
+    if (r > 0 && n > 0 && virgula() && conv_real(f)) {
+        size_t lim = (size_t)r < n - 1 ? (size_t)r : n - 1;
+        for (size_t i = 0; i < lim; i++) if (s[i] == '.') s[i] = ',';
+    }
+    return r;
+}
+double __real_strtod(const char *restrict s, char **restrict fim);
+double __wrap_strtod(const char *restrict s, char **restrict fim) {
+    char b[256];
+    size_t n = strlen(s);
+    if (!virgula() || n >= sizeof b) return __real_strtod(s, fim);
+    for (size_t i = 0; i <= n; i++) b[i] = s[i] == ',' ? '.' : s[i] == '.' ? ';' : s[i];
+    char *e;
+    double r = __real_strtod(b, &e);
+    if (fim) *fim = (char *)s + (e - b);
+    return r;
+}
+
+int __real_strcoll(const char *a, const char *b);
+int __wrap_strcoll(const char *a, const char *b) {
+    int id = idioma_cat(LC_COLLATE);
+    if (id == ID_C) return __real_strcoll(a, b);
+    int c = guia_comparar(a, (int)strlen(a), b, (int)strlen(b), id);
+    return c ? c : strcmp(a, b);
+}
+
+/* LC_TIME: troca %a %A %b %h %B %c %x %X %p %r (e %Ec %Ex %EX) pelo texto do idioma */
+static const char *const DIAS_PT[7] = { "domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado" };
+static const char *const DIAS_PT_AB[7] = { "dom", "seg", "ter", "qua", "qui", "sex", "sáb" };
+static const char *const MESES_PT[12] = { "janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro" };
+static const char *const MESES_PT_AB[12] = { "jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez" };
+static int poe(char *g, size_t o, size_t cap, const char *t, int escapar) {
+    for (; *t && o < cap - 1; t++) { if (escapar && *t == '%') { if (o < cap - 2) g[o++] = '%'; } g[o++] = *t; }
+    g[o] = '\0';
+    return (int)o;
+}
+static void expandir_tempo(const char *f, const struct tm *tm, char *g, size_t cap) {
+    int id = idioma_cat(LC_TIME);
+    size_t o = 0;
+    g[0] = '\0';
+    for (const char *p = f; *p && o < cap - 64; p++) {
+        if (p[0] != '%' || !p[1]) { g[o++] = *p; g[o] = '\0'; continue; }
+        const char *q = p + 1;
+        if ((*q == 'E' || *q == 'O') && q[1]) q++;
+        char c = *q;
+        const char *sub = NULL; int esc = 0;
+        int wd = tm->tm_wday >= 0 && tm->tm_wday < 7 ? tm->tm_wday : 0, mo = tm->tm_mon >= 0 && tm->tm_mon < 12 ? tm->tm_mon : 0;
+        if (id == ID_PT) {
+            switch (c) {
+            case 'a': sub = DIAS_PT_AB[wd]; esc = 1; break;
+            case 'A': sub = DIAS_PT[wd]; esc = 1; break;
+            case 'b': case 'h': sub = MESES_PT_AB[mo]; esc = 1; break;
+            case 'B': sub = MESES_PT[mo]; esc = 1; break;
+            case 'c': sub = "%a %d %b %Y %T"; break;
+            case 'x': sub = "%d/%m/%Y"; break;
+            case 'X': sub = "%T"; break;
+            case 'p': sub = ""; break;
+            case 'r': sub = "%I:%M:%S %p"; break;
+            }
+        } else if (id == ID_EN) {
+            switch (c) {
+            case 'c': sub = "%a %d %b %Y %r %Z"; break;
+            case 'x': sub = "%m/%d/%Y"; break;
+            case 'X': sub = "%r"; break;
+            }
+        }
+        if (!sub) {                                   /* fica como está (inclusive o %E/%O) */
+            while (p <= q && o < cap - 1) g[o++] = *p++;
+            p--; g[o] = '\0';
+            continue;
+        }
+        if (esc) o = (size_t)poe(g, o, cap, sub, 1);
+        else {                                        /* um formato: expande de novo (%a, %b, %p dentro do %c) */
+            char sub2[256];
+            expandir_tempo(sub, tm, sub2, sizeof sub2);
+            o = (size_t)poe(g, o, cap, sub2, 0);
+        }
+        p = q;
+    }
+}

@@ -54,7 +54,7 @@ done
 "$CC" "${FLAGS[@]}" -c "$SRC/guia-rt.c" -o guia-rt.o
 "$CC" --target=wasm32-wasip1 -O2 "${OBJS[@]}" guia-rt.o -o lua.wasm \
   -lsetjmp -lwasi-emulated-signal -lwasi-emulated-process-clocks -lm \
-  -Wl,--wrap=__stdio_read,--wrap=localtime_r,--wrap=localtime,--wrap=mktime,--wrap=strftime,--wrap=strerror \
+  -Wl,--wrap=__stdio_read,--wrap=localtime_r,--wrap=localtime,--wrap=mktime,--wrap=strftime,--wrap=strerror,--wrap=setlocale,--wrap=localeconv,--wrap=snprintf,--wrap=strtod,--wrap=strcoll \
   -Wl,-z,stack-size=8388608 -Wl,--stack-first -Wl,--max-memory=268435456 -Wl,--strip-all
 cp lua.wasm "$SAIDA/lua.wasm"
 # a licença do Lua (MIT) está no fim do readme.html e no lua.h

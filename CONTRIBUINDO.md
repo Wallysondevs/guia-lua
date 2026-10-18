@@ -139,7 +139,7 @@ No `.exercise`, `data-answer="a|b"` aceita respostas alternativas (a comparaçã
 | `math.random` | ✔ sem `math.randomseed` sorteia diferente a cada Rodar (como no lab); `math.randomseed(42)` dá **os mesmos números do lab** |
 | `os.execute("ls")`, `io.popen("date")` | **✘** no navegador não há shell nem outros programas: o comando responde como num Linux em que ele não existe — `sh: 1: ls: not found` (no stderr) e `nil  exit  127`; `io.popen(...)` lê `""` e o `:close()` dá `nil  exit  127`. Só `os.execute()` (= `true`), `"true"`, `"false"` e `"exit N"` funcionam. Mostre comandos do sistema no lab |
 | `require` de módulo em C (`.so`), `package.loadlib`, LuaRocks | **✘** não há bibliotecas dinâmicas no navegador: `module 'x' not found:` (igual ao lab quando o módulo não está instalado) ou `x.so: cannot open shared object file: No such file or directory`. Ensine LuaRocks no lab |
-| `os.setlocale("pt_BR.UTF-8")` | **✘** aceita (devolve o nome), mas nada muda: números continuam com ponto e `os.date("%c")` em inglês (no lab: `3,5` e `qua 31 dez 1969 21:00:00`) |
+| `os.setlocale`: `"pt_BR.UTF-8"`, `""` (= `pt_BR.UTF-8`, o `LANG` da Ana), `"pt_PT.UTF-8"`, `"en_US.UTF-8"`, `"C"`, `"C.UTF-8"`, `"POSIX"`, com ou sem categoria (`"numeric"`, `"time"`, `"collate"`…) | ✔ como no lab (são os locales instalados lá): devolve o mesmo nome (um que não existe, como `"pt_BR"` ou `"fr_FR.UTF-8"`, dá `nil`); com `numeric` em português os números saem e entram com vírgula (`3,5`, `tonumber("3,5")`, `string.format("%.2f")` = `1,50`); com `time`, `os.date` em português (`qui 05 mar 2026 14:07:09`, `março`, `%x` = `05/03/2026`); com `collate`, `<` e `table.sort` comparam textos na ordem do idioma (`álvaro Ana bia caio Érica Zeca`). Conferido com o lab, linha a linha |
 | Arquivos do sistema (`/etc/passwd`, `/usr/share/…`) | **✘** o disco do editor só tem `/home/ana`, `/tmp` e `/etc/hostname` (`notebook`) |
 | O modo interativo (`lua` sem arquivo, `> `), `lua -i`, `lua -e`, `luac` | **✘** o editor roda arquivos (`lua main.lua`); o `> ` se mostra com `pre.term` colhido no lab (`-t`) |
 
@@ -151,7 +151,6 @@ No `.exercise`, `data-answer="a|b"` aceita respostas alternativas (a comparaçã
 | `math.random` sem `math.randomseed(N)` | números diferentes dos do lab | sorteio novo a cada execução |
 | Hora e fuso (`os.time`, `os.date`) | o **relógio e o fuso do leitor** | `America/Sao_Paulo` (`-03`) |
 | `os.execute`, `io.popen` | `sh: 1: ls: not found`, `nil exit 127` | rodam o comando de verdade |
-| `os.setlocale("pt_BR.UTF-8")` + números/datas | nada muda (`3.5`, datas em inglês) | `3,5`, datas em português |
 | `string.packsize("l")`, `("L")`, `("T")` (`long`, `size_t`) | `4` (o WebAssembly é de 32 bits) | `8`. Os outros formatos (`i`, `j`, `n`, `d`, `s`…) são iguais |
 | Memória medida: `collectgarbage("count")`, `collectgarbage("param", "stepsize")` | números menores (32 bits: cada tabela, texto e ponteiro ocupa menos) | maiores (64 bits) |
 | `string.rep("x", 1 << 40)` (texto gigante) | `resulting string too large` | `not enough memory` |

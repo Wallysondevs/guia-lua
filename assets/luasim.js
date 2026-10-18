@@ -12,7 +12,7 @@
    ===================================================================== */
 (function () {
   "use strict";
-  var LUA_BYTES = 340502;    // download na 1ª vez (lua.wasm; atualizado por tools/construir-lua.sh)
+  var LUA_BYTES = 345270;    // download na 1ª vez (lua.wasm; atualizado por tools/construir-lua.sh)
   var LUA_VERSAO = "5.5.0";
   var TEMPO_MAX = 10000;     // ms rodando sem parar (sem contar a espera pelo teclado)
   var MAX_LINHAS = 3000;     // linhas mostradas no terminal (o resto é resumido)
