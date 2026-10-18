@@ -1,0 +1,668 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua Tabelas São Referências — cópia rasa, cópia profunda e == | Guia Lua</title>
+<meta name="description" content="Tabelas são referências no Lua 5.5, para quem está começando: b = a não copia a tabela (as duas variáveis apontam para a mesma), funções recebem a mesma tabela e podem mudá-la, o == compara se é a mesma tabela e não o conteúdo, como escrever uma função de cópia rasa, por que ela não basta para tabelas aninhadas, a cópia profunda com uma função própria, a tabela que contém a si mesma (stack overflow), e os erros reais, com missões no editor.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">Tabelas São Referências</span></h1>
+
+<p class="intro">Com números e textos, <code>local y = x</code> faz o que você espera: <code>y</code> fica com o mesmo valor, e mudar um não muda o outro. Com tabelas, não. <code>local b = a</code> <strong>não cria uma tabela nova</strong>: as duas variáveis passam a apontar para a <strong>mesma</strong> tabela, e o que você muda por uma aparece na outra. Esta aula explica por quê, mostra como isso afeta as funções e o <code>==</code>, e ensina a fazer uma cópia de verdade.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O que é uma <strong>referência</strong>, e por que <code>b = a</code> não copia uma tabela.</li>
+  <li>Que uma função que recebe uma tabela pode mudar a tabela de quem chamou.</li>
+  <li>Que o <code>==</code> entre tabelas pergunta "é a mesma tabela?", e não "têm o mesmo conteúdo?".</li>
+  <li>A escrever uma função de <strong>cópia rasa</strong>, e por que ela não basta para tabelas aninhadas.</li>
+  <li>A escrever uma função de <strong>cópia profunda</strong>.</li>
+  <li>Os erros reais: as mudanças que "vazam", o <code>&lt;</code> entre tabelas e o <code>stack overflow</code> da tabela que contém a si mesma.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>A ideia: o endereço da casa</h2>
+<p>Uma tabela é como uma <strong>casa</strong>. A variável não guarda a casa: guarda um papel com o <strong>endereço</strong> dela. Quando você escreve <code>local b = a</code>, o Lua copia o papel com o endereço, e não a casa. Agora há dois papéis apontando para a mesma casa: se alguém usar o papel <code>b</code> para ir lá e pintar a parede, quem for pelo papel <code>a</code> vai encontrar a parede pintada.</p>
+
+<p>Esse "papel com o endereço" é o que se chama <strong>referência</strong>. Com números, textos e booleanos é diferente: a variável guarda o <strong>próprio valor</strong>, e copiar a variável copia o valor.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Tipo</th><th>A variável guarda</th><th><code>b = a</code> faz</th></tr>
+<tr><td>número, texto, booleano, <code>nil</code></td><td>O próprio valor</td><td>Uma cópia do valor: mudar <code>b</code> não muda <code>a</code></td></tr>
+<tr><td>tabela (e função)</td><td>Uma referência (o "endereço")</td><td>Outra referência para a <strong>mesma</strong> tabela</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>1. <code>b = a</code> não copia</h2>
+
+<pre class="file" data-file="mesma.lua">local a = {"arroz", "feijão"}
+local b = a
+table.insert(b, "café")
+print(#a, table.concat(a, ", "))
+print(a == b)
+print(a)
+print(b)
+</pre>
+
+<pre class="term">$ lua mesma.lua
+3	arroz, feijão, café
+true
+table: 0x55578b98b6f0
+table: 0x55578b98b6f0
+</pre>
+
+<dl class="anatomy">
+  <dt>local b = a</dt><dd><code>b</code> recebe a referência que está em <code>a</code>. Continua existindo <strong>uma</strong> tabela só.</dd>
+  <dt>table.insert(b, "café")</dt><dd>O café foi inserido pela variável <code>b</code>…</dd>
+  <dt>print(#a, …)</dt><dd>…e aparece em <code>a</code>: 3 itens. Não há "a lista do <code>a</code>" e "a lista do <code>b</code>": há uma lista com dois nomes.</dd>
+  <dt>a == b</dt><dd><code>true</code>: são a mesma tabela.</dd>
+  <dt>print(a) e print(b)</dt><dd>O mesmo endereço nas duas linhas: é a prova de que é a mesma tabela. (O número muda a cada execução; o que importa é ser igual nas duas.)</dd>
+</dl>
+
+<p>Compare com números e textos:</p>
+
+<pre class="file" data-file="numero.lua">local x = 10
+local y = x
+y = y + 1
+print(x, y)
+local nome = "Ana"
+local outro = nome
+outro = outro .. " Lima"
+print(nome, outro)
+</pre>
+
+<pre class="term">$ lua numero.lua
+10	11
+Ana	Ana Lima
+</pre>
+
+<p>O <code>x</code> continuou 10 e o <code>nome</code> continuou <code>"Ana"</code>. Um texto nunca é modificado "por dentro": <code>outro .. " Lima"</code> cria um texto <strong>novo</strong>, e só a variável <code>outro</code> passa a guardá-lo.</p>
+
+<h3>Trocar a tabela × mudar a tabela</h3>
+<p>Há uma diferença importante entre <strong>mudar o que tem dentro</strong> da tabela e <strong>pôr outra tabela</strong> na variável:</p>
+
+<pre class="file" data-file="trocar.lua">local a = {"arroz"}
+local b = a
+b = {"pão"}
+print(a[1], b[1])
+local function limpar(lista)
+  lista = {}
+end
+local compras = {"leite"}
+limpar(compras)
+print(#compras)
+</pre>
+
+<pre class="term">$ lua trocar.lua
+arroz	pão
+1
+</pre>
+
+<dl class="anatomy">
+  <dt>b = {"pão"}</dt><dd>Isso não mexe na casa: é trocar o papel. Agora <code>b</code> aponta para uma tabela nova, e <code>a</code> continua apontando para a antiga. Por isso <code>a[1]</code> ainda é <code>"arroz"</code>.</dd>
+  <dt>lista = {}</dt><dd>Dentro da função, o mesmo: a variável <code>lista</code> passou a apontar para uma tabela vazia nova; a tabela <code>compras</code> não foi tocada e continua com 1 item.</dd>
+</dl>
+
+<p>Resumo: <code>b.x = …</code>, <code>b[1] = …</code> e <code>table.insert(b, …)</code> <strong>mudam</strong> a tabela (todo mundo vê). <code>b = …</code> só <strong>troca</strong> para onde <code>b</code> aponta (ninguém mais vê).</p>
+
+<hr>
+
+<h2>2. Funções recebem a mesma tabela</h2>
+<p>Quando você passa uma tabela para uma função (aula <a href="funcoes.html">Funções</a>), a função recebe a <strong>referência</strong>. Se ela mudar o conteúdo, a mudança fica valendo para quem chamou. Com um número, não:</p>
+
+<pre class="file" data-file="funcao.lua">local function dar_desconto(precos)
+  for produto, preco in pairs(precos) do
+    precos[produto] = preco * 0.9
+  end
+end
+local function dobrar(n)
+  n = n * 2
+end
+local precos = {leite = 5, pao = 1}
+dar_desconto(precos)
+print(precos.leite, precos.pao)
+local quantidade = 3
+dobrar(quantidade)
+print(quantidade)
+</pre>
+
+<pre class="term">$ lua funcao.lua
+4.5	0.9
+3
+</pre>
+
+<dl class="anatomy">
+  <dt>local function dar_desconto(precos)</dt><dd>Uma função é um pedaço de código com nome, que roda quando é chamado: <code>dar_desconto(precos)</code>. O que vai entre os parênteses na chamada chega na variável <code>precos</code> de dentro dela.</dd>
+  <dt>precos[produto] = preco * 0.9</dt><dd>A função mudou os preços (10% de desconto) <strong>na tabela que recebeu</strong>, que é a mesma tabela de fora. Depois da chamada, o leite custa 4.5.</dd>
+  <dt>dobrar(quantidade)</dt><dd>A função recebeu uma <strong>cópia</strong> do número 3; o <code>n = n * 2</code> mudou só a cópia. Fora, <code>quantidade</code> continua 3.</dd>
+</dl>
+
+<p>Isso é útil (uma função que arruma uma lista no lugar, como o <code>table.sort</code> e o <code>table.insert</code>, que mudam a tabela que você passa) e perigoso (uma função que você achava que só "lia" a tabela e acabou mudando). Se a função não deve mexer na sua tabela, passe uma cópia (seção 4).</p>
+
+<hr>
+
+<h2>3. O <code>==</code> compara a referência</h2>
+
+<pre class="file" data-file="iguais.lua">local a = {1, 2, 3}
+local b = {1, 2, 3}
+local c = a
+print(a == b)
+print(a == c)
+print({} == {})
+local function mesmas(x, y)
+  if #x ~= #y then return false end
+  for i = 1, #x do
+    if x[i] ~= y[i] then return false end
+  end
+  return true
+end
+print(mesmas(a, b))
+print(mesmas(a, {1, 2}))
+</pre>
+
+<pre class="term">$ lua iguais.lua
+false
+true
+false
+true
+false
+</pre>
+
+<dl class="anatomy">
+  <dt>a == b</dt><dd><code>false</code>, mesmo com o mesmo conteúdo: são duas tabelas, duas casas iguais em endereços diferentes. O <code>==</code> pergunta "é a <strong>mesma</strong> tabela?".</dd>
+  <dt>a == c</dt><dd><code>true</code>: <code>c</code> recebeu a referência de <code>a</code>.</dd>
+  <dt>{} == {}</dt><dd><code>false</code>: cada <code>{}</code> cria uma tabela nova.</dd>
+  <dt>mesmas(x, y)</dt><dd>Para comparar o <strong>conteúdo</strong>, escreva uma função: mesmo tamanho e item por item igual. O <code>return false</code> sai da função na hora, no primeiro item diferente (aula <a href="return.html">return</a>).</dd>
+</dl>
+
+<div class="tip">
+<strong>A mesma regra vale para tabela como chave</strong>
+<p>Uma tabela pode ser chave de outra (aula <a href="dicionarios.html">Dicionários</a>), mas a chave é a <strong>referência</strong>. <code>t[{1, 2}] = true</code> seguido de <code>t[{1, 2}]</code> dá <code>nil</code>: são duas tabelas <code>{1, 2}</code> diferentes. Guarde a tabela numa variável e use sempre a mesma variável como chave.</p>
+<pre class="file" data-file="chave_tabela.lua">local visitados = {}
+visitados[{1, 2}] = true
+print(visitados[{1, 2}])
+local ponto = {1, 2}
+visitados[ponto] = true
+print(visitados[ponto])
+</pre>
+<pre class="term">$ lua chave_tabela.lua
+nil
+true
+</pre>
+</div>
+
+<div class="trylua" data-goal="out:iguais: true;;src:\bfor\b">
+<p class="try-task"><strong>Missão:</strong> as duas listas de compras têm os mesmos itens, mas o <code>==</code> responde <code>false</code>. Troque o <code>a == b</code> por uma comparação item por item (com um <code>for</code>, como a função <code>mesmas</code> acima), para o programa mostrar <code>iguais: true</code>.</p>
+<pre class="script" data-file="main.lua">local a = {"arroz", "feijão", "café"}
+local b = {"arroz", "feijão", "café"}
+local iguais = a == b
+print("iguais: " .. tostring(iguais))
+</pre>
+<pre class="solucao" data-file="main.lua">local a = {"arroz", "feijão", "café"}
+local b = {"arroz", "feijão", "café"}
+local iguais = #a == #b
+for i = 1, #a do
+  if a[i] ~= b[i] then
+    iguais = false
+  end
+end
+print("iguais: " .. tostring(iguais))
+</pre>
+</div>
+
+<hr>
+
+<h2>4. Cópia rasa: uma tabela nova com os mesmos valores</h2>
+<p>O Lua não tem uma função pronta "copiar tabela". Mas ela é curta: crie uma tabela vazia e passe por todos os pares da original com <a href="pairs.html"><code>pairs</code></a>, guardando cada um na nova.</p>
+
+<pre class="file" data-file="rasa.lua">local function copiar(t)
+  local nova = {}
+  for chave, valor in pairs(t) do
+    nova[chave] = valor
+  end
+  return nova
+end
+local hoje = {"arroz", "feijão", dia = "segunda"}
+local amanha = copiar(hoje)
+table.insert(amanha, "café")
+amanha.dia = "terça"
+print(table.concat(hoje, ", "), hoje.dia)
+print(table.concat(amanha, ", "), amanha.dia)
+print(hoje == amanha)
+</pre>
+
+<pre class="term">$ lua rasa.lua
+arroz, feijão	segunda
+arroz, feijão, café	terça
+false
+</pre>
+
+<dl class="anatomy">
+  <dt>local nova = {}</dt><dd>Aqui nasce a tabela <strong>nova</strong>: uma casa nova, num endereço novo.</dd>
+  <dt>nova[chave] = valor</dt><dd>Cada par da original é guardado na nova. Funciona para listas e para dicionários, porque o <code>pairs</code> passa por todas as chaves.</dd>
+  <dt>return nova</dt><dd>A função devolve a tabela nova (aula <a href="return.html">return</a>).</dd>
+  <dt>o resultado</dt><dd>O café e a terça-feira ficaram só em <code>amanha</code>; <code>hoje</code> não mudou. E <code>hoje == amanha</code> é <code>false</code>: são duas tabelas.</dd>
+</dl>
+
+<h3>Só para listas: dois atalhos</h3>
+<pre class="file" data-file="lista_copia.lua">local notas = {7, 8, 9}
+local c1 = {table.unpack(notas)}
+local c2 = table.move(notas, 1, #notas, 1, {})
+c1[1] = 0
+c2[2] = 0
+print(table.concat(notas, " "), table.concat(c1, " "), table.concat(c2, " "))
+</pre>
+
+<pre class="term">$ lua lista_copia.lua
+7 8 9	0 8 9	7 0 9
+</pre>
+
+<dl class="anatomy">
+  <dt>{table.unpack(notas)}</dt><dd>Tira os itens (aula <a href="table-unpack.html">table.unpack</a>) e põe numa tabela nova. Bom para listas pequenas e sem buracos; com listas enormes, dá <code>too many results to unpack</code>.</dd>
+  <dt>table.move(notas, 1, #notas, 1, {})</dt><dd>"Mover" (na verdade, copiar) os itens de 1 a <code>#notas</code> de <code>notas</code> para a posição 1 de uma tabela nova <code>{}</code>, e devolver essa tabela. Funciona com listas de qualquer tamanho.</dd>
+</dl>
+
+<p>Os dois só copiam a parte de lista. Para uma tabela com chaves de nome, use a função <code>copiar</code>.</p>
+
+<div class="trylua" data-goal="outre:hoje: arroz, feijão\namanhã: arroz, feijão, café;;src:copiar\(\s*hoje">
+<p class="try-task"><strong>Missão:</strong> a Ana quis montar a lista de amanhã a partir da de hoje, mas o café apareceu nas duas. Troque <code>local amanha = hoje</code> por <code>local amanha = copiar(hoje)</code>, para a lista de hoje ficar só com <code>arroz, feijão</code>.</p>
+<pre class="script" data-file="main.lua">local function copiar(t)
+  local nova = {}
+  for chave, valor in pairs(t) do
+    nova[chave] = valor
+  end
+  return nova
+end
+local hoje = {"arroz", "feijão"}
+local amanha = hoje
+table.insert(amanha, "café")
+print("hoje: " .. table.concat(hoje, ", "))
+print("amanhã: " .. table.concat(amanha, ", "))
+</pre>
+<pre class="solucao" data-file="main.lua">local function copiar(t)
+  local nova = {}
+  for chave, valor in pairs(t) do
+    nova[chave] = valor
+  end
+  return nova
+end
+local hoje = {"arroz", "feijão"}
+local amanha = copiar(hoje)
+table.insert(amanha, "café")
+print("hoje: " .. table.concat(hoje, ", "))
+print("amanhã: " .. table.concat(amanha, ", "))
+</pre>
+</div>
+
+<hr>
+
+<h2>5. Por que "rasa": as tabelas de dentro continuam as mesmas</h2>
+<p>A cópia rasa copia os valores do <strong>primeiro nível</strong>. Se um desses valores é outra tabela (aula <a href="tabelas-aninhadas.html">Tabelas Aninhadas</a>), o que é copiado é a <strong>referência</strong> para ela, e as duas cópias passam a dividir a mesma tabela de dentro:</p>
+
+<pre class="file" data-file="rasa_aninhada.lua">local function copiar(t)
+  local nova = {}
+  for chave, valor in pairs(t) do
+    nova[chave] = valor
+  end
+  return nova
+end
+local ana = {nome = "Ana", endereco = {cidade = "Teresina"}}
+local bia = copiar(ana)
+bia.nome = "Bia"
+bia.endereco.cidade = "Picos"
+print(ana.nome, ana.endereco.cidade)
+print(bia.nome, bia.endereco.cidade)
+print(ana.endereco == bia.endereco)
+</pre>
+
+<pre class="term">$ lua rasa_aninhada.lua
+Ana	Picos
+Bia	Picos
+true
+</pre>
+
+<dl class="anatomy">
+  <dt>bia.nome = "Bia"</dt><dd>O nome é um texto, do primeiro nível: cada ficha tem o seu. A Ana continuou Ana.</dd>
+  <dt>bia.endereco.cidade = "Picos"</dt><dd>O endereço é uma tabela. A cópia rasa guardou em <code>bia.endereco</code> a <strong>mesma</strong> referência de <code>ana.endereco</code>. Mudar a cidade da Bia mudou a da Ana.</dd>
+  <dt>ana.endereco == bia.endereco</dt><dd><code>true</code>: é uma tabela de endereço só, dividida pelas duas fichas.</dd>
+</dl>
+
+<hr>
+
+<h2>6. Cópia profunda: copiar também o que está dentro</h2>
+<p>A <strong>cópia profunda</strong> copia todos os níveis: sempre que encontra um valor que é tabela, faz uma cópia dessa tabela também, e das tabelas que estiverem dentro dela, e assim por diante. O jeito mais curto de escrever isso é uma função que <strong>chama a si mesma</strong> para as tabelas de dentro (isso tem nome, <a href="recursao.html">recursão</a>, e tem aula própria):</p>
+
+<pre class="file" data-file="profunda.lua">local function copiar_tudo(t)
+  local nova = {}
+  for chave, valor in pairs(t) do
+    if type(valor) == "table" then
+      nova[chave] = copiar_tudo(valor)
+    else
+      nova[chave] = valor
+    end
+  end
+  return nova
+end
+local ana = {nome = "Ana", endereco = {cidade = "Teresina"}, notas = {7, 8}}
+local bia = copiar_tudo(ana)
+bia.nome = "Bia"
+bia.endereco.cidade = "Picos"
+bia.notas[1] = 10
+print(ana.nome, ana.endereco.cidade, ana.notas[1])
+print(bia.nome, bia.endereco.cidade, bia.notas[1])
+print(ana.endereco == bia.endereco)
+</pre>
+
+<pre class="term">$ lua profunda.lua
+Ana	Teresina	7
+Bia	Picos	10
+false
+</pre>
+
+<dl class="anatomy">
+  <dt>type(valor) == "table"</dt><dd>Pergunta se o valor é uma tabela (aula <a href="type.html">type</a>).</dd>
+  <dt>nova[chave] = copiar_tudo(valor)</dt><dd>Se for, não guarda a referência: guarda uma <strong>cópia</strong> dela, feita pela própria <code>copiar_tudo</code>. Se dentro dessa tabela houver outra, a chamada de dentro faz o mesmo, até não sobrar nenhum nível.</dd>
+  <dt>else nova[chave] = valor</dt><dd>Número, texto, booleano: copia o valor, como na cópia rasa.</dd>
+  <dt>o resultado</dt><dd>Agora a Bia tem o próprio endereço e as próprias notas. A Ana continuou em Teresina com nota 7, e <code>ana.endereco == bia.endereco</code> é <code>false</code>.</dd>
+</dl>
+
+<div class="warning">
+<strong>Os limites desta <code>copiar_tudo</code></strong>
+<ul>
+  <li>Ela não serve para uma tabela que contém <strong>a si mesma</strong> (direta ou indiretamente): ela entra num ciclo sem fim. Veja o último cenário de <a href="#errado">Quando dá errado</a> e o conserto.</li>
+  <li>Ela não copia a <strong>metatabela</strong> (aula <a href="metatabelas.html">Metatabelas</a>); para objetos com metatabela, a cópia precisa de um <code>setmetatable</code>.</li>
+  <li>Chaves que são tabelas não são copiadas (continuam a mesma referência). Quase nunca isso importa.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>Qual usar</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Você quer…</th><th>Use</th></tr>
+<tr><td>Outro nome para a <strong>mesma</strong> tabela (de propósito)</td><td><code>local b = a</code></td></tr>
+<tr><td>Uma lista nova com os mesmos itens (sem tabelas dentro)</td><td><code>table.move(a, 1, #a, 1, {})</code> ou <code>{table.unpack(a)}</code> (lista pequena)</td></tr>
+<tr><td>Uma tabela nova com os mesmos pares (sem tabelas dentro)</td><td>Cópia rasa: a função <code>copiar</code></td></tr>
+<tr><td>Uma tabela totalmente independente, com tabelas dentro</td><td>Cópia profunda: a função <code>copiar_tudo</code></td></tr>
+<tr><td>Saber se é a mesma tabela</td><td><code>a == b</code></td></tr>
+<tr><td>Saber se têm o mesmo conteúdo</td><td>Uma função própria que compare item por item</td></tr>
+<tr><td>Que uma função não mexa na sua tabela</td><td>Passe uma cópia: <code>f(copiar(t))</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+
+<div class="cenario">
+<strong>A mudança "vazou" para a outra tabela (sem erro)</strong>
+<pre class="file" data-file="mesma.lua">local a = {"arroz", "feijão"}
+local b = a
+table.insert(b, "café")
+print(#a, table.concat(a, ", "))
+</pre>
+<pre class="term">$ lua mesma.lua
+3	arroz, feijão, café
+</pre>
+<p>O café só foi posto em <code>b</code>, mas apareceu em <code>a</code>. Não é erro do Lua: <code>b = a</code> não copia (seção 1). <strong>Como consertar:</strong> se as duas listas devem ser independentes, faça uma cópia: <code>local b = copiar(a)</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Comparar duas listas iguais deu <code>false</code></strong>
+<pre class="file" data-file="iguais.lua">local a = {1, 2, 3}
+local b = {1, 2, 3}
+print(a == b)
+</pre>
+<pre class="term">$ lua iguais.lua
+false
+</pre>
+<p>O <code>==</code> compara referências: são duas tabelas (seção 3). <strong>Como consertar:</strong> compare o conteúdo com uma função como a <code>mesmas</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Maior e menor entre tabelas</strong>
+<pre class="file" data-file="erro_comparar.lua">local a = {preco = 5}
+local b = {preco = 3}
+print(a &lt; b)
+</pre>
+<pre class="term">$ lua erro_comparar.lua
+lua: erro_comparar.lua:3: attempt to compare two table values
+stack traceback:
+	erro_comparar.lua:3: in main chunk
+	[C]: in ?
+</pre>
+<p>"Tentativa de comparar dois valores tabela". O <code>==</code> funciona (compara referências), mas o <code>&lt;</code> e o <code>&gt;</code> não: o Lua não sabe o que é uma tabela "menor" que outra. <strong>Como consertar:</strong> compare o campo que interessa: <code>a.preco &lt; b.preco</code>. (Com <a href="metatabelas.html">metatabelas</a> dá para ensinar o Lua a comparar, com o <code>__lt</code>.)</p>
+</div>
+
+<div class="cenario">
+<strong>A cópia rasa dividiu a tabela de dentro (sem erro)</strong>
+<pre class="file" data-file="rasa_aninhada.lua">local function copiar(t)
+  local nova = {}
+  for chave, valor in pairs(t) do
+    nova[chave] = valor
+  end
+  return nova
+end
+local ana = {nome = "Ana", endereco = {cidade = "Teresina"}}
+local bia = copiar(ana)
+bia.endereco.cidade = "Picos"
+print(ana.endereco.cidade)
+</pre>
+<pre class="term">$ lua rasa_aninhada.lua
+Picos
+</pre>
+<p>A cidade da Ana mudou junto. A cópia rasa não copia as tabelas de dentro (seção 5). <strong>Como consertar:</strong> use a cópia profunda, <code>copiar_tudo</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>A tabela que contém a si mesma: <code>stack overflow</code></strong>
+<pre class="file" data-file="erro_ciclo.lua">local function copiar_tudo(t)
+  local nova = {}
+  for chave, valor in pairs(t) do
+    if type(valor) == "table" then
+      nova[chave] = copiar_tudo(valor)
+    else
+      nova[chave] = valor
+    end
+  end
+  return nova
+end
+local pasta = {nome = "Documentos"}
+pasta.eu_mesma = pasta
+local copia = copiar_tudo(pasta)
+</pre>
+<p>A mensagem real tem 24 linhas; aqui estão a primeira parte e a última, sem algumas das linhas repetidas do meio:</p>
+<pre class="term">$ lua erro_ciclo.lua
+lua: erro_ciclo.lua:3: stack overflow
+stack traceback:
+	erro_ciclo.lua:3: in upvalue 'copiar_tudo'
+	erro_ciclo.lua:5: in upvalue 'copiar_tudo'
+	erro_ciclo.lua:5: in upvalue 'copiar_tudo'
+	...	(skipping 124977 levels)
+	erro_ciclo.lua:5: in upvalue 'copiar_tudo'
+	erro_ciclo.lua:5: in local 'copiar_tudo'
+	erro_ciclo.lua:14: in main chunk
+	[C]: in ?
+</pre>
+<dl class="anatomy">
+  <dt>pasta.eu_mesma = pasta</dt><dd>A tabela guarda uma referência para ela mesma. Isso é permitido (e às vezes útil).</dd>
+  <dt>stack overflow</dt><dd>"Estouro da pilha". A <code>copiar_tudo</code> achou <code>eu_mesma</code>, que é uma tabela, e chamou a si mesma para copiá-la; lá dentro, achou <code>eu_mesma</code> de novo… sem fim. Cada chamada que ainda não terminou ocupa um lugar na <strong>pilha</strong>, e a pilha acabou.</dd>
+  <dt>in upvalue 'copiar_tudo'</dt><dd>Cada linha do rastro é uma chamada da <code>copiar_tudo</code> que estava esperando a de dentro terminar. São tantas que o Lua pulou (<em>skipping</em>) 124977 delas para não encher a tela.</dd>
+  <dt>erro_ciclo.lua:14: in main chunk</dt><dd>A primeira chamada, a da linha 14, no corpo do arquivo.</dd>
+</dl>
+<p><strong>Como consertar:</strong> a cópia anota, numa tabela <code>vistas</code>, cada tabela que já copiou (a original vira a chave; a cópia, o valor). Se encontrar de novo uma tabela já vista, devolve a cópia que já fez, em vez de começar outra:</p>
+<pre class="file" data-file="ciclo_ok.lua">local function copiar_tudo(t, vistas)
+  vistas = vistas or {}
+  if vistas[t] then return vistas[t] end
+  local nova = {}
+  vistas[t] = nova
+  for chave, valor in pairs(t) do
+    if type(valor) == "table" then
+      nova[chave] = copiar_tudo(valor, vistas)
+    else
+      nova[chave] = valor
+    end
+  end
+  return nova
+end
+local pasta = {nome = "Documentos"}
+pasta.eu_mesma = pasta
+local copia = copiar_tudo(pasta)
+print(copia.nome, copia.eu_mesma == copia, copia == pasta)
+</pre>
+<pre class="term">$ lua ciclo_ok.lua
+Documentos	true	false
+</pre>
+<p>A cópia aponta para si mesma (<code>copia.eu_mesma == copia</code>), como a original, e é uma tabela nova (<code>copia == pasta</code> é <code>false</code>).</p>
+</div>
+
+<hr>
+
+<h2>Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>O que faz</th></tr>
+<tr><td><code>local b = a</code> (tabela)</td><td>Outra referência para a <strong>mesma</strong> tabela</td></tr>
+<tr><td><code>b.x = 1</code>, <code>b[1] = 1</code>, <code>table.insert(b, …)</code></td><td>Mudam a tabela: todas as referências veem</td></tr>
+<tr><td><code>b = {}</code></td><td>Troca para onde <code>b</code> aponta; a tabela antiga não muda</td></tr>
+<tr><td><code>f(t)</code></td><td>A função recebe a mesma tabela e pode mudá-la</td></tr>
+<tr><td><code>a == b</code></td><td><code>true</code> só se for a mesma tabela</td></tr>
+<tr><td><code>a &lt; b</code> (tabelas)</td><td>Erro: <code>attempt to compare two table values</code></td></tr>
+<tr><td><code>copiar(t)</code> (com <code>pairs</code>)</td><td>Cópia rasa: tabela nova, as de dentro são divididas</td></tr>
+<tr><td><code>table.move(a, 1, #a, 1, {})</code></td><td>Cópia rasa de uma lista</td></tr>
+<tr><td><code>copiar_tudo(t)</code> (recursiva)</td><td>Cópia profunda: copia todos os níveis</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Sintoma ou mensagem</th><th>Causa provável</th></tr>
+<tr><td>Mudei uma tabela e a outra mudou junto</td><td><code>b = a</code> não copia; ou cópia rasa com tabela dentro</td></tr>
+<tr><td>Duas tabelas iguais e <code>==</code> deu <code>false</code></td><td><code>==</code> compara referências</td></tr>
+<tr><td><code>attempt to compare two table values</code></td><td><code>&lt;</code> ou <code>&gt;</code> entre tabelas: compare um campo</td></tr>
+<tr><td><code>stack overflow</code> numa função de cópia</td><td>A tabela contém a si mesma: use a tabela <code>vistas</code></td></tr>
+<tr><td><code>t[{1, 2}]</code> deu <code>nil</code></td><td>Cada <code>{1, 2}</code> é uma tabela nova: guarde a chave numa variável</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. Quanto vale?</h3>
+<p>Depois de <code>local a = {1}</code>, <code>local b = a</code> e <code>b[1] = 5</code>, quanto vale <code>a[1]</code>?</p>
+<div class="ex-code"><input data-answer="5" aria-label="resposta"></div>
+</div>
+
+<div class="exercise">
+<h3>2. Mesma tabela?</h3>
+<p>O que <code>print({1} == {1})</code> mostra?</p>
+<div class="ex-code"><input data-answer="false" aria-label="resposta"></div>
+</div>
+
+<div class="exercise">
+<h3>3. A cópia de uma lista</h3>
+<p>Complete a função que copia os itens 1 a <code>#a</code> para uma tabela nova:</p>
+<div class="ex-code">local b = table.<input data-answer="move" aria-label="função">(a, 1, #a, 1, {})</div>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">4. Com <code>local x = 3</code>, <code>local y = x</code> e <code>y = 10</code>, quanto vale <code>x</code>?</p>
+<label><input type="radio" name="q4"> 10</label>
+<label><input type="radio" name="q4"> 3</label>
+<label><input type="radio" name="q4"> <code>nil</code></label>
+<label><input type="radio" name="q4"> 13</label>
+</div>
+
+<div class="mc" data-answer="3">
+<p class="mc-q">5. A ficha tem um <code>endereco</code> que é uma tabela. Depois de uma <strong>cópia rasa</strong>, mudar <code>copia.endereco.cidade</code>…</p>
+<label><input type="radio" name="q5"> …dá erro</label>
+<label><input type="radio" name="q5"> …muda só a cópia</label>
+<label><input type="radio" name="q5"> …muda a cidade da original também</label>
+<label><input type="radio" name="q5"> …apaga o endereço da original</label>
+</div>
+
+<div class="mc" data-answer="1">
+<p class="mc-q">6. Uma função recebe uma lista e faz <code>table.insert(lista, "x")</code>. O que acontece com a lista de quem chamou?</p>
+<label><input type="radio" name="q6"> Ganha o <code>"x"</code>, porque é a mesma tabela</label>
+<label><input type="radio" name="q6"> Nada, porque a função recebe uma cópia</label>
+<label><input type="radio" name="q6"> Dá erro</label>
+<label><input type="radio" name="q6"> A lista fica vazia</label>
+</div>
+
+<h3>Missão final: a ficha independente</h3>
+
+<div class="trylua" data-goal="out:Ana mora em Teresina;;out:Bia mora em Picos;;src:type\(">
+<p class="try-task"><strong>Missão:</strong> a função <code>copiar</code> faz uma cópia rasa, e a mudança de cidade da Bia vaza para a Ana. Transforme-a numa cópia profunda: quando o <code>valor</code> for uma tabela (<code>type(valor) == "table"</code>), guarde <code>copiar(valor)</code> em vez do próprio valor. O programa deve mostrar <code>Ana mora em Teresina</code> e <code>Bia mora em Picos</code>.</p>
+<pre class="script" data-file="main.lua">local function copiar(t)
+  local nova = {}
+  for chave, valor in pairs(t) do
+    nova[chave] = valor
+  end
+  return nova
+end
+local ana = {nome = "Ana", endereco = {cidade = "Teresina"}}
+local bia = copiar(ana)
+bia.nome = "Bia"
+bia.endereco.cidade = "Picos"
+print(ana.nome .. " mora em " .. ana.endereco.cidade)
+print(bia.nome .. " mora em " .. bia.endereco.cidade)
+</pre>
+<pre class="solucao" data-file="main.lua">local function copiar(t)
+  local nova = {}
+  for chave, valor in pairs(t) do
+    if type(valor) == "table" then
+      nova[chave] = copiar(valor)
+    else
+      nova[chave] = valor
+    end
+  end
+  return nova
+end
+local ana = {nome = "Ana", endereco = {cidade = "Teresina"}}
+local bia = copiar(ana)
+bia.nome = "Bia"
+bia.endereco.cidade = "Picos"
+print(ana.nome .. " mora em " .. ana.endereco.cidade)
+print(bia.nome .. " mora em " .. bia.endereco.cidade)
+</pre>
+</div>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li>Uma variável de tabela guarda uma <strong>referência</strong> (o "endereço"), não a tabela. <code>b = a</code> faz duas variáveis apontarem para a <strong>mesma</strong> tabela.</li>
+  <li>Mudar o conteúdo (<code>b.x = …</code>, <code>table.insert(b, …)</code>) aparece em todas as referências; <code>b = {}</code> só troca para onde <code>b</code> aponta.</li>
+  <li>Funções recebem a mesma tabela e podem mudá-la; números e textos chegam como cópia.</li>
+  <li><code>==</code> entre tabelas pergunta "é a mesma tabela?"; para comparar o conteúdo, escreva uma função. <code>&lt;</code> entre tabelas é erro.</li>
+  <li><strong>Cópia rasa</strong>: tabela nova com os mesmos pares (<code>pairs</code>), mas as tabelas de dentro continuam divididas.</li>
+  <li><strong>Cópia profunda</strong>: uma função que copia também cada tabela de dentro, chamando a si mesma; para tabelas que contêm a si mesmas, anote as já copiadas.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
