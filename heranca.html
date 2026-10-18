@@ -1,0 +1,726 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua Herança — uma classe que aproveita outra | Guia Lua</title>
+<meta name="description" content="Herança no Lua para quem nunca programou: a Poupança que é uma Conta com rendimento, setmetatable(Filha, {__index = Mae}), o construtor que chama o da mãe, sobrescrever um método e chamar o da mãe com Conta.sacar(self, valor), Retangulo e Quadrado, metamétodos que não são herdados, e os erros reais do Lua 5.5 (stack overflow, attempt to compare nil with number).">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">Herança</span></h1>
+
+<p class="intro">A Ana já tem a classe <code>Conta</code> (aula <a href="classes.html">Classes</a>). Agora o banco quer uma <strong>Poupança</strong>: ela faz tudo o que uma conta faz (depositar, sacar, extrato) e mais uma coisa, render juros. Copiar a classe <code>Conta</code> inteira e acrescentar o método novo funcionaria, mas aí qualquer conserto na <code>Conta</code> teria de ser feito duas vezes. A <strong>herança</strong> resolve isso: a classe <code>Poupanca</code> (a "filha") <strong>aproveita</strong> tudo da <code>Conta</code> (a "mãe") e só escreve o que é diferente.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>A ideia de herança, com uma comparação do dia a dia.</li>
+  <li>A linha que liga a filha à mãe: <code>setmetatable(Poupanca, { __index = Conta })</code>.</li>
+  <li>O construtor da filha, que aproveita o da mãe.</li>
+  <li>O caminho que o Lua faz para achar um método herdado (a corrente objeto → filha → mãe).</li>
+  <li><strong>Sobrescrever</strong> um método e chamar a versão da mãe com <code>Conta.sacar(self, valor)</code>.</li>
+  <li>As figuras: <code>Quadrado</code> herdando de <code>Retangulo</code>.</li>
+  <li>Por que os metamétodos (<code>__tostring</code>) <strong>não</strong> passam sozinhos para a filha.</li>
+  <li>Os erros reais: <code>Conta:sacar</code> em vez de <code>Conta.sacar</code>, o <code>self:sacar</code> que chama a si mesmo, e a corrente esquecida.</li>
+</ul>
+</div>
+
+<p>Todos os programas rodaram no <strong>Lua 5.5</strong> da máquina da Ana (usuária <code>ana</code>, computador <code>notebook</code>) com <code>lua arquivo.lua</code>. Faça antes a aula <a href="classes.html">Classes com Metatabelas</a>. Usamos também <code>require</code> (aula <a href="modulos-proprios.html">Criando seu Módulo</a>) e a corrente de procura do <a href="index-newindex.html">__index</a>.</p>
+
+<hr>
+
+<h2>A ideia: a receita da família</h2>
+<p>A avó da Ana tem uma receita de bolo simples. A mãe dela fez a versão de chocolate: ela não reescreveu a receita inteira, só anotou "igual à da vovó, mas troque metade da farinha por chocolate". Quando alguém pergunta "quanto de açúcar?", a resposta está na receita da avó. Quando pergunta "e o chocolate?", está na anotação da mãe.</p>
+<ul>
+  <li>A receita da avó é a <strong>classe mãe</strong> (<code>Conta</code>).</li>
+  <li>A anotação "igual à da vovó, mas…" é a <strong>classe filha</strong> (<code>Poupanca</code>): só o que é novo ou diferente.</li>
+  <li>"Se não estiver na anotação, olhe a receita da avó" é o <code>__index</code> ligando a filha à mãe.</li>
+</ul>
+<p>Em programação se diz que a Poupança <strong>"é uma"</strong> Conta: tudo o que vale para uma conta vale para ela. Esse "é um" é o teste para saber se a herança faz sentido.</p>
+
+<hr>
+
+<h2>A classe mãe: <code>conta.lua</code></h2>
+<p>Para não repetir a classe <code>Conta</code> em todos os exemplos, ela fica num arquivo próprio, <code>conta.lua</code>, que devolve a classe no fim (um <a href="modulos-proprios.html">módulo</a>). É a mesma classe da aula anterior, com um <code>sacar</code> que recusa quando falta saldo:</p>
+
+<pre class="file" data-file="conta.lua">local Conta = {}
+Conta.__index = Conta
+
+function Conta.new(titular, saldo)
+  local self = setmetatable({}, Conta)
+  self.titular = titular
+  self.saldo = saldo or 0
+  return self
+end
+
+function Conta:depositar(valor)
+  self.saldo = self.saldo + valor
+end
+
+function Conta:sacar(valor)
+  if valor &gt; self.saldo then
+    return false, "saldo insuficiente"
+  end
+  self.saldo = self.saldo - valor
+  return true
+end
+
+function Conta:extrato()
+  print(string.format("%s: R$ %.2f", self.titular, self.saldo))
+end
+
+return Conta
+</pre>
+
+<p>Os programas desta aula começam com <code>local Conta = require("conta")</code>, e o <code>require</code> acha o <code>conta.lua</code> na mesma pasta.</p>
+
+<hr>
+
+<h2>1. A filha: <code>Poupanca</code></h2>
+
+<pre class="file" data-file="poupanca.lua">local Conta = require("conta")
+
+local Poupanca = setmetatable({}, { __index = Conta })
+Poupanca.__index = Poupanca
+
+function Poupanca.new(titular, saldo, taxa)
+  local self = Conta.new(titular, saldo)
+  setmetatable(self, Poupanca)
+  self.taxa = taxa
+  return self
+end
+
+function Poupanca:render()
+  self.saldo = self.saldo * (1 + self.taxa)
+end
+
+local p = Poupanca.new("Ana", 1000, 0.01)
+p:depositar(200)
+p:render()
+p:extrato()
+print(p:sacar(5000))
+print(getmetatable(p) == Poupanca, getmetatable(Poupanca).__index == Conta)
+print(rawget(Poupanca, "depositar"), Poupanca.depositar == Conta.depositar)
+
+local c = Conta.new("Bia", 50)
+print(c.render)
+</pre>
+
+<pre class="term">$ lua poupanca.lua
+Ana: R$ 1212.00
+false	saldo insuficiente
+true	true
+nil	true
+nil</pre>
+
+<dl class="anatomy">
+  <dt>local Poupanca = setmetatable({}, { __index = Conta })</dt><dd>A linha da herança. A classe <code>Poupanca</code> é uma tabela que ganha uma metatabela com <code>__index = Conta</code>: "o que faltar na <code>Poupanca</code>, procure na <code>Conta</code>".</dd>
+  <dt>Poupanca.__index = Poupanca</dt><dd>A mesma linha de toda classe: os objetos de <code>Poupanca</code> vão procurar os métodos na <code>Poupanca</code>.</dd>
+  <dt>local self = Conta.new(titular, saldo)</dt><dd>O construtor da filha <strong>aproveita</strong> o da mãe: quem guarda o titular e o saldo é o <code>Conta.new</code>. Assim, se um dia a <code>Conta</code> ganhar um campo novo no construtor, a poupança ganha junto.</dd>
+  <dt>setmetatable(self, Poupanca)</dt><dd>O <code>Conta.new</code> devolveu um objeto ligado à <code>Conta</code>. Aqui trocamos a metatabela dele para <code>Poupanca</code>: agora ele é uma poupança (e, pela corrente, também enxerga tudo da conta).</dd>
+  <dt>self.taxa = taxa</dt><dd>O dado que só a poupança tem: a taxa de rendimento (0.01 = 1%).</dd>
+  <dt>function Poupanca:render()</dt><dd>O método que só a poupança tem. 1200 com 1% dá 1212.</dd>
+</dl>
+
+<p>As três últimas linhas da saída confirmam o que aconteceu por dentro: a metatabela de <code>p</code> é <code>Poupanca</code>, a metatabela da <code>Poupanca</code> aponta para a <code>Conta</code>; a <code>Poupanca</code> <strong>não</strong> tem um <code>depositar</code> só dela (<code>rawget</code> deu <code>nil</code>), mas acha o da <code>Conta</code>. E uma conta comum não tem <code>render</code> (<code>nil</code>): a herança vai da mãe para a filha, nunca ao contrário.</p>
+
+<h3>Passo a passo: <code>p:depositar(200)</code></h3>
+<ol class="passo">
+  <li>O Lua procura <code>depositar</code> no objeto <code>p</code>. Ele só tem <code>titular</code>, <code>saldo</code> e <code>taxa</code>: não acha.</li>
+  <li>A metatabela de <code>p</code> é <code>Poupanca</code>, e <code>Poupanca.__index</code> é a própria <code>Poupanca</code>. O Lua procura <code>depositar</code> na <code>Poupanca</code>: ela só tem <code>__index</code>, <code>new</code> e <code>render</code>. Não acha.</li>
+  <li>A <code>Poupanca</code> também tem metatabela, com <code>__index = Conta</code>. O Lua procura <code>depositar</code> na <code>Conta</code>, e acha.</li>
+  <li>Ele chama <code>Conta.depositar(p, 200)</code>. O <code>self</code> é o <code>p</code>, então o depósito cai na poupança da Ana.</li>
+</ol>
+<p>É a <strong>corrente de procura</strong> da aula <a href="index-newindex.html">__index e __newindex</a> (cafeteira → modelo → fábrica), agora com classes: objeto → filha → mãe.</p>
+
+<hr>
+
+<h2>2. As figuras: <code>Quadrado</code> é um <code>Retangulo</code></h2>
+<p>O mesmo padrão serve para qualquer família de classes. Todo quadrado é um retângulo com largura e altura iguais. A classe <code>Quadrado</code> só precisa de um construtor mais simples (um lado só) e de uma descrição própria; a área vem do <code>Retangulo</code>:</p>
+
+<pre class="file" data-file="figuras.lua">local Retangulo = {}
+Retangulo.__index = Retangulo
+
+function Retangulo.new(largura, altura)
+  return setmetatable({ largura = largura, altura = altura }, Retangulo)
+end
+
+function Retangulo:area()
+  return self.largura * self.altura
+end
+
+function Retangulo:descricao()
+  return "retângulo " .. self.largura .. "x" .. self.altura
+end
+
+local Quadrado = setmetatable({}, { __index = Retangulo })
+Quadrado.__index = Quadrado
+
+function Quadrado.new(lado)
+  return setmetatable(Retangulo.new(lado, lado), Quadrado)
+end
+
+function Quadrado:descricao()
+  return "quadrado de lado " .. self.largura
+end
+
+local figuras = { Retangulo.new(3, 4), Quadrado.new(5), Retangulo.new(1, 2) }
+for _, f in ipairs(figuras) do
+  print(f:descricao() .. ": área " .. f:area())
+end
+</pre>
+
+<pre class="term">$ lua figuras.lua
+retângulo 3x4: área 12
+quadrado de lado 5: área 25
+retângulo 1x2: área 2</pre>
+
+<p>Repare no laço: ele chama <code>f:descricao()</code> e <code>f:area()</code> sem saber se <code>f</code> é retângulo ou quadrado. Cada objeto responde do seu jeito: o quadrado usa a <strong>sua</strong> <code>descricao</code> (o Lua a acha na <code>Quadrado</code> e para de procurar) e a <code>area</code> herdada. Isso tem um nome comprido, <strong>polimorfismo</strong> ("muitas formas"): o mesmo pedido, respostas diferentes conforme o objeto.</p>
+
+<div class="trylua" data-goal="out:quadrado de lado 5: área 25;;semerro">
+<p class="try-task"><strong>Missão:</strong> a classe <code>Quadrado</code> não está ligada ao <code>Retangulo</code>, e <code>q:area()</code> dá <code>attempt to call a nil value (method 'area')</code>. Troque <code>local Quadrado = {}</code> pela linha da herança, para o quadrado aproveitar a <code>area</code> do retângulo.</p>
+<pre class="script" data-file="main.lua">local Retangulo = {}
+Retangulo.__index = Retangulo
+
+function Retangulo.new(largura, altura)
+  return setmetatable({ largura = largura, altura = altura }, Retangulo)
+end
+
+function Retangulo:area()
+  return self.largura * self.altura
+end
+
+local Quadrado = {}
+Quadrado.__index = Quadrado
+
+function Quadrado.new(lado)
+  return setmetatable(Retangulo.new(lado, lado), Quadrado)
+end
+
+function Quadrado:descricao()
+  return "quadrado de lado " .. self.largura
+end
+
+local q = Quadrado.new(5)
+print(q:descricao() .. ": área " .. q:area())
+</pre>
+<pre class="solucao" data-file="main.lua">local Retangulo = {}
+Retangulo.__index = Retangulo
+
+function Retangulo.new(largura, altura)
+  return setmetatable({ largura = largura, altura = altura }, Retangulo)
+end
+
+function Retangulo:area()
+  return self.largura * self.altura
+end
+
+local Quadrado = setmetatable({}, { __index = Retangulo })
+Quadrado.__index = Quadrado
+
+function Quadrado.new(lado)
+  return setmetatable(Retangulo.new(lado, lado), Quadrado)
+end
+
+function Quadrado:descricao()
+  return "quadrado de lado " .. self.largura
+end
+
+local q = Quadrado.new(5)
+print(q:descricao() .. ": área " .. q:area())
+</pre>
+</div>
+
+<hr>
+
+<h2>3. Sobrescrever um método e chamar o da mãe</h2>
+<p>Às vezes a filha precisa fazer uma coisa <strong>do jeito dela</strong>. A poupança da Ana só permite 2 saques por mês. Ela escreve o seu próprio <code>Poupanca:sacar</code>: como o Lua acha esse método na <code>Poupanca</code> antes de chegar na <code>Conta</code>, a versão da filha "cobre" a da mãe. Isso se chama <strong>sobrescrever</strong> (em inglês, <em>override</em>).</p>
+<p>Mas a regra do saldo (não sacar mais do que tem) continua igual. Em vez de reescrevê-la, o <code>sacar</code> da filha <strong>chama o da mãe</strong>:</p>
+
+<pre class="file" data-file="sobrescrever.lua">local Conta = require("conta")
+
+local Poupanca = setmetatable({}, { __index = Conta })
+Poupanca.__index = Poupanca
+
+function Poupanca.new(titular, saldo, taxa)
+  local self = setmetatable(Conta.new(titular, saldo), Poupanca)
+  self.taxa = taxa
+  self.saques_no_mes = 0
+  return self
+end
+
+function Poupanca:sacar(valor)
+  if self.saques_no_mes &gt;= 2 then
+    return false, "a poupança só permite 2 saques por mês"
+  end
+  local ok, motivo = Conta.sacar(self, valor)
+  if ok then
+    self.saques_no_mes = self.saques_no_mes + 1
+  end
+  return ok, motivo
+end
+
+local p = Poupanca.new("Ana", 1000, 0.01)
+print(p:sacar(100))
+print(p:sacar(5000))
+print(p:sacar(100))
+print(p:sacar(100))
+p:extrato()
+
+local c = Conta.new("Bia", 1000)
+print(c:sacar(100), c:sacar(100), c:sacar(100))
+</pre>
+
+<pre class="term">$ lua sobrescrever.lua
+true	nil
+false	saldo insuficiente
+true	nil
+false	a poupança só permite 2 saques por mês
+Ana: R$ 800.00
+true	true	true</pre>
+
+<dl class="anatomy">
+  <dt>function Poupanca:sacar(valor)</dt><dd>A versão da filha. Para objetos de <code>Poupanca</code>, é esta que roda; para contas comuns, continua a da <code>Conta</code> (a Bia sacou 3 vezes sem problema, na última linha).</dd>
+  <dt>Conta.sacar(self, valor)</dt><dd>A chamada à mãe. Com <strong>ponto</strong> e passando o <code>self</code> à mão: "rode o <code>sacar</code> da <code>Conta</code>, mas <strong>nesta</strong> poupança". É o caso da tabela de <a href="metodos.html">Métodos</a>: chamar o método de uma tabela passando outra como <code>self</code>.</dd>
+  <dt>local ok, motivo = …</dt><dd>Guarda as duas respostas da mãe (<code>true</code>, ou <code>false</code> e o motivo) para decidir se conta o saque e para devolvê-las.</dd>
+  <dt>true nil</dt><dd>O primeiro saque deu certo. O <code>nil</code> é o <code>motivo</code>: a mãe devolveu só <code>true</code>, e a filha devolve <code>ok, motivo</code>.</dd>
+  <dt>false saldo insuficiente</dt><dd>Quem recusou foi a regra da <strong>mãe</strong>, chamada pela filha. Esse saque não contou.</dd>
+  <dt>false a poupança só permite…</dt><dd>No terceiro pedido (o segundo que deu certo foi o anterior), quem recusou foi a regra da <strong>filha</strong>, antes mesmo de chamar a mãe.</dd>
+</dl>
+
+<div class="warning">
+<strong>Ponto, não dois-pontos, para chamar a mãe</strong>
+<p><code>Conta:sacar(valor)</code> seria <code>Conta.sacar(Conta, valor)</code>: o <code>self</code> seria a <strong>classe</strong> <code>Conta</code>, que não tem saldo. E <code>self:sacar(valor)</code> chamaria a própria versão da filha de novo, para sempre. Os dois erros estão em <a href="#errado">Quando dá errado</a>.</p>
+</div>
+
+<hr>
+
+<h2>4. Os metamétodos não são herdados sozinhos</h2>
+<p>Uma surpresa: a <code>Conta</code> ganha um <code>__tostring</code>, e a poupança continua aparecendo como <code>table: 0x…</code>:</p>
+
+<pre class="file" data-file="tostring_heranca.lua">local Conta = require("conta")
+Conta.__tostring = function (c)
+  return string.format("Conta de %s (R$ %.2f)", c.titular, c.saldo)
+end
+
+local Poupanca = setmetatable({}, { __index = Conta })
+Poupanca.__index = Poupanca
+
+function Poupanca.new(titular, saldo)
+  return setmetatable(Conta.new(titular, saldo), Poupanca)
+end
+
+local c = Conta.new("Bia", 50)
+local p = Poupanca.new("Ana", 1000)
+print(c)
+print((tostring(p):gsub("0x%x+", "0x...")))
+print(Poupanca.__tostring == Conta.__tostring)
+
+Poupanca.__tostring = Conta.__tostring
+print(p)
+</pre>
+
+<pre class="term">$ lua tostring_heranca.lua
+Conta de Bia (R$ 50.00)
+table: 0x...
+true
+Conta de Ana (R$ 1000.00)</pre>
+
+<dl class="anatomy">
+  <dt>print(c) → Conta de Bia…</dt><dd>A conta comum usa o <code>__tostring</code> da <code>Conta</code>, a metatabela dela.</dd>
+  <dt>tostring(p) → table: 0x...</dt><dd>A metatabela da poupança é a <code>Poupanca</code>, e a <code>Poupanca</code> não tem um <code>__tostring</code> <strong>dela</strong>. (O <code>gsub</code> só esconde o endereço, que muda a cada vez.)</dd>
+  <dt>Poupanca.__tostring == Conta.__tostring → true</dt><dd>O curioso: <strong>lendo</strong> <code>Poupanca.__tostring</code>, o <code>__index</code> da corrente acha o da <code>Conta</code>. Mas quando o Lua procura um metamétodo, ele olha a metatabela <strong>crua</strong> (como um <a href="rawget-rawset.html">rawget</a>), sem seguir a corrente.</dd>
+  <dt>Poupanca.__tostring = Conta.__tostring</dt><dd>O conserto: copiar o metamétodo para a filha. Depois disso, <code>print(p)</code> funcionou.</dd>
+</dl>
+
+<p>Vale para <strong>todos</strong> os metamétodos (<code>__tostring</code>, <code>__eq</code>, <code>__lt</code>, <code>__add</code>, <code>__len</code>…): a filha precisa ter os seus. O <code>__index</code> da filha é o único que você já escreve sempre (<code>Poupanca.__index = Poupanca</code>).</p>
+
+<hr>
+
+<h2>5. "Este objeto é uma Conta?"</h2>
+<p>Na aula anterior, <code>getmetatable(obj) == Conta</code> dizia se o objeto era uma conta. Com herança, isso não basta: para uma poupança, a metatabela é <code>Poupanca</code>, não <code>Conta</code>. Uma função que sobe a corrente resolve:</p>
+
+<pre class="file" data-file="eh_um.lua">local Conta = require("conta")
+local Poupanca = setmetatable({}, { __index = Conta })
+Poupanca.__index = Poupanca
+function Poupanca.new(t, s) return setmetatable(Conta.new(t, s), Poupanca) end
+
+local function eh_um(objeto, classe)
+  local mt = getmetatable(objeto)
+  while mt do
+    if mt == classe then return true end
+    local mae = getmetatable(mt)
+    mt = mae and mae.__index
+  end
+  return false
+end
+
+local p = Poupanca.new("Ana", 10)
+local c = Conta.new("Bia", 10)
+print(eh_um(p, Poupanca), eh_um(p, Conta))
+print(eh_um(c, Poupanca), eh_um(c, Conta))
+print(getmetatable(p) == Conta)
+</pre>
+
+<pre class="term">$ lua eh_um.lua
+true	true
+false	true
+false</pre>
+
+<p>A poupança "é uma" Poupança <strong>e</strong> "é uma" Conta; a conta comum é só Conta. A função começa na classe do objeto e vai subindo (<code>mae.__index</code>, a mãe de cada classe) até achar a classe procurada ou acabar a corrente (<code>mt</code> vira <code>nil</code>). O <code>mae and mae.__index</code> evita erro quando a classe não tem mãe (veja <a href="and-or-ternario.html">O Truque do and/or</a>).</p>
+
+<hr>
+
+<h2 id="formas">Formas diferentes de fazer a mesma coisa</h2>
+<p>O livro <em>Programming in Lua</em>, do criador da linguagem, usa outro estilo: a classe é criada com <code>Conta:new()</code>, e a filha é "um objeto especial" da mãe. Funciona porque o <code>new</code> usa <code>self</code> (que é a classe que chamou) como metatabela:</p>
+
+<pre class="file" data-file="pil.lua">local Conta = { saldo = 0 }
+
+function Conta:new(o)
+  o = o or {}
+  self.__index = self
+  setmetatable(o, self)
+  return o
+end
+
+function Conta:depositar(v) self.saldo = self.saldo + v end
+
+local Poupanca = Conta:new()
+function Poupanca:render() self.saldo = self.saldo * 1.01 end
+
+local p = Poupanca:new({ titular = "Ana", saldo = 1000 })
+p:depositar(200)
+p:render()
+print(p.titular, p.saldo)
+</pre>
+
+<pre class="term">$ lua pil.lua
+Ana	1212.0</pre>
+
+<p>Aqui <code>Poupanca = Conta:new()</code> cria a filha, e <code>Poupanca:new(…)</code> roda o <strong>mesmo</strong> <code>new</code> da <code>Conta</code>, mas com <code>self = Poupanca</code>: o objeto fica ligado à filha. É mais curto, mas menos explícito; o <code>Conta.new</code> com <code>setmetatable(Filha, { __index = Mae })</code> mostra a ligação com todas as letras.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Situação</th><th>Qual usar</th></tr>
+<tr><td>A filha "é uma" mãe, com algo a mais ou diferente (Poupança é Conta, Quadrado é Retângulo)</td><td>Herança: <code>setmetatable(Filha, { __index = Mae })</code></td></tr>
+<tr><td>Só quer reaproveitar uma função, sem a relação "é um"</td><td>Chame a função direto, ou copie-a para a outra classe: herança não é obrigatória</td></tr>
+<tr><td>Muitos níveis (Avó → Mãe → Filha → Neta)</td><td>Funciona, mas fica difícil de seguir; prefira poucos níveis</td></tr>
+<tr><td>Código de outras pessoas com <code>Classe:new(o)</code></td><td>É o estilo do <em>Programming in Lua</em> (acima): leia o <code>self</code> do <code>new</code> como "a classe que chamou"</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+
+<div class="cenario">
+<strong>Chamou a mãe com dois-pontos: <code>Conta:sacar(valor)</code></strong>
+<pre class="file" data-file="mae_errado.lua">local Conta = require("conta")
+
+local Poupanca = setmetatable({}, { __index = Conta })
+Poupanca.__index = Poupanca
+
+function Poupanca.new(titular, saldo)
+  return setmetatable(Conta.new(titular, saldo), Poupanca)
+end
+
+function Poupanca:sacar(valor)
+  print("saque na poupança")
+  return Conta:sacar(valor)
+end
+
+local p = Poupanca.new("Ana", 1000)
+print(p:sacar(100))
+</pre>
+<pre class="term">$ lua mae_errado.lua
+saque na poupança
+lua: ./conta.lua:16: attempt to compare nil with number
+stack traceback:
+	./conta.lua:16: in function 'conta.sacar'
+	(...tail calls...)
+	mae_errado.lua:16: in main chunk
+	[C]: in ?</pre>
+<p>Linha por linha:</p>
+<dl class="anatomy">
+  <dt>./conta.lua:16:</dt><dd>O erro estourou <strong>no arquivo da mãe</strong>, na linha <code>if valor &gt; self.saldo then</code>. O <code>./</code> é a pasta atual, onde o <code>require</code> achou o módulo.</dd>
+  <dt>attempt to compare nil with number</dt><dd>"Tentativa de comparar <code>nil</code> com número". O <code>self</code> era a classe <code>Conta</code> (por causa do dois-pontos), e a classe não tem <code>saldo</code>: <code>self.saldo</code> é <code>nil</code>.</dd>
+  <dt>in function 'conta.sacar'</dt><dd>O Lua dá à função o nome do módulo e do campo: o <code>sacar</code> do módulo <code>conta</code>.</dd>
+  <dt>(...tail calls...)</dt><dd>"Chamadas de cauda": o <code>return Conta:sacar(valor)</code> é uma <a href="chamada-cauda.html">chamada de cauda</a>, e o Lua não guarda o passo pela <code>Poupanca:sacar</code> no rastro. Por isso a linha 12 do <code>mae_errado.lua</code> nem aparece.</dd>
+</dl>
+<p>O engano está na filha, mas o erro aparece na mãe: é o tipo de erro que confunde. <strong>Como consertar:</strong> <code>Conta.sacar(self, valor)</code>, com ponto e com o <code>self</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Chamou <code>self:sacar</code> dentro do próprio <code>sacar</code></strong>
+<pre class="file" data-file="recursao2.lua">local Conta = require("conta")
+
+local Poupanca = setmetatable({}, { __index = Conta })
+Poupanca.__index = Poupanca
+
+function Poupanca.new(titular, saldo)
+  return setmetatable(Conta.new(titular, saldo), Poupanca)
+end
+
+function Poupanca:sacar(valor)
+  print("saque na poupança")
+  local ok, motivo = self:sacar(valor)
+  return ok, motivo
+end
+
+local p = Poupanca.new("Ana", 1000)
+print(p:sacar(100))
+</pre>
+<pre class="term">$ lua recursao2.lua
+saque na poupança
+saque na poupança                « …e assim mais de 300 mil vezes…
+lua: recursao2.lua:11: stack overflow
+stack traceback:
+	recursao2.lua:11: in method 'sacar'
+	recursao2.lua:12: in method 'sacar'
+	recursao2.lua:12: in method 'sacar'
+	…                                « mais 6 linhas iguais
+	recursao2.lua:12: in method 'sacar'
+	...	(skipping 333303 levels)
+	recursao2.lua:12: in method 'sacar'
+	…                                « mais 8 linhas iguais
+	recursao2.lua:17: in main chunk
+	[C]: in ?</pre>
+<p>O <code>self</code> é uma poupança, então <code>self:sacar</code> acha… o <code>sacar</code> da <code>Poupanca</code>, o mesmo que está rodando. Ele chama a si mesmo, que chama a si mesmo, até a pilha de chamadas encher: <code>stack overflow</code> ("estouro da pilha"). No lab, o <code>saque na poupança</code> apareceu <strong>333.322 vezes</strong> antes do erro, e o rastro pulou 333.303 níveis. (Separamos a saída do erro para contar; num terminal, as linhas passam voando.) <strong>Como consertar:</strong> para usar a versão da mãe, <code>Conta.sacar(self, valor)</code>.</p>
+<p>E se a linha fosse <code>return self:sacar(valor)</code>? Aí seria uma <a href="chamada-cauda.html">chamada de cauda</a>, que não ocupa a pilha: o programa <strong>não termina nunca</strong>. No lab, o <code>timeout 3</code> teve de pará-lo (código de saída 124). No editor do guia, ele seria parado depois de 10 segundos.</p>
+</div>
+
+<div class="cenario">
+<strong>Esqueceu a linha da herança</strong>
+<pre class="file" data-file="esquece_corrente.lua">local Conta = require("conta")
+
+local Poupanca = {}
+Poupanca.__index = Poupanca
+
+function Poupanca.new(titular, saldo, taxa)
+  local self = setmetatable(Conta.new(titular, saldo), Poupanca)
+  self.taxa = taxa
+  return self
+end
+
+local p = Poupanca.new("Ana", 1000, 0.01)
+p:depositar(100)
+</pre>
+<pre class="term">$ lua esquece_corrente.lua
+lua: esquece_corrente.lua:13: attempt to call a nil value (method 'depositar')
+stack traceback:
+	esquece_corrente.lua:13: in main chunk
+	[C]: in ?</pre>
+<p>A <code>Poupanca</code> é uma classe "solta": sem <code>setmetatable(Poupanca, { __index = Conta })</code>, a procura para nela. <strong>Como consertar:</strong> <code>local Poupanca = setmetatable({}, { __index = Conta })</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Esqueceu de trocar a metatabela no construtor da filha</strong>
+<pre class="file" data-file="esquece_setmt.lua">local Conta = require("conta")
+
+local Poupanca = setmetatable({}, { __index = Conta })
+Poupanca.__index = Poupanca
+
+function Poupanca.new(titular, saldo, taxa)
+  local self = Conta.new(titular, saldo)
+  self.taxa = taxa
+  return self
+end
+
+function Poupanca:render()
+  self.saldo = self.saldo * (1 + self.taxa)
+end
+
+local p = Poupanca.new("Ana", 1000, 0.01)
+p:render()
+</pre>
+<pre class="term">$ lua esquece_setmt.lua
+lua: esquece_setmt.lua:17: attempt to call a nil value (method 'render')
+stack traceback:
+	esquece_setmt.lua:17: in main chunk
+	[C]: in ?</pre>
+<p>O <code>Conta.new</code> criou um objeto ligado à <code>Conta</code>, e ninguém trocou para <code>Poupanca</code>. O objeto é uma conta comum, com um campo <code>taxa</code> a mais: os métodos da mãe funcionam, mas os da filha (<code>render</code>) não existem para ele. <strong>Como consertar:</strong> <code>setmetatable(self, Poupanca)</code> depois do <code>Conta.new</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>O <code>print</code> da filha mostra <code>table: 0x…</code></strong>
+<p>A mãe tem <code>__tostring</code>, a filha não (seção 4). <strong>Como consertar:</strong> <code>Poupanca.__tostring = Conta.__tostring</code> (ou um <code>__tostring</code> próprio da filha). O mesmo vale para <code>__eq</code>, <code>__lt</code>, <code>__add</code> e os outros.</p>
+</div>
+
+<hr>
+
+<h2>Referência rápida: o molde da herança</h2>
+
+<pre class="file" data-file="molde_heranca.lua">local Filha = setmetatable({}, { __index = Mae })   -- liga a filha à mãe
+Filha.__index = Filha                               -- objetos procuram na filha
+
+function Filha.new(a, b, extra)
+  local self = Mae.new(a, b)                        -- a mãe monta a base
+  setmetatable(self, Filha)                         -- agora é uma Filha
+  self.extra = extra                                -- o que só a filha tem
+  return self
+end
+
+function Filha:metodo_novo() … end                  -- só a filha tem
+
+function Filha:metodo_da_mae(x)                     -- sobrescreve
+  -- … o que muda …
+  return Mae.metodo_da_mae(self, x)                 -- chama a versão da mãe
+end
+
+Filha.__tostring = Mae.__tostring                   -- metamétodos: copie
+</pre>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Mensagem</th><th>Causa provável</th></tr>
+<tr><td><code>attempt to call a nil value (method '…')</code> com um método da mãe</td><td>Faltou <code>setmetatable(Filha, { __index = Mae })</code></td></tr>
+<tr><td><code>attempt to call a nil value (method '…')</code> com um método da filha</td><td>O construtor da filha não fez <code>setmetatable(self, Filha)</code></td></tr>
+<tr><td>Erro no arquivo da mãe com <code>nil</code> (<code>attempt to compare nil with number</code>, <code>… a nil value (field '…')</code>)</td><td>Chamou <code>Mae:metodo(…)</code> em vez de <code>Mae.metodo(self, …)</code></td></tr>
+<tr><td><code>stack overflow</code> com <code>in method '…'</code> repetido</td><td><code>self:metodo()</code> dentro do próprio <code>metodo</code> sobrescrito</td></tr>
+<tr><td>O programa não termina</td><td>O mesmo, com <code>return self:metodo()</code> (chamada de cauda)</td></tr>
+<tr><td><code>table: 0x…</code> no <code>print</code> da filha</td><td>Metamétodo não herdado: copie para a filha</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. Complete a linha da herança</h3>
+<div class="ex-code">local Quadrado = <input data-answer="setmetatable" aria-label="função">({}, { <input data-answer="__index" aria-label="campo"> = Retangulo })</div>
+</div>
+
+<div class="exercise">
+<h3>2. Chamar a mãe</h3>
+<p>Dentro de <code>function Poupanca:depositar(valor)</code>, complete a chamada ao <code>depositar</code> da <code>Conta</code>:</p>
+<div class="ex-code">Conta<input data-answer="." aria-label="pontuação">depositar(<input data-answer="self" aria-label="primeiro argumento">, valor)</div>
+</div>
+
+<div class="mc" data-answer="3">
+<p class="mc-q">3. Em <code>p:extrato()</code>, com <code>p</code> uma Poupança e <code>extrato</code> só na <code>Conta</code>, em que ordem o Lua procura?</p>
+<label><input type="radio" name="q3"> Conta → Poupanca → p</label>
+<label><input type="radio" name="q3"> Só em <code>p</code></label>
+<label><input type="radio" name="q3"> p → Poupanca → Conta</label>
+<label><input type="radio" name="q3"> Poupanca → p → Conta</label>
+</div>
+
+<div class="mc" data-answer="1">
+<p class="mc-q">4. A <code>Conta</code> tem <code>__tostring</code>, a <code>Poupanca</code> herda da <code>Conta</code> e não tem. O que <code>print(poupanca_da_ana)</code> mostra?</p>
+<label><input type="radio" name="q4"> <code>table: 0x…</code></label>
+<label><input type="radio" name="q4"> O texto do <code>__tostring</code> da <code>Conta</code></label>
+<label><input type="radio" name="q4"> Dá erro</label>
+<label><input type="radio" name="q4"> <code>nil</code></label>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">5. Dentro do <code>Poupanca:sacar</code> sobrescrito, qual linha usa a regra da mãe sem cair em laço?</p>
+<label><input type="radio" name="q5"> <code>self:sacar(valor)</code></label>
+<label><input type="radio" name="q5"> <code>Conta.sacar(self, valor)</code></label>
+<label><input type="radio" name="q5"> <code>Conta:sacar(valor)</code></label>
+<label><input type="radio" name="q5"> <code>Poupanca.sacar(self, valor)</code></label>
+</div>
+
+<h3>Missão final: a conta corrente com tarifa</h3>
+
+<div class="trylua" data-goal="out:Bia: R$ 78.00;;src:Conta\.sacar\(\s*self;;semerro">
+<p class="try-task"><strong>Missão:</strong> a conta corrente cobra uma tarifa de R$ 2 por saque. Na aba <code>main.lua</code>, escreva <code>function Corrente:sacar(valor)</code> que chame o <code>sacar</code> da <code>Conta</code> com o valor mais a tarifa: <code>return Conta.sacar(self, valor + self.tarifa)</code>. Sacando 20 de 100, a Bia deve ficar com <code>R$ 78.00</code>. (A aba <code>conta.lua</code> é a classe mãe; não precisa mexer nela.)</p>
+<pre class="script" data-file="main.lua">local Conta = require("conta")
+
+local Corrente = setmetatable({}, { __index = Conta })
+Corrente.__index = Corrente
+
+function Corrente.new(titular, saldo)
+  local self = setmetatable(Conta.new(titular, saldo), Corrente)
+  self.tarifa = 2
+  return self
+end
+
+-- escreva aqui o function Corrente:sacar(valor)
+
+local c = Corrente.new("Bia", 100)
+print(c:sacar(20))
+print(c:sacar(77))
+c:extrato()
+</pre>
+<pre class="script" data-file="conta.lua">local Conta = {}
+Conta.__index = Conta
+
+function Conta.new(titular, saldo)
+  local self = setmetatable({}, Conta)
+  self.titular = titular
+  self.saldo = saldo or 0
+  return self
+end
+
+function Conta:depositar(valor)
+  self.saldo = self.saldo + valor
+end
+
+function Conta:sacar(valor)
+  if valor &gt; self.saldo then
+    return false, "saldo insuficiente"
+  end
+  self.saldo = self.saldo - valor
+  return true
+end
+
+function Conta:extrato()
+  print(string.format("%s: R$ %.2f", self.titular, self.saldo))
+end
+
+return Conta
+</pre>
+<pre class="solucao" data-file="main.lua">local Conta = require("conta")
+
+local Corrente = setmetatable({}, { __index = Conta })
+Corrente.__index = Corrente
+
+function Corrente.new(titular, saldo)
+  local self = setmetatable(Conta.new(titular, saldo), Corrente)
+  self.tarifa = 2
+  return self
+end
+
+function Corrente:sacar(valor)
+  return Conta.sacar(self, valor + self.tarifa)
+end
+
+local c = Corrente.new("Bia", 100)
+print(c:sacar(20))
+print(c:sacar(77))
+c:extrato()
+</pre>
+</div>
+
+<p>No lab, a solução mostrou <code>true</code>, depois <code>false	saldo insuficiente</code> (77 + 2 de tarifa = 79, mais do que os 78 que sobraram: a regra da mãe recusou) e, por fim, <code>Bia: R$ 78.00</code>.</p>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li><strong>Herança</strong>: a classe filha aproveita tudo da mãe e só escreve o que é novo ou diferente. Use quando a filha "é uma" mãe.</li>
+  <li>A ligação: <code>local Filha = setmetatable({}, { __index = Mae })</code> e <code>Filha.__index = Filha</code>. A procura segue a corrente objeto → filha → mãe.</li>
+  <li>O construtor da filha chama o da mãe (<code>Mae.new(…)</code>) e troca a metatabela: <code>setmetatable(self, Filha)</code>.</li>
+  <li><strong>Sobrescrever</strong>: escreva o método na filha. Para usar a versão da mãe, <code>Mae.metodo(self, …)</code>, com ponto e <code>self</code>. Nunca <code>Mae:metodo</code> nem <code>self:metodo</code> dentro dele mesmo.</li>
+  <li>Os metamétodos (<code>__tostring</code>, <code>__eq</code>…) não seguem a corrente: copie-os para a filha.</li>
+  <li>Próximo passo: dados que ninguém de fora consegue mexer, em <a href="encapsulamento.html">Privacidade com Closures</a>.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
