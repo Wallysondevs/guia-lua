@@ -1,0 +1,641 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua goto — rótulos e o “continue” que o Lua não tem | Guia Lua</title>
+<meta name="description" content="O goto e os rótulos (::nome::) do Lua para quem nunca programou: por que o Lua não tem continue, o jeito idiomático goto continue, o erro real de pular para dentro do escopo de uma local, o cuidado com o repeat … until, sair de dois laços de uma vez e as mensagens reais do Lua 5.5.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">goto</span> e rótulos</h1>
+
+<p class="intro">Muitas linguagens têm uma palavra para dizer "esta volta do laço não me interessa, passe para a próxima": é o <code>continue</code> ("continuar"). O Lua <strong>não tem</strong> <code>continue</code>. No lugar dele, o Lua tem uma ferramenta mais geral: o <code>goto</code> (em inglês, "vá para"), que pula para um ponto marcado do programa, chamado <strong>rótulo</strong>. Escrever <code>goto continue</code> e pôr o rótulo <code>::continue::</code> no fim do laço é o jeito que a comunidade Lua usa no lugar do <code>continue</code>.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>Por que <code>continue</code> sozinho dá erro de sintaxe no Lua.</li>
+  <li>O que é um <strong>rótulo</strong> (<code>::nome::</code>) e como o <code>goto</code> pula até ele.</li>
+  <li>O jeito idiomático: <code>goto continue</code> + <code>::continue::</code> no fim do laço, no <code>for</code> e no <code>while</code>.</li>
+  <li>O erro real "<code>jumps into the scope of</code>": quando o pulo cai dentro do alcance de uma variável <code>local</code>, e como consertar com <code>do … end</code>.</li>
+  <li>A pegadinha do <code>repeat … until</code> com <code>goto continue</code>.</li>
+  <li>Como sair de <strong>dois laços de uma vez</strong> com um <code>goto</code>.</li>
+  <li>As outras mensagens reais: rótulo que não existe, rótulo repetido, pulo para dentro de um bloco.</li>
+</ul>
+</div>
+
+<p>Todos os programas desta aula rodaram no <strong>Lua 5.5</strong> da máquina da Ana (usuária <code>ana</code>, computador <code>notebook</code>), salvos na pasta pessoal dela e executados com <code>lua arquivo.lua</code> (veja <a href="executar.html">Rodando um Programa</a>). Você pode rodar cada um no editor do guia. Antes desta aula, vale ter visto <a href="for-numerico.html">for Numérico</a>, <a href="while.html">while</a> e <a href="break.html">break</a>.</p>
+
+<hr>
+
+<h2>A ideia: "pule para a placa"</h2>
+<p>A Ana confere o estoque da padaria com uma lista na mão. Para cada produto, ela faz três coisas: olha a prateleira, anota a quantidade e cola uma etiqueta de preço. Mas quando a prateleira está <strong>vazia</strong>, não há o que etiquetar. O dono deixou uma placa pendurada no fim do corredor, escrita "PRÓXIMO PRODUTO", e um bilhete: <em>"se a prateleira estiver vazia, vá direto para a placa"</em>.</p>
+<ol class="passo">
+  <li>Prateleira do pão: tem pão → anota, etiqueta, chega à placa e segue para o próximo.</li>
+  <li>Prateleira do leite: <strong>vazia</strong> → pula tudo e vai direto para a placa.</li>
+  <li>Prateleira do café: tem café → anota, etiqueta, chega à placa…</li>
+</ol>
+<p>No Lua, a placa é um <strong>rótulo</strong>: um nome entre dois pares de dois-pontos, como <code>::continue::</code>. O bilhete "vá para a placa" é o <code>goto continue</code>. Quando o <code>goto</code> roda, o Lua pula para a linha do rótulo e continua dali. Se o rótulo está no fim do laço, pular para ele é o mesmo que dizer "acabou esta volta, vamos para a próxima".</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Peça</th><th>Como se escreve</th><th>O que faz</th></tr>
+<tr><td>Rótulo (a placa)</td><td><code>::continue::</code></td><td>Marca um ponto do programa com um nome. Sozinho, não faz nada: o Lua passa por ele como se não existisse.</td></tr>
+<tr><td>O pulo (o bilhete)</td><td><code>goto continue</code></td><td>Faz o programa continuar a partir do rótulo com esse nome.</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>1. O Lua não tem <code>continue</code></h2>
+<p>Quem já viu outra linguagem tenta logo isto, para mostrar os números de 1 a 5 menos o 3:</p>
+
+<pre class="file" data-file="continue_palavra.lua">for i = 1, 5 do
+  if i == 3 then
+    continue
+  end
+  print(i)
+end
+</pre>
+
+<pre class="term">$ lua continue_palavra.lua
+lua: continue_palavra.lua:4: syntax error near 'end'
+$ echo $?
+1</pre>
+
+<p>"Erro de sintaxe perto de <code>end</code>", na linha 4. Para o Lua, <code>continue</code> <strong>não é uma palavra especial</strong>: é só um nome qualquer, como <code>preco</code> ou <code>x</code>. Um nome sozinho numa linha não é um comando completo (o Lua esperava algo como <code>continue = 1</code> ou <code>continue()</code>), e ele só percebe isso quando chega ao <code>end</code> da linha 4. Por isso a mensagem aponta o <code>end</code>, e não o <code>continue</code>. Repare que nenhum número foi mostrado: com erro de sintaxe, o programa nem começa a rodar, e não aparece <code>stack traceback</code>.</p>
+
+<hr>
+
+<h2>2. O jeito idiomático: <code>goto continue</code></h2>
+<p>Este programa mostra só os números <strong>pares</strong> de 1 a 10. Quando o número é ímpar, ele pula para o rótulo no fim do laço:</p>
+
+<pre class="file" data-file="pares.lua">for i = 1, 10 do
+  if i % 2 == 1 then
+    goto continue
+  end
+  print(i)
+  ::continue::
+end
+print("fim")
+</pre>
+
+<dl class="anatomy">
+  <dt>for i = 1, 10 do</dt><dd>Um <a href="for-numerico.html">for numérico</a> comum: <code>i</code> vale 1, 2, 3… até 10.</dd>
+  <dt>if i % 2 == 1 then</dt><dd>O <code>%</code> é o resto da divisão (veja <a href="divisao.html">Divisão: /, // e %</a>). Resto 1 na divisão por 2 quer dizer "ímpar".</dd>
+  <dt>goto continue</dt><dd>"Vá para o rótulo <code>continue</code>." As linhas que estão entre o <code>goto</code> e o rótulo (aqui, o <code>print(i)</code>) são <strong>puladas</strong>.</dd>
+  <dt>print(i)</dt><dd>Só chega aqui quem não pulou: os pares.</dd>
+  <dt>::continue::</dt><dd>O <strong>rótulo</strong>: dois-pontos duplos, o nome, dois-pontos duplos. Ele fica na última linha do corpo do laço, logo antes do <code>end</code>. Chegar até ele (pulando ou não) é chegar ao fim da volta.</dd>
+  <dt>end</dt><dd>Fim do corpo. O <code>for</code> passa para o próximo <code>i</code>.</dd>
+</dl>
+
+<pre class="term">$ lua pares.lua
+2
+4
+6
+8
+10
+fim</pre>
+
+<p>O nome <code>continue</code> não é obrigatório: <code>goto proximo</code> com <code>::proximo::</code> funcionaria igual. Mas <code>continue</code> é o nome que todo mundo usa, justamente porque faz o papel do <code>continue</code> das outras linguagens. Quem ler o seu código vai entender na hora.</p>
+
+<h3>Passo a passo: as três primeiras voltas</h3>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Volta</th><th><code>i</code></th><th><code>i % 2 == 1</code>?</th><th>O que acontece</th></tr>
+<tr><td>1ª</td><td>1</td><td><code>true</code></td><td><code>goto continue</code>: pula o <code>print</code>, cai no rótulo, a volta acaba</td></tr>
+<tr><td>2ª</td><td>2</td><td><code>false</code></td><td>Não entra no <code>if</code>; mostra <code>2</code>; passa pelo rótulo (que não faz nada); a volta acaba</td></tr>
+<tr><td>3ª</td><td>3</td><td><code>true</code></td><td>Pula de novo</td></tr>
+</table>
+</div>
+
+<div class="tip">
+<strong><code>goto continue</code> × <code>break</code></strong>
+<p>O <a href="break.html">break</a> ("quebrar") <strong>sai do laço</strong> de vez: as voltas que faltavam não acontecem. O <code>goto continue</code> só <strong>encerra a volta atual</strong>: o laço segue com o próximo valor. No exemplo acima, um <code>break</code> no lugar do <code>goto</code> pararia tudo logo no <code>i = 1</code>, e o programa mostraria só <code>fim</code>.</p>
+</div>
+
+<h3>Um exemplo da padaria</h3>
+<p>Agora o estoque da Ana: duas listas, uma com os produtos e outra com as quantidades na mesma ordem (as listas têm aula própria em <a href="listas.html">Tabelas como Listas</a>; por enquanto, basta saber que <code>produtos[2]</code> é o segundo produto e <code>#produtos</code> é quantos são). Produto com quantidade 0 é avisado e pulado:</p>
+
+<pre class="file" data-file="estoque.lua">local produtos = {"pão", "leite", "café", "manteiga"}
+local quantidades = {12, 0, 5, 0}
+
+for i = 1, #produtos do
+  if quantidades[i] == 0 then
+    print("(pulando " .. produtos[i] .. ": acabou)")
+    goto continue
+  end
+  print(produtos[i] .. ": " .. quantidades[i] .. " no estoque")
+  ::continue::
+end
+</pre>
+
+<pre class="term">$ lua estoque.lua
+pão: 12 no estoque
+(pulando leite: acabou)
+café: 5 no estoque
+(pulando manteiga: acabou)</pre>
+
+<div class="trylua" data-goal="outre:^(?![\s\S]*leite: 0)(?![\s\S]*manteiga: 0)[\s\S]*café: 5 no estoque;;src:goto\s+continue;;src:::continue::">
+<p class="try-task"><strong>Missão:</strong> este programa mostra até os produtos que acabaram (<code>leite: 0 no estoque</code>). Use <code>goto continue</code> e o rótulo <code>::continue::</code> para pular os produtos com quantidade 0. (Mostrar um aviso de "pulando" é opcional.)</p>
+<pre class="script" data-file="main.lua">local produtos = {"pão", "leite", "café", "manteiga"}
+local quantidades = {12, 0, 5, 0}
+
+for i = 1, #produtos do
+  print(produtos[i] .. ": " .. quantidades[i] .. " no estoque")
+end
+</pre>
+<pre class="solucao" data-file="main.lua">local produtos = {"pão", "leite", "café", "manteiga"}
+local quantidades = {12, 0, 5, 0}
+
+for i = 1, #produtos do
+  if quantidades[i] == 0 then
+    goto continue
+  end
+  print(produtos[i] .. ": " .. quantidades[i] .. " no estoque")
+  ::continue::
+end
+</pre>
+</div>
+
+<hr>
+
+<h2>3. No <code>while</code> também</h2>
+<p>O <code>goto continue</code> funciona em qualquer laço. A professora da Ana quer a média das notas, mas algumas foram digitadas erradas (fora de 0 a 10) e devem ser ignoradas:</p>
+
+<pre class="file" data-file="while_cont.lua">local notas = {7, -1, 9, 15, 6}
+local soma, contadas = 0, 0
+local i = 0
+while i &lt; #notas do
+  i = i + 1
+  local nota = notas[i]
+  if nota &lt; 0 or nota &gt; 10 then
+    print("nota inválida ignorada: " .. nota)
+    goto continue
+  end
+  soma = soma + nota
+  contadas = contadas + 1
+  ::continue::
+end
+print("média: " .. soma / contadas)
+</pre>
+
+<pre class="term">$ lua while_cont.lua
+nota inválida ignorada: -1
+nota inválida ignorada: 15
+média: 7.333333333333333</pre>
+
+<p>Repare num detalhe importante: o <code>i = i + 1</code> está <strong>no começo</strong> do corpo, antes de qualquer <code>goto</code>. Se ele ficasse depois do <code>goto continue</code>, as voltas que pulam não somariam 1 ao <code>i</code>, o <code>i</code> ficaria parado na nota inválida, e o laço nunca terminaria (um <strong>laço infinito</strong>; veja <a href="while.html">while</a>). No <code>for</code> numérico esse perigo não existe: quem anda com o <code>i</code> é o próprio <code>for</code>.</p>
+
+<p>E a <code>local nota</code> declarada <strong>antes</strong> do <code>goto</code>? Sem problema nenhum. O cuidado é com a <code>local</code> que fica <strong>entre</strong> o <code>goto</code> e o rótulo, que é o assunto da próxima seção.</p>
+
+<hr>
+
+<h2 id="escopo">4. O erro clássico: pular para dentro do escopo de uma <code>local</code></h2>
+<p>Uma variável <code>local</code> existe da linha em que foi declarada até o fim do bloco (o <strong>escopo</strong> dela; veja <a href="local.html">local × Global</a> e <a href="escopo.html">Escopo e Blocos</a>). O <code>goto</code> tem uma regra: ele <strong>não pode pular por cima</strong> da declaração de uma <code>local</code> e cair num ponto onde ela já deveria existir. Se pudesse, a variável estaria "valendo" sem nunca ter recebido valor.</p>
+
+<p>Olhe este programa. Ele declara <code>local dobro</code> entre o <code>goto</code> e o rótulo, e ainda tem um <code>print</code> <strong>depois</strong> do rótulo:</p>
+
+<pre class="file" data-file="escopo.lua">for i = 1, 3 do
+  if i == 2 then
+    goto continue
+  end
+  local dobro = i * 2
+  print(dobro)
+  ::continue::
+  print("volta", i, "terminou")
+end
+</pre>
+
+<pre class="term">$ lua escopo.lua
+lua: escopo.lua:8: &lt;goto continue&gt; at line 3 jumps into the scope of 'dobro'
+$ echo $?
+1</pre>
+
+<p>Linha por linha:</p>
+<dl class="anatomy">
+  <dt>lua: escopo.lua:8:</dt><dd>Quem reclama é o <code>lua</code>, no arquivo <code>escopo.lua</code>. A linha 8 é onde ele percebeu o problema: o <code>print</code> depois do rótulo, que ainda está dentro do escopo de <code>dobro</code>.</dd>
+  <dt>&lt;goto continue&gt; at line 3</dt><dd>"O <code>goto continue</code> da linha 3…"</dd>
+  <dt>jumps into the scope of 'dobro'</dt><dd>"…pula para dentro do escopo de <code>dobro</code>." Pulando da linha 3 para a linha 7, o programa passaria por cima do <code>local dobro = i * 2</code> (linha 5), mas cairia num lugar onde <code>dobro</code> ainda existe (a linha 8 poderia usá-la).</dd>
+</dl>
+<p>É um erro de <strong>compilação</strong>, como um erro de sintaxe: o Lua confere isso antes de rodar a primeira linha. Por isso não saiu nem o <code>2</code> da primeira volta, e não há <code>stack traceback</code>.</p>
+
+<h3>Por que o <code>pares.lua</code> não deu esse erro?</h3>
+<p>Tire o <code>print</code> de depois do rótulo, e o mesmo programa funciona:</p>
+
+<pre class="file" data-file="escopo_ok.lua">for i = 1, 3 do
+  if i == 2 then
+    goto continue
+  end
+  local dobro = i * 2
+  print(dobro)
+  ::continue::
+end
+</pre>
+
+<pre class="term">$ lua escopo_ok.lua
+2
+6</pre>
+
+<p>O manual do Lua explica: o escopo de uma <code>local</code> vai até o <strong>último comando "de verdade"</strong> do bloco. Rótulos (e o <code>;</code> sozinho) não contam: o manual os chama de comandos vazios (<em>void statements</em>). Com o <code>::continue::</code> sendo a <strong>última coisa</strong> antes do <code>end</code>, o escopo de <code>dobro</code> já terminou no <code>print(dobro)</code>, e o pulo cai do lado de fora. Essa é a razão de o rótulo <code>::continue::</code> ficar sempre <strong>colado no <code>end</code></strong>.</p>
+
+<h3>Como consertar quando você precisa de algo depois do rótulo</h3>
+<p>Ponha as variáveis que ficam entre o <code>goto</code> e o rótulo dentro de um bloco <code>do … end</code> (veja <a href="sintaxe.html">Sintaxe e Blocos</a>). O escopo delas termina no <code>end</code> desse bloco, antes do rótulo:</p>
+
+<pre class="file" data-file="escopo_conserto.lua">for i = 1, 3 do
+  if i == 2 then
+    goto continue
+  end
+  do
+    local dobro = i * 2
+    print(dobro)
+  end
+  ::continue::
+  print("volta", i, "terminou")
+end
+</pre>
+
+<pre class="term">$ lua escopo_conserto.lua
+2
+volta	1	terminou
+volta	2	terminou
+6
+volta	3	terminou</pre>
+
+<p>(Os espaços largos entre <code>volta</code>, o número e <code>terminou</code> são o TAB que o <a href="print.html">print</a> põe entre vários valores.) A volta 2 pulou o <code>dobro</code>, mas passou pelo <code>print</code> do fim: o rótulo aqui não é um "fim de volta", é um "pule até aqui".</p>
+
+<div class="trylua" data-goal="semerro;;outre:volta\t3\tterminou;;src:goto\s+continue">
+<p class="try-task"><strong>Missão:</strong> este é o <code>escopo.lua</code>, que nem chega a rodar. Conserte-o sem tirar o <code>goto</code> nem o <code>print</code> do fim: ponha a <code>local dobro</code> e o <code>print(dobro)</code> dentro de um <code>do … end</code>.</p>
+<pre class="script" data-file="main.lua">for i = 1, 3 do
+  if i == 2 then
+    goto continue
+  end
+  local dobro = i * 2
+  print(dobro)
+  ::continue::
+  print("volta", i, "terminou")
+end
+</pre>
+<pre class="solucao" data-file="main.lua">for i = 1, 3 do
+  if i == 2 then
+    goto continue
+  end
+  do
+    local dobro = i * 2
+    print(dobro)
+  end
+  ::continue::
+  print("volta", i, "terminou")
+end
+</pre>
+</div>
+
+<hr>
+
+<h2>5. A pegadinha do <code>repeat … until</code></h2>
+<p>No <a href="repeat.html">repeat … until</a>, a condição do <code>until</code> faz parte do corpo do laço: ela enxerga as variáveis <code>local</code> do corpo. Isso quer dizer que o <code>::continue::</code> antes do <code>until</code> <strong>não</strong> é a última coisa do bloco, e o erro da seção 4 aparece mesmo com o rótulo "no fim":</p>
+
+<pre class="file" data-file="repeat.lua">local n = 0
+repeat
+  n = n + 1
+  if n == 2 then
+    goto continue
+  end
+  local quadrado = n * n
+  print(n, quadrado)
+  ::continue::
+until n &gt;= 4
+</pre>
+
+<pre class="term">$ lua repeat.lua
+lua: repeat.lua:10: &lt;goto continue&gt; at line 5 jumps into the scope of 'quadrado'</pre>
+
+<p>A linha 10 é a do <code>until</code>: o <code>until n &gt;= 4</code> poderia usar <code>quadrado</code>, então ele ainda está no escopo dela. O conserto é o mesmo: um <code>do … end</code> em volta da <code>local</code>.</p>
+
+<pre class="file" data-file="repeat2.lua">local n = 0
+repeat
+  n = n + 1
+  if n == 2 then
+    goto continue
+  end
+  do
+    local quadrado = n * n
+    print(n, quadrado)
+  end
+  ::continue::
+until n &gt;= 4
+</pre>
+
+<pre class="term">$ lua repeat2.lua
+1	1
+3	9
+4	16</pre>
+
+<hr>
+
+<h2>6. Sair de dois laços de uma vez</h2>
+<p>O <code>break</code> só sai do laço <strong>mais de dentro</strong>. Quando há um laço dentro de outro (veja <a href="lacos-aninhados.html">Laços Aninhados</a>) e você quer parar <strong>tudo</strong> assim que achar o que procurava, o <code>goto</code> resolve com um rótulo depois dos dois laços. A Ana procura o Davi nas turmas da escola:</p>
+
+<pre class="file" data-file="aninhado.lua">local turmas = {
+  {"Ana", "Bia", "Caio"},
+  {"Davi", "Eva"},
+}
+for t = 1, #turmas do
+  for a = 1, #turmas[t] do
+    if turmas[t][a] == "Davi" then
+      print("Achei o Davi na turma " .. t .. ", posição " .. a)
+      goto achou
+    end
+    print("olhando " .. turmas[t][a])
+  end
+end
+print("Davi não está em nenhuma turma")
+::achou::
+print("fim da busca")
+</pre>
+
+<pre class="term">$ lua aninhado.lua
+olhando Ana
+olhando Bia
+olhando Caio
+Achei o Davi na turma 2, posição 1
+fim da busca</pre>
+
+<p>O <code>goto achou</code> sai dos dois <code>for</code> e ainda pula o aviso "não está em nenhuma turma". Com um <code>break</code> no lugar, só o laço de dentro pararia: o de fora seguiria para a próxima turma, e o aviso apareceria mesmo tendo achado o Davi. (<code>turmas[t][a]</code> é "a turma número <code>t</code>, aluno número <code>a</code>": uma lista dentro de outra, assunto de <a href="tabelas-aninhadas.html">Tabelas Aninhadas</a>.)</p>
+
+<hr>
+
+<h2>7. <code>goto</code> para trás: funciona, mas evite</h2>
+<p>O <code>goto</code> também pula para um rótulo que está <strong>antes</strong> dele, e isso cria uma repetição:</p>
+
+<pre class="file" data-file="voltar.lua">local tentativa = 1
+::de_novo::
+print("tentativa " .. tentativa)
+tentativa = tentativa + 1
+if tentativa &lt;= 3 then
+  goto de_novo
+end
+print("acabou")
+</pre>
+
+<pre class="term">$ lua voltar.lua
+tentativa 1
+tentativa 2
+tentativa 3
+acabou</pre>
+
+<p>Funciona, mas é um <code>while</code> disfarçado, e mais difícil de ler: quem chega ao <code>::de_novo::</code> não sabe que ali começa uma repetição até achar o <code>goto</code> lá embaixo. Programas cheios de <code>goto</code> para cima e para baixo ganharam até um apelido: "código espaguete", porque o caminho do programa vira um prato de macarrão. A regra prática é usar o <code>goto</code> só nos dois casos desta aula: <strong>o <code>continue</code></strong> e <strong>sair de laços aninhados</strong>. Para repetir, use <a href="while.html">while</a>, <a href="repeat.html">repeat</a> ou <a href="for-numerico.html">for</a>.</p>
+
+<hr>
+
+<h2 id="formas">Formas diferentes de fazer a mesma coisa</h2>
+<p>Pular uma volta nem sempre precisa de <code>goto</code>. O <code>pares.lua</code> pode ser escrito com o <code>if</code> "ao contrário": em vez de "se for ímpar, pule", diga "se for par, mostre":</p>
+
+<pre class="file" data-file="if_invertido.lua">for i = 1, 10 do
+  if i % 2 == 0 then
+    print(i)
+  end
+end
+print("fim")
+</pre>
+
+<pre class="term">$ lua if_invertido.lua
+2
+4
+6
+8
+10
+fim</pre>
+
+<p>Com uma linha só dentro do <code>if</code>, essa forma é a mais simples. O <code>goto continue</code> ganha quando há <strong>várias</strong> condições para pular e muito código depois delas: em vez de um <code>if</code> dentro de outro <code>if</code> dentro de outro, empurrando o código para a direita, cada condição vira uma linha "se for assim, pule" no começo da volta, e o resto fica na margem normal.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Situação</th><th>Qual usar</th></tr>
+<tr><td>Pular a volta por um motivo simples, com pouco código depois</td><td><code>if</code> com a condição invertida</td></tr>
+<tr><td>Várias condições para pular, ou muito código depois delas</td><td><code>goto continue</code> + <code>::continue::</code> colado no <code>end</code></td></tr>
+<tr><td>Parar o laço de vez</td><td><a href="break.html">break</a></td></tr>
+<tr><td>Parar dois ou mais laços de uma vez</td><td><code>goto</code> para um rótulo depois dos laços (ou pôr os laços numa <a href="funcoes.html">função</a> e usar <a href="return.html">return</a>)</td></tr>
+<tr><td>Repetir</td><td><code>while</code>, <code>repeat</code> ou <code>for</code>, nunca <code>goto</code> para trás</td></tr>
+</table>
+</div>
+
+<div class="note">
+<strong>Em outras versões do Lua</strong>
+<p>O <code>goto</code> chegou no <strong>Lua 5.2</strong>. No <strong>Lua 5.1</strong> ele não existe; lá, <code>goto</code> é um nome comum e o <code>pares.lua</code> dá erro de sintaxe:</p>
+<pre class="term">$ lua5.1 pares.lua
+lua5.1: pares.lua:3: '=' expected near 'continue'</pre>
+<p>O <strong>LuaJIT</strong> (Neovim, LÖVE), que segue o 5.1, aceita o <code>goto</code>: no lab, <code>luajit pares.lua</code> mostrou <code>2</code>, <code>4</code>, <code>6</code>… igual ao 5.5. No Lua 5.4 a mensagem do escopo diz <code>jumps into the scope of local 'dobro'</code> (com a palavra <code>local</code>); no 5.5 ela diz só <code>'dobro'</code>. Mais em <a href="versoes.html">Lua 5.1, LuaJIT, 5.4 e 5.5</a>.</p>
+</div>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+
+<div class="cenario">
+<strong>O nome do rótulo não bate com o do <code>goto</code></strong>
+<pre class="file" data-file="semrotulo.lua">for i = 1, 3 do
+  if i == 2 then
+    goto continua
+  end
+  print(i)
+  ::continue::
+end
+</pre>
+<pre class="term">$ lua semrotulo.lua
+lua: semrotulo.lua:7: no visible label 'continua' for &lt;goto&gt; at line 3</pre>
+<p>"Nenhum rótulo visível chamado <code>continua</code> para o <code>goto</code> da linha 3." O <code>goto</code> diz <code>continua</code> e o rótulo diz <code>continue</code>: para o Lua são nomes diferentes. A linha 7 é o <code>end</code> do laço, onde ele desistiu de procurar. <strong>Como consertar:</strong> use o mesmo nome nos dois lugares.</p>
+</div>
+
+<div class="cenario">
+<strong>O rótulo está em outro laço</strong>
+<pre class="file" data-file="fora.lua">for i = 1, 3 do
+  print(i)
+end
+goto continue
+for j = 1, 3 do
+  ::continue::
+  print(j)
+end
+</pre>
+<pre class="term">$ lua fora.lua
+lua: fora.lua:8: no visible label 'continue' for &lt;goto&gt; at line 4</pre>
+<p>O rótulo existe, mas não é <strong>visível</strong> de onde o <code>goto</code> está. Um rótulo só é visível no bloco onde foi escrito (e nos blocos de dentro dele). O <code>::continue::</code> está dentro do segundo <code>for</code>; o <code>goto</code>, fora. O <code>goto</code> pode <strong>sair</strong> de blocos (como na seção 6), mas não pode <strong>entrar</strong> num. O mesmo vale para um <code>do … end</code>:</p>
+<pre class="file" data-file="dentro.lua">goto meio
+do
+  ::meio::
+  print("dentro do bloco")
+end
+</pre>
+<pre class="term">$ lua dentro.lua
+lua: dentro.lua:5: no visible label 'meio' for &lt;goto&gt; at line 1</pre>
+</div>
+
+<div class="cenario">
+<strong>Dois rótulos com o mesmo nome</strong>
+<pre class="file" data-file="duplicado.lua">for i = 1, 3 do
+  ::continue::
+  if i == 2 then
+    goto continue
+  end
+  print(i)
+  ::continue::
+end
+</pre>
+<pre class="term">$ lua duplicado.lua
+lua: duplicado.lua:7: label 'continue' already defined on line 2</pre>
+<p>"O rótulo <code>continue</code> já foi definido na linha 2." Num mesmo bloco, cada rótulo tem um nome único (senão, para qual dos dois o <code>goto</code> iria?). <strong>Como consertar:</strong> apague um deles. Laços <strong>diferentes</strong> podem ter cada um o seu <code>::continue::</code>, inclusive um laço dentro do outro: cada <code>goto continue</code> vai para o rótulo do laço onde ele está (veja <a href="lacos-aninhados.html">Laços Aninhados</a>). O problema é só repetir o nome <strong>no mesmo bloco</strong>.</p>
+</div>
+
+<div class="cenario">
+<strong>Pulou para dentro do escopo de uma <code>local</code></strong>
+<pre class="term">$ lua escopo.lua
+lua: escopo.lua:8: &lt;goto continue&gt; at line 3 jumps into the scope of 'dobro'</pre>
+<p>Visto na <a href="#escopo">seção 4</a>: entre o <code>goto</code> e o rótulo há uma <code>local</code>, e depois do rótulo ainda há código (ou um <code>until</code>). <strong>Como consertar:</strong> deixe o <code>::continue::</code> como última linha antes do <code>end</code>, ou ponha a <code>local</code> dentro de um <code>do … end</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Escreveu <code>continue</code> como em outras linguagens</strong>
+<pre class="term">$ lua continue_palavra.lua
+lua: continue_palavra.lua:4: syntax error near 'end'</pre>
+<p>O Lua não tem <code>continue</code>; para ele, é só um nome solto. <strong>Como consertar:</strong> <code>goto continue</code> e o rótulo <code>::continue::</code> antes do <code>end</code> do laço.</p>
+</div>
+
+<hr>
+
+<h2>Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>O que faz</th></tr>
+<tr><td><code>::nome::</code></td><td>Rótulo: marca um ponto do programa. Não faz nada quando o programa passa por ele.</td></tr>
+<tr><td><code>goto nome</code></td><td>Continua o programa a partir do rótulo <code>nome</code></td></tr>
+<tr><td><code>goto continue</code> … <code>::continue::</code> <code>end</code></td><td>O "continue" do Lua: encerra a volta atual e segue para a próxima</td></tr>
+<tr><td><code>goto fim</code> com <code>::fim::</code> depois dos laços</td><td>Sai de vários laços de uma vez</td></tr>
+<tr><td><code>do local x = … end</code></td><td>Encerra o escopo de <code>x</code> antes do rótulo</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Mensagem</th><th>Causa provável</th></tr>
+<tr><td><code>syntax error near 'end'</code> (com <code>continue</code> no código)</td><td>Usou <code>continue</code>, que não existe no Lua</td></tr>
+<tr><td><code>&lt;goto X&gt; at line N jumps into the scope of 'v'</code></td><td>Uma <code>local v</code> entre o <code>goto</code> e o rótulo, e código (ou <code>until</code>) depois do rótulo</td></tr>
+<tr><td><code>no visible label 'X' for &lt;goto&gt; at line N</code></td><td>Nome diferente, ou o rótulo está dentro de outro bloco (ou de uma função)</td></tr>
+<tr><td><code>label 'X' already defined on line N</code></td><td>Dois rótulos com o mesmo nome visíveis ao mesmo tempo</td></tr>
+<tr><td><code>'=' expected near 'continue'</code></td><td>Rodou no Lua 5.1, que não tem <code>goto</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. Complete o "continue" do Lua</h3>
+<p>Complete para o laço pular o número 3:</p>
+<div class="ex-code">for i = 1, 5 do<br>&nbsp;&nbsp;if i == 3 then<br>&nbsp;&nbsp;&nbsp;&nbsp;<input data-answer="goto" aria-label="palavra-chave"> continue<br>&nbsp;&nbsp;end<br>&nbsp;&nbsp;print(i)<br>&nbsp;&nbsp;<input data-answer="::continue::" aria-label="rótulo"><br>end</div>
+</div>
+
+<div class="exercise">
+<h3>2. Quantos números?</h3>
+<p>Quantos números este programa mostra?</p>
+<pre class="file" data-file="conta.lua">for i = 1, 10 do
+  if i &gt; 3 and i &lt; 8 then
+    goto continue
+  end
+  print(i)
+  ::continue::
+end
+</pre>
+<div class="ex-code">Mostra <input data-answer="6" aria-label="quantidade"> números.</div>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">3. O que acontece com <code>continue</code> sozinho dentro de um laço no Lua 5.5?</p>
+<label><input type="radio" name="q3"> Pula para a próxima volta, como em outras linguagens</label>
+<label><input type="radio" name="q3"> Erro de sintaxe: o Lua não tem <code>continue</code></label>
+<label><input type="radio" name="q3"> Sai do laço, como o <code>break</code></label>
+<label><input type="radio" name="q3"> Nada: a linha é ignorada</label>
+</div>
+
+<div class="mc" data-answer="3">
+<p class="mc-q">4. Onde se põe o <code>::continue::</code> para não ter o erro "jumps into the scope"?</p>
+<label><input type="radio" name="q4"> Logo depois do <code>for … do</code></label>
+<label><input type="radio" name="q4"> Logo depois do <code>goto</code></label>
+<label><input type="radio" name="q4"> Como a última linha do corpo, colado no <code>end</code></label>
+<label><input type="radio" name="q4"> Depois do <code>end</code> do laço</label>
+</div>
+
+<div class="mc" data-answer="1">
+<p class="mc-q">5. Há um <code>for</code> dentro de outro <code>for</code>. Você achou o que procurava e quer parar os <strong>dois</strong>. Qual destas opções faz isso?</p>
+<label><input type="radio" name="q5"> <code>goto achou</code> com <code>::achou::</code> depois dos dois laços</label>
+<label><input type="radio" name="q5"> Um <code>break</code> no laço de dentro</label>
+<label><input type="radio" name="q5"> <code>goto continue</code> com <code>::continue::</code> no fim do laço de dentro</label>
+<label><input type="radio" name="q5"> <code>continue 2</code></label>
+</div>
+
+<h3>Missão final: a média só das notas válidas</h3>
+
+<div class="trylua" data-goal="out:média: 8.0;;src:goto\s+continue">
+<p class="try-task"><strong>Missão:</strong> o programa calcula a média de todas as notas, mas <code>12</code> e <code>-3</code> foram digitadas erradas. Dentro do laço, antes de somar, use <code>goto continue</code> para pular as notas menores que 0 ou maiores que 10, e ponha o <code>::continue::</code> no lugar certo. A média certa é <code>8.0</code>.</p>
+<pre class="script" data-file="main.lua">local notas = {8, 12, 7, -3, 9}
+local soma, contadas = 0, 0
+for i = 1, #notas do
+  local nota = notas[i]
+  soma = soma + nota
+  contadas = contadas + 1
+end
+print("média: " .. soma / contadas)
+</pre>
+<pre class="solucao" data-file="main.lua">local notas = {8, 12, 7, -3, 9}
+local soma, contadas = 0, 0
+for i = 1, #notas do
+  local nota = notas[i]
+  if nota &lt; 0 or nota &gt; 10 then
+    print("ignorando " .. nota)
+    goto continue
+  end
+  soma = soma + nota
+  contadas = contadas + 1
+  ::continue::
+end
+print("média: " .. soma / contadas)
+</pre>
+</div>
+
+<p>Sem o pulo, o programa mostra <code>média: 6.6</code> (33 dividido por 5). Com ele, no lab, saiu:</p>
+<pre class="term">$ lua media.lua
+ignorando 12
+ignorando -3
+média: 8.0</pre>
+<p>O <code>8.0</code> tem o <code>.0</code> porque a divisão <code>/</code> sempre dá um número com vírgula (um <em>float</em>; veja <a href="numeros.html">Números</a>).</p>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li>O Lua <strong>não tem</strong> <code>continue</code>: escrito sozinho, ele dá <code>syntax error</code>.</li>
+  <li>Um <strong>rótulo</strong> <code>::nome::</code> marca um ponto do programa; <code>goto nome</code> pula até ele.</li>
+  <li>O jeito idiomático de pular uma volta: <code>goto continue</code> e o rótulo <code>::continue::</code> como <strong>última linha</strong> do corpo do laço, colado no <code>end</code>. Funciona no <code>for</code> e no <code>while</code> (no <code>while</code>, ande com o contador <strong>antes</strong> do <code>goto</code>).</li>
+  <li>O <code>goto</code> não pode pular para dentro do escopo de uma <code>local</code>: <code>jumps into the scope of 'x'</code>. Conserto: rótulo colado no <code>end</code>, ou a <code>local</code> dentro de um <code>do … end</code>. No <code>repeat … until</code>, o <code>until</code> conta como parte do corpo.</li>
+  <li>O <code>goto</code> pode <strong>sair</strong> de blocos (bom para parar laços aninhados), mas não <strong>entrar</strong> neles.</li>
+  <li>Use o <code>goto</code> só para o "continue" e para sair de laços aninhados. Para repetir, use os laços.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
