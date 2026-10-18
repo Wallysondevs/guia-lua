@@ -1,0 +1,694 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua Escopo e Blocos — onde cada variável local existe | Guia Lua</title>
+<meta name="description" content="Escopo no Lua 5.5 para quem nunca programou: o que é um bloco (do … end, if, for, while, repeat, function), onde uma variável local nasce e morre, a variável de mesmo nome que esconde a de fora (sombreamento), a global que vaza de dentro da função, o limite de 200 locais e os erros reais com a dica (global 'total').">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">Escopo e Blocos</span></h1>
+
+<p class="intro">Você já sabe criar variáveis com <code>local</code> (veja <a href="local.html">local × Global</a>). Falta responder uma pergunta importante: <strong>até onde</strong> uma variável local vale? Em que linhas o Lua ainda sabe quem ela é, e a partir de que linha ela some? A resposta tem nome: <strong>escopo</strong> (em inglês, <em>scope</em>), que é o pedaço do programa onde um nome existe. E no Lua o escopo é decidido pelos <strong>blocos</strong>: os trechos que começam com <code>do</code>, <code>then</code>, <code>function</code> ou <code>repeat</code> e terminam com <code>end</code> (ou <code>until</code>).</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O que é um <strong>bloco</strong> e quais comandos criam um: <code>do … end</code>, <code>if</code>, <code>for</code>, <code>while</code>, <code>repeat</code> e <code>function</code>.</li>
+  <li>A regra do escopo: uma variável <code>local</code> vale <strong>da linha seguinte à declaração até o <code>end</code></strong> do bloco onde ela foi criada.</li>
+  <li>Por que uma local "sumida" vira <code>nil</code> sem dar erro, e por que a mensagem de erro diz <code>(global 'total')</code> mesmo você tendo escrito <code>local total</code>.</li>
+  <li>O <strong>sombreamento</strong>: uma local de dentro com o mesmo nome esconde a de fora (e o bug silencioso que isso causa).</li>
+  <li>A variável que <strong>vaza</strong> de dentro de uma função quando falta o <code>local</code>.</li>
+  <li>Detalhes reais do Lua 5.5: o limite de 200 locais, o aviso do modo interativo e a declaração <code>global</code>.</li>
+</ul>
+</div>
+
+<p>Todos os programas desta aula rodaram no <strong>Lua 5.5</strong> da máquina da Ana (usuária <code>ana</code>, computador <code>notebook</code>), salvos na pasta pessoal dela e executados com <code>lua arquivo.lua</code> (veja <a href="executar.html">Rodando um Programa</a>). Você pode rodar cada um no editor do guia.</p>
+
+<hr>
+
+<h2>A ideia: o recado na geladeira e o recado na gaveta</h2>
+<p>Na casa da Ana, quem quer deixar um recado tem duas opções:</p>
+<ul>
+  <li>Um recado <strong>na porta da geladeira</strong>: todo mundo da casa vê, em qualquer cômodo, a qualquer hora. É prático, mas qualquer um pode riscar, trocar ou apagar sem querer.</li>
+  <li>Um recado <strong>dentro da gaveta da cozinha</strong>: só vê quem está mexendo naquela gaveta. Quando a gaveta fecha, o recado fica lá dentro, e ninguém da sala sabe que ele existe.</li>
+</ul>
+<p>No Lua, a variável <strong>global</strong> é o recado da geladeira: vale no programa inteiro. A variável <strong>local</strong> é o recado da gaveta: vale só dentro do <strong>bloco</strong> onde foi criada. O bloco é a gaveta; o <code>end</code> é a gaveta fechando.</p>
+<p>E quando alguém, na sala, procura um recado que só existe dentro da gaveta? Ele não acha, e conclui "não tem recado nenhum". O Lua faz igual: um nome que ele não encontra como local, ele procura como global; se não achar, o valor é <code>nil</code> (nada). Guarde essa frase, porque ela explica quase todos os erros desta aula.</p>
+
+<hr>
+
+<h2>1. O bloco mais simples: <code>do … end</code></h2>
+<p>O comando <code>do … end</code> ("faça … fim") não repete nada e não testa nada: ele só <strong>cria um bloco</strong>. É a gaveta pura, sem mais nada em volta. Por isso ele é o melhor jeito de ver o escopo funcionando:</p>
+
+<pre class="file" data-file="bloco.lua">local loja = "Padaria da Ana"
+do
+  local promocao = "pão de queijo"
+  print("Dentro do bloco:", loja, promocao)
+end
+print("Fora do bloco:", loja, promocao)
+</pre>
+
+<dl class="anatomy">
+  <dt>local loja = …</dt><dd>Uma local criada <strong>fora</strong> de qualquer bloco, no nível de cima do arquivo. Ela vale daqui até o fim do arquivo, inclusive dentro do <code>do</code>.</dd>
+  <dt>do</dt><dd>Abre um bloco novo. Tudo até o <code>end</code> correspondente está "dentro da gaveta".</dd>
+  <dt>local promocao = …</dt><dd>Uma local criada <strong>dentro</strong> do bloco. Ela nasce nesta linha e morre no <code>end</code>.</dd>
+  <dt>print("Dentro do bloco:", …)</dt><dd>Aqui dentro as duas existem: a de fora (<code>loja</code>) e a de dentro (<code>promocao</code>).</dd>
+  <dt>end</dt><dd>Fecha o bloco. A <code>promocao</code> deixa de existir.</dd>
+  <dt>print("Fora do bloco:", …)</dt><dd>A <code>loja</code> continua valendo. A <code>promocao</code>, não: o Lua não acha nenhuma local com esse nome e procura uma global <code>promocao</code>, que também não existe.</dd>
+</dl>
+
+<pre class="term">$ lua bloco.lua
+Dentro do bloco:	Padaria da Ana	pão de queijo
+Fora do bloco:	Padaria da Ana	nil</pre>
+
+<p>Repare no detalhe mais importante: <strong>não deu erro</strong>. Ler uma variável que não existe não é erro no Lua; o valor simplesmente é <code>nil</code>. O erro só aparece quando você tenta <strong>fazer alguma coisa</strong> com esse <code>nil</code> (somar, juntar texto, indexar), como você vai ver na seção <a href="#errado">Quando dá errado</a>.</p>
+
+<div class="tip">
+<strong>Para que serve um <code>do … end</code> sozinho?</strong>
+<p>Para guardar variáveis de rascunho num canto. Se você precisa de duas ou três variáveis só para calcular uma coisa, ponha o cálculo num <code>do … end</code>: quando o bloco fecha, os rascunhos somem e não atrapalham o resto do programa (nem ocupam memória à toa). Você vai ver esse uso em programas maiores.</p>
+</div>
+
+<div class="trylua">
+<p class="try-task"><strong>Experimente:</strong> rode e confira o <code>nil</code> na segunda linha. Depois, mude a linha 6 para <code>print("Fora do bloco:", loja, promocao .. "!")</code> e rode de novo: agora o Lua tenta <strong>juntar</strong> o <code>nil</code> com um texto, e aí sim aparece um erro. Leia a dica entre parênteses no fim da mensagem.</p>
+<pre class="script" data-file="main.lua">local loja = "Padaria da Ana"
+do
+  local promocao = "pão de queijo"
+  print("Dentro do bloco:", loja, promocao)
+end
+print("Fora do bloco:", loja, promocao)
+</pre>
+</div>
+
+<hr>
+
+<h2>2. Todo <code>if</code>, <code>for</code>, <code>while</code> e <code>function</code> também é um bloco</h2>
+<p>Você já usa blocos o tempo todo, talvez sem perceber. Cada comando que termina com <code>end</code> tem o seu próprio bloco, e cada um funciona como uma gaveta:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Comando</th><th>Onde fica o bloco</th></tr>
+<tr><td><code>do … end</code></td><td>Entre o <code>do</code> e o <code>end</code></td></tr>
+<tr><td><code>if … then … elseif … then … else … end</code></td><td>Cada parte é um bloco separado: o trecho do <code>then</code>, o de cada <code>elseif</code> e o do <code>else</code></td></tr>
+<tr><td><code>while … do … end</code></td><td>Entre o <code>do</code> e o <code>end</code> (e ele <strong>recomeça</strong> a cada volta)</td></tr>
+<tr><td><code>for … do … end</code></td><td>Entre o <code>do</code> e o <code>end</code>; a variável do <code>for</code> (<code>i</code>, <code>k, v</code>) também é local do laço</td></tr>
+<tr><td><code>repeat … until condição</code></td><td>Entre o <code>repeat</code> e o <code>until</code>, <strong>incluindo a condição</strong> do <code>until</code></td></tr>
+<tr><td><code>function … end</code></td><td>O corpo da função; os <strong>parâmetros</strong> são locais desse bloco</td></tr>
+</table>
+</div>
+
+<h3>Dentro de um <code>if</code></h3>
+
+<pre class="file" data-file="if_escopo.lua">local nota = 8
+if nota &gt;= 7 then
+  local situacao = "aprovada"
+  print("Dentro do if:", situacao)
+end
+print("Depois do if:", situacao)
+</pre>
+
+<pre class="term">$ lua if_escopo.lua
+Dentro do if:	aprovada
+Depois do if:	nil</pre>
+
+<p>A <code>situacao</code> foi criada dentro do <code>then</code>. Quando o <code>end</code> do <code>if</code> chegou, ela sumiu. É um engano muito comum de quem está começando: "mas o <code>if</code> rodou, então a variável existe!". O <code>if</code> rodou, sim, mas a variável era <strong>da gaveta dele</strong>.</p>
+
+<h3>Dentro de um <code>for</code></h3>
+
+<pre class="file" data-file="for_escopo.lua">local soma = 0
+for i = 1, 3 do
+  local dobro = i * 2
+  soma = soma + dobro
+  print("volta", i, "dobro", dobro)
+end
+print("soma:", soma)
+print("i depois do for:", i)
+print("dobro depois do for:", dobro)
+</pre>
+
+<pre class="term">$ lua for_escopo.lua
+volta	1	dobro	2
+volta	2	dobro	4
+volta	3	dobro	6
+soma:	12
+i depois do for:	nil
+dobro depois do for:	nil</pre>
+
+<p>Três coisas para notar:</p>
+<ul>
+  <li>A <code>soma</code> foi criada <strong>antes</strong> do <code>for</code>, por isso ela continua viva depois e guarda o total (12). É assim que se acumula um valor num laço.</li>
+  <li>O <code>dobro</code> é criado de novo <strong>a cada volta</strong>: o corpo do laço é um bloco que abre e fecha três vezes. Cada volta tem um <code>dobro</code> novinho.</li>
+  <li>O <code>i</code>, a variável de controle do <code>for</code>, é local <strong>do laço</strong>. Depois do <code>end</code>, ele não existe mais. Em outras linguagens o contador às vezes "sobra" depois do laço; no Lua, não.</li>
+</ul>
+
+<h3>Dentro de um <code>while</code></h3>
+
+<pre class="file" data-file="while_escopo.lua">local n = 3
+while n &gt; 0 do
+  local mensagem = "faltam " .. n
+  print(mensagem)
+  n = n - 1
+end
+print(mensagem, n)
+</pre>
+
+<pre class="term">$ lua while_escopo.lua
+faltam 3
+faltam 2
+faltam 1
+nil	0</pre>
+
+<p>A <code>mensagem</code> é da gaveta do <code>while</code>; o <code>n</code>, criado fora, sobrevive e termina valendo 0.</p>
+
+<h3>O caso especial do <code>repeat … until</code></h3>
+<p>No <code>repeat</code>, a condição do <code>until</code> ainda está <strong>dentro</strong> do bloco. Por isso ela consegue enxergar as locais criadas no corpo do laço:</p>
+
+<pre class="file" data-file="repeat_escopo.lua">local tentativas = 0
+repeat
+  tentativas = tentativas + 1
+  local acertou = (tentativas == 3)
+  print("tentativa", tentativas, acertou)
+until acertou
+print("acabou em", tentativas)
+</pre>
+
+<pre class="term">$ lua repeat_escopo.lua
+tentativa	1	false
+tentativa	2	false
+tentativa	3	true
+acabou em	3</pre>
+
+<p>O <code>until acertou</code> usa a local <code>acertou</code>, criada na linha 4, dentro do laço. Isso só funciona no <code>repeat</code>; no <code>while</code>, a condição fica <strong>antes</strong> do bloco e não vê nada de dentro dele. Mais detalhes em <a href="repeat.html">repeat … until</a>.</p>
+
+<h3>Dentro de uma função</h3>
+
+<pre class="file" data-file="funcao_escopo.lua">local taxa = 5
+
+local function com_taxa(valor)
+  local total = valor + taxa
+  return total
+end
+
+print(com_taxa(20))
+print(valor, total)
+</pre>
+
+<pre class="term">$ lua funcao_escopo.lua
+25
+nil	nil</pre>
+
+<dl class="anatomy">
+  <dt>local taxa = 5</dt><dd>Criada fora da função, antes dela. A função <strong>enxerga</strong> a <code>taxa</code>: blocos de dentro veem as locais dos blocos de fora.</dd>
+  <dt>(valor)</dt><dd>O <strong>parâmetro</strong> é uma variável local da função (veja <a href="parametros.html">Parâmetros e Argumentos</a>). Ele recebe o 20 a cada chamada e some quando a função termina.</dd>
+  <dt>local total = …</dt><dd>Uma local do corpo da função. O valor dela sai da função pelo <code>return</code>; a variável em si, não.</dd>
+  <dt>print(valor, total)</dt><dd>Fora da função, nem <code>valor</code> nem <code>total</code> existem: <code>nil nil</code>.</dd>
+</dl>
+
+<p>A regra geral, que vale para todos os blocos: <strong>de dentro se vê o que está fora; de fora não se vê o que está dentro</strong>. Como numa casa com janelas de vidro espelhado: quem está no quarto vê a rua, quem está na rua não vê o quarto.</p>
+
+<hr>
+
+<h2>3. Blocos dentro de blocos</h2>
+<p>Blocos podem ficar uns dentro dos outros, como gavetas dentro de um armário dentro de um quarto. Cada nível vê os de fora:</p>
+
+<pre class="file" data-file="aninhado.lua">local a = "rua"
+do
+  local b = "casa"
+  do
+    local c = "quarto"
+    print(a, b, c)
+  end
+  print(a, b, c)
+end
+print(a, b, c)
+</pre>
+
+<pre class="term">$ lua aninhado.lua
+rua	casa	quarto
+rua	casa	nil
+rua	nil	nil</pre>
+
+<p>Leia de dentro para fora: no bloco mais interno, as três existem. Um nível acima, o <code>c</code> já sumiu. No nível de cima do arquivo, só sobrou o <code>a</code>. Por isso a indentação (os 2 espaços a mais em cada nível) ajuda tanto: ela mostra, de olho, em que gaveta cada linha está.</p>
+
+<hr>
+
+<h2>4. A regra exata: da linha seguinte até o <code>end</code></h2>
+<p>O escopo de uma local começa <strong>depois</strong> da linha que a declara, não no começo do bloco. O que está escrito <strong>acima</strong> da declaração não a conhece, mesmo estando no mesmo bloco:</p>
+
+<pre class="file" data-file="ordem.lua">local function mostrar()
+  print("cidade =", cidade)
+end
+local cidade = "Recife"
+mostrar()
+print("aqui embaixo:", cidade)
+</pre>
+
+<pre class="term">$ lua ordem.lua
+cidade =	nil
+aqui embaixo:	Recife</pre>
+
+<p>Por que a função mostrou <code>nil</code>, se ela só foi <strong>chamada</strong> depois de a <code>cidade</code> existir? Porque o Lua decide a que variável cada nome se refere quando <strong>lê o código</strong>, de cima para baixo, e não quando roda. Na linha 2, ao ler <code>cidade</code>, ainda não havia nenhuma local com esse nome, então ele anotou: "essa <code>cidade</code> é uma global". A <code>local cidade</code> da linha 4 é outra variável, que a função nunca vai ver. <strong>Como consertar:</strong> declare a <code>cidade</code> antes da função.</p>
+
+<div class="note">
+<strong>É por isso que as locais ficam no começo</strong>
+<p>O costume é declarar no topo do arquivo (ou do bloco) as locais que várias partes do programa vão usar, e só depois as funções que as usam. E é também por isso que uma função recursiva precisa de <code>local function nome</code> (e não de <code>local nome = function</code>): a aula <a href="recursao.html">Recursão</a> mostra o erro real.</p>
+</div>
+
+<hr>
+
+<h2>5. Mesmo nome dentro e fora: o sombreamento</h2>
+<p>E se, dentro de um bloco, você criar uma local com o <strong>mesmo nome</strong> de uma variável de fora? Não dá erro. A de dentro <strong>esconde</strong> a de fora até o <code>end</code>; a de fora fica intacta, esperando. Isso se chama <strong>sombreamento</strong> (em inglês, <em>shadowing</em>): a de dentro faz sombra na de fora.</p>
+
+<pre class="file" data-file="sombra.lua">local preco = 10
+print("1. fora:", preco)
+do
+  local preco = 99
+  print("2. dentro:", preco)
+  preco = preco + 1
+  print("3. dentro:", preco)
+end
+print("4. fora de novo:", preco)
+</pre>
+
+<pre class="term">$ lua sombra.lua
+1. fora:	10
+2. dentro:	99
+3. dentro:	100
+4. fora de novo:	10</pre>
+
+<p>São <strong>duas variáveis diferentes</strong> que por acaso têm o mesmo nome, como duas pessoas chamadas Ana em salas diferentes. O <code>preco = preco + 1</code> da linha 6 mexeu na de dentro (a que estava "na frente"); a de fora continuou valendo 10.</p>
+
+<h3>O truque <code>local x = x</code></h3>
+<p>Na linha que declara a local, o lado direito do <code>=</code> ainda é calculado com o nome <strong>antigo</strong>, porque a nova local só começa a valer na linha seguinte. Por isso isto funciona:</p>
+
+<pre class="file" data-file="xx.lua">local x = 1
+local x = x + 1
+print(x)
+local nome = "Ana"
+do
+  local nome = nome .. " Lima"
+  print(nome)
+end
+print(nome)
+</pre>
+
+<pre class="term">$ lua xx.lua
+2
+Ana Lima
+Ana</pre>
+
+<p>Na linha 6, o <code>nome</code> do lado direito é o de fora (<code>"Ana"</code>); o resultado vai para uma local nova, só do bloco. Você vai encontrar <code>local print = print</code> e <code>local x = x</code> no código de outras pessoas: é uma cópia local de um valor de fora.</p>
+
+<h3>O bug silencioso do sombreamento</h3>
+<p>O sombreamento tem um lado perigoso: escrever <code>local</code> sem querer na frente de uma variável que <strong>já existia</strong>. Veja o caixa da Ana somando as quantidades de três itens:</p>
+
+<pre class="file" data-file="sombra_bug.lua">local itens = {3, 5, 2}
+local total = 0
+for _, qtd in ipairs(itens) do
+  local total = total + qtd
+end
+print("Total: " .. total)
+</pre>
+
+<pre class="term">$ lua sombra_bug.lua
+Total: 0</pre>
+
+<p>Nenhum erro, e a resposta errada: era para dar 10. O <code>local</code> da linha 4 criou, <strong>a cada volta</strong>, uma <code>total</code> nova dentro do laço, calculada a partir da <code>total</code> de fora (que continua 0). As somas foram feitas na variável da gaveta, e a gaveta fechou no <code>end</code>. O Lua não avisa nada: para ele, é um programa válido. <strong>Como consertar:</strong> dentro do laço, só <strong>atribua</strong> (<code>total = total + qtd</code>), sem <code>local</code>.</p>
+
+<div class="trylua" data-goal="out:Total: 10;;semerro">
+<p class="try-task"><strong>Missão:</strong> o programa mostra <code>Total: 0</code>. Conserte a linha 4 para a soma ir para a <code>total</code> de fora e o programa mostrar <code>Total: 10</code>.</p>
+<pre class="script" data-file="main.lua">local itens = {3, 5, 2}
+local total = 0
+for _, qtd in ipairs(itens) do
+  local total = total + qtd
+end
+print("Total: " .. total)
+</pre>
+<pre class="solucao" data-file="main.lua">local itens = {3, 5, 2}
+local total = 0
+for _, qtd in ipairs(itens) do
+  total = total + qtd
+end
+print("Total: " .. total)
+</pre>
+</div>
+
+<hr>
+
+<h2>6. A variável que vaza: esqueceu o <code>local</code> dentro da função</h2>
+<p>O contrário também acontece. Se você <strong>esquece</strong> o <code>local</code> na primeira vez que usa um nome, o Lua não reclama: ele cria uma <strong>global</strong>, o recado na geladeira. E a variável "vaza" para fora da função:</p>
+
+<pre class="file" data-file="vazou.lua">local function calcular_total(precos)
+  total = 0
+  for _, p in ipairs(precos) do
+    total = total + p
+  end
+  return total
+end
+
+print(calcular_total({4, 6, 10}))
+print("Vazou para fora:", total)
+</pre>
+
+<pre class="term">$ lua vazou.lua
+20
+Vazou para fora:	20</pre>
+
+<p>A função funcionou (deu 20), mas deixou uma <code>total</code> global para trás, que qualquer parte do programa pode ler e estragar. Num programa pequeno, parece inofensivo. Num programa grande, duas funções que usam <code>total</code> sem <code>local</code> estão mexendo <strong>na mesma variável</strong>, e uma bagunça a conta da outra. É por isso que o guia insiste: <strong><code>local</code> sempre</strong>, a não ser que você queira mesmo uma global (veja <a href="local.html">local × Global</a>). Com <code>local total = 0</code> na linha 2, a segunda linha da saída vira <code>Vazou para fora: nil</code>.</p>
+
+<h3>Mexer numa local de fora, sem vazar</h3>
+<p>Uma função pode, sim, <strong>alterar</strong> uma local de fora, de propósito. Basta que ela tenha sido declarada antes da função:</p>
+
+<pre class="file" data-file="dentro_fora.lua">local contador = 0
+local function somar()
+  contador = contador + 1
+end
+somar()
+somar()
+somar()
+print("contador:", contador)
+</pre>
+
+<pre class="term">$ lua dentro_fora.lua
+contador:	3</pre>
+
+<p>Aqui não há <code>local</code> dentro da função, mas também não há global: como já existia uma local <code>contador</code> visível (a da linha 1), o <code>contador = contador + 1</code> usa essa. A função "lembra" da variável de fora mesmo depois; esse poder tem nome, <strong>closure</strong>, e aula própria: <a href="closures.html">Closures</a>.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Você escreveu</th><th>Existe uma local com esse nome visível?</th><th>O que acontece</th></tr>
+<tr><td><code>local x = 1</code></td><td>(tanto faz)</td><td>Cria uma local <strong>nova</strong> neste bloco (se já havia outra, ela fica escondida até o <code>end</code>)</td></tr>
+<tr><td><code>x = 1</code></td><td>Sim</td><td>Muda o valor dessa local</td></tr>
+<tr><td><code>x = 1</code></td><td>Não</td><td>Cria (ou muda) uma <strong>global</strong> <code>x</code></td></tr>
+<tr><td><code>print(x)</code></td><td>Não, e não há global <code>x</code></td><td>Mostra <code>nil</code>, sem erro</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>7. Escopo no modo interativo (<code>&gt;</code>)</h2>
+<p>No modo interativo (veja <a href="repl.html">O Modo Interativo</a>), <strong>cada linha que você digita é um bloco</strong>. Uma local criada numa linha morre no fim daquela mesma linha. O Lua 5.5 até avisa:</p>
+
+<pre class="term">$ lua
+Lua 5.5.0  Copyright (C) 1994-2025 Lua.org, PUC-Rio
+&gt; local preco = 10
+warning: locals do not survive across lines in interactive mode
+&gt; print(preco)
+nil
+&gt; do local preco = 10; print(preco) end
+10
+&gt; preco = 10
+&gt; print(preco)
+10
+&gt; os.exit()</pre>
+
+<p>O aviso diz: "variáveis locais não sobrevivem de uma linha para outra no modo interativo". Por isso, no <code>&gt;</code>, é normal usar globais para testar coisas rápidas (ou escrever tudo na mesma linha, como no <code>do … end</code> acima). Em arquivos <code>.lua</code>, continue com <code>local</code>. <span class="versao">5.5</span> O aviso é novidade do 5.5; nas versões antigas a local também sumia, só que calada.</p>
+
+<hr>
+
+<h2 id="formas">Formas diferentes de fazer a mesma coisa</h2>
+<p>A Ana quer calcular o valor com desconto e mostrar no fim. O desconto só existe se o preço passar de R$ 30. Três jeitos:</p>
+
+<p><strong>1. Declarar antes do <code>if</code> e só atribuir dentro</strong> (o mais comum):</p>
+<pre class="file" data-file="forma1.lua">local preco = 50
+local desconto = 0
+if preco &gt; 30 then
+  desconto = preco * 0.1
+end
+print("Você pagou " .. (preco - desconto))
+</pre>
+
+<p><strong>2. Declarar sem valor (fica <code>nil</code>) e preencher nos dois caminhos</strong>:</p>
+<pre class="file" data-file="forma2.lua">local preco = 50
+local desconto
+if preco &gt; 30 then
+  desconto = preco * 0.1
+else
+  desconto = 0
+end
+print("Você pagou " .. (preco - desconto))
+</pre>
+
+<p><strong>3. Calcular numa linha só, sem bloco nenhum</strong>, com o truque do <code>and</code>/<code>or</code> (veja <a href="and-or-ternario.html">O Truque do and/or</a>):</p>
+<pre class="file" data-file="forma3.lua">local preco = 50
+local desconto = preco &gt; 30 and preco * 0.1 or 0
+print("Você pagou " .. (preco - desconto))
+</pre>
+
+<p>As três mostram a mesma coisa:</p>
+<pre class="term">$ lua forma1.lua
+Você pagou 45.0</pre>
+
+<p>(O <code>.0</code> aparece porque <code>50 * 0.1</code> é um número com vírgula, um <em>float</em>; veja <a href="numeros.html">Números</a>.)</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Situação</th><th>Qual usar</th></tr>
+<tr><td>A variável tem um valor "padrão" e o <code>if</code> só às vezes o muda</td><td>Forma 1: <code>local x = padrão</code> antes, <code>x = …</code> dentro</td></tr>
+<tr><td>Cada caminho do <code>if</code> dá um valor diferente</td><td>Forma 2: <code>local x</code> antes, <code>x = …</code> em cada caminho</td></tr>
+<tr><td>Escolha simples entre dois valores (e o primeiro nunca é <code>false</code>/<code>nil</code>)</td><td>Forma 3: <code>local x = cond and a or b</code></td></tr>
+<tr><td>Variáveis de rascunho que só servem para um cálculo</td><td>Um <code>do … end</code> em volta delas</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+
+<div class="cenario">
+<strong>Usou fora do bloco uma local criada dentro do <code>if</code></strong>
+<pre class="file" data-file="erro_escopo2.lua">local preco = 50
+if preco &gt; 30 then
+  local desconto = preco * 0.1
+end
+print("Você pagou", preco - desconto)
+</pre>
+<pre class="term">$ lua erro_escopo2.lua
+lua: erro_escopo2.lua:5: attempt to perform arithmetic on a nil value (global 'desconto')
+stack traceback:
+	erro_escopo2.lua:5: in main chunk
+	[C]: in ?</pre>
+<p>Linha por linha:</p>
+<dl class="anatomy">
+  <dt>lua: erro_escopo2.lua:5:</dt><dd>Quem reclama é o <code>lua</code>; o problema está no arquivo <code>erro_escopo2.lua</code>, <strong>linha 5</strong> (o <code>print</code>).</dd>
+  <dt>attempt to perform arithmetic on a nil value</dt><dd>"Tentativa de fazer conta com um valor <code>nil</code>": o <code>preco - desconto</code> tentou subtrair um nada.</dd>
+  <dt>(global 'desconto')</dt><dd>A pista de ouro: o Lua diz que o <code>desconto</code> da linha 5 é uma <strong>global</strong>. Mas você escreveu <code>local desconto</code>! Escreveu, só que na linha 3, dentro do <code>if</code>. Na linha 5, aquela local já tinha morrido, e o Lua procurou uma global com esse nome. Sempre que você vir <code>(global 'algo')</code> para uma variável que você <strong>tem certeza</strong> de ter declarado com <code>local</code>, desconfie do escopo (ou de um erro de digitação no nome).</dd>
+  <dt>stack traceback: … in main chunk / [C]: in ?</dt><dd>O "rastro" de onde o programa estava: no <code>main chunk</code> (o corpo principal do arquivo), que foi iniciado pelo próprio <code>lua</code> (<code>[C]: in ?</code>). A aula <a href="erros.html">Lendo uma Mensagem de Erro</a> explica cada linha desse rastro.</dd>
+</dl>
+<p><strong>Como consertar:</strong> declare o <code>desconto</code> <strong>antes</strong> do <code>if</code> (as formas 1 e 2 acima).</p>
+</div>
+
+<div class="cenario">
+<strong>Criou o acumulador dentro do laço</strong>
+<pre class="file" data-file="erro_escopo.lua">local itens = {3, 5, 2}
+for _, qtd in ipairs(itens) do
+  local total = 0
+  total = total + qtd
+end
+print("Total: " .. total)
+</pre>
+<pre class="term">$ lua erro_escopo.lua
+lua: erro_escopo.lua:6: attempt to concatenate a nil value (global 'total')
+stack traceback:
+	erro_escopo.lua:6: in main chunk
+	[C]: in ?</pre>
+<p>"Tentativa de concatenar (juntar com <code>..</code>) um valor <code>nil</code> (global <code>'total'</code>)". De novo a dica <code>global</code>: a <code>total</code> do laço morreu no <code>end</code> da linha 5. E mesmo que ela sobrevivesse, estaria errada: o <code>local total = 0</code> dentro do laço zera a conta a cada volta. <strong>Como consertar:</strong> <code>local total = 0</code> <strong>antes</strong> do <code>for</code>, e dentro dele só <code>total = total + qtd</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Declarou <code>local</code> de novo dentro do laço: resposta errada, sem erro</strong>
+<p>É o caso da seção 5 (<code>Total: 0</code> no lugar de <code>Total: 10</code>). É o pior tipo de bug: o programa roda até o fim, e só a conta sai errada. A pista é ver o mesmo nome com <code>local</code> <strong>duas vezes</strong>, uma fora e outra dentro de um bloco. Às vezes é de propósito (o <code>local x = x</code>); na maioria das vezes, é engano.</p>
+</div>
+
+<div class="cenario">
+<strong>Mais de 200 variáveis locais na mesma função</strong>
+<p>Uma curiosidade real: cada função (e o arquivo principal, que conta como uma função) pode ter no máximo <strong>200</strong> locais ativas ao mesmo tempo. Um arquivo com 201 linhas <code>local v1 = 1</code>, <code>local v2 = 2</code>, …, <code>local v201 = 201</code> nem começa a rodar:</p>
+<pre class="term">$ lua muitas.lua
+lua: muitas.lua:202: too many local variables (limit is 200) in main function near &lt;eof&gt;</pre>
+<p>"Variáveis locais demais (o limite é 200) na função principal, perto do fim do arquivo (<code>&lt;eof&gt;</code>, <em>end of file</em>)". Repare que não há <code>stack traceback</code>: é um erro encontrado na <strong>leitura</strong> do arquivo, antes de rodar. Ninguém escreve 200 locais de propósito; se aparecer, é hora de guardar os valores numa <a href="tabelas.html">tabela</a> ou de dividir o código em funções. E é mais um motivo para usar blocos: uma local cujo bloco já fechou não conta mais para o limite.</p>
+</div>
+
+<div class="cenario">
+<strong>Com a declaração <code>global</code>, o erro vira erro de leitura</strong> <span class="versao">5.5</span>
+<p>O Lua 5.5 trouxe uma ferramenta para pegar esses enganos <strong>antes</strong> de rodar: a declaração <code>global</code>. Depois de um <code>global print, ipairs</code>, o Lua só aceita como global os nomes que você listou; qualquer outro nome livre vira erro:</p>
+<pre class="file" data-file="global55.lua">global print, ipairs
+local itens = {3, 5, 2}
+for _, qtd in ipairs(itens) do
+  local total = 0
+  total = total + qtd
+end
+print("Total: " .. total)
+</pre>
+<pre class="term">$ lua global55.lua
+lua: global55.lua:7: variable 'total' not declared</pre>
+<p>"Variável <code>'total'</code> não declarada", e o programa nem começa. A mensagem aponta direto a linha 7, onde a <code>total</code> está fora do escopo. Os detalhes (e por que <code>print</code> e <code>ipairs</code> precisam entrar na lista) estão em <a href="global.html">A Declaração global</a>. No Lua 5.4 e no LuaJIT essa palavra não existe (veja <a href="versoes.html">as diferenças entre versões</a>).</p>
+</div>
+
+<div class="trylua" data-goal="out:Você pagou 45.0;;semerro">
+<p class="try-task"><strong>Missão:</strong> este programa para com <code>attempt to perform arithmetic on a nil value (global 'desconto')</code>. Rode para ver o erro e conserte o escopo do <code>desconto</code> para o programa mostrar <code>Você pagou 45.0</code>.</p>
+<pre class="script" data-file="main.lua">local preco = 50
+if preco &gt; 30 then
+  local desconto = preco * 0.1
+end
+print("Você pagou " .. (preco - desconto))
+</pre>
+<pre class="solucao" data-file="main.lua">local preco = 50
+local desconto = 0
+if preco &gt; 30 then
+  desconto = preco * 0.1
+end
+print("Você pagou " .. (preco - desconto))
+</pre>
+</div>
+
+<hr>
+
+<h2>Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Regra</th><th>Exemplo</th></tr>
+<tr><td>Uma local vale da <strong>linha seguinte</strong> à declaração até o <code>end</code> do seu bloco</td><td><code>do local x = 1 end</code> → depois, <code>x</code> é <code>nil</code></td></tr>
+<tr><td>Criam bloco: <code>do</code>, <code>then</code>/<code>elseif</code>/<code>else</code>, <code>while</code>, <code>for</code>, <code>repeat</code>, <code>function</code></td><td>Cada um com o seu <code>end</code> (ou <code>until</code>)</td></tr>
+<tr><td>De dentro se vê o que está fora; de fora não se vê o de dentro</td><td>A função enxerga a <code>taxa</code> declarada antes dela</td></tr>
+<tr><td>A variável do <code>for</code> e os parâmetros são locais</td><td><code>for i = 1, 3 do … end</code> → depois, <code>i</code> é <code>nil</code></td></tr>
+<tr><td>O <code>until</code> enxerga as locais do corpo do <code>repeat</code></td><td><code>repeat local ok = … until ok</code></td></tr>
+<tr><td>Mesmo nome dentro esconde o de fora (sombreamento)</td><td><code>local preco = 99</code> dentro de um <code>do</code></td></tr>
+<tr><td>Nome não achado como local é procurado como global</td><td>Sem global, o valor é <code>nil</code></td></tr>
+<tr><td>Sem <code>local</code> e sem local visível → cria global</td><td><code>total = 0</code> dentro da função vaza</td></tr>
+<tr><td>No modo interativo, cada linha é um bloco</td><td><code>warning: locals do not survive across lines in interactive mode</code></td></tr>
+<tr><td>Máximo de 200 locais ativas por função</td><td><code>too many local variables (limit is 200)</code></td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Sintoma</th><th>Causa provável</th></tr>
+<tr><td><code>attempt to … a nil value (global 'x')</code> e você tem certeza de que escreveu <code>local x</code></td><td>A local foi criada num bloco que já fechou (ou o nome foi digitado diferente)</td></tr>
+<tr><td>A variável mostra <code>nil</code> sem erro</td><td>Está sendo lida fora do bloco onde foi criada</td></tr>
+<tr><td>A soma do laço dá 0 (ou o valor inicial)</td><td><code>local</code> de novo dentro do laço: sombreamento</td></tr>
+<tr><td>Uma variável aparece com valor "do nada" em outra parte do programa</td><td>Faltou <code>local</code> dentro de uma função: ela virou global</td></tr>
+<tr><td>A função vê <code>nil</code> numa local que existe</td><td>A local foi declarada <strong>depois</strong> da função</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. O que aparece?</h3>
+<pre class="file" data-file="ex1.lua">local cor = "azul"
+do
+  local cor = "verde"
+end
+print(cor)
+</pre>
+<div class="ex-code">O programa mostra <input data-answer="azul" aria-label="valor mostrado"></div>
+</div>
+
+<div class="exercise">
+<h3>2. E agora?</h3>
+<pre class="file" data-file="ex2.lua">for i = 1, 5 do
+  local quadrado = i * i
+end
+print(quadrado)
+</pre>
+<div class="ex-code">O programa mostra <input data-answer="nil" aria-label="valor mostrado"></div>
+</div>
+
+<div class="exercise">
+<h3>3. Complete</h3>
+<p>Complete para a <code>soma</code> sobreviver ao laço e o programa mostrar 6:</p>
+<div class="ex-code"><input data-answer="local" aria-label="palavra-chave"> soma = 0<br>for i = 1, 3 do<br>&nbsp;&nbsp;soma = soma + i<br><input data-answer="end" aria-label="palavra-chave"><br>print(soma)</div>
+</div>
+
+<div class="mc" data-answer="3">
+<p class="mc-q">4. A mensagem foi <code>attempt to perform arithmetic on a nil value (global 'frete')</code>, mas o programa tem <code>local frete = 15</code> dentro de um <code>if</code>, algumas linhas acima. O que aconteceu?</p>
+<label><input type="radio" name="q4"> O Lua não aceita <code>local</code> dentro de <code>if</code></label>
+<label><input type="radio" name="q4"> O 15 não é um número</label>
+<label><input type="radio" name="q4"> A conta está fora do <code>if</code>, onde a local <code>frete</code> já não existe</label>
+<label><input type="radio" name="q4"> Faltou um <code>return</code></label>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">5. Dentro de uma função, a Ana escreveu <code>nome = "Bia"</code> (sem <code>local</code>), e não existe nenhuma local <code>nome</code> visível. O que acontece?</p>
+<label><input type="radio" name="q5"> Erro: variável não declarada</label>
+<label><input type="radio" name="q5"> Cria uma variável global <code>nome</code>, visível no programa inteiro</label>
+<label><input type="radio" name="q5"> Cria uma local que some no fim da função</label>
+<label><input type="radio" name="q5"> Nada: a linha é ignorada</label>
+</div>
+
+<div class="mc" data-answer="1">
+<p class="mc-q">6. Em qual destes laços a condição consegue usar uma local criada dentro do corpo?</p>
+<label><input type="radio" name="q6"> <code>repeat … until condição</code></label>
+<label><input type="radio" name="q6"> <code>while condição do … end</code></label>
+<label><input type="radio" name="q6"> <code>for i = 1, n do … end</code></label>
+<label><input type="radio" name="q6"> Em nenhum</label>
+</div>
+
+<h3>Missão final: o caixa que esquecia o troco</h3>
+
+<div class="trylua" data-goal="out:Troco: 15;;out:Itens: 3;;semerro">
+<p class="try-task"><strong>Missão:</strong> o caixa da padaria soma as compras, conta os itens e calcula o troco de uma nota de R$ 50. Mas o programa tem <strong>dois</strong> problemas de escopo: a contagem de itens sai errada (por causa de um <code>local</code> a mais) e o troco dá erro (por causa de uma local que morre cedo demais). Conserte os dois para a saída terminar com <code>Itens: 3</code> e <code>Troco: 15</code>.</p>
+<pre class="script" data-file="main.lua">local precos = {12, 8, 15}
+local soma = 0
+local itens = 0
+for _, p in ipairs(precos) do
+  soma = soma + p
+  local itens = itens + 1
+end
+if soma &lt;= 50 then
+  local troco = 50 - soma
+end
+print("Soma: " .. soma)
+print("Itens: " .. itens)
+print("Troco: " .. troco)
+</pre>
+<pre class="solucao" data-file="main.lua">local precos = {12, 8, 15}
+local soma = 0
+local itens = 0
+for _, p in ipairs(precos) do
+  soma = soma + p
+  itens = itens + 1
+end
+local troco = 0
+if soma &lt;= 50 then
+  troco = 50 - soma
+end
+print("Soma: " .. soma)
+print("Itens: " .. itens)
+print("Troco: " .. troco)
+</pre>
+</div>
+
+<p>Rodando o programa original no lab, a saída foi <code>Soma: 35</code>, <code>Itens: 0</code> e, na linha 13, <code>attempt to concatenate a nil value (global 'troco')</code>. Com os dois consertos: <code>Soma: 35</code>, <code>Itens: 3</code>, <code>Troco: 15</code>.</p>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li><strong>Escopo</strong> é o pedaço do programa onde um nome existe. No Lua, quem decide são os <strong>blocos</strong>: <code>do</code>, <code>if</code>, <code>while</code>, <code>for</code>, <code>repeat</code> e <code>function</code>.</li>
+  <li>Uma <code>local</code> vale da linha seguinte à declaração até o <code>end</code> do bloco. A variável do <code>for</code> e os parâmetros de uma função também são locais.</li>
+  <li>De dentro de um bloco se veem as locais de fora; de fora, não se veem as de dentro.</li>
+  <li>Um nome que não é local é procurado como global; se não existir, vale <code>nil</code>. Por isso a mensagem diz <code>(global 'x')</code> quando a sua local já morreu.</li>
+  <li>Uma local de dentro com o mesmo nome esconde a de fora (sombreamento); um <code>local</code> a mais num laço é um bug silencioso.</li>
+  <li>Sem <code>local</code>, a variável vira global e vaza da função. Use <code>local</code> sempre.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
