@@ -1,0 +1,657 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua Instalar — o Lua 5.5 no Ubuntu, Windows e macOS | Guia Lua</title>
+<meta name="description" content="Como instalar o Lua 5.5 para quem nunca programou: conferir com lua -v, a mensagem real do Ubuntu quando o Lua não está instalado, sudo apt install lua5.5 liblua5.5-dev (e por que o -dev conserta as setas do modo interativo), compilar do código-fonte de lua.org, Fedora e Arch, LuaBinaries no Windows, Homebrew no macOS, a armadilha do luarocks que troca o lua para o 5.1 e os erros reais de quem está instalando.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">Instalar</span></h1>
+
+<p class="intro">As caixas Experimente do guia rodam o Lua de verdade no navegador, então você pode estudar as primeiras aulas sem instalar nada. Mas, para escrever os seus próprios programas, guardar os arquivos e rodar quando quiser, você vai querer o Lua no seu computador. Ao contrário de outras linguagens, o Lua <strong>não vem instalado</strong> no Ubuntu. A boa notícia: ele é minúsculo, e a instalação leva poucos segundos. Nesta aula você vai conferir se ele já está aí, instalar o Lua 5.5, evitar duas armadilhas que pegam quase todo mundo e fazer um teste final.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>Como descobrir se o Lua já está instalado, e qual versão, com <code>lua -v</code>.</li>
+  <li>A ler a mensagem do Ubuntu quando o Lua não está lá, e qual pacote escolher.</li>
+  <li>A instalar com <code>sudo apt install lua5.5 liblua5.5-dev</code>, e por que o segundo pacote faz as setas funcionarem.</li>
+  <li>A compilar o Lua do código-fonte oficial, para quando o seu sistema não tem o 5.5.</li>
+  <li>Como instalar no Fedora, no Arch, no <strong>Windows</strong> (LuaBinaries) e no <strong>macOS</strong> (Homebrew).</li>
+  <li>A armadilha do <code>luarocks</code>, que troca o seu <code>lua</code> para o 5.1, e como desfazer.</li>
+  <li>Os erros mais comuns de quem está instalando, com as mensagens reais.</li>
+</ul>
+</div>
+
+<p>As saídas de terminal desta aula vêm do computador da Ana, que usa <strong>Ubuntu 26.04</strong>. Os comandos com <code>sudo</code> instalam coisas no sistema; as saídas deles foram colhidas num Ubuntu 26.04 de verdade, e o que não deu para rodar (tudo o que é de Windows e de macOS, e as outras distribuições) está marcado como <strong>ilustrativo</strong>, conferido nas páginas oficiais (<a href="https://www.lua.org/download.html">lua.org/download.html</a>, LuaBinaries e Homebrew).</p>
+
+<hr>
+
+<h2>A ideia: a música e o tocador</h2>
+<p>Um arquivo de música no celular não toca sozinho: você precisa de um aplicativo de música para tocá-lo. Com o Lua é igual. O seu programa (o arquivo <code>.lua</code>) é a música; o <strong>interpretador <code>lua</code></strong> é o tocador. "Instalar o Lua" é instalar o tocador. Depois disso, qualquer programa Lua, seu ou de outra pessoa, pode ser "tocado" no seu computador.</p>
+
+<p>No Ubuntu, as peças do Lua vêm em pacotes separados:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Pacote</th><th>O que traz</th><th>Comparação</th></tr>
+<tr><td><strong><code>lua5.5</code></strong></td><td>O interpretador <code>lua</code> (e o <code>luac</code>, que você viu na <a href="introducao.html">Introdução</a>), com as bibliotecas padrão</td><td>O tocador de música</td></tr>
+<tr><td><strong><code>liblua5.5-dev</code></strong></td><td>Os arquivos para programas em C usarem o Lua. E, de brinde, a biblioteca que faz as <strong>setas</strong> e o <strong>histórico</strong> funcionarem no modo interativo (seção 3)</td><td>O controle remoto do tocador</td></tr>
+<tr><td><strong><code>luarocks</code></strong></td><td>O instalador de <strong>bibliotecas</strong> feitas por outras pessoas</td><td>A loja de músicas novas (com uma pegadinha: seção 9)</td></tr>
+</table>
+</div>
+
+<p>Para todas as aulas do Nível 1, o <code>lua5.5</code> basta. O <code>liblua5.5-dev</code> é recomendado para o modo interativo ficar confortável. O <code>luarocks</code> fica para muito depois (aula <a href="luarocks.html">LuaRocks</a>): <strong>não instale agora</strong>.</p>
+
+<hr>
+
+<h2>1. O Lua já está instalado?</h2>
+<p>Antes de instalar, pergunte ao computador. Abra o terminal (no Ubuntu: <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>T</kbd>) e digite <code>lua -v</code>. Num Ubuntu recém-instalado, a resposta é esta:</p>
+
+<pre class="term">$ lua -v
+Comando 'lua' não encontrado, mas poder ser instalado com:
+sudo apt install lua5.1  # version 5.1.5-12, or
+sudo apt install lua5.2  # version 5.2.4-4
+sudo apt install lua5.3  # version 5.3.6-3
+sudo apt install lua5.4  # version 5.4.8-1build1
+sudo apt install lua5.5  # version 5.5.0-3
+</pre>
+
+<p>O terminal não achou nenhum programa chamado <code>lua</code>, e o Ubuntu (com o programa dele de "comando não encontrado") sugeriu os pacotes que trazem um. Linha por linha:</p>
+
+<dl class="anatomy">
+  <dt>Comando 'lua' não encontrado,</dt><dd>Não há nenhum programa <code>lua</code> neste computador. O Lua <strong>não está instalado</strong>.</dd>
+  <dt>mas poder ser instalado com:</dt><dd>"Mas pode ser instalado com". O "poder" no lugar de "pode" é um erro de tradução do próprio Ubuntu, não do seu computador.</dd>
+  <dt>sudo apt install lua5.1 … lua5.5</dt><dd>Cinco pacotes, um para cada versão do Lua, da 5.1 à 5.5. Qualquer um deles cria o comando <code>lua</code>. O número depois de <code>version</code> é a revisão do pacote.</dd>
+</dl>
+
+<p><strong>Escolha o <code>lua5.5</code></strong>, a versão que este guia ensina. O Ubuntu lista do mais antigo para o mais novo, e o primeiro da lista (o 5.1) é de 2006. Os outros comandos do Lua dão a mesma resposta, até que você instale:</p>
+
+<pre class="term">$ lua5.5 -v
+Comando 'lua5.5' não encontrado, mas poder ser instalado com:
+sudo apt install lua5.5
+</pre>
+
+<dl class="anatomy">
+  <dt>lua</dt><dd>O nome do interpretador do Lua.</dd>
+  <dt>-v</dt><dd>"Versão": em vez de rodar um programa, mostre a versão e saia. Só existe a forma curta, <code>-v</code>; o <code>--version</code> de outros programas não funciona no Lua (você vai ver o erro em <a href="#errado">Quando dá errado</a>).</dd>
+</dl>
+
+<p>Se o seu computador respondeu com uma linha começando por <code>Lua 5.</code>, o Lua já está aí. Veja qual é a versão e pule para a seção 2 ou 3.</p>
+
+<hr>
+
+<h2>2. Ubuntu 26.04: <code>sudo apt install lua5.5 liblua5.5-dev</code></h2>
+<p>O comando recomendado para quem vai seguir o guia instala o interpretador e o pacote das setas de uma vez (o <code>sudo</code> pede a sua senha):</p>
+
+<pre class="file" data-file="terminal">sudo apt install lua5.5 liblua5.5-dev
+</pre>
+
+<dl class="anatomy">
+  <dt>sudo</dt><dd>"Faça como administrador". Instalar programas mexe no sistema, então o Ubuntu pede a sua senha. Enquanto você digita, nada aparece na tela (nem asteriscos): é normal. Digite e aperte <kbd>Enter</kbd>.</dd>
+  <dt>apt</dt><dd>O gerenciador de pacotes do Ubuntu e do Debian: a "loja de aplicativos" do terminal.</dd>
+  <dt>install</dt><dd>"Instale".</dd>
+  <dt>lua5.5 liblua5.5-dev</dt><dd>Os dois pacotes, separados por espaço. Se quiser só o mínimo, <code>sudo apt install lua5.5</code> já dá o comando <code>lua</code> (mas veja a seção 3 antes).</dd>
+</dl>
+
+<p>Esta é a saída real de <code>sudo apt install lua5.5</code> (só o interpretador) num Ubuntu 26.04 sem Lua. Os números marcados com <code>…</code> mudam de um computador para outro:</p>
+
+<pre class="term">$ sudo apt install lua5.5
+Lendo listas de pacotes...
+Construindo árvore de dependências...
+Lendo informação de estado...
+Resolvendo dependências...
+Instalando:
+  lua5.5
+
+Resumo:
+  Atualizando: 0, Instalando: 1, Removendo: 0, Não atualizando: 0
+  Tamanho de download: 171 kB                       « menos que uma foto
+  Espaço necessário: 500 kB / … disponível           « o espaço livre do seu disco
+
+Obter:1 http://archive.ubuntu.com/ubuntu resolute-updates/universe amd64 lua5.5 amd64 5.5.0-3ubuntu0.1 [171 kB]
+Obtidos 171 kB em 0s (1.068 kB/s)
+Selecionando pacote previamente não selecionado lua5.5.
+(Lendo banco de dados ... … arquivos e diretórios atualmente instalados).
+Preparando para desempacotar .../lua5.5_5.5.0-3ubuntu0.1_amd64.deb ...
+Desempacotando lua5.5 (5.5.0-3ubuntu0.1) ...
+Configurando lua5.5 (5.5.0-3ubuntu0.1) ...
+update-alternatives: usando /usr/bin/lua5.5 para fornecer /usr/bin/lua (lua-interpreter) no modo automático
+update-alternatives: usando /usr/bin/luac5.5 para fornecer /usr/bin/luac (lua-compiler) no modo automático
+Processando gatilhos para man-db (2.13.1-1build1) ...
+</pre>
+
+<p>(Num terminal de verdade o <code>apt</code> também mostra uma barra de progresso, e pode perguntar <code>Continuar? [S/n]</code>: aperte <kbd>Enter</kbd>.) A parte importante são as duas linhas do <code>update-alternatives</code>:</p>
+
+<dl class="anatomy">
+  <dt>usando /usr/bin/lua5.5</dt><dd>O programa instalado se chama, de verdade, <code>lua5.5</code>, com o número da versão no nome. Assim várias versões podem morar no mesmo computador sem brigar.</dd>
+  <dt>para fornecer /usr/bin/lua (lua-interpreter)</dt><dd>O Ubuntu cria um "atalho" chamado <code>lua</code> que aponta para o <code>lua5.5</code>. É por isso que o guia inteiro escreve só <code>lua</code>. O nome desse atalho no sistema é <code>lua-interpreter</code> ("interpretador Lua").</dd>
+  <dt>no modo automático</dt><dd>Se você instalar outra versão do Lua depois, o Ubuntu pode mudar o atalho sozinho, para a versão que ele acha "melhor". Guarde essa frase: ela é a origem da armadilha da seção 9.</dd>
+  <dt>/usr/bin/luac</dt><dd>O mesmo para o <code>luac</code>, que vira o atalho do <code>luac5.5</code>.</dd>
+</dl>
+
+<p>Pronto. Agora o Lua responde:</p>
+
+<pre class="term">$ lua -v
+Lua 5.5.0  Copyright (C) 1994-2025 Lua.org, PUC-Rio
+$ which lua
+/usr/bin/lua                                       « o atalho
+$ readlink -f /usr/bin/lua
+/usr/bin/lua5.5                                    « para onde o atalho aponta
+$ lua5.5 -v
+Lua 5.5.0  Copyright (C) 1994-2025 Lua.org, PUC-Rio
+</pre>
+
+<p>(O <code>which</code>, "qual", mostra onde está o programa; o <code>readlink -f</code> segue o atalho até o fim.) A resposta <code>Lua 5.5.0</code> quer dizer: Lua <strong>5.5</strong>, revisão <strong>0</strong>. As revisões (5.5.0, 5.5.1…) só corrigem defeitos; tudo o que o guia ensina vale para qualquer 5.5.x.</p>
+
+<hr>
+
+<h2>3. Por que o <code>liblua5.5-dev</code>: as setas do modo interativo</h2>
+<p>No <a href="repl.html">modo interativo</a> do Lua (o <code>&gt;</code>, que você vai conhecer daqui a duas aulas), é muito cômodo apertar a <strong>seta para cima</strong> para repetir a linha anterior, ou as setas para os lados para corrigir uma letra. Quem cuida disso é uma biblioteca chamada <strong>readline</strong>. O <code>lua5.5</code> do Ubuntu procura essa biblioteca quando abre, mas ela só existe no computador junto com um pacote "de desenvolvimento" (o <code>libreadline-dev</code>), que <strong>não</strong> vem com o <code>lua5.5</code>.</p>
+
+<p>Num Ubuntu com só o <code>lua5.5</code>, a seta para cima vira um monte de símbolos, e o Enter depois dela dá um erro esquisito:</p>
+
+<pre class="term">$ lua
+Lua 5.5.0  Copyright (C) 1994-2025 Lua.org, PUC-Rio
+&gt; ^[[A                                             « a seta para cima, sem a readline
+stdin: bad binary format (truncated chunk)
+</pre>
+
+<p>O <code>^[[A</code> é o "código" que o teclado manda quando você aperta a seta para cima. Sem a readline, ninguém traduz esse código, e o Lua recebe os símbolos como se fossem um programa. O primeiro deles (o <code>^[</code>, a tecla Esc) é justamente o primeiro byte de um arquivo de <em>bytecode</em> do Lua, então ele acha que recebeu uma tradução (<em>binary</em>) cortada no meio (<em>truncated chunk</em>). Nada se estragou: é só a falta da biblioteca. O Lua até avisa o motivo, se você abrir o modo interativo com os avisos ligados (<code>lua -W</code>): junto com as linhas de abertura, aparece esta:</p>
+
+<pre class="term">Lua warning: library 'libreadline.so' not found     « "biblioteca libreadline.so não encontrada"
+</pre>
+
+<p>O conserto é instalar o <code>liblua5.5-dev</code> (que puxa o <code>libreadline-dev</code>) ou só o <code>libreadline-dev</code>. O próprio <code>apt</code> mostra a ligação entre os dois:</p>
+
+<pre class="term">$ apt-cache depends lua5.5
+lua5.5
+  Depende: libc6                                    « o lua5.5 sozinho não traz a readline
+$ apt-cache show liblua5.5-dev | grep -E "^(Version|Depends)"
+Version: 5.5.0-3ubuntu0.1
+Depends: liblua5.5-0 (= 5.5.0-3ubuntu0.1), libc6-dev | libc-dev, libreadline-dev
+Version: 5.5.0-3
+Depends: liblua5.5-0 (= 5.5.0-3), libc6-dev | libc-dev, libreadline-dev
+</pre>
+
+<p>(O <code>grep</code> filtrou só as linhas de versão e de dependências; aparecem duas versões porque o Ubuntu guarda a original e a atualizada.) Depois de instalar, feche o <code>lua</code> e abra de novo: as setas e o histórico passam a funcionar, e o <code>lua -W</code> não reclama mais.</p>
+
+<div class="note">
+<strong>Isso só afeta o modo interativo</strong>
+<p>Programas em arquivo (<code>lua programa.lua</code>) funcionam igualzinho com ou sem a readline. E o <code>lua5.4</code> do Ubuntu não tem esse problema: ele já depende da readline. Se você não quiser instalar o pacote <code>-dev</code>, dá para viver sem as setas: é só redigitar a linha.</p>
+</div>
+
+<hr>
+
+<h2>4. Ubuntu e Debian mais antigos: não têm o 5.5</h2>
+<p>O Lua 5.5 saiu em dezembro de 2025, e só as versões de sistema lançadas depois disso têm o pacote <code>lua5.5</code>. Segundo as páginas de pacotes do Ubuntu e do Debian:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Sistema</th><th>Tem o <code>lua5.5</code>?</th><th>O que fazer</th></tr>
+<tr><td>Ubuntu 26.04 LTS (o da Ana)</td><td>Sim (5.5.0)</td><td>Seção 2</td></tr>
+<tr><td>Ubuntu 24.04 LTS e anteriores</td><td>Não</td><td>Compile o 5.5 (seção 5), ou use o <code>lua5.4</code></td></tr>
+<tr><td>Debian 13 ("trixie")</td><td>Não</td><td>Compile o 5.5 (seção 5), ou use o <code>lua5.4</code></td></tr>
+<tr><td>Debian <em>testing</em> e <em>unstable</em></td><td>Sim (5.5.1)</td><td><code>sudo apt install lua5.5</code></td></tr>
+</table>
+</div>
+
+<div class="note">
+<strong>Dá para estudar com o 5.4?</strong>
+<p>Quase tudo. A diferença entre o 5.4 e o 5.5 é pequena, e o que é novidade do 5.5 vem marcado no guia com o selo <span class="versao">5.5</span> (a declaração <code>global</code>, por exemplo). A página <a href="novidades.html">Novidades do Lua 5.5</a> reúne essas mudanças. Para o 5.4: <code>sudo apt install lua5.4</code> (ilustrativo), e aí o comando é <code>lua</code> ou <code>lua5.4</code>. E as caixas Experimente do guia rodam sempre o 5.5, em qualquer computador.</p>
+</div>
+
+<hr>
+
+<h2>5. Compilando do código-fonte (qualquer Linux)</h2>
+<p>Como o Lua é pequeno e escrito em C, compilá-lo é rápido e não tem mistério: é o jeito que o próprio site oficial ensina. Você precisa do compilador de C e do <code>make</code> (no Ubuntu e no Debian: <code>sudo apt install build-essential</code>, ilustrativo). Os quatro comandos são os da página <a href="https://www.lua.org/download.html">lua.org/download.html</a>, com a versão mais nova (a 5.5.1, de julho de 2026):</p>
+
+<pre class="term">$ curl -L -R -O https://www.lua.org/ftp/lua-5.5.1.tar.gz
+                                                   « (a barra de progresso do download)
+$ tar zxf lua-5.5.1.tar.gz
+$ cd lua-5.5.1
+$ make all test
+make[1]: Entrando no diretório '/home/ana/lua-5.5.1/src'
+Guessing Linux
+make[2]: Entrando no diretório '/home/ana/lua-5.5.1/src'
+make all SYSCFLAGS="-DLUA_USE_LINUX" SYSLIBS="-Wl,-E -ldl"
+make[3]: Entrando no diretório '/home/ana/lua-5.5.1/src'
+gcc -std=gnu99 -O2 -Wall -Wextra -DLUA_USE_LINUX    -c -o lapi.o lapi.c
+gcc -std=gnu99 -O2 -Wall -Wextra -DLUA_USE_LINUX   -c lcode.c
+…                                                  « uma linha gcc para cada arquivo .c
+gcc -std=gnu99 -o lua   lua.o liblua.a -lm -Wl,-E -ldl
+gcc -std=gnu99 -O2 -Wall -Wextra -DLUA_USE_LINUX    -c -o luac.o luac.c
+gcc -std=gnu99 -o luac   luac.o liblua.a -lm -Wl,-E -ldl
+make[3]: Saindo do diretório '/home/ana/lua-5.5.1/src'
+make[2]: Saindo do diretório '/home/ana/lua-5.5.1/src'
+make[1]: Saindo do diretório '/home/ana/lua-5.5.1/src'
+make[1]: Entrando no diretório '/home/ana/lua-5.5.1/src'
+./lua -v
+Lua 5.5.1  Copyright (C) 1994-2026 Lua.org, PUC-Rio   « o teste: o Lua novinho respondeu
+make[1]: Saindo do diretório '/home/ana/lua-5.5.1/src'
+</pre>
+
+<dl class="anatomy">
+  <dt>curl -L -R -O …</dt><dd>Baixa o arquivo do site oficial. <code>.tar.gz</code> é um pacote compactado, como um <code>.zip</code>.</dd>
+  <dt>tar zxf …</dt><dd>Descompacta, criando a pasta <code>lua-5.5.1</code>.</dd>
+  <dt>cd lua-5.5.1</dt><dd>Entra na pasta.</dd>
+  <dt>make all test</dt><dd>Compila tudo (<code>all</code>) e faz um teste rápido (<code>test</code>). Cada linha <code>gcc</code> é o compilador de C traduzindo um dos arquivos do Lua. No fim, o <code>test</code> roda <code>./lua -v</code>.</dd>
+</dl>
+
+<p>Na pasta <code>src</code> ficam os dois programas novos, <code>lua</code> e <code>luac</code>. Dá para usá-los dali mesmo (<code>src/lua -v</code>) ou instalá-los para todo o sistema, em <code>/usr/local</code>, com <code>sudo make install</code> (ilustrativo). O mesmo caminho funciona no macOS e em outras distribuições, com o compilador de C de cada uma.</p>
+
+<div class="warning">
+<strong>O 5.5 de lua.org e o do Ubuntu</strong>
+<p>O site oficial já está na revisão 5.5.1; o Ubuntu 26.04 traz a 5.5.0, e o editor do guia também. A diferença são só correções de defeitos: nada do que o guia ensina muda.</p>
+</div>
+
+<hr>
+
+<h2>6. Outras distribuições Linux</h2>
+<p>Nas distribuições que não são Ubuntu ou Debian, o Lua também vem do gerenciador de pacotes. Os comandos abaixo são <strong>ilustrativos</strong> (não foram rodados no computador da Ana), e as versões são as das páginas de pacotes de cada distribuição:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Distribuição</th><th>Instalar</th><th>Versão do pacote</th></tr>
+<tr><td>Ubuntu 26.04, Debian <em>testing</em></td><td><code>sudo apt install lua5.5 liblua5.5-dev</code></td><td>5.5</td></tr>
+<tr><td>Fedora 45 ou mais novo</td><td><code>sudo dnf install lua</code></td><td>5.5.1</td></tr>
+<tr><td>Fedora 43 e 44</td><td><code>sudo dnf install lua</code></td><td>5.4.8 (para o 5.5, compile: seção 5)</td></tr>
+<tr><td>Arch, Manjaro</td><td><code>sudo pacman -S lua</code></td><td>5.5.1</td></tr>
+</table>
+</div>
+
+<p>Em todas elas, confira depois com <code>lua -v</code>.</p>
+
+<hr>
+
+<h2>7. Windows</h2>
+<p>O Windows não vem com Lua, e o site oficial não tem instalador próprio: ele aponta para o <strong>LuaBinaries</strong>, um projeto que publica o Lua já compilado. Tudo nesta seção é <strong>ilustrativo</strong> (o computador da Ana usa Linux), conferido em <a href="https://luabinaries.sourceforge.net/">luabinaries.sourceforge.net</a>.</p>
+
+<ol class="passo">
+  <li>Na página do LuaBinaries, entre na pasta da versão <strong>5.5.0</strong>, depois em <strong>Tools Executables</strong>, e baixe o arquivo <code>lua-5.5.0_Win64_bin.zip</code> (para Windows de 64 bits, o normal hoje).</li>
+  <li>Descompacte numa pasta fácil, por exemplo <code>C:\lua</code>. Dentro dela há quatro arquivos (a lista abaixo é a do <code>.zip</code> de verdade).</li>
+  <li>Abra o <strong>Terminal</strong> (ou o PowerShell), entre na pasta com <code>cd C:\lua</code> e rode <code>.\lua55.exe -v</code>.</li>
+  <li>Para usar de qualquer pasta, acrescente <code>C:\lua</code> ao <code>PATH</code> do Windows (a lista de pastas onde ele procura comandos: "Editar as variáveis de ambiente do sistema", no menu Iniciar).</li>
+</ol>
+
+<pre class="term">$ unzip -l lua-5.5.0_Win64_bin.zip
+Archive:  lua-5.5.0_Win64_bin.zip
+  Length      Date    Time    Name
+---------  ---------- -----   ----
+   371668  2026-01-19 17:27   lua55.dll
+   123938  2026-01-19 17:28   lua55.exe
+   315126  2026-01-19 17:28   luac55.exe
+   126794  2026-01-19 17:28   wlua55.exe
+---------                     -------
+   937526                     4 files
+</pre>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Arquivo</th><th>O que é</th></tr>
+<tr><td><code>lua55.exe</code></td><td>O interpretador. No Windows, o comando é <code>lua55</code> em vez de <code>lua</code>: onde o guia diz <code>lua ola.lua</code>, digite <code>lua55 ola.lua</code> (ou renomeie o arquivo para <code>lua.exe</code>).</td></tr>
+<tr><td><code>luac55.exe</code></td><td>O <code>luac</code>.</td></tr>
+<tr><td><code>wlua55.exe</code></td><td>Um <code>lua</code> que roda sem abrir a janela do terminal (para programas com janela própria).</td></tr>
+<tr><td><code>lua55.dll</code></td><td>A biblioteca do Lua, que os <code>.exe</code> usam. Deixe na mesma pasta.</td></tr>
+</table>
+</div>
+
+<div class="note">
+<strong>Linux no Windows: o WSL</strong>
+<p>Se você quer seguir o guia exatamente como ele é, com os mesmos comandos do Ubuntu, o Windows 10 e o 11 podem rodar um Ubuntu de verdade dentro deles, o <strong>WSL</strong> (<em>Windows Subsystem for Linux</em>). Com um Ubuntu 26.04 no WSL, tudo das seções 1 a 3 vale igual.</p>
+</div>
+
+<hr>
+
+<h2>8. macOS</h2>
+<p>O macOS também não traz o Lua. O jeito mais simples é o <a href="https://brew.sh/">Homebrew</a>, o gerenciador de pacotes mais usado no Mac. Segundo a página da fórmula (<a href="https://formulae.brew.sh/formula/lua">formulae.brew.sh/formula/lua</a>), ela instala o <strong>5.5.1</strong> (<strong>ilustrativo</strong>):</p>
+
+<pre class="file" data-file="Terminal do macOS (ilustrativo)">brew install lua
+lua -v
+</pre>
+
+<p>No Mac, o comando é <code>lua</code>, como no Ubuntu: tudo o que o guia mostra no terminal vale igual lá. Sem o Homebrew, dá para compilar do código-fonte, como na seção 5 (o Mac precisa das ferramentas de linha de comando da Apple, que trazem o compilador).</p>
+
+<hr>
+
+<h2>9. A armadilha do <code>luarocks</code>: o <code>lua</code> vira 5.1</h2>
+<p>Mais adiante no guia você vai conhecer o <strong>LuaRocks</strong>, o instalador de bibliotecas do Lua. No Ubuntu 26.04, o pacote <code>luarocks</code> do <code>apt</code> traz uma surpresa: ele depende do <strong>Lua 5.1</strong>, e, ao instalar o 5.1, o Ubuntu <strong>troca o atalho <code>lua</code></strong> para ele. Entre as muitas linhas de <code>sudo apt install luarocks</code>, aparece esta:</p>
+
+<pre class="term">update-alternatives: usando /usr/bin/lua5.1 para fornecer /usr/bin/lua (lua-interpreter) no modo automático
+</pre>
+
+<p>E, a partir daí:</p>
+
+<pre class="term">$ lua -v
+Lua 5.1.5  Copyright (C) 1994-2012 Lua.org, PUC-Rio     « era 5.5, virou 5.1!
+</pre>
+
+<p><strong>Por que acontece:</strong> lembra do "modo automático" da seção 2? Cada versão instalada tem uma <strong>prioridade</strong>, e no modo automático o Ubuntu aponta o atalho <code>lua</code> para a de prioridade maior. O pacote do 5.1 tem prioridade 110; o do 5.5, só 20. Instalou o 5.1, ele "ganhou".</p>
+
+<p><strong>Como desfazer:</strong> diga ao Ubuntu qual versão você quer, com dois comandos (um para o <code>lua</code>, outro para o <code>luac</code>):</p>
+
+<pre class="file" data-file="terminal">sudo update-alternatives --set lua-interpreter /usr/bin/lua5.5
+sudo update-alternatives --set lua-compiler /usr/bin/luac5.5
+</pre>
+
+<p>O <code>--set</code> ("defina") passa o atalho para o <strong>modo manual</strong>: o Ubuntu não muda mais sozinho, nem que você instale outras versões. No computador da Ana isso já foi feito, e o <code>--display</code> ("mostre") confirma:</p>
+
+<pre class="term">$ update-alternatives --display lua-interpreter
+lua-interpreter - modo manual                       « não muda mais sozinho
+  a melhor versão de link é /usr/bin/lua5.1          « a que "ganharia" no automático
+  o link atualmente aponta para /usr/bin/lua5.5      « a que está valendo
+  link lua-interpreter é /usr/bin/lua
+  secundário lua-manual é /usr/share/man/man1/lua.1.gz
+/usr/bin/lua5.1 - prioridade 110
+  secundário lua-manual: /usr/share/man/man1/lua5.1.1.gz
+/usr/bin/lua5.4 - prioridade 20
+  secundário lua-manual: /usr/share/man/man1/lua5.4.1.gz
+/usr/bin/lua5.5 - prioridade 20
+  secundário lua-manual: /usr/share/man/man1/lua5.5.1.gz
+</pre>
+
+<p>(Também existe o <code>sudo update-alternatives --config lua-interpreter</code>, que mostra as versões numeradas e pergunta qual você quer.) E tem mais: o <code>luarocks</code> do <code>apt</code> nem instala bibliotecas para o 5.5. A aula <a href="luarocks.html">LuaRocks</a> mostra o jeito que funciona. Até lá, você não precisa dele.</p>
+
+<hr>
+
+<h2>10. Um editor para escrever os programas</h2>
+<p>Um programa Lua é um arquivo de <strong>texto puro</strong>. Qualquer editor de texto serve, menos os de "documento", como o LibreOffice Writer ou o Word: eles gravam fontes, cores e margens junto com o texto, e o Lua não entende nada disso. Algumas opções:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Editor</th><th>Como conseguir no Ubuntu</th><th>Bom para</th></tr>
+<tr><td><strong>nano</strong></td><td>Já vem. Roda dentro do terminal.</td><td>Arquivos pequenos, sem sair do terminal. É o que as aulas usam (aula <a href="executar.html">Rodando um Programa</a>).</td></tr>
+<tr><td><strong>Editor de Texto</strong></td><td>Já vem (é o editor com janela do Ubuntu).</td><td>Começar sem instalar nada. Ele pinta as palavras do Lua com cores quando o arquivo termina em <code>.lua</code>.</td></tr>
+<tr><td><strong>VS Code</strong></td><td>Baixado do site da Microsoft ou pela Central de Aplicativos, mais a extensão "Lua"</td><td>Quem quer o editor que a maioria dos programadores usa, com cores, dicas e avisos de erro enquanto digita.</td></tr>
+</table>
+</div>
+
+<p>Não existe editor "certo". Para as primeiras aulas, o <strong>nano</strong> ou o Editor de Texto são ótimos. Uma dica para qualquer um deles: configure a tecla <kbd>Tab</kbd> para inserir <strong>2 espaços</strong>, que é o recuo que o guia usa (a aula <a href="sintaxe.html">Sintaxe e Blocos</a> explica para que ele serve).</p>
+
+<hr>
+
+<h2>11. O teste final</h2>
+<p>Com o Lua instalado, rode um programinha de teste. Crie um arquivo chamado <code>teste.lua</code> com este conteúdo (a aula <a href="executar.html">Rodando um Programa (.lua)</a> mostra como criar o arquivo pelo terminal):</p>
+
+<pre class="file" data-file="teste.lua">print("Lua está funcionando!")
+print("Versão:", _VERSION)
+</pre>
+
+<pre class="term">$ lua teste.lua
+Lua está funcionando!
+Versão:	Lua 5.5
+</pre>
+
+<dl class="anatomy">
+  <dt>print("Lua está funcionando!")</dt><dd>Mostra a frase na tela.</dd>
+  <dt>print("Versão:", _VERSION)</dt><dd>Mostra duas coisas na mesma linha: o texto <code>Versão:</code> e o valor de <code>_VERSION</code>, que todo Lua tem, com o nome da versão (só o principal: <code>Lua 5.5</code>, sem a revisão). A vírgula separa as duas, e o <code>print</code> põe uma tabulação entre elas (aula <a href="print.html">print()</a>).</dd>
+</dl>
+
+<p>Se apareceram as duas linhas, está tudo pronto. Faça o mesmo teste no editor do guia:</p>
+
+<div class="trylua" data-goal="src:_VERSION;;outre:Lua 5\.5;;semerro">
+<p class="try-task"><strong>Missão:</strong> o programa mostra só a frase. Acrescente uma segunda linha que mostre a versão: <code>print("Versão:", _VERSION)</code>. Rode e veja qual versão o editor do guia usa.</p>
+<pre class="script" data-file="main.lua">print("Lua está funcionando!")
+</pre>
+<pre class="solucao" data-file="main.lua">print("Lua está funcionando!")
+print("Versão:", _VERSION)
+</pre>
+</div>
+
+<hr>
+
+<h2>Formas diferentes de ter o Lua</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Onde</th><th>Como</th><th>Quando usar</th></tr>
+<tr><td>No navegador</td><td>As caixas Experimente do guia (aula <a href="simulador.html">O Editor do Guia</a>)</td><td>Para começar já, ou num computador em que você não pode instalar nada</td></tr>
+<tr><td>Ubuntu 26.04</td><td><code>sudo apt install lua5.5 liblua5.5-dev</code></td><td>Sempre que der. É o que o guia mostra</td></tr>
+<tr><td>Ubuntu 26.04</td><td><code>sudo apt install lua5.5</code> (sem o <code>-dev</code>)</td><td>Se quiser o mínimo; o modo interativo fica sem setas</td></tr>
+<tr><td>Ubuntu/Debian mais antigos</td><td>Compilar de lua.org (<code>make all test</code>)</td><td>Quando o sistema não tem o pacote <code>lua5.5</code></td></tr>
+<tr><td>Ubuntu/Debian mais antigos</td><td><code>sudo apt install lua5.4</code></td><td>Para estudar sem compilar; quase tudo do guia funciona</td></tr>
+<tr><td>Fedora, Arch</td><td><code>sudo dnf install lua</code>, <code>sudo pacman -S lua</code></td><td>Nessas distribuições</td></tr>
+<tr><td>Windows</td><td>LuaBinaries (<code>lua55.exe</code>)</td><td>O caminho apontado pelo site oficial</td></tr>
+<tr><td>Windows</td><td>WSL, com Ubuntu dentro</td><td>Para seguir o guia exatamente igual</td></tr>
+<tr><td>macOS</td><td><code>brew install lua</code></td><td>Para quem usa o Homebrew</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+
+<div class="cenario">
+<strong><code>Comando 'lua' não encontrado</code></strong>
+<pre class="term">$ lua ola.lua
+Comando 'lua' não encontrado, mas poder ser instalado com:
+sudo apt install lua5.1  # version 5.1.5-12, or
+sudo apt install lua5.2  # version 5.2.4-4
+sudo apt install lua5.3  # version 5.3.6-3
+sudo apt install lua5.4  # version 5.4.8-1build1
+sudo apt install lua5.5  # version 5.5.0-3
+</pre>
+<p><strong>O que aconteceu:</strong> o Lua não está instalado. Repare que o programa <code>ola.lua</code> nem chegou a ser lido: quem respondeu foi o Ubuntu, que não achou o comando <code>lua</code>.</p>
+<p><strong>Como resolver:</strong> <code>sudo apt install lua5.5 liblua5.5-dev</code> (seção 2). Escolha o <code>lua5.5</code>, e não o primeiro da lista.</p>
+</div>
+
+<div class="cenario">
+<strong><code>Lua</code> com L maiúsculo</strong>
+<pre class="term">$ Lua -v
+Comando 'Lua' não encontrado, você quis dizer:
+  comando 'ua' do deb ubuntu-pro-client (37.2ubuntu)
+  comando 'tua' do deb tua (4.3-17)
+  comando 'lua' do deb lua5.1 (5.1.5-12)
+  comando 'lua' do deb lua5.2 (5.2.4-4)
+  comando 'lua' do deb lua5.3 (5.3.6-3)
+  comando 'lua' do deb lua5.4 (5.4.8-1build1)
+  comando 'lua' do deb lua5.5 (5.5.0-3)
+  comando 'pua' do deb pglistener (5.2-3)
+Experimente: sudo apt install &lt;deb name&gt;
+</pre>
+<p><strong>O que aconteceu:</strong> o nome da linguagem se escreve <strong>Lua</strong>, mas o nome do <strong>comando</strong> é <code>lua</code>, tudo minúsculo. No Linux, maiúsculas e minúsculas são letras diferentes, então <code>Lua</code> e <code>lua</code> são comandos diferentes, e <code>Lua</code> não existe. O Ubuntu procurou nomes parecidos e listou vários (<code>ua</code>, <code>tua</code>, <code>pua</code> não têm nada a ver com o assunto). "deb" quer dizer "pacote".</p>
+<p><strong>Como resolver:</strong> tudo em minúsculas: <code>lua -v</code>. Isso vai valer dentro do Lua também: lá, <code>Print</code> e <code>print</code> são coisas diferentes (aula <a href="sintaxe.html">Sintaxe e Blocos</a>).</p>
+</div>
+
+<div class="cenario">
+<strong><code>sudo apt install lua</code>: o pacote "virtual"</strong>
+<p>A Ana tentou o nome mais curto. A simulação do <code>apt</code> (com <code>-s</code>, que não instala nada) mostra o que acontece:</p>
+<pre class="term">$ apt-get install -s lua
+NOTA: Esta é apenas uma simulação!
+      apt-get precisa de privilégios de root para execução real.
+      Lembre-se também de que a trava está desativada e,
+      portanto, não dependa da relevância para a situação real atual!
+Lendo listas de pacotes...
+Construindo árvore de dependências...
+Lendo informação de estado...
+O pacote lua é um pacote virtual fornecido por:
+  lua5.5 5.5.0-3ubuntu0.1
+  lua5.4 5.4.8-1build1
+  lua5.3 5.3.6-3
+  lua5.2 5.2.4-4
+  lua5.1 5.1.5-12
+
+E: O pacote 'lua' não tem candidato para instalação
+</pre>
+<p><strong>O que aconteceu:</strong> no Ubuntu não existe um pacote chamado só <code>lua</code>. Existe um "pacote virtual": um nome que vários pacotes de verdade dizem fornecer. Como há cinco candidatos, o <code>apt</code> não escolhe por você e para com um erro (o <code>E:</code> é de "erro"). <strong>Como resolver:</strong> diga a versão: <code>sudo apt install lua5.5</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Opção digitada errada: <code>unrecognized option</code></strong>
+<pre class="term">$ lua --vesion
+lua: unrecognized option '--vesion'
+usage: lua [options] [script [args]]
+Available options are:
+  -e stat   execute string 'stat'
+  -i        enter interactive mode after executing 'script'
+  -l mod    require library 'mod' into global 'mod'
+  -l g=mod  require library 'mod' into global 'g'
+  -v        show version information
+  -E        ignore environment variables
+  -W        turn warnings on
+  --        stop handling options
+  -         stop handling options and execute stdin
+</pre>
+<p><strong>O que aconteceu:</strong> "opção não reconhecida: <code>--vesion</code>". Faltou o <code>r</code>, mas, mesmo com ele, <code>--version</code> não funcionaria: o <code>lua</code> só conhece opções de uma letra. Depois do erro, ele mostra o jeito de usar (<em>usage</em>): <code>lua</code>, opções, um programa (<em>script</em>) e os argumentos do programa (<em>args</em>). A lista é o manual de bolso do <code>lua</code>; a que interessa aqui é <code>-v</code>, <em>show version information</em> ("mostre a versão"). As outras aparecem nas próximas aulas. (O <code>-h</code> de "ajuda" também não existe: dá o mesmo erro e a mesma lista.)</p>
+<p><strong>Como resolver:</strong> <code>lua -v</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Digitei <code>lua -v</code> dentro do Lua</strong>
+<p>A Ana abriu o modo interativo do Lua (o <code>&gt;</code>) e, lá dentro, quis conferir a versão:</p>
+<pre class="term">$ lua
+Lua 5.5.0  Copyright (C) 1994-2025 Lua.org, PUC-Rio
+&gt; lua -v
+stdin:1: attempt to perform arithmetic on a nil value (global 'lua')
+stack traceback:
+        stdin:1: in main chunk
+        [C]: in ?
+&gt; os.exit()
+$ lua -v
+Lua 5.5.0  Copyright (C) 1994-2025 Lua.org, PUC-Rio
+</pre>
+<p><strong>O que aconteceu:</strong> o <code>&gt;</code> quer dizer que quem está ouvindo é o <strong>Lua</strong>, e não o terminal. O Lua leu <code>lua -v</code> como uma conta: "<code>lua</code> menos <code>v</code>". Como ninguém criou nada chamado <code>lua</code> lá dentro, ele vale <code>nil</code> ("nada"), e não dá para fazer conta com nada: <code>attempt to perform arithmetic on a nil value (global 'lua')</code>, "tentativa de fazer aritmética com um valor nil (o nome <code>lua</code>)". O <code>stdin:1:</code> é o "arquivo" do modo interativo (<em>stdin</em> = o que você digita), linha 1. Repare que a primeira linha, a que começa com <code>Lua 5.5.0</code>, já tinha dito a versão.</p>
+<p><strong>Como resolver:</strong> saia do Lua com <code>os.exit()</code> (ou <kbd>Ctrl</kbd>+<kbd>D</kbd>) e digite o comando no terminal, onde aparece o <code>$</code>. A aula <a href="repl.html">O Modo Interativo (&gt;)</a> mostra a diferença entre os dois com calma.</p>
+</div>
+
+<div class="cenario">
+<strong>A seta para cima vira <code>^[[A</code></strong>
+<pre class="term">$ lua
+Lua 5.5.0  Copyright (C) 1994-2025 Lua.org, PUC-Rio
+&gt; ^[[A
+stdin: bad binary format (truncated chunk)
+</pre>
+<p><strong>O que aconteceu:</strong> o <code>lua5.5</code> não achou a biblioteca readline, que cuida das setas e do histórico (seção 3). <strong>Como resolver:</strong> <code>sudo apt install liblua5.5-dev</code> (ou <code>libreadline-dev</code>), e abra o <code>lua</code> de novo.</p>
+</div>
+
+<div class="cenario">
+<strong>Instalei o <code>luarocks</code> e o <code>lua -v</code> diz 5.1</strong>
+<pre class="term">$ lua -v
+Lua 5.1.5  Copyright (C) 1994-2012 Lua.org, PUC-Rio
+</pre>
+<p><strong>O que aconteceu:</strong> o pacote <code>luarocks</code> trouxe o Lua 5.1, que tem prioridade maior e "roubou" o atalho <code>lua</code> (seção 9). O seu 5.5 continua instalado: <code>lua5.5 -v</code> responde <code>Lua 5.5.0</code>. Um sintoma comum é um programa que usa novidades (como a divisão <code>//</code>) parar de funcionar de repente. <strong>Como resolver:</strong> <code>sudo update-alternatives --set lua-interpreter /usr/bin/lua5.5</code> e <code>sudo update-alternatives --set lua-compiler /usr/bin/luac5.5</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Um erro de digitação no programa de teste</strong>
+<p>A Ana digitou o teste com pressa e esqueceu uma letra:</p>
+<pre class="file" data-file="teste_erro.lua">prnt("Lua está funcionando!")
+</pre>
+<pre class="term">$ lua teste_erro.lua
+lua: teste_erro.lua:1: attempt to call a nil value (global 'prnt')
+stack traceback:
+	teste_erro.lua:1: in main chunk
+	[C]: in ?
+</pre>
+<p><strong>O que aconteceu:</strong> a instalação está ótima; o erro é do programa. A mensagem diz o arquivo e a linha (<code>teste_erro.lua:1:</code>) e o problema: "tentativa de chamar um valor nil (o nome <code>prnt</code>)". Como não existe nada chamado <code>prnt</code>, o Lua não tem o que chamar. A aula <a href="erros.html">Lendo uma Mensagem de Erro</a> ensina a ler todo tipo de mensagem.</p>
+<p><strong>Como resolver:</strong> conserte para <code>print</code>.</p>
+</div>
+
+<div class="trylua" data-goal="out:Lua está funcionando!;;semerro">
+<p class="try-task"><strong>Missão:</strong> o programa de teste da Ana dá erro. Rode para ver a mensagem, conserte e rode de novo, até aparecer <code>Lua está funcionando!</code>.</p>
+<pre class="script" data-file="main.lua">prnt("Lua está funcionando!")
+</pre>
+<pre class="solucao" data-file="main.lua">print("Lua está funcionando!")
+</pre>
+</div>
+
+<hr>
+
+<h2>Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Comando</th><th>O que faz</th></tr>
+<tr><td><code>lua -v</code></td><td>Mostra a versão do Lua (só existe a forma curta)</td></tr>
+<tr><td><code>lua -W</code></td><td>Abre o Lua com os avisos ligados (mostra, por exemplo, se falta a readline)</td></tr>
+<tr><td><code>which lua</code> / <code>readlink -f /usr/bin/lua</code></td><td>Onde está o <code>lua</code> / para qual versão o atalho aponta</td></tr>
+<tr><td><code>sudo apt install lua5.5 liblua5.5-dev</code></td><td>Ubuntu 26.04: o Lua 5.5 com setas e histórico no modo interativo</td></tr>
+<tr><td><code>sudo update-alternatives --set lua-interpreter /usr/bin/lua5.5</code></td><td>Faz o <code>lua</code> voltar a ser o 5.5 (e <code>lua-compiler</code> … <code>/usr/bin/luac5.5</code> para o <code>luac</code>)</td></tr>
+<tr><td><code>update-alternatives --display lua-interpreter</code></td><td>Mostra as versões instaladas e para qual o <code>lua</code> aponta</td></tr>
+<tr><td><code>make all test</code></td><td>Compila o Lua baixado de lua.org (dentro da pasta descompactada)</td></tr>
+<tr><td><code>sudo dnf install lua</code> / <code>sudo pacman -S lua</code></td><td>Fedora / Arch</td></tr>
+<tr><td><code>lua55 -v</code></td><td>Windows, com o LuaBinaries</td></tr>
+<tr><td><code>brew install lua</code></td><td>macOS com Homebrew</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. A versão</h3>
+<p>Complete o comando que mostra a versão do Lua:</p>
+<div class="ex-code">$ lua <input data-answer="-v" aria-label="opção"></div>
+</div>
+
+<div class="exercise">
+<h3>2. O pacote certo</h3>
+<p>Complete o comando que instala o Lua 5.5 no Ubuntu 26.04:</p>
+<div class="ex-code">$ sudo apt install <input data-answer="lua5.5" aria-label="pacote"></div>
+</div>
+
+<div class="mc" data-answer="3">
+<p class="mc-q">3. No Ubuntu, a Ana digitou <code>lua ola.lua</code> e recebeu <code>Comando 'lua' não encontrado, mas poder ser instalado com:</code> e uma lista. O que ela deve fazer?</p>
+<label><input type="radio" name="q3"> Instalar o primeiro pacote da lista, o <code>lua5.1</code>.</label>
+<label><input type="radio" name="q3"> Renomear o arquivo para <code>ola.txt</code>.</label>
+<label><input type="radio" name="q3"> Instalar o <code>lua5.5</code>: o Lua não está no computador, e o 5.5 é a versão do guia.</label>
+<label><input type="radio" name="q3"> Corrigir o português da mensagem.</label>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">4. Para que serve instalar o <code>liblua5.5-dev</code> junto com o <code>lua5.5</code>, para quem está aprendendo?</p>
+<label><input type="radio" name="q4"> Para os programas em arquivo rodarem mais rápido.</label>
+<label><input type="radio" name="q4"> Ele traz a readline, e as setas e o histórico passam a funcionar no modo interativo.</label>
+<label><input type="radio" name="q4"> Sem ele, o comando <code>lua</code> não existe.</label>
+<label><input type="radio" name="q4"> Ele traduz as mensagens de erro para o português.</label>
+</div>
+
+<div class="mc" data-answer="4">
+<p class="mc-q">5. A Ana instalou o <code>luarocks</code> pelo <code>apt</code> e agora <code>lua -v</code> mostra <code>Lua 5.1.5</code>. O que aconteceu?</p>
+<label><input type="radio" name="q5"> O Lua 5.5 foi apagado.</label>
+<label><input type="radio" name="q5"> O computador dela não aceita o Lua 5.5.</label>
+<label><input type="radio" name="q5"> O <code>-v</code> mostra sempre a versão mais antiga.</label>
+<label><input type="radio" name="q5"> O luarocks trouxe o Lua 5.1, que tem prioridade maior e passou a ser o atalho <code>lua</code>; o <code>update-alternatives --set</code> desfaz.</label>
+</div>
+
+<div class="mc" data-answer="1">
+<p class="mc-q">6. No Windows, com o LuaBinaries, qual comando roda o programa <code>ola.lua</code>?</p>
+<label><input type="radio" name="q6"> <code>lua55 ola.lua</code></label>
+<label><input type="radio" name="q6"> <code>python ola.lua</code></label>
+<label><input type="radio" name="q6"> <code>lua5.5.0_Win64 ola.lua</code></label>
+<label><input type="radio" name="q6"> Dois cliques no <code>lua55.dll</code></label>
+</div>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li>Instalar o Lua é instalar o <strong>interpretador</strong>, o "tocador" dos seus programas <code>.lua</code>. Confira se ele está aí com <code>lua -v</code>.</li>
+  <li>O Ubuntu <strong>não</strong> traz o Lua. Sem ele, aparece <code>Comando 'lua' não encontrado, mas poder ser instalado com:</code> e uma lista de pacotes: escolha o <code>lua5.5</code>.</li>
+  <li>No Ubuntu 26.04: <code>sudo apt install lua5.5 liblua5.5-dev</code>. O pacote <code>-dev</code> traz a readline, sem a qual a seta para cima vira <code>^[[A</code> no modo interativo.</li>
+  <li>O programa se chama <code>lua5.5</code>; o <code>lua</code> é um atalho criado pelo <code>update-alternatives</code>.</li>
+  <li>Sem o pacote <code>lua5.5</code> (Ubuntu 24.04, Debian 13), compile de lua.org com <code>make all test</code>, ou estude com o <code>lua5.4</code>.</li>
+  <li>Fedora 45+ e Arch: <code>dnf install lua</code> / <code>pacman -S lua</code>. Windows: LuaBinaries (<code>lua55.exe</code>) ou WSL. macOS: <code>brew install lua</code>.</li>
+  <li>O <code>luarocks</code> do <code>apt</code> troca o <code>lua</code> para o 5.1; desfaça com <code>sudo update-alternatives --set lua-interpreter /usr/bin/lua5.5</code>.</li>
+  <li>Dentro do <code>&gt;</code> quem ouve é o Lua; os comandos do terminal vão no <code>$</code>.</li>
+  <li>Próximo passo: escrever um arquivo e rodá-lo, em <a href="executar.html">Rodando um Programa (.lua)</a>.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
