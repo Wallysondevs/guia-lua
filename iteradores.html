@@ -406,7 +406,7 @@ end
 function: 0x56512f3c2530
 function: 0x56512f3c25e0
 function: 0x56512f3c26c0</pre>
-<p>Sem os parênteses, o <code>for</code> usou a <strong>fábrica</strong> como se ela fosse a maquininha. A cada volta, ele chama <code>contagem(nil, …)</code>, que devolve uma função nova (nunca <code>nil</code>), e o laço nunca acaba: o lab mostrou funções diferentes sem parar (os endereços mudam a cada execução). Aqui o <code>| head -3</code> mostrou só as 3 primeiras linhas e encerrou o programa; sem ele, seria preciso apertar <kbd>Ctrl</kbd>+<kbd>C</kbd>. <strong>Como consertar:</strong> <code>for numero in contagem(3) do</code>.</p>
+<p>Sem os parênteses, o <code>for</code> usou a <strong>fábrica</strong> como se ela fosse a maquininha. A cada volta, ele chama <code>contagem(nil, …)</code>, que devolve uma função nova (nunca <code>nil</code>), e o laço nunca acaba: o lab mostrou funções diferentes sem parar (os endereços mudam a cada execução). Aqui o <code>| head -3</code> mostrou só as 3 primeiras linhas e encerrou o programa; sem ele, seria preciso apertar <kbd>Ctrl</kbd>+<kbd>C</kbd> (no editor do guia, o programa é parado sozinho em menos de um segundo, com <code>(o programa escreveu demais: …)</code>). <strong>Como consertar:</strong> <code>for numero in contagem(3) do</code>.</p>
 </div>
 
 <div class="cenario">
