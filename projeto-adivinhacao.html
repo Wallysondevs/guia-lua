@@ -1,0 +1,1110 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua Projeto Jogo de Adivinhação — math.random, semente, while, for e goto passo a passo | Guia Lua</title>
+<meta name="description" content="Projeto passo a passo: um jogo de adivinhação em Lua 5.5. Sorteio com math.random e a semente math.randomseed, dicas com while, tentativas limitadas com for e break, palpite validado com tonumber, math.type e goto continue, e várias partidas com recorde numa função. Cinco versões com sessões reais e missões no editor.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Projeto <span class="hl">Jogo de Adivinhação</span></h1>
+
+<p class="intro">O computador pensa num número de 1 a 100 e você tenta adivinhar. A cada palpite, ele diz "mais alto" ou "mais baixo", até você acertar ou as tentativas acabarem. É um jogo pequeno, mas tem tudo o que um programa de verdade tem: um sorteio, um laço, decisões, uma conta de tentativas e a obrigação de não quebrar quando alguém digita "sete" no lugar de 7.</p>
+
+<div class="note">
+<strong>Você vai praticar</strong>
+<ul>
+  <li>Sortear números com <a href="math-random.html">math.random</a> e fixar a semente com <code>math.randomseed</code>.</li>
+  <li>Converter o palpite com <a href="conversao.html">tonumber</a> e comparar com <a href="operadores-comparacao.html">&lt; e ==</a>.</li>
+  <li>Repetir até acertar com <a href="while.html">while</a> (e, como alternativa, <a href="repeat.html">repeat … until</a>).</li>
+  <li>Contar e limitar as tentativas com o <a href="for-numerico.html">for numérico</a> e <a href="break.html">break</a>.</li>
+  <li>Validar o palpite com <code>math.type</code> e pular uma volta com <a href="goto.html">goto continue</a>.</li>
+  <li>Organizar a partida numa <a href="funcoes.html">função</a> que devolve um resultado com <a href="return.html">return</a> (ou <a href="nil.html">nil</a>), e guardar o recorde.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>O que vamos construir</h2>
+<p>O jogo pronto, no terminal da Ana. <strong>Os números depois dos dois-pontos foram digitados por ela</strong>; o resto é o programa:</p>
+
+<pre class="term" data-cwd="~/projetos/adivinhacao">$ lua adivinhacao.lua
+=== Jogo de Adivinhação ===
+Pensei num número de 1 a 100. Você tem 7 tentativas.
+Tentativa 1/7: sete
+Digite um número inteiro, como 42.             « não gasta tentativa
+Tentativa 1/7: 50
+Mais baixo!
+Tentativa 2/7: 25
+Mais alto!
+Tentativa 3/7: 37
+Mais baixo!
+Tentativa 4/7: 31
+Mais baixo!
+Tentativa 5/7: 28
+Acertou em 5 tentativa(s)!
+Novo recorde!
+Seu recorde: 5 tentativa(s).
+Jogar de novo? (s/n): s
+Pensei num número de 1 a 100. Você tem 7 tentativas.
+Tentativa 1/7: 50
+Mais baixo!
+Tentativa 2/7: 25
+Mais baixo!
+Tentativa 3/7: 12
+Mais alto!
+Tentativa 4/7: 18
+Acertou em 4 tentativa(s)!
+Novo recorde!                                   « 4 é melhor que 5
+Seu recorde: 4 tentativa(s).
+Jogar de novo? (s/n): S
+Pensei num número de 1 a 100. Você tem 7 tentativas.
+Tentativa 1/7: 10
+Mais alto!
+Tentativa 2/7: 20
+Mais alto!
+Tentativa 3/7: 30
+Mais alto!
+Tentativa 4/7: 40
+Mais alto!
+Tentativa 5/7: 45
+Mais alto!
+Tentativa 6/7: 47
+Mais alto!
+Tentativa 7/7: 48
+Mais alto!
+Suas tentativas acabaram. O número era 49.     « desta vez ela perdeu
+Seu recorde: 4 tentativa(s).
+Jogar de novo? (s/n): n
+Até a próxima!</pre>
+
+<p>Cinco versões, uma novidade em cada:</p>
+
+<ol class="passo">
+  <li><a href="#versao1">Um sorteio, um palpite</a> (<code>math.random</code>, <code>tonumber</code>).</li>
+  <li><a href="#versao2">Dicas até acertar</a> (<code>while</code>).</li>
+  <li><a href="#versao3">Tentativas contadas e limitadas</a> (<code>for</code>, <code>break</code>, <code>string.format</code>).</li>
+  <li><a href="#versao4">Palpite validado</a> (<code>math.type</code>, <code>goto continue</code>).</li>
+  <li><a href="#versao5">Várias partidas e recorde</a> (<code>local function</code>, <code>return</code>, <code>nil</code>).</li>
+</ol>
+
+<h3>Antes de começar</h3>
+<p>Este projeto usa o que você viu na <a href="projeto-calculadora.html">Calculadora</a>: <code>io.write</code> e <code>io.read</code>, <code>tonumber</code>, <code>if</code>/<code>elseif</code> e <code>while</code>. Crie a pasta do jogo; o arquivo vai se chamar <code>adivinhacao.lua</code> (sem acento e sem cedilha no nome do arquivo, que é o costume):</p>
+
+<pre class="term">$ mkdir -p projetos/adivinhacao
+$ cd projetos/adivinhacao</pre>
+
+<hr>
+
+<h2>Antes de tudo: sorteio e semente</h2>
+<p>O sorteio vem da função <code>math.random</code> ("aleatório"), da biblioteca <code>math</code>, que já vem com o Lua (não precisa de <code>require</code>). <code>math.random(1, 100)</code> sorteia um número <strong>inteiro</strong> de 1 a 100, <strong>com</strong> o 1 e o 100 incluídos. No modo interativo:</p>
+
+<pre class="term">$ lua
+Lua 5.5.0  Copyright (C) 1994-2025 Lua.org, PUC-Rio
+&gt; math.random(1, 100)
+96
+&gt; math.random(1, 100)
+11
+&gt; math.random(100)
+66
+&gt; math.randomseed(42)
+42      0
+&gt; math.random(1, 100)
+50
+&gt; math.random(1, 100)
+76
+&gt; math.randomseed(42)
+42      0
+&gt; math.random(1, 100)
+50
+&gt; math.random()
+0.546883112434215
+&gt; math.random(1, 6)
+6
+&gt; os.exit()</pre>
+
+<dl class="anatomy">
+  <dt>math.random(1, 100)</dt><dd>Um inteiro de 1 a 100. Os dois primeiros deram 96 e 11 no computador da Ana; no seu, vão dar outros, e a cada vez outros.</dd>
+  <dt>math.random(100)</dt><dd>Com um número só, é "de 1 até ele": o mesmo que <code>math.random(1, 100)</code>.</dd>
+  <dt>math.randomseed(42)</dt><dd>Fixa a <strong>semente</strong> em 42 (veja abaixo). No modo interativo ele mostra <code>42      0</code>: são as duas partes da semente que ele usou; num programa, ninguém olha esse retorno.</dd>
+  <dt>math.random(1, 100) → 50, 76</dt><dd>Depois da semente 42, o primeiro sorteio deu <strong>50</strong> e o segundo <strong>76</strong>. Quando a Ana chamou <code>math.randomseed(42)</code> de novo, voltou a dar 50.</dd>
+  <dt>math.random()</dt><dd>Sem números, sorteia um float entre 0 e 1 (o 1 fica de fora).</dd>
+</dl>
+
+<div class="note">
+<strong>O que é a semente (<code>seed</code>)</strong>
+<p>O computador não "joga dados" de verdade: ele calcula uma sequência de números que <strong>parecem</strong> aleatórios, a partir de um número inicial, a <strong>semente</strong> (em inglês, <em>seed</em>). Sem <code>math.randomseed</code>, o Lua 5.5 escolhe uma semente diferente a cada execução, e o jogo é imprevisível. Com <code>math.randomseed(42)</code>, a semente é sempre 42 e a sequência é sempre a mesma: 50, 76, 86…</p>
+<p>Isso é ótimo para <strong>testar</strong>: se o número secreto é sempre 50, dá para conferir se o programa responde certo. Por isso, <strong>todas as missões desta página começam com <code>math.randomseed(42)</code></strong>, e o número secreto delas é sempre 50 (e, numa segunda partida, 76). No jogo de verdade, a linha da semente sai: senão a Ana decoraria a resposta.</p>
+<p>As partidas no terminal desta página foram jogadas com a semente fixada <strong>por fora</strong> do programa, com a variável de ambiente <code>LUA_INIT</code> (o <code>lua</code> roda o código dela antes do arquivo). Assim o programa fica igual ao do jogo de verdade, e você pode repetir as partidas no seu computador:</p>
+<pre class="term" data-cwd="~/projetos/adivinhacao">$ export LUA_INIT="math.randomseed(13)"
+$ lua adivinhacao.lua</pre>
+<p>Com a semente 13, os números secretos são 28, 18 e 49. Para voltar ao normal, feche o terminal ou rode <code>unset LUA_INIT</code>.</p>
+</div>
+
+<div class="warning">
+<strong>No Lua 5.1 e no LuaJIT é diferente</strong>
+<p>O Lua 5.4 e o 5.5 escolhem uma semente nova sozinhos. O <strong>5.1</strong> e o <strong>LuaJIT</strong> (o Lua do Neovim e do LÖVE) não: sem <code>math.randomseed</code>, o "sorteio" dá <strong>o mesmo número toda vez</strong>. No computador da Ana:</p>
+<pre class="term">$ lua -e "print(math.random(1,100))"; lua -e "print(math.random(1,100))"
+62
+51
+$ lua5.1 -e "print(math.random(1,100))"; lua5.1 -e "print(math.random(1,100))"
+85
+85
+$ luajit -e "print(math.random(1,100))"; luajit -e "print(math.random(1,100))"
+80
+80
+$ luajit -e "math.randomseed(42) print(math.random(1,100))"
+96</pre>
+<p>Por isso, em código antigo você vai ver <code>math.randomseed(os.time())</code> no começo: era o jeito de ter uma semente diferente a cada execução (a hora). E a mesma semente não dá os mesmos números em versões diferentes: com 42, o 5.5 sorteia 50 e o LuaJIT, 96. Mais em <a href="versoes.html">As Diferenças entre as Versões</a>.</p>
+</div>
+
+<hr>
+
+<h2 id="versao1">Versão 1 · Um sorteio, um palpite</h2>
+<p>A primeira versão sorteia o número, pede <strong>um</strong> palpite e diz se acertou.</p>
+
+<pre class="file" data-file="adivinhacao.lua">local secreto = math.random(1, 100)
+
+print("=== Jogo de Adivinhação ===")
+print("Pensei num número de 1 a 100.")
+io.write("Seu palpite: ")
+local palpite = tonumber(io.read())
+
+if palpite == secreto then
+  print("Acertou!")
+else
+  print("Errou! O número era " .. secreto .. ".")
+end
+</pre>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Linha</th><th>O que faz</th></tr>
+<tr><td><code>local secreto = math.random(1, 100)</code></td><td>Sorteia o número e guarda em <code>secreto</code>. Fica no começo: o número é escolhido <strong>antes</strong> de a Ana jogar, e não muda mais.</td></tr>
+<tr><td><code>io.write("Seu palpite: ")</code></td><td>A pergunta, sem pular linha (veja <a href="io-write.html">io.write</a>).</td></tr>
+<tr><td><code>tonumber(io.read())</code></td><td>Lê o palpite (texto) e converte em número (veja <a href="io-read.html">io.read</a>).</td></tr>
+<tr><td><code>if palpite == secreto then</code></td><td>Compara os dois números. Igual: acertou. Senão, mostra qual era.</td></tr>
+</table>
+</div>
+
+<pre class="term" data-cwd="~/projetos/adivinhacao">$ lua adivinhacao.lua
+=== Jogo de Adivinhação ===
+Pensei num número de 1 a 100.
+Seu palpite: 37
+Errou! O número era 96.</pre>
+
+<p>Uma chance em cem: difícil. E com a semente 42, em que o número é 50, a Ana acerta:</p>
+
+<pre class="term" data-cwd="~/projetos/adivinhacao">$ LUA_INIT="math.randomseed(42)" lua adivinhacao.lua
+=== Jogo de Adivinhação ===
+Pensei num número de 1 a 100.
+Seu palpite: 50
+Acertou!</pre>
+
+<p>(O <code>LUA_INIT="…"</code> antes do comando vale só para aquele comando.)</p>
+
+<div class="cenario">
+<strong>Esquecer o <code>tonumber</code>: nunca acerta</strong>
+<p>Sem o <code>tonumber</code> (<code>local palpite = io.read()</code>), a Ana digitou exatamente o número sorteado:</p>
+<pre class="term" data-cwd="~/projetos/adivinhacao">$ LUA_INIT="math.randomseed(42)" lua adivinhacao.lua
+=== Jogo de Adivinhação ===
+Pensei num número de 1 a 100.
+Seu palpite: 50
+Errou! O número era 50.</pre>
+<p>"Errou! O número era 50", depois de ela digitar 50. Não aparece erro nenhum, e é isso que torna o defeito traiçoeiro. O <code>io.read()</code> devolveu o <strong>texto</strong> <code>"50"</code>, e o <code>secreto</code> é o <strong>número</strong> <code>50</code>. No Lua, o <code>==</code> entre um texto e um número dá sempre <code>false</code>: ele não converte (veja <a href="operadores-comparacao.html">Comparações</a>). Na hora de mostrar, o <code>..</code> transforma o número em texto, e os dois parecem iguais na tela.</p>
+</div>
+
+<div class="cenario">
+<strong>Texto no lugar de número</strong>
+<pre class="term" data-cwd="~/projetos/adivinhacao">$ lua adivinhacao.lua
+=== Jogo de Adivinhação ===
+Pensei num número de 1 a 100.
+Seu palpite: sete
+Errou! O número era 100.</pre>
+<p>O <code>tonumber("sete")</code> deu <code>nil</code>, e <code>nil == 100</code> é só <code>false</code>: nada quebrou. Na versão 2, com <code>&lt;</code>, isso vai virar um erro de verdade.</p>
+</div>
+
+<div class="trylua" data-stdin="50" data-goal="out:Acertou!">
+<p class="try-task"><strong>Missão (versão 1):</strong> este programa tem o defeito do cenário acima: com a semente 42 o número secreto é 50, a entrada da missão é <code>50</code>, e mesmo assim ele diz "Errou!". Converta o palpite com <code>tonumber</code> para a Ana acertar.</p>
+<pre class="script" data-file="adivinhacao.lua">math.randomseed(42)  -- semente fixa: o número secreto é 50
+local secreto = math.random(1, 100)
+
+print("=== Jogo de Adivinhação ===")
+print("Pensei num número de 1 a 100.")
+io.write("Seu palpite: ")
+local palpite = io.read()
+
+if palpite == secreto then
+  print("Acertou!")
+else
+  print("Errou! O número era " .. secreto .. ".")
+end
+</pre>
+<pre class="solucao" data-file="adivinhacao.lua">math.randomseed(42)  -- semente fixa: o número secreto é 50
+local secreto = math.random(1, 100)
+
+print("=== Jogo de Adivinhação ===")
+print("Pensei num número de 1 a 100.")
+io.write("Seu palpite: ")
+local palpite = tonumber(io.read())
+
+if palpite == secreto then
+  print("Acertou!")
+else
+  print("Errou! O número era " .. secreto .. ".")
+end
+</pre>
+</div>
+
+<hr>
+
+<h2 id="versao2">Versão 2 · Dicas até acertar</h2>
+<p>Agora o jogo continua até a Ana acertar, e a cada erro dá uma dica. A repetição é um <a href="while.html">while true</a> com <code>break</code> (como na calculadora), e um contador guarda quantos palpites ela já deu.</p>
+
+<pre class="file" data-file="adivinhacao.lua">local secreto = math.random(1, 100)
+local tentativas = 0
+
+print("=== Jogo de Adivinhação ===")
+print("Pensei num número de 1 a 100.")
+
+while true do
+  io.write("Seu palpite: ")
+  local palpite = tonumber(io.read())
+  tentativas = tentativas + 1
+
+  if palpite == secreto then
+    print("Acertou em " .. tentativas .. " tentativa(s)!")
+    break
+  elseif palpite &lt; secreto then
+    print("Mais alto!")
+  else
+    print("Mais baixo!")
+  end
+end
+</pre>
+
+<dl class="anatomy">
+  <dt>local tentativas = 0</dt><dd>O contador começa em zero, <strong>fora</strong> do laço. Se ficasse dentro, voltaria a zero a cada volta.</dd>
+  <dt>tentativas = tentativas + 1</dt><dd>"O novo valor é o antigo mais um". O Lua não tem <code>+=</code> nem <code>++</code>: escreve-se a conta inteira.</dd>
+  <dt>elseif palpite &lt; secreto then</dt><dd>Se o palpite é <strong>menor</strong> que o número, a dica é "mais alto". Senão (sobrou o "maior"), "mais baixo".</dd>
+  <dt>break</dt><dd>Só no acerto: sai do laço e o programa termina.</dd>
+</dl>
+
+<pre class="term" data-cwd="~/projetos/adivinhacao">$ lua adivinhacao.lua
+=== Jogo de Adivinhação ===
+Pensei num número de 1 a 100.
+Seu palpite: 50
+Mais baixo!
+Seu palpite: 25
+Mais alto!
+Seu palpite: 37
+Mais baixo!
+Seu palpite: 31
+Mais baixo!
+Seu palpite: 28
+Acertou em 5 tentativa(s)!</pre>
+
+<div class="tip">
+<strong>A estratégia da Ana</strong>
+<p>Ela sempre chuta o meio do que sobrou: 50, depois 25 (o meio de 1 a 49), depois 37 (o meio de 26 a 49)… Cada palpite corta as possibilidades pela metade, e assim 7 palpites bastam para qualquer número de 1 a 100 (2 elevado a 7 é 128, mais que 100). Em programação essa ideia se chama <strong>busca binária</strong>. É por isso que a versão 3 dá 7 tentativas.</p>
+</div>
+
+<div class="cenario">
+<strong>Texto no lugar de número: <code>attempt to compare nil with number</code></strong>
+<pre class="term" data-cwd="~/projetos/adivinhacao">$ lua adivinhacao.lua
+=== Jogo de Adivinhação ===
+Pensei num número de 1 a 100.
+Seu palpite: 50
+Mais baixo!
+Seu palpite: trinta
+lua: adivinhacao.lua:15: attempt to compare nil with number
+stack traceback:
+        adivinhacao.lua:15: in main chunk
+        [C]: in ?</pre>
+<p>"Tentativa de comparar nil com número", na linha 15, a do <code>palpite &lt; secreto</code>. O <code>tonumber("trinta")</code> deu <code>nil</code>. O <code>==</code> da linha 12 aceita comparar qualquer coisa (só dá <code>false</code>), mas o <code>&lt;</code> só compara números com números (ou textos com textos), e <strong>para o programa</strong>. A versão 4 resolve.</p>
+</div>
+
+<div class="trylua" data-stdin="25\n75\n50" data-goal="out:Mais alto!;;out:Mais baixo!;;out:Acertou em 3 tentativa(s)!">
+<p class="try-task"><strong>Missão (versão 2):</strong> o jogo repete, mas só diz "Errou!". Troque o <code>else</code> por um <code>elseif palpite &lt; secreto then</code> que mostra <code>Mais alto!</code> e um <code>else</code> que mostra <code>Mais baixo!</code>. O número secreto é 50 e a entrada da missão é <code>25</code>, <code>75</code>, <code>50</code>.</p>
+<pre class="script" data-file="adivinhacao.lua">math.randomseed(42)  -- semente fixa: o número secreto é 50
+local secreto = math.random(1, 100)
+local tentativas = 0
+
+print("=== Jogo de Adivinhação ===")
+print("Pensei num número de 1 a 100.")
+
+while true do
+  io.write("Seu palpite: ")
+  local palpite = tonumber(io.read())
+  tentativas = tentativas + 1
+
+  if palpite == secreto then
+    print("Acertou em " .. tentativas .. " tentativa(s)!")
+    break
+  else
+    print("Errou!")
+  end
+end
+</pre>
+<pre class="solucao" data-file="adivinhacao.lua">math.randomseed(42)  -- semente fixa: o número secreto é 50
+local secreto = math.random(1, 100)
+local tentativas = 0
+
+print("=== Jogo de Adivinhação ===")
+print("Pensei num número de 1 a 100.")
+
+while true do
+  io.write("Seu palpite: ")
+  local palpite = tonumber(io.read())
+  tentativas = tentativas + 1
+
+  if palpite == secreto then
+    print("Acertou em " .. tentativas .. " tentativa(s)!")
+    break
+  elseif palpite &lt; secreto then
+    print("Mais alto!")
+  else
+    print("Mais baixo!")
+  end
+end
+</pre>
+</div>
+
+<hr>
+
+<h2 id="versao3">Versão 3 · Tentativas contadas e limitadas</h2>
+<p>Com tentativas infinitas, não dá para perder. A versão 3 dá <strong>7</strong> tentativas. Quando se sabe quantas voltas dar, o laço natural é o <a href="for-numerico.html">for numérico</a>: <code>for tentativa = 1, MAX do</code> conta de 1 a 7 sozinho. E as frases passam a ser montadas com <a href="string-format.html">string.format</a>, que fica mais limpo que um monte de <code>..</code>.</p>
+
+<pre class="file" data-file="adivinhacao.lua">local MAX = 7
+local secreto = math.random(1, 100)
+local acertou = false
+
+print("=== Jogo de Adivinhação ===")
+print(string.format("Pensei num número de 1 a 100. Você tem %d tentativas.", MAX))
+
+for tentativa = 1, MAX do
+  io.write(string.format("Tentativa %d/%d: ", tentativa, MAX))
+  local palpite = tonumber(io.read())
+
+  if palpite == secreto then
+    print(string.format("Acertou em %d tentativa(s)!", tentativa))
+    acertou = true
+    break
+  elseif palpite &lt; secreto then
+    print("Mais alto!")
+  else
+    print("Mais baixo!")
+  end
+end
+
+if not acertou then
+  print(string.format("Suas tentativas acabaram. O número era %d.", secreto))
+end
+</pre>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Peça</th><th>O que faz</th></tr>
+<tr><td><code>local MAX = 7</code></td><td>O limite, num lugar só. Para dar 10 tentativas, muda-se uma linha. O nome em MAIÚSCULAS avisa quem lê que esse valor não muda durante o programa (no 5.5 também dá para escrever <code>local MAX &lt;const&gt; = 7</code>, e aí o Lua garante; veja <a href="const.html">Constantes</a>).</td></tr>
+<tr><td><code>local acertou = false</code></td><td>Uma "bandeira": começa abaixada e só sobe (<code>true</code>) no acerto. Depois do laço, ela conta como o laço terminou.</td></tr>
+<tr><td><code>for tentativa = 1, MAX do</code></td><td>Repete com <code>tentativa</code> valendo 1, 2, …, 7. Não precisa do <code>tentativas + 1</code>: o <code>for</code> conta sozinho.</td></tr>
+<tr><td><code>string.format("Tentativa %d/%d: ", tentativa, MAX)</code></td><td>Monta o texto trocando cada <code>%d</code> (um inteiro) pelo valor seguinte, na ordem: <code>"Tentativa 1/7: "</code>.</td></tr>
+<tr><td><code>break</code></td><td>No acerto, sai do <code>for</code> antes da 7ª volta.</td></tr>
+<tr><td><code>if not acertou then</code></td><td>Depois do laço: se a bandeira continua abaixada, as 7 voltas passaram sem acerto. O <code>not</code> inverte: <code>not false</code> é <code>true</code>.</td></tr>
+</table>
+</div>
+
+<pre class="term" data-cwd="~/projetos/adivinhacao">$ lua adivinhacao.lua
+=== Jogo de Adivinhação ===
+Pensei num número de 1 a 100. Você tem 7 tentativas.
+Tentativa 1/7: 50
+Mais baixo!
+Tentativa 2/7: 25
+Mais alto!
+Tentativa 3/7: 37
+Mais baixo!
+Tentativa 4/7: 31
+Mais baixo!
+Tentativa 5/7: 28
+Acertou em 5 tentativa(s)!
+$ lua adivinhacao.lua
+=== Jogo de Adivinhação ===
+Pensei num número de 1 a 100. Você tem 7 tentativas.
+Tentativa 1/7: 90
+Mais baixo!
+Tentativa 2/7: 80
+Mais baixo!
+Tentativa 3/7: 70
+Mais baixo!
+Tentativa 4/7: 60
+Mais baixo!
+Tentativa 5/7: 50
+Mais baixo!
+Tentativa 6/7: 40
+Mais baixo!
+Tentativa 7/7: 30
+Mais baixo!
+Suas tentativas acabaram. O número era 28.</pre>
+
+<p>Na segunda partida, a Ana desceu de 10 em 10 e as tentativas acabaram antes de chegar no 28.</p>
+
+<div class="cenario">
+<strong>Mexer na variável do <code>for</code>: <code>attempt to assign to const variable</code></strong> <span class="versao">5.5</span>
+<p>Alguém tentou "não gastar" uma tentativa mexendo no contador do <code>for</code>. Num teste menor:</p>
+<pre class="file" data-file="const.lua">for tentativa = 1, 3 do
+  print("Tentativa " .. tentativa)
+  tentativa = tentativa + 1
+end
+</pre>
+<pre class="term" data-cwd="~/projetos/adivinhacao">$ lua const.lua
+lua: const.lua:3: attempt to assign to const variable 'tentativa'
+$ lua5.4 const.lua
+Tentativa 1
+Tentativa 2
+Tentativa 3</pre>
+<p>"Tentativa de mudar a variável constante <code>tentativa</code>". No Lua 5.5, a variável de controle do <code>for</code> é <strong>constante</strong>: só o <code>for</code> muda o valor dela. Repare que não há <code>stack traceback</code>: o erro aparece <strong>antes</strong> de o programa começar, quando o Lua lê o arquivo (é um erro de compilação, como um erro de sintaxe; nem a "Tentativa 1" foi mostrada). No 5.4, a linha 3 era aceita mas não adiantava nada: o <code>for</code> continuava contando 1, 2, 3 do mesmo jeito. Para controlar o contador você mesmo, use um <code>while</code> com uma variável sua, como na versão 4. Veja <a href="for-numerico.html">for Numérico</a> e <a href="novidades.html">Novidades do Lua 5.5</a>.</p>
+</div>
+
+<div class="trylua" data-stdin="10\n20\n30\n40\n45\n47\n48" data-goal="out:Suas tentativas acabaram. O número era 50.">
+<p class="try-task"><strong>Missão (versão 3):</strong> o jogo limita as tentativas, mas quando elas acabam ele termina calado. Depois do <code>for</code>, se a bandeira <code>acertou</code> continuar <code>false</code>, mostre <code>Suas tentativas acabaram. O número era 50.</code> (com o <code>secreto</code>, não com o 50 escrito à mão). A entrada da missão são 7 palpites errados.</p>
+<pre class="script" data-file="adivinhacao.lua">math.randomseed(42)  -- semente fixa: o número secreto é 50
+local MAX = 7
+local secreto = math.random(1, 100)
+local acertou = false
+
+print("=== Jogo de Adivinhação ===")
+print(string.format("Pensei num número de 1 a 100. Você tem %d tentativas.", MAX))
+
+for tentativa = 1, MAX do
+  io.write(string.format("Tentativa %d/%d: ", tentativa, MAX))
+  local palpite = tonumber(io.read())
+
+  if palpite == secreto then
+    print(string.format("Acertou em %d tentativa(s)!", tentativa))
+    acertou = true
+    break
+  elseif palpite &lt; secreto then
+    print("Mais alto!")
+  else
+    print("Mais baixo!")
+  end
+end
+
+-- e se as tentativas acabaram?
+</pre>
+<pre class="solucao" data-file="adivinhacao.lua">math.randomseed(42)  -- semente fixa: o número secreto é 50
+local MAX = 7
+local secreto = math.random(1, 100)
+local acertou = false
+
+print("=== Jogo de Adivinhação ===")
+print(string.format("Pensei num número de 1 a 100. Você tem %d tentativas.", MAX))
+
+for tentativa = 1, MAX do
+  io.write(string.format("Tentativa %d/%d: ", tentativa, MAX))
+  local palpite = tonumber(io.read())
+
+  if palpite == secreto then
+    print(string.format("Acertou em %d tentativa(s)!", tentativa))
+    acertou = true
+    break
+  elseif palpite &lt; secreto then
+    print("Mais alto!")
+  else
+    print("Mais baixo!")
+  end
+end
+
+if not acertou then
+  print(string.format("Suas tentativas acabaram. O número era %d.", secreto))
+end
+</pre>
+</div>
+
+<hr>
+
+<h2 id="versao4">Versão 4 · Palpite validado</h2>
+<p>Duas coisas ainda derrubam ou atrapalham o jogo: um texto (<code>sete</code>) para o programa com <code>attempt to compare nil with number</code>, e palpites sem sentido (<code>7.5</code>, <code>150</code>) gastam tentativas. A versão 4 recusa os dois <strong>sem gastar tentativa</strong>. Como agora é o programa que decide quando contar, o <code>for</code> dá lugar a um <code>while</code> com um contador próprio.</p>
+
+<p>Falta uma peça: depois de recusar o palpite, o programa precisa <strong>pular o resto da volta</strong> e perguntar de novo. Muitas linguagens têm um comando <code>continue</code> para isso; o Lua não tem. O jeito do Lua é um <a href="goto.html">goto</a> ("vá para") até um <strong>rótulo</strong> no fim do laço, que por costume se chama <code>::continue::</code>.</p>
+
+<pre class="file" data-file="adivinhacao.lua">local MAX = 7
+local secreto = math.random(1, 100)
+local acertou = false
+local tentativa = 1
+
+print("=== Jogo de Adivinhação ===")
+print(string.format("Pensei num número de 1 a 100. Você tem %d tentativas.", MAX))
+
+while tentativa &lt;= MAX do
+  io.write(string.format("Tentativa %d/%d: ", tentativa, MAX))
+  local texto = io.read()
+  if texto == nil then          -- a entrada acabou (Ctrl+D)
+    print()
+    break
+  end
+
+  local palpite = tonumber(texto)
+  if palpite == nil or math.type(palpite) ~= "integer" then
+    print("Digite um número inteiro, como 42.")
+    goto continue
+  end
+  if palpite &lt; 1 or palpite &gt; 100 then
+    print("O número está entre 1 e 100.")
+    goto continue
+  end
+
+  if palpite == secreto then
+    print(string.format("Acertou em %d tentativa(s)!", tentativa))
+    acertou = true
+    break
+  elseif palpite &lt; secreto then
+    print("Mais alto!")
+  else
+    print("Mais baixo!")
+  end
+  tentativa = tentativa + 1
+
+  ::continue::
+end
+
+if not acertou then
+  print(string.format("Suas tentativas acabaram. O número era %d.", secreto))
+end
+</pre>
+
+<dl class="anatomy">
+  <dt>while tentativa &lt;= MAX do</dt><dd>"Enquanto ainda houver tentativas". O contador é nosso: começa em 1 e só sobe na linha <code>tentativa = tentativa + 1</code>, depois de um palpite válido.</dd>
+  <dt>if texto == nil then … break</dt><dd>Se a entrada acabou (<kbd>Ctrl</kbd>+<kbd>D</kbd>), sai do laço, em vez de quebrar no <code>tonumber</code>.</dd>
+  <dt>palpite == nil or math.type(palpite) ~= "integer"</dt><dd>Recusa o que não é número (<code>nil</code>) <strong>ou</strong> o que é número mas não inteiro. O <code>math.type</code> diz <code>"integer"</code> para <code>7</code> e <code>"float"</code> para <code>7.5</code> (veja <a href="numeros.html">Números</a>). A ordem importa: se <code>palpite</code> for <code>nil</code>, o <code>or</code> já fica com o <code>true</code> da esquerda e nem chama o <code>math.type</code>.</dd>
+  <dt>palpite &lt; 1 or palpite &gt; 100</dt><dd>Fora da faixa: menor que 1 ou maior que 100.</dd>
+  <dt>goto continue</dt><dd>Pula direto para o rótulo <code>::continue::</code>, sem passar pelo <code>tentativa = tentativa + 1</code>: a tentativa não é gasta. Do rótulo, o laço volta ao começo e pergunta de novo.</dd>
+  <dt>::continue::</dt><dd>O rótulo: um nome entre <code>::</code> e <code>::</code>. Sozinho, não faz nada; só marca o lugar. Precisa ser a <strong>última</strong> coisa do bloco (veja o cenário abaixo).</dd>
+</dl>
+
+<pre class="term" data-cwd="~/projetos/adivinhacao">$ lua adivinhacao.lua
+=== Jogo de Adivinhação ===
+Pensei num número de 1 a 100. Você tem 7 tentativas.
+Tentativa 1/7: sete
+Digite um número inteiro, como 42.
+Tentativa 1/7: 50
+Mais baixo!
+Tentativa 2/7: 7.5
+Digite um número inteiro, como 42.
+Tentativa 2/7: 150
+O número está entre 1 e 100.
+Tentativa 2/7: 0
+O número está entre 1 e 100.
+Tentativa 2/7: 25
+Mais alto!
+Tentativa 3/7: 28
+Acertou em 3 tentativa(s)!</pre>
+
+<p>Repare na contagem: o <code>sete</code>, o <code>7.5</code>, o <code>150</code> e o <code>0</code> foram recusados e a tentativa continuou a mesma (1/7, depois 2/7 três vezes).</p>
+
+<div class="cenario">
+<strong>Rótulo fora do fim do bloco: <code>jumps into the scope of</code></strong>
+<pre class="file" data-file="goto.lua">for i = 1, 3 do
+  if i == 2 then
+    goto continue
+  end
+  local dobro = i * 2
+  ::continue::
+  print(i, dobro)
+end
+</pre>
+<pre class="term" data-cwd="~/projetos/adivinhacao">$ lua goto.lua
+lua: goto.lua:7: &lt;goto continue&gt; at line 3 jumps into the scope of 'dobro'</pre>
+<p>"O <code>goto continue</code> da linha 3 pula para dentro do alcance de <code>dobro</code>". Do rótulo em diante, a variável local <code>dobro</code> existe; mas, vindo pelo <code>goto</code>, a linha que dá valor a ela foi pulada. O Lua não deixa: o <code>print(i, dobro)</code> usaria uma variável que nunca foi criada. Como na versão 4 o <code>::continue::</code> é a última coisa antes do <code>end</code>, ninguém usa nada depois dele, e o Lua aceita. Regra prática: <strong><code>::continue::</code> sempre logo antes do <code>end</code> do laço</strong>. Como no cenário do <code>for</code>, é um erro de compilação (sem traceback).</p>
+</div>
+
+<div class="trylua" data-stdin="sete\n7.5\n150\n50" data-goal="out:Digite um número inteiro, como 42.;;out:O número está entre 1 e 100.;;out:Acertou em 1 tentativa(s)!;;semerro">
+<p class="try-task"><strong>Missão (versão 4):</strong> o laço e o rótulo <code>::continue::</code> já estão prontos, mas faltam as duas recusas. Logo depois do <code>tonumber</code>, acrescente: se <code>palpite</code> for <code>nil</code> ou não for inteiro, mostre <code>Digite um número inteiro, como 42.</code> e faça <code>goto continue</code>; se estiver fora de 1 a 100, mostre <code>O número está entre 1 e 100.</code> e faça <code>goto continue</code>. A entrada é <code>sete</code>, <code>7.5</code>, <code>150</code>, <code>50</code>: o acerto deve contar como a 1ª tentativa.</p>
+<pre class="script" data-file="adivinhacao.lua">math.randomseed(42)  -- semente fixa: o número secreto é 50
+local MAX = 7
+local secreto = math.random(1, 100)
+local acertou = false
+local tentativa = 1
+
+print("=== Jogo de Adivinhação ===")
+print(string.format("Pensei num número de 1 a 100. Você tem %d tentativas.", MAX))
+
+while tentativa &lt;= MAX do
+  io.write(string.format("Tentativa %d/%d: ", tentativa, MAX))
+  local texto = io.read()
+  if texto == nil then
+    print()
+    break
+  end
+
+  local palpite = tonumber(texto)
+  -- recuse aqui o que não for inteiro e o que estiver fora de 1 a 100
+
+  if palpite == secreto then
+    print(string.format("Acertou em %d tentativa(s)!", tentativa))
+    acertou = true
+    break
+  elseif palpite &lt; secreto then
+    print("Mais alto!")
+  else
+    print("Mais baixo!")
+  end
+  tentativa = tentativa + 1
+
+  ::continue::
+end
+
+if not acertou then
+  print(string.format("Suas tentativas acabaram. O número era %d.", secreto))
+end
+</pre>
+<pre class="solucao" data-file="adivinhacao.lua">math.randomseed(42)  -- semente fixa: o número secreto é 50
+local MAX = 7
+local secreto = math.random(1, 100)
+local acertou = false
+local tentativa = 1
+
+print("=== Jogo de Adivinhação ===")
+print(string.format("Pensei num número de 1 a 100. Você tem %d tentativas.", MAX))
+
+while tentativa &lt;= MAX do
+  io.write(string.format("Tentativa %d/%d: ", tentativa, MAX))
+  local texto = io.read()
+  if texto == nil then
+    print()
+    break
+  end
+
+  local palpite = tonumber(texto)
+  if palpite == nil or math.type(palpite) ~= "integer" then
+    print("Digite um número inteiro, como 42.")
+    goto continue
+  end
+  if palpite &lt; 1 or palpite &gt; 100 then
+    print("O número está entre 1 e 100.")
+    goto continue
+  end
+
+  if palpite == secreto then
+    print(string.format("Acertou em %d tentativa(s)!", tentativa))
+    acertou = true
+    break
+  elseif palpite &lt; secreto then
+    print("Mais alto!")
+  else
+    print("Mais baixo!")
+  end
+  tentativa = tentativa + 1
+
+  ::continue::
+end
+
+if not acertou then
+  print(string.format("Suas tentativas acabaram. O número era %d.", secreto))
+end
+</pre>
+</div>
+
+<hr>
+
+<h2 id="versao5">Versão 5 · Várias partidas e recorde</h2>
+<p>A Ana quer jogar de novo sem rodar o programa outra vez, e quer saber o seu recorde (o menor número de tentativas). A partida inteira vira uma <a href="funcoes.html">função</a>, <code>jogar()</code>, que <strong>devolve</strong> quantas tentativas a Ana usou, ou <code>nil</code> se ela perdeu. O programa principal chama <code>jogar()</code> quantas vezes ela quiser e cuida do recorde.</p>
+
+<pre class="file" data-file="adivinhacao.lua">-- Jogo de Adivinhação da Ana, versão 5: várias partidas e recorde
+
+local MAX = 7
+
+-- Joga uma partida. Devolve o número de tentativas, ou nil se perdeu.
+local function jogar()
+  local secreto = math.random(1, 100)
+  local tentativa = 1
+  print(string.format("Pensei num número de 1 a 100. Você tem %d tentativas.", MAX))
+
+  while tentativa &lt;= MAX do
+    io.write(string.format("Tentativa %d/%d: ", tentativa, MAX))
+    local texto = io.read()
+    if texto == nil then        -- a entrada acabou (Ctrl+D)
+      print()
+      print("Até a próxima!")
+      os.exit(0)
+    end
+
+    local palpite = tonumber(texto)
+    if palpite == nil or math.type(palpite) ~= "integer" then
+      print("Digite um número inteiro, como 42.")
+      goto continue
+    end
+    if palpite &lt; 1 or palpite &gt; 100 then
+      print("O número está entre 1 e 100.")
+      goto continue
+    end
+
+    if palpite == secreto then
+      print(string.format("Acertou em %d tentativa(s)!", tentativa))
+      return tentativa
+    elseif palpite &lt; secreto then
+      print("Mais alto!")
+    else
+      print("Mais baixo!")
+    end
+    tentativa = tentativa + 1
+
+    ::continue::
+  end
+
+  print(string.format("Suas tentativas acabaram. O número era %d.", secreto))
+  return nil
+end
+
+print("=== Jogo de Adivinhação ===")
+local recorde = nil
+
+while true do
+  local tentativas = jogar()
+  if tentativas and (recorde == nil or tentativas &lt; recorde) then
+    recorde = tentativas
+    print("Novo recorde!")
+  end
+  if recorde then
+    print(string.format("Seu recorde: %d tentativa(s).", recorde))
+  end
+
+  io.write("Jogar de novo? (s/n): ")
+  local resposta = io.read()
+  if resposta == nil or resposta:lower() ~= "s" then
+    break
+  end
+end
+
+print("Até a próxima!")
+</pre>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Peça</th><th>O que faz</th></tr>
+<tr><td><code>local function jogar()</code></td><td>A partida da versão 4, inteira, dentro de uma função sem parâmetros. O <code>secreto</code> é sorteado <strong>dentro</strong> dela: cada partida tem um número novo.</td></tr>
+<tr><td><code>return tentativa</code></td><td>No acerto, devolve o número de tentativas e <strong>sai da função</strong> na hora (no lugar do <code>break</code> e da bandeira <code>acertou</code>, que não são mais necessários).</td></tr>
+<tr><td><code>return nil</code></td><td>Se o laço acabou sem acerto, a função devolve <code>nil</code>: "não houve tentativas vencedoras". (Uma função que termina sem <code>return</code> também devolve nada, mas escrever deixa a intenção clara.)</td></tr>
+<tr><td><code>local recorde = nil</code></td><td>No começo ainda não há recorde.</td></tr>
+<tr><td><code>tentativas and (recorde == nil or tentativas &lt; recorde)</code></td><td>"Ganhou, <strong>e</strong> (ainda não havia recorde <strong>ou</strong> este é menor)". Se <code>tentativas</code> for <code>nil</code> (perdeu), o <code>and</code> para ali e o resto nem é testado. Os parênteses fazem o <code>or</code> ser resolvido primeiro (veja <a href="operadores-logicos.html">and, or e not</a>).</td></tr>
+<tr><td><code>resposta == nil or resposta:lower() ~= "s"</code></td><td>Sai se a entrada acabou ou se a resposta não for <code>s</code>/<code>S</code>. Testar o <code>nil</code> primeiro evita chamar <code>:lower()</code> em <code>nil</code>.</td></tr>
+</table>
+</div>
+
+<p>A sessão completa está no começo da página: na segunda partida, 4 tentativas bateram o recorde de 5; na terceira, a Ana perdeu e o recorde continuou 4.</p>
+
+<div class="cenario">
+<strong>Chamar <code>:lower()</code> em <code>nil</code></strong>
+<p>Sem o teste <code>resposta == nil</code>, um <kbd>Ctrl</kbd>+<kbd>D</kbd> em "Jogar de novo?" faz <code>nil:lower()</code>. Num teste de três linhas (<code>lower.lua</code>, só com a pergunta, o <code>io.read()</code> e o <code>if resposta:lower() ~= "s"</code>):</p>
+<pre class="term" data-cwd="~/projetos/adivinhacao">$ lua lower.lua
+Jogar de novo? (s/n):
+lua: lower.lua:3: attempt to index a nil value (local 'resposta')
+stack traceback:
+        lower.lua:3: in main chunk
+        [C]: in ?</pre>
+<p>"Tentativa de indexar um valor nil": o <code>:</code> procura <code>lower</code> dentro do valor, e <code>nil</code> não tem nada dentro. Sempre que um valor pode ser <code>nil</code>, teste antes de usar o <code>:</code>. Mais em <a href="erros.html">Lendo uma Mensagem de Erro</a>.</p>
+</div>
+
+<div class="trylua" data-stdin="50\ns\n60\n70\n76\nn" data-goal="outre:Acertou em 3 tentativa\(s\)!\nSeu recorde: 1 tentativa\(s\)\.;;semerro">
+<p class="try-task"><strong>Missão (versão 5):</strong> o recorde está errado: ele sempre vira o resultado da última partida. Com a semente 42, a 1ª partida (número 50) é ganha em 1 tentativa e a 2ª (número 76) em 3, e o programa diz "Novo recorde!" e "Seu recorde: 3". Conserte o <code>if</code>: só troque o recorde se ainda não houver um (<code>recorde == nil</code>) <strong>ou</strong> se as tentativas forem menos que ele. Depois da 2ª partida deve aparecer <code>Seu recorde: 1 tentativa(s).</code>, sem "Novo recorde!".</p>
+<pre class="script" data-file="adivinhacao.lua">math.randomseed(42)  -- semente fixa: os números secretos são 50 e 76
+local MAX = 7
+
+local function jogar()
+  local secreto = math.random(1, 100)
+  local tentativa = 1
+  print(string.format("Pensei num número de 1 a 100. Você tem %d tentativas.", MAX))
+
+  while tentativa &lt;= MAX do
+    io.write(string.format("Tentativa %d/%d: ", tentativa, MAX))
+    local texto = io.read()
+    if texto == nil then
+      print()
+      print("Até a próxima!")
+      os.exit(0)
+    end
+
+    local palpite = tonumber(texto)
+    if palpite == nil or math.type(palpite) ~= "integer" then
+      print("Digite um número inteiro, como 42.")
+      goto continue
+    end
+    if palpite &lt; 1 or palpite &gt; 100 then
+      print("O número está entre 1 e 100.")
+      goto continue
+    end
+
+    if palpite == secreto then
+      print(string.format("Acertou em %d tentativa(s)!", tentativa))
+      return tentativa
+    elseif palpite &lt; secreto then
+      print("Mais alto!")
+    else
+      print("Mais baixo!")
+    end
+    tentativa = tentativa + 1
+
+    ::continue::
+  end
+
+  print(string.format("Suas tentativas acabaram. O número era %d.", secreto))
+  return nil
+end
+
+print("=== Jogo de Adivinhação ===")
+local recorde = nil
+
+while true do
+  local tentativas = jogar()
+  if tentativas then
+    recorde = tentativas
+    print("Novo recorde!")
+  end
+  if recorde then
+    print(string.format("Seu recorde: %d tentativa(s).", recorde))
+  end
+
+  io.write("Jogar de novo? (s/n): ")
+  local resposta = io.read()
+  if resposta == nil or resposta:lower() ~= "s" then
+    break
+  end
+end
+
+print("Até a próxima!")
+</pre>
+<pre class="solucao" data-file="adivinhacao.lua">math.randomseed(42)  -- semente fixa: os números secretos são 50 e 76
+local MAX = 7
+
+local function jogar()
+  local secreto = math.random(1, 100)
+  local tentativa = 1
+  print(string.format("Pensei num número de 1 a 100. Você tem %d tentativas.", MAX))
+
+  while tentativa &lt;= MAX do
+    io.write(string.format("Tentativa %d/%d: ", tentativa, MAX))
+    local texto = io.read()
+    if texto == nil then
+      print()
+      print("Até a próxima!")
+      os.exit(0)
+    end
+
+    local palpite = tonumber(texto)
+    if palpite == nil or math.type(palpite) ~= "integer" then
+      print("Digite um número inteiro, como 42.")
+      goto continue
+    end
+    if palpite &lt; 1 or palpite &gt; 100 then
+      print("O número está entre 1 e 100.")
+      goto continue
+    end
+
+    if palpite == secreto then
+      print(string.format("Acertou em %d tentativa(s)!", tentativa))
+      return tentativa
+    elseif palpite &lt; secreto then
+      print("Mais alto!")
+    else
+      print("Mais baixo!")
+    end
+    tentativa = tentativa + 1
+
+    ::continue::
+  end
+
+  print(string.format("Suas tentativas acabaram. O número era %d.", secreto))
+  return nil
+end
+
+print("=== Jogo de Adivinhação ===")
+local recorde = nil
+
+while true do
+  local tentativas = jogar()
+  if tentativas and (recorde == nil or tentativas &lt; recorde) then
+    recorde = tentativas
+    print("Novo recorde!")
+  end
+  if recorde then
+    print(string.format("Seu recorde: %d tentativa(s).", recorde))
+  end
+
+  io.write("Jogar de novo? (s/n): ")
+  local resposta = io.read()
+  if resposta == nil or resposta:lower() ~= "s" then
+    break
+  end
+end
+
+print("Até a próxima!")
+</pre>
+</div>
+
+<hr>
+
+<h2 id="formas">Formas diferentes de fazer</h2>
+<p>O laço "até acertar" da versão 2 também pode ser escrito com <a href="repeat.html">repeat … until</a> ("repita … até que"), que testa a condição no <strong>fim</strong> de cada volta. Uma particularidade do Lua ajuda aqui: a variável <code>local</code> criada dentro do <code>repeat</code> ainda vale no <code>until</code>.</p>
+
+<pre class="file" data-file="repeat.lua">local secreto = math.random(1, 100)
+local tentativas = 0
+
+print("=== Jogo de Adivinhação ===")
+print("Pensei num número de 1 a 100.")
+
+repeat
+  io.write("Seu palpite: ")
+  local palpite = tonumber(io.read())
+  tentativas = tentativas + 1
+  if palpite &lt; secreto then
+    print("Mais alto!")
+  elseif palpite &gt; secreto then
+    print("Mais baixo!")
+  end
+until palpite == secreto
+
+print("Acertou em " .. tentativas .. " tentativa(s)!")
+</pre>
+
+<pre class="term" data-cwd="~/projetos/adivinhacao">$ LUA_INIT="math.randomseed(13)" lua repeat.lua
+=== Jogo de Adivinhação ===
+Pensei num número de 1 a 100.
+Seu palpite: 50
+Mais baixo!
+Seu palpite: 25
+Mais alto!
+Seu palpite: 28
+Acertou em 3 tentativa(s)!</pre>
+
+<p>Não há <code>break</code>: o laço termina sozinho quando o <code>until</code> fica verdadeiro, e a frase do acerto vai para depois dele.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Forma</th><th>Quando usar</th></tr>
+<tr><td><code>while true do … break … end</code></td><td>Quando a saída fica no meio da volta (versão 2). O mais flexível.</td></tr>
+<tr><td><code>repeat … until condição</code></td><td>Quando a volta roda pelo menos uma vez e a decisão de parar fica no fim (o palpite é lido antes de testar).</td></tr>
+<tr><td><code>for i = 1, MAX do … break … end</code></td><td>Quando o número máximo de voltas é conhecido e cada volta conta (versão 3).</td></tr>
+<tr><td><code>while contador &lt;= MAX do … end</code> + <code>goto continue</code></td><td>Quando é o programa que decide se a volta conta ou não (versão 4).</td></tr>
+<tr><td><code>math.random(1, 100)</code> ou <code>math.random(100)</code></td><td>Dá no mesmo; a forma com os dois números deixa a faixa visível para quem lê.</td></tr>
+</table>
+</div>
+
+<h2>Ideias para continuar</h2>
+<ul>
+  <li>Perguntar a dificuldade no começo: fácil (1 a 50, 10 tentativas), difícil (1 a 1000, 10 tentativas). <code>MAX</code> e a faixa viram parâmetros de <code>jogar(limite, max)</code>.</li>
+  <li>Avisar "Está quente!" quando o palpite estiver a menos de 5 do número (<code>math.abs(palpite - secreto) &lt; 5</code>; veja <a href="math.html">A Biblioteca math</a>).</li>
+  <li>Guardar o recorde num arquivo para ele sobreviver ao fim do programa (veja <a href="arquivos-escrever.html">Escrevendo Arquivos</a>).</li>
+</ul>
+
+<hr>
+
+<h2>Referência rápida do projeto</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>Para que serviu</th></tr>
+<tr><td><code>math.random(1, 100)</code></td><td>Sortear um inteiro de 1 a 100 (os dois incluídos)</td></tr>
+<tr><td><code>math.randomseed(42)</code></td><td>Fixar a semente: a mesma sequência sempre (para testar)</td></tr>
+<tr><td><code>LUA_INIT="math.randomseed(13)" lua jogo.lua</code></td><td>Fixar a semente por fora do programa, só naquela execução</td></tr>
+<tr><td><code>tentativas = tentativas + 1</code></td><td>Contar (o Lua não tem <code>+=</code>)</td></tr>
+<tr><td><code>for tentativa = 1, MAX do</code> … <code>break</code></td><td>Limitar as tentativas (versão 3)</td></tr>
+<tr><td><code>local acertou = false</code> … <code>if not acertou</code></td><td>Saber, depois do laço, como ele terminou</td></tr>
+<tr><td><code>string.format("Tentativa %d/%d: ", t, MAX)</code></td><td>Montar frases com números</td></tr>
+<tr><td><code>math.type(x) == "integer"</code></td><td>Aceitar só inteiros (<code>7.5</code> é <code>"float"</code>)</td></tr>
+<tr><td><code>goto continue</code> … <code>::continue::</code></td><td>Pular o resto da volta (o "continue" do Lua; o rótulo fica logo antes do <code>end</code>)</td></tr>
+<tr><td><code>return tentativa</code> / <code>return nil</code></td><td>A função conta como a partida terminou</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Sintoma</th><th>Causa provável</th></tr>
+<tr><td>"Errou! O número era 50" depois de digitar 50</td><td>Faltou o <code>tonumber</code>: <code>"50" == 50</code> é <code>false</code></td></tr>
+<tr><td><code>attempt to compare nil with number</code></td><td>O <code>tonumber</code> deu <code>nil</code> e o programa usou <code>&lt;</code> mesmo assim</td></tr>
+<tr><td>O "sorteio" dá sempre o mesmo número</td><td>Uma semente fixa esquecida no programa, ou Lua 5.1/LuaJIT sem <code>math.randomseed</code></td></tr>
+<tr><td><code>attempt to assign to const variable 'tentativa'</code></td><td>Mudar a variável do <code>for</code> (proibido no 5.5)</td></tr>
+<tr><td><code>jumps into the scope of 'x'</code></td><td>O rótulo do <code>goto</code> não está no fim do bloco, e há um <code>local</code> no meio do caminho</td></tr>
+<tr><td><code>attempt to index a nil value (local 'resposta')</code></td><td><code>:lower()</code> num <code>nil</code> (a entrada acabou): teste o <code>nil</code> antes</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. O sorteio</h3>
+<p>Complete para sortear um número de 1 a 6, como um dado:</p>
+<div class="ex-code">local dado = math.<input data-answer="random" aria-label="função">(1, 6)</div>
+</div>
+
+<div class="exercise">
+<h3>2. A semente</h3>
+<p>Complete para que o programa sorteie sempre a mesma sequência:</p>
+<div class="ex-code">math.<input data-answer="randomseed" aria-label="função">(42)</div>
+</div>
+
+<div class="exercise">
+<h3>3. O "continue" do Lua</h3>
+<p>Complete a linha que pula para o rótulo <code>::continue::</code>:</p>
+<div class="ex-code"><input data-answer="goto" aria-label="palavra-chave"> continue</div>
+</div>
+
+<div class="exercise">
+<h3>4. Inteiro ou não?</h3>
+<p>O que <code>math.type(tonumber("7.5"))</code> devolve? (escreva com as aspas)</p>
+<div class="ex-code"><input data-answer="&quot;float&quot;" aria-label="resposta"></div>
+</div>
+
+<div class="mc" data-answer="3">
+<p class="mc-q">5. Sem <code>tonumber</code>, a Ana digitou o número certo e o jogo disse "Errou!". Por quê?</p>
+<label><input type="radio" name="q5"> O <code>math.random</code> mudou o número depois do palpite</label>
+<label><input type="radio" name="q5"> O <code>io.read()</code> não leu nada</label>
+<label><input type="radio" name="q5"> <code>"50" == 50</code> é <code>false</code>: o <code>==</code> não converte texto em número</label>
+<label><input type="radio" name="q5"> Faltou o <code>break</code></label>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">6. Na versão 4, por que o <code>goto continue</code> não gasta a tentativa?</p>
+<label><input type="radio" name="q6"> Porque o <code>goto</code> zera o contador</label>
+<label><input type="radio" name="q6"> Porque ele pula a linha <code>tentativa = tentativa + 1</code>, que fica antes do rótulo</label>
+<label><input type="radio" name="q6"> Porque o <code>while</code> não conta voltas com <code>goto</code></label>
+<label><input type="radio" name="q6"> Porque o rótulo diminui a tentativa em 1</label>
+</div>
+
+<div class="mc" data-answer="4">
+<p class="mc-q">7. O que acontece no Lua 5.5 com <code>for i = 1, 3 do i = i + 1 end</code>?</p>
+<label><input type="radio" name="q7"> O laço roda 3 vezes, como se a linha não existisse</label>
+<label><input type="radio" name="q7"> O laço roda só 2 vezes</label>
+<label><input type="radio" name="q7"> O laço nunca termina</label>
+<label><input type="radio" name="q7"> O programa nem começa: <code>attempt to assign to const variable 'i'</code></label>
+</div>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li><code>math.random(1, 100)</code> sorteia um inteiro de 1 a 100. O Lua 5.5 escolhe uma semente nova a cada execução; <code>math.randomseed(42)</code> fixa a sequência (ótimo para testar). No 5.1 e no LuaJIT, sem semente, o sorteio se repete.</li>
+  <li>Converta o palpite com <code>tonumber</code>: <code>"50" == 50</code> é <code>false</code>, e <code>nil &lt; 50</code> para o programa.</li>
+  <li><code>while true</code> + <code>break</code> repete até acertar; <code>repeat … until</code> é a alternativa com o teste no fim.</li>
+  <li>O <code>for</code> conta as tentativas sozinho; no 5.5 a variável dele é constante. Uma bandeira (<code>acertou</code>) diz depois como o laço terminou.</li>
+  <li><code>math.type</code> separa inteiros de floats. O Lua não tem <code>continue</code>: use <code>goto continue</code> com o rótulo <code>::continue::</code> logo antes do <code>end</code>.</li>
+  <li>Uma função que devolve o resultado da partida (ou <code>nil</code>) deixa o programa principal cuidar das várias partidas e do recorde.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
