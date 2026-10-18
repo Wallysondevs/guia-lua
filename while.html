@@ -368,7 +368,7 @@ $ echo $?
 <h3>No editor do guia</h3>
 <p id="editor-infinito">A caixa "Experimente" roda o Lua de verdade dentro do navegador, então um laço infinito lá também não termina sozinho. A diferença é que o editor tem as suas próprias travas:</p>
 <ul>
-  <li>enquanto o programa roda, o botão <strong>▶ Rodar</strong> vira <strong>■ Parar</strong>. Clicar nele é o <kbd>Ctrl</kbd>+<kbd>C</kbd> do editor: a caixa mostra <code>^C</code> e <code>[programa interrompido]</code>;</li>
+  <li>enquanto o programa roda, o botão <strong>▶ Rodar</strong> vira <strong>■ Parar</strong>. Clicar nele é o <kbd>Ctrl</kbd>+<kbd>C</kbd> do editor: a caixa mostra <code>^C</code> e <code>[programa interrompido]</code> (sem o <code>lua: interrupted!</code> e o <code>stack traceback</code> que o terminal mostra);</li>
   <li>se o programa passar de <strong>10 segundos</strong> rodando sem terminar, o editor o para sozinho com o aviso <code>(o editor parou o programa: ele rodou mais de 10 segundos sem terminar — laço infinito?)</code> (o tempo em que o programa espera você digitar não conta);</li>
   <li>se o programa escrever demais (como o <code>Volta 1</code> sem fim), o editor também o para antes disso: mais de 2 milhões de caracteres.</li>
 </ul>
