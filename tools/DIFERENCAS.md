@@ -14,10 +14,76 @@ Uma diferença que **não** está lá é um achado: avise o agente do simulador.
 ## Diferenças encontradas
 <!-- AUTO: cada página tem a sua seção, reescrita a cada --nativo. Página sem diferença não aparece. -->
 
-<!-- pagina:simulador-teste-interno.html -->
-### simulador-teste-interno.html (2026-10-18 19:45 UTC)
+<!-- pagina:coleta-lixo.html -->
+### coleta-lixo.html (2026-10-18 19:46 UTC)
 
-**caixa 10, código inicial (linha 174)** — saída diferente: + total 4 | + -rw-rw-r-- 1 ana ana 227 Oct 18 16:45 main.lua | + true	exit	0 | - sh: 1: ls: not found (esperado: comandos do sistema (os.execute/io.popen: no navegador não há outros programas); informações do sistema (os.execute, io.popen, os.getenv, memória))
+**caixa 1, código inicial (linha 110)** — saída diferente: + Com a lista:        5777.9 KB | + Depois de limpar:   5600.9 KB | - Com a lista:        4943.7 KB | - Depois de limpar:   4816.4 KB (esperado: memória usada (o editor é de 32 bits: números menores))
+
+```lua
+local lista = {}
+for i = 1, 100000 do
+  lista[i] = "item " .. i
+end
+local com_lista = collectgarbage("count")
+print(string.format("Com a lista:      %8.1f KB", com_lista))
+
+collectgarbage("collect")
+local depois = collectgarbage("count")
+print(string.format("Depois de limpar: %8.1f KB", depois))
+print("Liberou mais da metade?", depois < com_lista / 2)
+```
+
+- editor (código de saída 0):
+
+```
+Com a lista:        4943.7 KB
+Depois de limpar:   4816.4 KB
+Liberou mais da metade?	false
+```
+- lab, lua (código de saída 0):
+
+```
+Com a lista:        5777.9 KB
+Depois de limpar:   5600.9 KB
+Liberou mais da metade?	false
+```
+
+**caixa 1, solução (linha 124)** — saída diferente: + Com a lista:        5777.9 KB | + Depois de limpar:    529.7 KB | - Com a lista:        4943.7 KB | - Depois de limpar:    526.5 KB (esperado: memória usada (o editor é de 32 bits: números menores))
+
+```lua
+local lista = {}
+for i = 1, 100000 do
+  lista[i] = "item " .. i
+end
+local com_lista = collectgarbage("count")
+print(string.format("Com a lista:      %8.1f KB", com_lista))
+lista = nil
+collectgarbage("collect")
+local depois = collectgarbage("count")
+print(string.format("Depois de limpar: %8.1f KB", depois))
+print("Liberou mais da metade?", depois < com_lista / 2)
+```
+
+- editor (código de saída 0):
+
+```
+Com a lista:        4943.7 KB
+Depois de limpar:    526.5 KB
+Liberou mais da metade?	true
+```
+- lab, lua (código de saída 0):
+
+```
+Com a lista:        5777.9 KB
+Depois de limpar:    529.7 KB
+Liberou mais da metade?	true
+```
+<!-- /pagina:coleta-lixo.html -->
+
+<!-- pagina:simulador-teste-interno.html -->
+### simulador-teste-interno.html (2026-10-18 19:46 UTC)
+
+**caixa 10, código inicial (linha 174)** — saída diferente: + total 4 | + -rw-rw-r-- 1 ana ana 227 Oct 18 16:46 main.lua | + true	exit	0 | - sh: 1: ls: not found (esperado: comandos do sistema (os.execute/io.popen: no navegador não há outros programas); informações do sistema (os.execute, io.popen, os.getenv))
 
 ```lua
 print(os.execute())
@@ -48,17 +114,17 @@ nil	exit	127
 ```
 true
 total 4
--rw-rw-r-- 1 ana ana 227 Oct 18 16:45 main.lua
+-rw-rw-r-- 1 ana ana 227 Oct 18 16:46 main.lua
 true	exit	0
 nil	exit	3
 true	exit	0
-dom. 18 out 2026 16:45:50 -03
+dom. 18 out 2026 16:46:44 -03
 
 true	exit	0
 /home/ana	ana	nil
 ```
 
-**caixa 11, código inicial (linha 187)** — saída diferente: + true	6	0.47694722133634893 | - true	3	0.34229237346953123 (esperado: data, hora e tempo medido; informações do sistema (os.execute, io.popen, os.getenv, memória))
+**caixa 11, código inicial (linha 187)** — saída diferente: + true	1	0.98517404951944854 | - true	5	0.33928774182946053 (esperado: data, hora e tempo medido; informações do sistema (os.execute, io.popen, os.getenv); os.setlocale (o editor só tem o locale C))
 
 ```lua
 print(os.time() > 1700000000, os.date("%Y-%m-%d %H:%M:%S"), os.date("%z %Z"))
@@ -76,9 +142,9 @@ print(os.setlocale())
 - editor (código de saída 0):
 
 ```
-true	2026-10-18 16:45:50	-0300 -03
+true	2026-10-18 16:46:44	-0300 -03
 00:00	1767279600
-true	3	0.34229237346953123
+true	5	0.33928774182946053
 50	76
 true
 oi
@@ -87,16 +153,16 @@ C
 - lab, lua (código de saída 0):
 
 ```
-true	2026-10-18 16:45:50	-0300 -03
+true	2026-10-18 16:46:44	-0300 -03
 00:00	1767279600
-true	6	0.47694722133634893
+true	1	0.98517404951944854
 50	76
 true
 oi
 C
 ```
 
-**caixa 12, código inicial (linha 202)** — saída diferente: + false	table: 0x5634c8519d10 | - false	table: 0x80e340 | + false	not enough memory | - false	resulting string too large (esperado: endereços de memória (table: 0x…, function: 0x…); informações do sistema (os.execute, io.popen, os.getenv, memória))
+**caixa 12, código inicial (linha 202)** — saída diferente: + false	table: 0x562577f41d10 | - false	table: 0x80e340 | + false	not enough memory | - false	resulting string too large (esperado: endereços de memória (table: 0x…, function: 0x…); limites de memória (o editor é WebAssembly de 32 bits, com no máximo 256 MB); memória usada (o editor é de 32 bits: números menores))
 
 ```lua
 print(pcall(error, "falhou"))
@@ -140,7 +206,7 @@ true
 
 ```
 false	falhou
-false	table: 0x5634c8519d10
+false	table: 0x562577f41d10
 main.lua:3: nível 1
 false	main.lua:4: attempt to index a nil value (local 't')
 stack traceback:
@@ -157,7 +223,7 @@ false	not enough memory
 true
 ```
 
-**caixa 15, código inicial (linha 239)** — saída diferente: + Pensei num número (sorteado: 707) | + pairs começa por	chave3 | - Pensei num número (sorteado: 836) | - pairs começa por	chave15 (esperado: números sorteados sem math.randomseed(N); ordem do pairs/next (chaves de texto: muda a cada execução))
+**caixa 15, código inicial (linha 239)** — saída diferente: + Pensei num número (sorteado: 822) | + pairs começa por	chave13 | - Pensei num número (sorteado: 943) | - pairs começa por	chave6 (esperado: números sorteados sem math.randomseed(N); ordem do pairs/next (chaves de texto: muda a cada execução))
 
 ```lua
 local sorteado = math.random(1, 1000)
@@ -179,8 +245,8 @@ end
 - editor (código de saída 0):
 
 ```
-Pensei num número (sorteado: 836)
-pairs começa por	chave15
+Pensei num número (sorteado: 943)
+pairs começa por	chave6
 Número: dobro:	20
 Número: Isso não é um número.
 Número: dobro:	10
@@ -189,8 +255,8 @@ Número: tchau
 - lab, lua (código de saída 0):
 
 ```
-Pensei num número (sorteado: 707)
-pairs começa por	chave3
+Pensei num número (sorteado: 822)
+pairs começa por	chave13
 Número: dobro:	20
 Número: Isso não é um número.
 Número: dobro:	10
@@ -198,44 +264,10 @@ Número: tchau
 ```
 <!-- /pagina:simulador-teste-interno.html -->
 
-<!-- pagina:io-read.html -->
-### io-read.html (2026-10-18 19:46 UTC)
-
-**caixa 3, código inicial (linha 464)** — saída diferente: + lua: main.lua:6: attempt to perform arithmetic on a nil value (global 'n2') | - Primeira nota: lua: main.lua:6: attempt to perform arithmetic on a nil value (global 'n2') | + Primeira nota: Segunda 
-
-```lua
-io.write("Primeira nota: ")
-local n1 = io.read("n")
-io.write("Segunda nota: ")
--- leia a segunda nota aqui
-
-print("Média:", (n1 + n2) / 2)
-```
-
-- editor (código de saída 1):
-
-```
-Primeira nota: lua: main.lua:6: attempt to perform arithmetic on a nil value (global 'n2')
-stack traceback:
-	main.lua:6: in main chunk
-	[C]: in ?
-Segunda nota: 
-```
-- lab, lua (código de saída 1):
-
-```
-lua: main.lua:6: attempt to perform arithmetic on a nil value (global 'n2')
-stack traceback:
-	main.lua:6: in main chunk
-	[C]: in ?
-Primeira nota: Segunda nota: 
-```
-<!-- /pagina:io-read.html -->
-
 <!-- pagina:tabelas.html -->
 ### tabelas.html (2026-10-18 19:46 UTC)
 
-**caixa 2, código inicial (linha 330)** — saída diferente: + table: 0x55d20e7d26f0 | - table: 0x80dd20 (esperado: endereços de memória (table: 0x…, function: 0x…))
+**caixa 2, código inicial (linha 330)** — saída diferente: + table: 0x5620ec6236f0 | - table: 0x80dd20 (esperado: endereços de memória (table: 0x…, function: 0x…))
 
 ```lua
 local compras = {"pão", "leite", "café"}
@@ -256,9 +288,69 @@ table: 0x80dd20
 - lab, lua (código de saída 0):
 
 ```
-table: 0x55d20e7d26f0
+table: 0x5620ec6236f0
 1	pão
 2	leite
 3	café
 ```
 <!-- /pagina:tabelas.html -->
+
+<!-- pagina:pairs.html -->
+### pairs.html (2026-10-18 19:47 UTC)
+
+**caixa 1, código inicial (linha 86)** — saída diferente: + leite: 12 | - pao: 40 | + arroz: 5 | + pao: 40 (esperado: ordem do pairs/next (chaves de texto: muda a cada execução))
+
+```lua
+local estoque = {arroz = 5, feijao = 3, leite = 12, cafe = 2, pao = 40}
+for produto, quantidade in pairs(estoque) do
+  print(produto .. ": " .. quantidade)
+end
+```
+
+- editor (código de saída 0):
+
+```
+pao: 40
+feijao: 3
+cafe: 2
+arroz: 5
+leite: 12
+```
+- lab, lua (código de saída 0):
+
+```
+leite: 12
+feijao: 3
+arroz: 5
+cafe: 2
+pao: 40
+```
+
+**caixa 3, código inicial (linha 493)** — saída diferente: + cafe: 2 | + arroz: 5 | - cafe: 2 | - arroz: 5 (esperado: ordem do pairs/next (chaves de texto: muda a cada execução))
+
+```lua
+local estoque = {arroz = 5, feijao = 3, leite = 12, cafe = 2, pao = 40}
+for produto, quantidade in pairs(estoque) do
+  print(produto .. ": " .. quantidade)
+end
+```
+
+- editor (código de saída 0):
+
+```
+pao: 40
+feijao: 3
+cafe: 2
+arroz: 5
+leite: 12
+```
+- lab, lua (código de saída 0):
+
+```
+cafe: 2
+arroz: 5
+pao: 40
+feijao: 3
+leite: 12
+```
+<!-- /pagina:pairs.html -->

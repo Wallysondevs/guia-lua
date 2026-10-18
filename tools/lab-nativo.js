@@ -31,9 +31,10 @@ function rodar(arquivos, opts) {
     arquivos.map((a) => 'mkdir -p "$(dirname ' + q(a.nome) + ')" && printf %s ' + q(b64(a.codigo)) + " | base64 -d > " + q(a.nome)).join("\n"),
     "printf %s " + q(b64(opts.stdin || "")) + " | base64 -d > /tmp/entrada.txt",
     "echo @@RODA@@",
-    // stdout em linhas (como no terminal, e como no editor): sem isso, num pipe, o que o
-    // io.write escreveu com \n e a mensagem de erro trocariam de ordem
-    "SB=; command -v stdbuf >/dev/null && SB='stdbuf -oL'",
+    // como no terminal (e no editor): stdout em linhas (-oL) e stdin sem buffer (-i0: antes de
+    // ler a entrada, o glibc mostra o io.write("Nome: ") sem \n). Sem isso, num pipe, a saída e a
+    // mensagem de erro trocariam de ordem
+    "SB=; command -v stdbuf >/dev/null && SB='stdbuf -i0 -oL'",
     "timeout 10 $SB lua " + q(arquivos[0].nome) + " " + (opts.args || []).map(q).join(" ") + " < /tmp/entrada.txt 2>&1; echo \"@@EXIT@@$?\"",
     "lua -v 2>&1 | sed -n 's/^Lua \\([0-9.]*\\).*/\\1/p'",
   ].join("\n");
