@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tutorial Lua — aprenda a programar do zero, como numa escola | Guia Lua</title>
+<meta name="description" content="Curso de Lua do zero ao avançado, em português, para quem nunca programou: print, variáveis, if, for, tabelas, funções, arquivos, metatabelas, corrotinas e muito mais, com o Lua 5.5 de verdade rodando no seu navegador, missões, projetos e exercícios. Saídas e mensagens de erro conferidas no Lua real.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="hero">
+<h1>Tutorial Lua</h1>
+<p>Aprenda a <strong>programar do zero</strong> com Lua, como numa escola: cada comando é explicado pedaço por pedaço, você vê o que o programa responde de verdade e pratica num editor aqui mesmo na página. Quem roda os seus programas é o <strong>Lua 5.5</strong>, o interpretador oficial, funcionando <strong>dentro do seu navegador</strong>. Você não precisa instalar nada para começar, em qualquer sistema: Windows, macOS, Linux ou até um Chromebook.</p>
+<a class="btn btn-lg" href="introducao.html">Comece pelo Nível 1 &#10095;</a>
+</div>
+
+<div class="pager"></div>
+
+<h2>Experimente agora</h2>
+<p>A caixa abaixo é o editor <strong>Experimente</strong> do guia. Em cima fica o programa; clique em <strong>▶ Rodar</strong> e o que ele escreve aparece embaixo, num terminal. Na primeira vez, o editor baixa o Lua (uns 340 KB, menos que uma foto); depois, é na hora. Pode mexer à vontade: nada que você fizer aqui estraga o guia.</p>
+
+<div class="trylua" data-goal="out:Comprar: manteiga;;out:Total de itens: 4">
+<p class="try-task"><strong>Missão:</strong> rode o programa como está e veja a lista de compras da Ana. Depois, ela lembrou que acabou a manteiga: acrescente <code>"manteiga"</code> na lista da primeira linha (depois de <code>"café"</code>, com uma vírgula antes) e rode de novo.</p>
+<pre class="script" data-file="main.lua">local compras = {"pão", "leite", "café"}
+for _, item in ipairs(compras) do
+  print("Comprar: " .. item)
+end
+print("Total de itens: " .. #compras)
+</pre>
+<pre class="solucao" data-file="main.lua">local compras = {"pão", "leite", "café", "manteiga"}
+for _, item in ipairs(compras) do
+  print("Comprar: " .. item)
+end
+print("Total de itens: " .. #compras)
+</pre>
+</div>
+
+<p>O que aconteceu: você escreveu um <strong>programa</strong>, uma lista de instruções que o computador segue na ordem. Lido em voz alta, ele diz: "a lista de compras é pão, leite, café e manteiga; <strong>para cada</strong> item da lista, escreva 'Comprar: ' e o item; no fim, escreva quantos itens a lista tem". O Lua seguiu as instruções e escreveu uma linha por item. Você não precisou mudar o resto do programa: ele se adaptou sozinho à lista maior. Essa língua de instruções é o <strong>Lua</strong>, e é isso que este guia ensina.</p>
+
+<p>Se você esqueceu de fechar as aspas, viu uma mensagem em vermelho, em inglês: <code>lua: main.lua:1: unfinished string near '"manteiga}'</code> ("texto não terminado, na linha 1, perto de <code>"manteiga}</code>"). E se esqueceu a <strong>vírgula</strong>, a mensagem foi <code>'}' expected near '"manteiga"'</code>: o Lua esperava o fim da lista (o <code>}</code>) e encontrou outro texto colado no anterior. O Lua não adivinha: ele diz exatamente onde não entendeu. Errar e ler o que o computador responde é metade do aprendizado: todas as aulas mostram os erros mais comuns, com a mensagem real e o jeito de consertar.</p>
+
+<h3>Um programa que conversa</h3>
+<p>Programas também podem <strong>perguntar</strong>. Rode a caixa, digite o seu nome no terminal dela (no campo que aparece depois da pergunta) e tecle <kbd>Enter</kbd>:</p>
+
+<div class="trylua" data-digitar="Ana">
+<pre class="script" data-file="main.lua">io.write("Qual é o seu nome? ")
+local nome = io.read()
+print("Olá, " .. nome .. "! Bem-vinda ao Lua.")
+</pre>
+</div>
+
+<hr>
+
+<h2>O que é este guia</h2>
+<p>Um programa é uma receita que o computador segue. O <strong>Lua</strong> é uma língua para escrever essas receitas, criada no Brasil, na PUC-Rio, em 1993. Ela é <strong>pequena</strong> (cabe inteira na cabeça), <strong>rápida</strong> e feita para morar <strong>dentro de outros programas</strong>: por isso está nos jogos (do <em>World of Warcraft</em> ao Roblox, que usa uma variação dela), no editor Neovim, em programas de fotografia e em ferramentas de rede. A aula <a href="introducao.html">O que é Lua</a> conta essa história.</p>
+
+<p>Quem aprende Lua consegue:</p>
+<ul>
+  <li>fazer o computador repetir tarefas e tomar decisões: "se a nota for 7 ou mais, aprovada; senão, recuperação";</li>
+  <li>guardar e organizar informações em <strong>tabelas</strong>, a única (e poderosíssima) estrutura de dados do Lua: o estoque da lojinha, a agenda de contatos;</li>
+  <li>ler e gravar arquivos de texto e planilhas CSV;</li>
+  <li>escrever programas grandes, divididos em funções e módulos, e criar os seus próprios "objetos" com metatabelas;</li>
+  <li>usar o que aprendeu para criar jogos (no LÖVE, no Roblox), configurar o Neovim ou estender os programas que embutem o Lua.</li>
+</ul>
+
+<p>O guia é para quem <strong>nunca programou</strong>. Ele começa do zero absoluto (o que é um programa? como se roda um?) e vai até metatabelas, corrotinas, o ambiente <code>_ENV</code> e testes. Cada aula ensina <strong>um assunto só</strong>, com calma. O Lua das aulas é o <strong>5.5</strong>, o do Ubuntu 26.04 e o do editor; quando algo é diferente nas versões que muita gente ainda usa (o 5.1, o LuaJIT, o 5.4), uma nota avisa.</p>
+
+<hr>
+
+<h2>Como as aulas funcionam</h2>
+<p>Nenhum código aparece "seco". Toda aula segue o mesmo caminho:</p>
+<ol class="passo">
+  <li><strong>A ideia primeiro.</strong> Antes do código, você entende o problema que ele resolve, com uma comparação do dia a dia: uma receita de bolo, uma caixa com etiqueta, uma lista de compras.</li>
+  <li><strong>Anatomia.</strong> Cada parte de um comando novo é separada e explicada.</li>
+  <li><strong>A saída real.</strong> Depois de cada exemplo, o que o Lua respondeu de verdade, no terminal. Nenhuma saída foi inventada.</li>
+  <li><strong>Experimente.</strong> Pelo menos duas caixas por aula para você mudar o código e rodar, muitas com uma <strong>missão</strong> que confere sozinha se você acertou.</li>
+  <li><strong>Várias formas de fazer.</strong> Quase sempre há mais de um jeito de escrever a mesma coisa, e uma tabela "qual usar" mostra quando escolher cada um.</li>
+  <li><strong>Quando dá errado.</strong> O código com erro e a mensagem real do Lua (<code>lua: arquivo.lua:3: …</code> e o <code>stack traceback</code>), traduzida e explicada linha por linha.</li>
+  <li><strong>Exercícios e resumo.</strong> Perguntas com correção na hora e uma lista curta do que levar da aula.</li>
+</ol>
+
+<h3>Exemplo: a anatomia de um programa</h3>
+<p>Veja como as aulas desmontam um programa. Primeiro o código, num arquivo chamado <code>compras.lua</code>:</p>
+
+<pre class="file" data-file="compras.lua">local compras = {"pão", "leite", "café"}
+for _, item in ipairs(compras) do
+  print("Comprar: " .. item)
+end
+print("Total de itens: " .. #compras)
+</pre>
+
+<p>Agora cada parte:</p>
+
+<dl class="anatomy">
+  <dt>local compras = {...}</dt><dd>Uma <strong>variável</strong>: um nome (<code>compras</code>) que guarda um valor. O <code>local</code> diz que o nome só vale neste arquivo. Aqui o valor é uma <strong>tabela</strong> com três textos, entre chaves (aulas <a href="variaveis.html">Variáveis</a>, <a href="local.html">local × Global</a> e <a href="tabelas.html">Tabelas</a>).</dd>
+  <dt>for _, item in ipairs(compras) do</dt><dd>"Para cada item de compras, faça": repete o bloco de baixo uma vez para cada elemento da lista. O <code>do</code> abre o bloco (aulas <a href="ipairs.html">Percorrendo uma Lista</a> e <a href="sintaxe.html">Sintaxe e Blocos</a>).</dd>
+  <dt>  print("Comprar: " .. item)</dt><dd>O bloco que se repete. O <code>..</code> junta o texto com o item (aula <a href="concatenacao.html">Juntando Textos</a>). Os 2 espaços no começo são para você enxergar que a linha está "dentro" do <code>for</code>.</dd>
+  <dt>end</dt><dd>"Fim": fecha o bloco do <code>for</code>.</dd>
+  <dt>print("Total de itens: " .. #compras)</dt><dd>Depois do <code>end</code>: roda uma vez só. O <code>#</code> conta os itens da lista (aula <a href="operador-tamanho.html">O Operador de Tamanho</a>).</dd>
+</dl>
+
+<h3>Exemplo: o terminal</h3>
+<p>Além do editor, as aulas mostram o <strong>terminal</strong> da máquina das aulas: um computador chamado <code>notebook</code>, da usuária <code>ana</code>. Lá, o programa fica no arquivo <code>compras.lua</code>, e quem o roda é o comando <code>lua</code>:</p>
+
+<pre class="term">$ lua compras.lua
+Comprar: pão
+Comprar: leite
+Comprar: café
+Total de itens: 3
+</pre>
+
+<p>E o programa que conversa, com a Ana digitando o nome dela:</p>
+
+<pre class="term">$ lua conversa.lua
+Qual é o seu nome? Ana
+Olá, Ana! Bem-vinda ao Lua.
+</pre>
+
+<p>A resposta é a mesma do editor, porque o Lua é o mesmo nos dois lugares. A aula <a href="simulador.html">O Editor do Guia</a> mostra tudo o que as caixas Experimente sabem fazer e o que muda no terminal, e <a href="instalar.html">Instalar o Lua</a> ensina a pôr o Lua no seu computador.</p>
+
+<hr>
+
+<h2>Escolha sua trilha</h2>
+<p>O guia tem três níveis, uma seção de projetos e uma de referência. Os níveis foram pensados para serem feitos em ordem: cada aula usa o que as anteriores ensinaram.</p>
+<div class="trilhas">
+  <div class="trilha n1">
+    <h3>Nível 1 · Iniciante</h3>
+    <p>Lua do zero.</p>
+    <ul>
+      <li><a href="introducao.html">Começando</a>: o que é Lua, instalar, rodar um programa, o modo interativo, o editor do guia, sintaxe e comentários</li>
+      <li><a href="print.html">Saída e entrada</a>: <code>print()</code>, <code>io.write()</code> e <code>io.read()</code></li>
+      <li><a href="variaveis.html">Variáveis e tipos</a>: <code>local</code>, números inteiros e decimais, textos, <code>true</code>/<code>false</code> e <code>nil</code></li>
+      <li><a href="operadores-aritmeticos.html">Operadores</a> e <a href="strings.html">textos</a>: contas, comparações, o <code>..</code>, <code>string.format</code> e os padrões</li>
+      <li><a href="if.html">Decisões</a> e <a href="while.html">repetições</a>: <code>if</code>, <code>elseif</code>, <code>while</code>, <code>repeat</code>, <code>for</code> e <code>goto</code></li>
+    </ul>
+    <a class="btn" href="introducao.html">Começar &#10095;</a>
+  </div>
+  <div class="trilha n2">
+    <h3>Nível 2 · Intermediário</h3>
+    <p>Tabelas, funções e arquivos.</p>
+    <ul>
+      <li><a href="tabelas.html">Tabelas</a>: listas, <code>ipairs</code>, dicionários, <code>pairs</code>, <code>table.sort</code> e cópias</li>
+      <li><a href="funcoes.html">Funções</a>: parâmetros, vários retornos, <code>...</code>, closures e recursão</li>
+      <li><a href="erros.html">Erros</a>: ler uma mensagem, <code>error</code>, <code>pcall</code>, <code>xpcall</code> e <code>assert</code></li>
+      <li><a href="io-open.html">Arquivos</a>: abrir, ler, escrever, linha por linha, apagar e renomear</li>
+      <li><a href="modulos.html">Módulos e bibliotecas</a>: <code>require</code>, <code>math</code>, datas e horas e o LuaRocks</li>
+    </ul>
+    <a class="btn" href="tabelas.html">Começar &#10095;</a>
+  </div>
+  <div class="trilha n3">
+    <h3>Nível 3 · Avançado</h3>
+    <p>O poder das metatabelas.</p>
+    <ul>
+      <li><a href="metatabelas.html">Metatabelas e objetos</a>: metamétodos, <code>__index</code>, métodos com <code>:</code>, classes e herança</li>
+      <li><a href="const.html">Variáveis especiais</a>: <code>&lt;const&gt;</code>, <code>&lt;close&gt;</code>, a declaração <code>global</code> e o <code>_ENV</code></li>
+      <li><a href="iteradores.html">Recursos poderosos</a>: iteradores, corrotinas, <code>load</code>, a coleta de lixo e dados binários</li>
+      <li><a href="arg.html">Ferramentas do dia a dia</a>: linha de comando, outros programas, depuração, testes, estilo e as diferenças entre as versões</li>
+    </ul>
+    <a class="btn" href="metatabelas.html">Começar &#10095;</a>
+  </div>
+  <div class="trilha proj">
+    <h3>Projetos</h3>
+    <p>Programas completos, construídos passo a passo.</p>
+    <ul>
+      <li><a href="projeto-calculadora.html">Calculadora</a>, <a href="projeto-adivinhacao.html">jogo de adivinhação</a> e <a href="projeto-forca.html">jogo da forca</a></li>
+      <li><a href="projeto-tarefas.html">Lista de tarefas</a> e <a href="projeto-agenda.html">agenda de contatos</a></li>
+      <li><a href="projeto-notas.html">Notas da turma (CSV)</a> e <a href="projeto-banco.html">conta bancária (classes)</a></li>
+      <li><a href="projeto-palavras.html">Contador de palavras</a> e <a href="projeto-velha.html">jogo da velha</a></li>
+    </ul>
+    <a class="btn" href="projeto-calculadora.html">Ver projetos &#10095;</a>
+  </div>
+  <div class="trilha ref">
+    <h3>Referência</h3>
+    <p>Consulta rápida para quando você já sabe o que procura.</p>
+    <ul>
+      <li><a href="ref-funcoes-globais.html">Funções globais</a> e <a href="ref-palavras-chave.html">palavras reservadas</a></li>
+      <li>As bibliotecas <a href="ref-string.html">string</a>, <a href="ref-table.html">table</a>, <a href="ref-math.html">math</a> e <a href="ref-io-os.html">io e os</a></li>
+      <li><a href="ref-padroes.html">Padrões</a>, <a href="ref-metametodos.html">metamétodos</a> e <a href="ref-operadores.html">operadores</a></li>
+      <li><a href="ref-erros.html">Mensagens de erro comuns</a>, traduzidas</li>
+    </ul>
+    <a class="btn" href="ref-funcoes-globais.html">Consultar &#10095;</a>
+  </div>
+</div>
+
+<hr>
+
+<h2>Como estudar</h2>
+<p>Programar se aprende programando, como quem aprende a cozinhar cozinhando. Para cada aula, siga estes quatro passos:</p>
+<ol class="passo">
+  <li><strong>Leia com calma.</strong> Leia a ideia, a anatomia e a saída. Não pule a parte "Quando dá errado": quem entende a mensagem de erro conserta o problema em segundos.</li>
+  <li><strong>Mexa nos exemplos.</strong> Em toda caixa Experimente, mude um número, troque um texto, apague um pedaço de propósito e veja o que o Lua responde. Não tem como estragar nada: cada Rodar começa do zero.</li>
+  <li><strong>Faça as missões.</strong> As caixas com <strong>Missão</strong> conferem sozinhas se você acertou. Tente de verdade antes de abrir a solução; se abrir, digite a solução você mesmo em vez de só olhar.</li>
+  <li><strong>Repita no seu computador.</strong> Quando chegar à aula <a href="instalar.html">Instalar o Lua</a>, instale-o e refaça os programas no terminal. Algumas coisas (instalar bibliotecas com o LuaRocks, rodar outros programas, guardar arquivos de verdade) só existem lá.</li>
+</ol>
+
+<div class="tip">
+<strong>A regra de ouro</strong>
+<p>Ler não basta: digite cada programa. Copiar e colar ensina pouco; digitar faz você reparar em cada aspa, cada <code>end</code> e cada <code>..</code>. Comece pela aula <a href="introducao.html">O que é Lua</a> e, antes de ir longe, dê uma olhada em <a href="simulador.html">O Editor do Guia</a>.</p>
+</div>
+
+<hr>
+
+<h2>Como ler este guia</h2>
+<div class="table-wrap">
+<table class="ref">
+<thead><tr><th>Elemento</th><th>O que significa</th></tr></thead>
+<tbody>
+<tr><td>Caixa com <code>compras.lua</code> no canto</td><td>Um programa para ler. O nome no canto é o nome do arquivo (programas em Lua terminam em <code>.lua</code>).</td></tr>
+<tr><td>Caixa <strong>Experimente</strong></td><td>Um programa para você mudar e rodar, com o Lua de verdade. As com <strong>Missão</strong> conferem a sua resposta; as com <strong>Abrir o lua</strong> são o modo interativo.</td></tr>
+<tr><td>Caixa <strong>Quando dá errado</strong></td><td>Um programa com um erro colocado de propósito, com a mensagem real do Lua e a explicação.</td></tr>
+<tr><td><code>ana@notebook:~$</code></td><td>O prompt do terminal: usuária <code>ana</code>, no computador <code>notebook</code>, na pasta pessoal (<code>~</code>). O que vem depois é o comando digitado.</td></tr>
+<tr><td><code>&gt;</code> e <code>&gt;&gt;</code></td><td>Os prompts do modo interativo do Lua: ele espera uma linha de Lua e responde na hora; o <code>&gt;&gt;</code> pede o resto de um bloco (aula <a href="repl.html">O Modo Interativo</a>).</td></tr>
+<tr><td>Linhas sem prompt</td><td>A resposta do computador.</td></tr>
+<tr><td><span class="t-a">← etiqueta</span></td><td>Uma explicação do guia sobre aquela linha. Não aparece no terminal real.</td></tr>
+<tr><td><span class="versao">5.5</span></td><td>Algo que só existe a partir do Lua 5.5 (a lista completa está em <a href="novidades.html">Novidades do Lua 5.5</a>).</td></tr>
+</tbody>
+</table>
+</div>
+
+<div class="note">
+<strong>Versão de referência: Lua 5.5</strong>
+<p>O guia ensina o <strong>Lua 5.5</strong>. As saídas de terminal foram colhidas no Lua <strong>5.5.0</strong> de um Ubuntu 26.04 em português do Brasil (o pacote <code>lua5.5</code>); o editor das aulas é o mesmo <strong>Lua 5.5.0</strong> oficial de lua.org, compilado para rodar no navegador (WebAssembly). Os dois vêm do mesmo código-fonte: a linguagem, as mensagens de erro e as respostas são as mesmas. As mensagens de erro saem em inglês, exatamente como o Lua as escreve, e as aulas as explicam em português. Muitos programas ainda usam versões antigas (o LuaJIT e o Roblox seguem o 5.1; o Debian 13 traz o 5.4): quase tudo funciona igual, e as diferenças aparecem em notas e na aula <a href="versoes.html">Lua 5.1, LuaJIT, 5.4 e 5.5</a>.</p>
+</div>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
