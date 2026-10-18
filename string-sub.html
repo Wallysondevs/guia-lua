@@ -1,0 +1,485 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua string.sub, byte e char — pedaços de texto | Guia Lua</title>
+<meta name="description" content="Pedaços de texto no Lua para quem nunca programou: string.sub com posições que começam em 1, posições negativas que contam do fim, o que acontece fora dos limites, uma letra com sub(i, i), os códigos das letras com string.byte e string.char, o acento cortado ao meio e os erros reais do Lua 5.5.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">sub, byte e char</span></h1>
+
+<p class="intro">Muitas vezes você não quer o texto inteiro, só um <strong>pedaço</strong> dele: o dia de uma data <code>"18/10/2026"</code>, a primeira letra de um nome, os últimos 4 dígitos de um cartão, a extensão <code>.txt</code> de um arquivo. A função <code>string.sub</code> (de <em>substring</em>, "pedaço de texto") recorta esse pedaço a partir das <strong>posições</strong> das letras. Nesta aula você também conhece <code>string.byte</code> e <code>string.char</code>, que mostram o número que o computador guarda para cada letra.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>Como as posições das letras são contadas no Lua: a primeira é a <strong>1</strong>.</li>
+  <li>Como recortar com <code>texto:sub(inicio, fim)</code> e com <code>texto:sub(inicio)</code>, até o fim.</li>
+  <li>As posições <strong>negativas</strong>, que contam a partir do fim: <code>-1</code> é a última letra.</li>
+  <li>O que acontece quando a posição passa do tamanho do texto (spoiler: não dá erro).</li>
+  <li>Como pegar uma letra só, com <code>texto:sub(i, i)</code>, e por que <code>texto[1]</code> não funciona.</li>
+  <li>O que são os códigos das letras, com <code>string.byte</code> e <code>string.char</code>.</li>
+  <li>Por que <code>("ação"):sub(1, 2)</code> mostra <code>a�</code>.</li>
+</ul>
+</div>
+
+<p>Todos os programas desta aula rodaram no <strong>Lua 5.5</strong> da máquina da Ana (usuária <code>ana</code>, computador <code>notebook</code>), salvos na pasta pessoal dela e executados com <code>lua arquivo.lua</code>. Você pode rodar cada um no editor do guia. O dois-pontos de <code>texto:sub(…)</code> é o mesmo atalho de <a href="string-metodos.html">Funções de Texto</a>: <code>texto:sub(1, 3)</code> é o mesmo que <code>string.sub(texto, 1, 3)</code>.</p>
+
+<hr>
+
+<h2>A ideia: a fileira de cadeiras numeradas</h2>
+<p>Imagine o texto como uma fileira de cadeiras no cinema, cada letra sentada numa cadeira numerada. No Lua, a numeração começa na cadeira <strong>1</strong> (em várias outras linguagens ela começa no 0; no Lua, não). E tem um segundo jeito de numerar, de trás para frente: a última cadeira é a <strong>-1</strong>, a penúltima é a <strong>-2</strong>, e assim por diante. Para o texto <code>"Lua 5.5"</code>:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Letra</th><td><code>L</code></td><td><code>u</code></td><td><code>a</code></td><td><code>&nbsp;</code> (espaço)</td><td><code>5</code></td><td><code>.</code></td><td><code>5</code></td></tr>
+<tr><th>Posição</th><td>1</td><td>2</td><td>3</td><td>4</td><td>5</td><td>6</td><td>7</td></tr>
+<tr><th>Do fim</th><td>-7</td><td>-6</td><td>-5</td><td>-4</td><td>-3</td><td>-2</td><td>-1</td></tr>
+</table>
+</div>
+
+<p>O espaço também ocupa uma cadeira, e o ponto também. Para recortar um pedaço, você diz ao Lua <strong>de qual cadeira até qual cadeira</strong>, e as duas pontas entram no pedaço.</p>
+
+<hr>
+
+<h2>1. Recortar: <code>texto:sub(inicio, fim)</code></h2>
+
+<pre class="file" data-file="recorte.lua">local s = "Lua 5.5"
+print(s:sub(1, 3))
+print(s:sub(5, 7))
+print(s:sub(2, 2))
+print(string.sub(s, 1, 3))
+</pre>
+
+<dl class="anatomy">
+  <dt>s:sub(1, 3)</dt><dd>Da posição 1 até a 3, <strong>incluindo as duas</strong>: <code>L</code>, <code>u</code>, <code>a</code>.</dd>
+  <dt>s:sub(5, 7)</dt><dd>Da 5 até a 7: <code>5.5</code>.</dd>
+  <dt>s:sub(2, 2)</dt><dd>Começa e termina na mesma cadeira: uma letra só, o <code>u</code>.</dd>
+  <dt>string.sub(s, 1, 3)</dt><dd>O jeito longo, sem o dois-pontos: o texto vira o primeiro argumento. O resultado é o mesmo.</dd>
+</dl>
+
+<pre class="term">$ lua recorte.lua
+Lua
+5.5
+u
+Lua</pre>
+
+<p>Como toda função de texto, o <code>sub</code> devolve um texto <strong>novo</strong>; o <code>s</code> continua <code>"Lua 5.5"</code> (veja <a href="string-metodos.html">Funções de Texto</a>, seção 3). Uma conta útil: o pedaço <code>sub(i, j)</code> tem <code>j - i + 1</code> letras. <code>sub(5, 7)</code> tem 7 − 5 + 1 = 3.</p>
+
+<hr>
+
+<h2>2. Até o fim: <code>texto:sub(inicio)</code></h2>
+<p>O segundo número é opcional. Sem ele, o recorte vai até a última letra:</p>
+
+<pre class="file" data-file="ate-o-fim.lua">local s = "Lua 5.5"
+print(s:sub(5))
+print(s:sub(1))
+</pre>
+
+<pre class="term">$ lua ate-o-fim.lua
+5.5
+Lua 5.5</pre>
+
+<p><code>s:sub(1)</code> devolve o texto inteiro: da primeira cadeira até a última.</p>
+
+<hr>
+
+<h2>3. Contando do fim: posições negativas</h2>
+<p>Quando o que você quer está no <strong>fim</strong> do texto, e o texto pode ter qualquer tamanho, conte de trás para frente:</p>
+
+<pre class="file" data-file="negativo.lua">local s = "Lua 5.5"
+print(s:sub(-3))
+print(s:sub(-3, -2))
+print(s:sub(-1))
+
+local arquivo = "compras.txt"
+print(arquivo:sub(-4))
+local cartao = "5502 1234 8765 4321"
+print("Cartão final " .. cartao:sub(-4))
+</pre>
+
+<pre class="term">$ lua negativo.lua
+5.5
+5.
+5
+.txt
+Cartão final 4321</pre>
+
+<dl class="anatomy">
+  <dt>s:sub(-3)</dt><dd>Da antepenúltima letra até o fim: as 3 últimas, <code>5.5</code>.</dd>
+  <dt>s:sub(-3, -2)</dt><dd>Da antepenúltima até a penúltima: <code>5.</code> (sem o último 5).</dd>
+  <dt>s:sub(-1)</dt><dd>Só a última letra.</dd>
+  <dt>arquivo:sub(-4)</dt><dd>As 4 últimas letras de qualquer nome de arquivo: a extensão <code>.txt</code>. Funciona com <code>"lista.txt"</code> ou com <code>"notas-da-turma.txt"</code> sem mudar nada.</dd>
+</dl>
+
+<p>Dá para misturar os dois jeitos: <code>s:sub(2, -2)</code> é "da segunda letra até a penúltima", um jeito fácil de tirar o primeiro e o último caractere (por exemplo, as aspas de <code>'"oi"'</code>).</p>
+
+<hr>
+
+<h2>4. Fora dos limites: o Lua não reclama</h2>
+<p>O que acontece se você pedir cadeiras que não existem? Em vez de dar erro, o <code>sub</code> <strong>ajusta</strong> as pontas para dentro do texto:</p>
+
+<pre class="file" data-file="limites.lua">local s = "Lua 5.5"
+print("[" .. s:sub(5, 3) .. "]")
+print("[" .. s:sub(10, 20) .. "]")
+print("[" .. s:sub(0) .. "]")
+print(s:sub(-100, 3), s:sub(3, 100))
+</pre>
+
+<pre class="term">$ lua limites.lua
+[]
+[]
+[Lua 5.5]
+Lua	a 5.5</pre>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Pedido</th><th>O que o Lua faz</th><th>Resultado</th></tr>
+<tr><td><code>sub(5, 3)</code></td><td>O início vem depois do fim: não sobra nada</td><td><code>""</code> (texto vazio)</td></tr>
+<tr><td><code>sub(10, 20)</code></td><td>O texto só tem 7 letras: as cadeiras 10 a 20 estão vazias</td><td><code>""</code></td></tr>
+<tr><td><code>sub(0)</code></td><td>Não existe cadeira 0: ele começa na 1</td><td>o texto inteiro</td></tr>
+<tr><td><code>sub(-100, 3)</code></td><td>Antes da primeira cadeira: começa na 1</td><td><code>Lua</code></td></tr>
+<tr><td><code>sub(3, 100)</code></td><td>Depois da última: para na última</td><td><code>a 5.5</code></td></tr>
+</table>
+</div>
+
+<p>Os colchetes <code>[ ]</code> em volta servem só para você <strong>ver</strong> o texto vazio: sem eles, a linha sairia em branco. Essa tolerância é boa (o programa não para) e ruim (um erro de conta passa calado e você recebe <code>""</code> sem perceber).</p>
+
+<div class="trylua" data-goal="out:Dia: 18, mês: 10, ano: 2026;;src:sub">
+<p class="try-task"><strong>Missão:</strong> o caixa da padaria grava a data como <code>"18/10/2026"</code>. O dia já está recortado. Troque os dois <code>"?"</code> por recortes com <code>data:sub(…)</code> para o programa mostrar <code>Dia: 18, mês: 10, ano: 2026</code>. Dica: conte as cadeiras; as barras também ocupam lugar.</p>
+<pre class="script" data-file="main.lua">local data = "18/10/2026"
+local dia = data:sub(1, 2)
+local mes = "?"
+local ano = "?"
+print("Dia: " .. dia .. ", mês: " .. mes .. ", ano: " .. ano)
+</pre>
+<pre class="solucao" data-file="main.lua">local data = "18/10/2026"
+local dia = data:sub(1, 2)
+local mes = data:sub(4, 5)
+local ano = data:sub(7, 10)
+print("Dia: " .. dia .. ", mês: " .. mes .. ", ano: " .. ano)
+</pre>
+</div>
+
+<hr>
+
+<h2>5. Uma letra só: <code>texto:sub(i, i)</code></h2>
+<p>Para pegar <strong>uma</strong> letra, o início e o fim são a mesma posição. Um uso clássico: pôr a primeira letra de um nome em maiúscula, juntando o <code>sub</code> com o <code>upper</code> de <a href="string-metodos.html">Funções de Texto</a>:</p>
+
+<pre class="file" data-file="inicial.lua">local nome = "ana"
+local primeira = nome:sub(1, 1)
+local resto = nome:sub(2)
+print(primeira, resto)
+print(primeira:upper() .. resto)
+print("Inicial: " .. nome:sub(1, 1):upper() .. ".")
+</pre>
+
+<pre class="term">$ lua inicial.lua
+a	na
+Ana
+Inicial: A.</pre>
+
+<p>A linha 5 cola a primeira letra em maiúscula com o resto, que já estava em minúsculas. A linha 6 faz tudo de uma vez, encadeando: recorta, depois põe em maiúscula.</p>
+
+<div class="warning">
+<strong><code>nome[1]</code> não pega a primeira letra</strong>
+<p>Em outras linguagens, <code>nome[1]</code> ou <code>nome[0]</code> pega uma letra. No Lua, os colchetes servem para as <a href="tabelas.html">tabelas</a>, e um texto não é uma tabela de letras: <code>nome[1]</code> dá <code>nil</code>, sem erro nenhum (você vê em <a href="#errado">Quando dá errado</a>). Para uma letra, use sempre <code>nome:sub(1, 1)</code>.</p>
+</div>
+
+<hr>
+
+<h2>6. O número de cada letra: <code>string.byte</code></h2>
+<p>Por dentro, o computador não guarda letras: ele guarda <strong>números</strong>, um para cada caractere, combinados numa tabela que todo computador conhece (a tabela <strong>ASCII</strong>, de 1963, que vai do 0 ao 127). O <code>A</code> é 65, o <code>a</code> é 97, o algarismo <code>0</code> é 48 e o espaço é 32. O <code>string.byte</code> mostra esses números:</p>
+
+<pre class="file" data-file="codigos.lua">print(("A"):byte())
+print(("a"):byte(), ("0"):byte(), (" "):byte())
+print(("Ana"):byte(1, -1))
+print(("Ana"):byte(2))
+</pre>
+
+<pre class="term">$ lua codigos.lua
+65
+97	48	32
+65	110	97
+110</pre>
+
+<dl class="anatomy">
+  <dt>("A"):byte()</dt><dd>Sem posição, ele olha a primeira letra: 65.</dd>
+  <dt>("Ana"):byte(1, -1)</dt><dd>Com início e fim (iguais aos do <code>sub</code>, inclusive os negativos), ele devolve <strong>vários</strong> números, um por letra: 65 (A), 110 (n), 97 (a). O <code>print</code> mostra todos, separados por tabulação.</dd>
+  <dt>("Ana"):byte(2)</dt><dd>Só a posição 2: o <code>n</code>, 110.</dd>
+</dl>
+
+<p>Repare que <code>A</code> (65) e <code>a</code> (97) são números diferentes: é por isso que, para o Lua, <code>"Ana" == "ana"</code> é falso. As letras estão em ordem (<code>B</code> é 66, <code>C</code> é 67…), e é isso que faz <code>"Ana" &lt; "Bia"</code> ser verdadeiro (veja <a href="operadores-comparacao.html">Comparações</a>). E o nome "byte": cada um desses números cabe num <strong>byte</strong>, o pedacinho de memória que vai de 0 a 255.</p>
+
+<hr>
+
+<h2>7. Do número para a letra: <code>string.char</code></h2>
+<p>O <code>string.char</code> faz o caminho de volta: você dá os números, ele monta o texto. Ele não tem atalho com dois-pontos (os números não têm), então escreva sempre <code>string.char(…)</code>:</p>
+
+<pre class="file" data-file="char.lua">print(string.char(65, 110, 97))
+print(string.char(76, 117, 97))
+print(string.char(("a"):byte() + 1))
+</pre>
+
+<pre class="term">$ lua char.lua
+Ana
+Lua
+b</pre>
+
+<p>A última linha pega o número do <code>a</code> (97), soma 1 (98) e transforma de volta em letra: <code>b</code>, a letra seguinte. É assim que funcionam as cifras de brincadeira do tipo "troque cada letra pela próxima".</p>
+
+<hr>
+
+<h2>8. Acentos: a letra cortada ao meio</h2>
+<p>A tabela ASCII não tem "ç" nem "ã". As letras com acento usam o padrão <strong>UTF-8</strong>, que guarda cada uma em <strong>2 bytes</strong>. Como o <code>sub</code> e o <code>byte</code> contam bytes, e não letras, o acento atrapalha a conta:</p>
+
+<pre class="file" data-file="acento.lua">local palavra = "ação"
+print(#palavra)
+print(palavra:sub(1, 2), palavra:sub(1, 3))
+print(("ç"):byte(1, -1))
+print(string.char(195, 167))
+</pre>
+
+<pre class="term">$ lua acento.lua
+6
+a�	aç                       « o � é meio "ç": o primeiro dos seus 2 bytes
+195	167
+ç</pre>
+
+<p>O <code>"ação"</code> ocupa 6 bytes: <code>a</code> (1), <code>ç</code> (2), <code>ã</code> (2), <code>o</code> (1). Pedindo <code>sub(1, 2)</code>, o Lua entregou o <code>a</code> e só <strong>metade</strong> do <code>ç</code>; o terminal não sabe mostrar meia letra e põe o <code>�</code> no lugar. Com <code>sub(1, 3)</code> o <code>ç</code> veio inteiro. O <code>byte</code> mostra os dois números do <code>ç</code> (195 e 167), e o <code>char</code> com esses dois números monta o <code>ç</code> de novo.</p>
+<p>Para recortar texto com acento contando <strong>letras</strong>, a biblioteca <code>utf8</code> tem as ferramentas certas: veja <a href="utf8.html">Acentos e a Biblioteca utf8</a>.</p>
+
+<hr>
+
+<h2 id="formas">Formas diferentes de fazer a mesma coisa</h2>
+<p>As 4 últimas letras de um texto, de três jeitos:</p>
+
+<pre class="file" data-file="ultimas.lua">local arquivo = "compras.txt"
+print(arquivo:sub(-4))                -- 1. contando do fim
+print(arquivo:sub(#arquivo - 3))      -- 2. fazendo a conta com o tamanho
+print(string.sub(arquivo, -4, -1))    -- 3. o jeito longo, com as duas pontas
+</pre>
+
+<pre class="term">$ lua ultimas.lua
+.txt
+.txt
+.txt</pre>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Você quer…</th><th>Use</th></tr>
+<tr><td>Um pedaço que começa no início ou no meio</td><td><code>s:sub(i, j)</code></td></tr>
+<tr><td>Do meio até o fim</td><td><code>s:sub(i)</code></td></tr>
+<tr><td>As últimas letras, sem saber o tamanho do texto</td><td><code>s:sub(-n)</code> (mais claro do que <code>s:sub(#s - n + 1)</code>)</td></tr>
+<tr><td>Uma letra, como texto</td><td><code>s:sub(i, i)</code></td></tr>
+<tr><td>O número (código) de uma letra</td><td><code>s:byte(i)</code></td></tr>
+<tr><td>Montar texto a partir de códigos</td><td><code>string.char(n1, n2, …)</code></td></tr>
+<tr><td>Recortar por <strong>conteúdo</strong> (o que vem depois do <code>@</code>, por exemplo), sem saber a posição</td><td>procure a posição antes com <a href="string-find.html">string.find</a>, ou use <code>string.match</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+
+<div class="cenario">
+<strong>Usou colchetes para pegar uma letra</strong>
+<pre class="file" data-file="colchete.lua">local nome = "Ana"
+print(nome[1])
+</pre>
+<pre class="term">$ lua colchete.lua
+nil</pre>
+<p>Nenhuma mensagem de erro: só um <code>nil</code> (o "nada", veja <a href="nil.html">O Valor nil</a>). O que aconteceu: o Lua procurou um campo chamado <code>1</code> na biblioteca <code>string</code> (é lá que os textos procuram tudo, como você viu no <a href="string-metodos.html">dois-pontos</a>), e não existe nenhum. O perigo é o programa seguir com esse <code>nil</code> e quebrar mais adiante, longe do engano. <strong>Como consertar:</strong> <code>nome:sub(1, 1)</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Esqueceu de dizer onde começa</strong>
+<pre class="term">$ lua -e 'print(("abc"):sub())'
+lua: (command line):1: bad argument #1 to 'sub' (number expected, got no value)
+stack traceback:
+	[C]: in method 'sub'
+	(command line):1: in main chunk
+	[C]: in ?</pre>
+<p>"Argumento ruim nº 1 para o <code>sub</code> (esperava um número, não recebeu nenhum valor)". O início é obrigatório; só o fim é opcional. (O <code>lua -e</code> roda um pedacinho de código direto no terminal; por isso o lugar do erro aparece como <code>(command line):1</code>, "linha de comando, linha 1".) Repare no número do argumento: com o dois-pontos, o início é o <strong>#1</strong> (<code>in method 'sub'</code>). Escrevendo <code>string.sub("abc")</code>, a mensagem diz <code>bad argument #2 to 'sub'</code>, porque aí o texto é o nº 1 e o início é o nº 2. <strong>Como consertar:</strong> <code>("abc"):sub(1)</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Posição com casas decimais</strong>
+<pre class="file" data-file="metade.lua">local nome = "Ana Lima"
+local meio = #nome / 2
+print(nome:sub(1, meio))
+local impar = "Bia"
+print(impar:sub(1, #impar / 2))
+</pre>
+<pre class="term">$ lua metade.lua
+Ana
+lua: metade.lua:5: bad argument #2 to 'sub' (number has no integer representation)
+stack traceback:
+	[C]: in method 'sub'
+	metade.lua:5: in main chunk
+	[C]: in ?</pre>
+<p>A primeira metade funcionou: <code>8 / 2</code> dá <code>4.0</code>, um número com vírgula mas que é inteiro, e o Lua aceita. Já <code>3 / 2</code> dá <code>1.5</code>, e não existe a cadeira 1,5: "o número não tem representação inteira". <strong>Como consertar:</strong> use a divisão inteira <code>//</code>, que sempre dá um número sem vírgula: <code>impar:sub(1, #impar // 2)</code> (veja <a href="divisao.html">Divisão: /, // e %</a>).</p>
+</div>
+
+<div class="cenario">
+<strong>Número que não é de letra no <code>string.char</code></strong>
+<pre class="term">$ lua -e 'print(string.char(256))'
+lua: (command line):1: bad argument #1 to 'char' (value out of range)
+stack traceback:
+	[C]: in field 'char'
+	(command line):1: in main chunk
+	[C]: in ?</pre>
+<p>"Valor fora da faixa". Cada número do <code>string.char</code> vira <strong>um byte</strong>, e um byte vai de 0 a 255. O 256 (ou um negativo, como <code>-1</code>, que dá a mesma mensagem) não cabe. <strong>Como consertar:</strong> use números de 0 a 255. Para letras além disso, como o <code>€</code>, existe o <code>utf8.char</code> (aula <a href="utf8.html">utf8</a>).</p>
+</div>
+
+<div class="cenario">
+<strong>Deu uma letra para o <code>string.char</code></strong>
+<pre class="term">$ lua -e 'print(string.char("A"))'
+lua: (command line):1: bad argument #1 to 'char' (number expected, got string)
+stack traceback:
+	[C]: in field 'char'
+	(command line):1: in main chunk
+	[C]: in ?</pre>
+<p>"Esperava um número, recebeu um texto". O <code>char</code> vai do número para a letra; para ir da letra para o número, o certo é <code>("A"):byte()</code>. <strong>Como consertar:</strong> troque de função.</p>
+</div>
+
+<div class="cenario">
+<strong>A variável estava vazia</strong>
+<pre class="file" data-file="vazia.lua">local nome
+print(nome:sub(1, 1))
+</pre>
+<pre class="term">$ lua vazia.lua
+lua: vazia.lua:2: attempt to index a nil value (local 'nome')
+stack traceback:
+	vazia.lua:2: in main chunk
+	[C]: in ?</pre>
+<p>"Tentativa de indexar um valor <code>nil</code>": para achar o <code>sub</code>, o Lua precisa olhar dentro do <code>nome</code>, e ele está vazio. <strong>Como consertar:</strong> dê um texto à variável antes de recortar.</p>
+</div>
+
+<hr>
+
+<h2>Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>O que faz</th><th>Com <code>s = "Lua 5.5"</code></th></tr>
+<tr><td><code>s:sub(i, j)</code></td><td>Pedaço da posição <code>i</code> até a <code>j</code>, as duas incluídas</td><td><code>s:sub(1, 3)</code> → <code>Lua</code></td></tr>
+<tr><td><code>s:sub(i)</code></td><td>Da posição <code>i</code> até o fim</td><td><code>s:sub(5)</code> → <code>5.5</code></td></tr>
+<tr><td><code>s:sub(-n)</code></td><td>As <code>n</code> últimas letras</td><td><code>s:sub(-3)</code> → <code>5.5</code></td></tr>
+<tr><td><code>s:sub(i, i)</code></td><td>Só a letra da posição <code>i</code></td><td><code>s:sub(2, 2)</code> → <code>u</code></td></tr>
+<tr><td><code>s:sub(2, -2)</code></td><td>Tira a primeira e a última letra</td><td><code>ua 5.</code></td></tr>
+<tr><td><code>s:byte(i)</code></td><td>O código da letra na posição <code>i</code> (sem <code>i</code>: a primeira)</td><td><code>s:byte(1)</code> → <code>76</code></td></tr>
+<tr><td><code>s:byte(i, j)</code></td><td>Os códigos de várias letras, como vários valores</td><td><code>("Ana"):byte(1, -1)</code> → <code>65 110 97</code></td></tr>
+<tr><td><code>string.char(n, …)</code></td><td>Monta um texto a partir de códigos de 0 a 255</td><td><code>string.char(76, 117, 97)</code> → <code>Lua</code></td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Sintoma</th><th>Causa provável</th></tr>
+<tr><td><code>nil</code> no lugar de uma letra</td><td>Usou <code>s[1]</code>: o certo é <code>s:sub(1, 1)</code></td></tr>
+<tr><td><code>""</code> (nada) quando esperava um pedaço</td><td>Início depois do fim, ou posições além do tamanho do texto</td></tr>
+<tr><td><code>bad argument #1 to 'sub' (number expected, got no value)</code></td><td>Faltou a posição de início</td></tr>
+<tr><td><code>number has no integer representation</code></td><td>Posição com vírgula, como <code>1.5</code>: use <code>//</code></td></tr>
+<tr><td><code>bad argument #1 to 'char' (value out of range)</code></td><td>Número menor que 0 ou maior que 255</td></tr>
+<tr><td><code>�</code> no meio do texto</td><td>O recorte cortou uma letra com acento ao meio: veja <a href="utf8.html">utf8</a></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. Complete o recorte</h3>
+<p>Complete para mostrar <code>bairro</code>, a última palavra de <code>"padaria do bairro"</code>:</p>
+<div class="ex-code">local s = "padaria do bairro"<br>print(s:sub(<input data-answer="-6|12" aria-label="posição">))</div>
+</div>
+
+<div class="exercise">
+<h3>2. Qual é a saída?</h3>
+<p>O que <code>print(("Lua"):sub(2, 3))</code> mostra?</p>
+<div class="ex-code">Mostra <input data-answer="ua" aria-label="saída"></div>
+</div>
+
+<div class="exercise">
+<h3>3. O código da letra</h3>
+<p>Sabendo que <code>("A"):byte()</code> é 65, quanto vale <code>("C"):byte()</code>? Responda com um número.</p>
+<div class="ex-code">Vale <input data-answer="67" aria-label="número"></div>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">4. Em <code>local s = "Lua"</code>, qual linha mostra a letra <code>a</code>?</p>
+<label><input type="radio" name="q4"> <code>print(s[3])</code></label>
+<label><input type="radio" name="q4"> <code>print(s:sub(-1))</code></label>
+<label><input type="radio" name="q4"> <code>print(s:sub(0, 0))</code></label>
+<label><input type="radio" name="q4"> <code>print(s:byte(3))</code></label>
+</div>
+
+<div class="mc" data-answer="3">
+<p class="mc-q">5. O que acontece com <code>("Ana"):sub(5, 10)</code>?</p>
+<label><input type="radio" name="q5"> Dá erro: a posição 5 não existe</label>
+<label><input type="radio" name="q5"> Devolve <code>nil</code></label>
+<label><input type="radio" name="q5"> Devolve o texto vazio <code>""</code></label>
+<label><input type="radio" name="q5"> Devolve <code>"Ana"</code></label>
+</div>
+
+<div class="mc" data-answer="1">
+<p class="mc-q">6. Por que <code>#"pão"</code> dá 4, e não 3?</p>
+<label><input type="radio" name="q6"> Porque o <code>ã</code> ocupa 2 bytes no UTF-8, e o <code>#</code> conta bytes</label>
+<label><input type="radio" name="q6"> Porque o <code>#</code> conta o fim do texto como uma letra</label>
+<label><input type="radio" name="q6"> Porque as posições começam em 0</label>
+<label><input type="radio" name="q6"> Porque o Lua conta as aspas</label>
+</div>
+
+<h3>Missão final: o crachá</h3>
+
+<div class="trylua" data-goal="out:Carla Dias (C.D.);;src:sub">
+<p class="try-task"><strong>Missão:</strong> o sistema da escola guardou o nome todo em minúsculas. Faça o crachá sair como <code>Carla Dias (C.D.)</code>: primeira letra de cada parte em maiúscula (<code>sub(1, 1):upper()</code> + <code>sub(2)</code>) e as iniciais entre parênteses.</p>
+<pre class="script" data-file="main.lua">local nome = "carla"
+local sobrenome = "dias"
+local nome_bonito = nome
+local sobrenome_bonito = sobrenome
+local iniciais = "?.?."
+print(nome_bonito .. " " .. sobrenome_bonito .. " (" .. iniciais .. ")")
+</pre>
+<pre class="solucao" data-file="main.lua">local nome = "carla"
+local sobrenome = "dias"
+local nome_bonito = nome:sub(1, 1):upper() .. nome:sub(2)
+local sobrenome_bonito = sobrenome:sub(1, 1):upper() .. sobrenome:sub(2)
+local iniciais = nome_bonito:sub(1, 1) .. "." .. sobrenome_bonito:sub(1, 1) .. "."
+print(nome_bonito .. " " .. sobrenome_bonito .. " (" .. iniciais .. ")")
+</pre>
+</div>
+
+<p>Antes de mudar, o programa mostra <code>carla dias (?.?.)</code>. Depois de acertar, troque <code>"carla"</code> por <code>"érica"</code> e veja o que sai: <code>érica</code>, sem a maiúscula. O <code>sub(1, 1)</code> pegou só o primeiro dos 2 bytes do <code>é</code>, o <code>upper</code> não sabe o que fazer com meio <code>é</code>, e o <code>sub(2)</code> trouxe a outra metade de volta. E a inicial sai com meia letra: <code>(�.D.)</code>. A solução para nomes com acento está em <a href="utf8.html">utf8</a>.</p>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li>No Lua, as posições das letras começam em <strong>1</strong>. As negativas contam do fim: <code>-1</code> é a última.</li>
+  <li><code>s:sub(i, j)</code> recorta da posição <code>i</code> até a <code>j</code>, as duas incluídas; <code>s:sub(i)</code> vai até o fim; <code>s:sub(-n)</code> pega as <code>n</code> últimas.</li>
+  <li>Posições fora do texto não dão erro: o <code>sub</code> ajusta as pontas, e pode devolver <code>""</code>.</li>
+  <li>Uma letra é <code>s:sub(i, i)</code>; <code>s[i]</code> dá <code>nil</code>.</li>
+  <li><code>s:byte(i)</code> dá o código da letra (A = 65, a = 97); <code>string.char(…)</code> faz o caminho de volta, com números de 0 a 255.</li>
+  <li><code>sub</code>, <code>byte</code> e <code>#</code> contam <strong>bytes</strong>: letras com acento ocupam 2 e podem ser cortadas ao meio. Para elas, use a biblioteca <a href="utf8.html">utf8</a>.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
