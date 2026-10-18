@@ -1,0 +1,604 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua Metatabelas — setmetatable e getmetatable | Guia Lua</title>
+<meta name="description" content="Metatabelas do Lua para quem nunca programou: o que é uma metatabela, setmetatable e getmetatable, o primeiro metamétodo (__add) para somar duas cestas de compras, uma metatabela para muitas tabelas, tirar e proteger a metatabela (__metatable) e os erros reais do Lua 5.5.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">Metatabelas</span></h1>
+
+<p class="intro">Você já sabe que o Lua soma números (<code>30 + 12</code>) e junta textos (<code>"Ana" .. "!"</code>). Mas o que ele faz se você mandar somar duas <strong>tabelas</strong>? Sozinho, ele não sabe, e para com um erro. As <strong>metatabelas</strong> são o jeito de <strong>ensinar</strong> o Lua a fazer coisas novas com as suas tabelas: somar, comparar, mostrar com <code>print</code>, ter valores padrão. Esta aula mostra a peça central de tudo isso: a função <code>setmetatable</code>. Ela é a porta de entrada para as próximas aulas, que vão até as <strong>classes</strong> e a <strong>herança</strong>.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O que é uma metatabela, com uma comparação do dia a dia: o manual de instruções.</li>
+  <li>O erro real que o Lua dá quando você soma duas tabelas sem ensinar como.</li>
+  <li>Como ligar uma metatabela a uma tabela com <code>setmetatable</code>, e como consultar com <code>getmetatable</code>.</li>
+  <li>O primeiro <strong>metamétodo</strong>, o <code>__add</code>, para somar duas cestas de compras.</li>
+  <li>Por que uma metatabela só serve para <strong>muitas</strong> tabelas, e como tirar ou proteger uma metatabela (<code>__metatable</code>).</li>
+  <li>Os erros mais comuns: esquecer o <code>setmetatable</code>, esquecer os dois sublinhados, passar algo que não é tabela.</li>
+</ul>
+</div>
+
+<p>Todos os programas desta aula rodaram no <strong>Lua 5.5</strong> da máquina da Ana (usuária <code>ana</code>, computador <code>notebook</code>), salvos na pasta pessoal dela e executados com <code>lua arquivo.lua</code> (veja <a href="executar.html">Rodando um Programa</a>). Para acompanhar, você precisa conhecer <a href="tabelas.html">tabelas</a>, <a href="dicionarios.html">tabelas como dicionários</a> e <a href="funcoes.html">funções</a>.</p>
+
+<hr>
+
+<h2>A ideia: o manual de instruções que acompanha a tabela</h2>
+<p>A Ana comprou uma cafeteira nova. A cafeteira é a coisa em si: tem água, pó, uma jarra. Junto dela veio um <strong>manual de instruções</strong>, que não é a cafeteira, mas diz o que fazer em situações especiais: "se a luz vermelha piscar, faça isto", "se faltar água, faça aquilo".</p>
+<p>No Lua é igual:</p>
+<ul>
+  <li>a <strong>tabela</strong> é a cafeteira: guarda os seus dados (<code>{ total = 30 }</code>);</li>
+  <li>a <strong>metatabela</strong> é o manual: uma <strong>outra tabela</strong>, presa à primeira, que diz ao Lua o que fazer em situações que ele não sabe resolver sozinho, como "alguém tentou somar esta tabela com outra";</li>
+  <li>cada instrução do manual se chama <strong>metamétodo</strong>. É uma função guardada na metatabela com um nome especial, que sempre começa com <strong>dois sublinhados</strong>: <code>__add</code> ("somar", em inglês), <code>__index</code>, <code>__tostring</code>…</li>
+</ul>
+<p>O prefixo "meta" vem do grego e quer dizer "além de", "sobre": a metatabela é uma tabela <strong>sobre</strong> a outra tabela. Sem manual, a tabela funciona normalmente (guarda e devolve valores); o manual só entra em ação nas situações especiais.</p>
+
+<hr>
+
+<h2>1. O problema: somar duas tabelas</h2>
+<p>A Ana e a Bia fizeram compras na padaria. Cada cesta é uma tabela com o total gasto. A Ana quer saber quanto as duas gastaram juntas e tenta o mais natural, o <code>+</code>:</p>
+
+<pre class="file" data-file="soma_cestas.lua">local cesta_ana = { total = 30 }
+local cesta_bia = { total = 12 }
+local juntas = cesta_ana + cesta_bia
+print(juntas.total)
+</pre>
+
+<pre class="term">$ lua soma_cestas.lua
+lua: soma_cestas.lua:3: attempt to perform arithmetic on a table value (local 'cesta_ana')
+stack traceback:
+	soma_cestas.lua:3: in main chunk
+	[C]: in ?</pre>
+
+<p>Linha por linha:</p>
+<dl class="anatomy">
+  <dt>soma_cestas.lua:3:</dt><dd>O erro aconteceu no arquivo <code>soma_cestas.lua</code>, na <strong>linha 3</strong>: a linha do <code>+</code>.</dd>
+  <dt>attempt to perform arithmetic on a table value</dt><dd>"Tentativa de fazer aritmética (conta) com um valor do tipo tabela". O <code>+</code> é uma conta, e o Lua só sabe fazer conta com números (e com textos que parecem números, como <code>"10"</code>).</dd>
+  <dt>(local 'cesta_ana')</dt><dd>O Lua ainda diz <strong>qual</strong> valor era a tabela: a variável local <code>cesta_ana</code>, o primeiro lado da soma.</dd>
+  <dt>stack traceback: … in main chunk / [C]: in ?</dt><dd>O "rastro" de onde o programa estava: no corpo principal do arquivo (<em>main chunk</em>), que foi chamado pelo próprio <code>lua</code> (<code>[C]: in ?</code>). Veja <a href="erros.html">Lendo uma Mensagem de Erro</a>.</dd>
+</dl>
+
+<p>O Lua não está errado: o que seria "somar duas cestas"? Somar o <code>total</code>? Juntar os itens? Só quem escreveu o programa sabe. A metatabela é o lugar onde você <strong>conta</strong> isso a ele.</p>
+
+<hr>
+
+<h2>2. <code>getmetatable</code> e <code>setmetatable</code></h2>
+<p>Duas funções cuidam das metatabelas. Os nomes vêm do inglês: <em>get</em> = "pegar", <em>set</em> = "definir".</p>
+
+<pre class="file" data-file="primeira.lua">local cesta = { total = 30 }
+print(getmetatable(cesta))
+
+local regras = {}
+setmetatable(cesta, regras)
+print(getmetatable(cesta) == regras)
+</pre>
+
+<pre class="term">$ lua primeira.lua
+nil
+true</pre>
+
+<dl class="anatomy">
+  <dt>getmetatable(cesta)</dt><dd>"Qual é a metatabela da <code>cesta</code>?" A resposta foi <code>nil</code> (nada): toda tabela que você cria com <code>{ }</code> nasce <strong>sem</strong> metatabela.</dd>
+  <dt>local regras = {}</dt><dd>A futura metatabela. Repare: é uma tabela <strong>comum</strong>, criada com <code>{}</code>. O que a torna "meta" é só o uso que se faz dela. O nome <code>regras</code> é escolha nossa (muita gente usa <code>mt</code>, de <em>metatable</em>).</dd>
+  <dt>setmetatable(cesta, regras)</dt><dd>"A partir de agora, a metatabela da <code>cesta</code> é a tabela <code>regras</code>." Primeiro vem a tabela, depois o manual.</dd>
+  <dt>getmetatable(cesta) == regras</dt><dd>Perguntamos de novo, e agora a resposta é a própria tabela <code>regras</code>. O <code>==</code> deu <code>true</code> porque é <strong>a mesma</strong> tabela, não uma cópia (veja <a href="tabelas-referencia.html">Tabelas São Referências</a>).</dd>
+</dl>
+
+<p>Por enquanto o manual está vazio: ligar uma metatabela vazia não muda nada. A tabela continua guardando e devolvendo os seus valores como sempre, e o que está <strong>dentro</strong> da metatabela não vira campo da tabela:</p>
+
+<pre class="file" data-file="mtvazia.lua">local regras = {}
+local c = setmetatable({ total = 1 }, regras)
+print(c.total)
+print(c.cor)
+print(regras.total)
+</pre>
+
+<pre class="term">$ lua mtvazia.lua
+1
+nil
+nil</pre>
+
+<p>A tabela e o manual são duas tabelas separadas: o <code>total</code> mora na cesta, não em <code>regras</code>. Ligar uma à outra não copia nada.</p>
+
+<hr>
+
+<h2>3. O primeiro metamétodo: <code>__add</code></h2>
+<p>Agora vamos escrever a primeira instrução no manual. O nome dela é <code>__add</code> (dois sublinhados + <em>add</em>, "somar"). Quando o Lua encontra um <code>+</code> com uma tabela, ele olha a metatabela dela; se houver um <code>__add</code> lá, ele <strong>chama essa função</strong> com os dois lados da conta, e o que ela devolver é o resultado do <code>+</code>.</p>
+
+<pre class="file" data-file="cestas.lua">local regras = {}
+regras.__add = function (a, b)
+  return { total = a.total + b.total }
+end
+
+local cesta_ana = setmetatable({ total = 30 }, regras)
+local cesta_bia = setmetatable({ total = 12 }, regras)
+
+local juntas = cesta_ana + cesta_bia
+print(juntas.total)
+</pre>
+
+<pre class="term">$ lua cestas.lua
+42</pre>
+
+<dl class="anatomy">
+  <dt>regras.__add = function (a, b)</dt><dd>Guarda uma função no campo <code>__add</code> da metatabela. Ela recebe os <strong>dois lados</strong> da soma: <code>a</code> é o que está à esquerda do <code>+</code>, <code>b</code> o que está à direita.</dd>
+  <dt>return { total = a.total + b.total }</dt><dd>A nossa regra: "somar duas cestas é criar uma cesta nova cujo total é a soma dos totais". Aqui dentro, <code>a.total + b.total</code> é <code>30 + 12</code>, uma conta entre números, que o Lua sabe fazer.</dd>
+  <dt>setmetatable({ total = 30 }, regras)</dt><dd>Cria a tabela e já liga a metatabela, numa linha só. Funciona porque o <code>setmetatable</code> <strong>devolve a própria tabela</strong> (seção 4).</dd>
+  <dt>cesta_ana + cesta_bia</dt><dd>O Lua vê que <code>cesta_ana</code> é uma tabela, procura <code>__add</code> na metatabela dela, acha, e chama <code>regras.__add(cesta_ana, cesta_bia)</code>. Você nunca chama o metamétodo com o nome: quem chama é o Lua, na hora do <code>+</code>.</dd>
+</dl>
+
+<p>Passo a passo do que aconteceu na linha do <code>+</code>:</p>
+<ol class="passo">
+  <li>O lado esquerdo, <code>cesta_ana</code>, é um número? Não, é uma tabela. Então a conta normal não serve.</li>
+  <li>O Lua pega a metatabela de <code>cesta_ana</code> (a <code>regras</code>) e procura nela o campo <code>__add</code>.</li>
+  <li>Achou uma função. Ele a chama com <code>(cesta_ana, cesta_bia)</code>.</li>
+  <li>A função devolveu <code>{ total = 42 }</code>, e esse é o valor de <code>cesta_ana + cesta_bia</code>.</li>
+</ol>
+
+<div class="tip">
+<strong>E se só um dos lados tiver metatabela?</strong>
+<p>O Lua procura o <code>__add</code> primeiro no lado <strong>esquerdo</strong>; se não achar, procura no <strong>direito</strong>. Basta um dos dois ter o metamétodo. Com <code>c1</code> ligada às <code>regras</code> e <code>comum = { total = 5 }</code> sem metatabela, tanto <code>c1 + comum</code> quanto <code>comum + c1</code> deram <code>35</code> no lab. Os detalhes (e os outros operadores) estão na próxima aula, <a href="metametodos-aritmeticos.html">Metamétodos de Operadores</a>.</p>
+</div>
+
+<div class="trylua" data-goal="out:Total das duas cestas: 42;;semerro">
+<p class="try-task"><strong>Missão:</strong> o manual (<code>regras</code>) já tem o <code>__add</code>, mas as cestas não estão ligadas a ele. Rode para ver o erro <code>attempt to perform arithmetic on a table value</code>. Depois use <code>setmetatable</code> nas duas cestas para a soma funcionar.</p>
+<pre class="script" data-file="main.lua">local regras = {}
+regras.__add = function (a, b)
+  return { total = a.total + b.total }
+end
+
+local cesta_ana = { total = 30 }
+local cesta_bia = { total = 12 }
+
+local juntas = cesta_ana + cesta_bia
+print("Total das duas cestas: " .. juntas.total)
+</pre>
+<pre class="solucao" data-file="main.lua">local regras = {}
+regras.__add = function (a, b)
+  return { total = a.total + b.total }
+end
+
+local cesta_ana = setmetatable({ total = 30 }, regras)
+local cesta_bia = setmetatable({ total = 12 }, regras)
+
+local juntas = cesta_ana + cesta_bia
+print("Total das duas cestas: " .. juntas.total)
+</pre>
+</div>
+
+<hr>
+
+<h2>4. O <code>setmetatable</code> devolve a tabela</h2>
+<p>O <code>setmetatable(t, mt)</code> liga a metatabela e depois <strong>devolve o próprio <code>t</code></strong>. Não é uma cópia: é a mesma tabela.</p>
+
+<pre class="file" data-file="retorno.lua">local regras = {}
+local t = {}
+local volta = setmetatable(t, regras)
+print(volta == t)
+print(type(volta))
+</pre>
+
+<pre class="term">$ lua retorno.lua
+true
+table</pre>
+
+<p>É por isso que se vê tanto este jeito de escrever, que cria a tabela e liga o manual de uma vez:</p>
+
+<pre class="file" data-file="jeito.lua">local cesta = setmetatable({ total = 30 }, regras)
+</pre>
+
+<p>As duas formas abaixo fazem a mesma coisa:</p>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Em duas linhas</th><th>Numa linha só</th></tr>
+<tr><td><code>local cesta = { total = 30 }</code><br><code>setmetatable(cesta, regras)</code></td><td><code>local cesta = setmetatable({ total = 30 }, regras)</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>5. Uma metatabela para muitas tabelas</h2>
+<p>O manual não precisa ser um por tabela. Uma loja de cafeteiras não escreve um manual diferente para cada aparelho do mesmo modelo: imprime o mesmo texto para todos. No Lua, o normal é ter <strong>uma</strong> metatabela e ligá-la a <strong>todas</strong> as tabelas do mesmo tipo. Uma função que cria cestas deixa isso organizado:</p>
+
+<pre class="file" data-file="compartilhada.lua">local regras = {
+  __add = function (a, b)
+    return { total = a.total + b.total }
+  end,
+}
+
+local function nova_cesta(total)
+  return setmetatable({ total = total }, regras)
+end
+
+local c1 = nova_cesta(30)
+local c2 = nova_cesta(12)
+local c3 = nova_cesta(8)
+print(getmetatable(c1) == getmetatable(c3))
+
+local juntas = c1 + c2
+print(juntas.total)
+print(getmetatable(juntas))
+</pre>
+
+<pre class="term">$ lua compartilhada.lua
+true
+42
+nil</pre>
+
+<dl class="anatomy">
+  <dt>local regras = { __add = function … end, }</dt><dd>A mesma metatabela de antes, escrita de outro jeito: o <code>__add</code> já vai dentro das chaves, como qualquer campo de dicionário.</dd>
+  <dt>local function nova_cesta(total)</dt><dd>Uma "fábrica" de cestas: toda cesta criada por ela já sai com o manual ligado. Isso evita esquecer o <code>setmetatable</code> (o erro mais comum desta aula).</dd>
+  <dt>getmetatable(c1) == getmetatable(c3) → true</dt><dd>As três cestas apontam para <strong>a mesma</strong> tabela <code>regras</code>. Mudou o manual, mudou para todas.</dd>
+  <dt>getmetatable(juntas) → nil</dt><dd>Atenção: a cesta que o <code>__add</code> devolveu foi criada com <code>{ }</code> puro, então ela <strong>não</strong> tem manual. A missão final mostra o problema que isso causa e o conserto.</dd>
+</dl>
+
+<p>Essa ideia (uma metatabela compartilhada + uma função que cria as tabelas) é exatamente o começo das <a href="classes.html">classes</a>, daqui a algumas aulas.</p>
+
+<hr>
+
+<h2>6. Só tabelas ganham metatabela pelo Lua</h2>
+<p>O <code>setmetatable</code> só aceita <strong>tabelas</strong>. Os outros tipos não têm metatabela, com uma exceção curiosa: os textos.</p>
+
+<pre class="file" data-file="tipos.lua">print(getmetatable({}))
+print(getmetatable(42))
+print(getmetatable(print))
+local mt = getmetatable("abc")
+print(type(mt))
+print(mt.__index == string)
+print(("abc"):upper())
+</pre>
+
+<pre class="term">$ lua tipos.lua
+nil
+nil
+nil
+table
+true
+ABC</pre>
+
+<p>Tabela nova, número e função: <code>nil</code>, sem manual. Mas os <strong>textos</strong> já vêm com uma metatabela pronta, criada pelo próprio Lua, com um campo <code>__index</code> que aponta para a biblioteca <code>string</code>. É ela que faz <code>("abc"):upper()</code> funcionar como <code>string.upper("abc")</code> (veja <a href="string-metodos.html">Funções de Texto</a>). Você vai entender o <code>__index</code> em <a href="index-newindex.html">__index e __newindex</a> e o dois-pontos em <a href="metodos.html">Métodos</a>.</p>
+
+<div class="note">
+<strong>Só pelo Lua, não pelo seu programa</strong>
+<p>A metatabela dos textos foi o Lua que pôs. O seu programa não consegue dar metatabela a um texto ou a um número com <code>setmetatable</code> (a seção <a href="#errado">Quando dá errado</a> mostra o erro). Existe um jeito pela biblioteca <a href="debug.html">debug</a>, mas ele é para ferramentas, não para programas do dia a dia.</p>
+</div>
+
+<hr>
+
+<h2>7. Tirar e proteger a metatabela</h2>
+
+<h3>Tirar: <code>setmetatable(t, nil)</code></h3>
+<p>Passar <code>nil</code> no lugar do manual desliga a metatabela. A tabela volta a ser comum:</p>
+
+<pre class="file" data-file="tirar.lua">local regras = { __add = function (a, b) return a.total + b.total end }
+local c = setmetatable({ total = 5 }, regras)
+print(c + c)
+setmetatable(c, nil)
+print(getmetatable(c))
+print(c + c)
+</pre>
+
+<pre class="term">$ lua tirar.lua
+10
+nil
+lua: tirar.lua:6: attempt to perform arithmetic on a table value (local 'c')
+stack traceback:
+	tirar.lua:6: in main chunk
+	[C]: in ?</pre>
+
+<p>Na linha 3, com o manual, <code>c + c</code> deu <code>10</code> (aqui o <code>__add</code> devolve um número, não uma cesta: o metamétodo pode devolver o que você quiser). Na linha 4 o manual saiu, e na linha 6 voltou o erro do começo da aula.</p>
+
+<h3>Proteger: o campo <code>__metatable</code></h3>
+<p>Às vezes você escreve uma biblioteca e não quer que quem a usa troque ou bagunce o manual das suas tabelas. Para isso existe o campo especial <code>__metatable</code>. Quando ele existe na metatabela:</p>
+<ul>
+  <li>o <code>getmetatable</code> devolve <strong>o valor desse campo</strong>, e não a metatabela de verdade;</li>
+  <li>o <code>setmetatable</code> se recusa a trocar a metatabela e dá erro.</li>
+</ul>
+
+<pre class="file" data-file="protegida.lua">local regras = { __metatable = "não mexa" }
+local cofre = setmetatable({}, regras)
+print(getmetatable(cofre))
+setmetatable(cofre, {})
+</pre>
+
+<pre class="term">$ lua protegida.lua
+não mexa
+lua: protegida.lua:4: cannot change a protected metatable
+stack traceback:
+	[C]: in global 'setmetatable'
+	protegida.lua:4: in main chunk
+	[C]: in ?</pre>
+
+<dl class="anatomy">
+  <dt>não mexa</dt><dd>O <code>getmetatable</code> devolveu o texto guardado em <code>__metatable</code>, escondendo a tabela <code>regras</code>. Poderia ser qualquer valor: um texto de aviso, <code>false</code>…</dd>
+  <dt>cannot change a protected metatable</dt><dd>"Não é possível mudar uma metatabela protegida". O <code>setmetatable</code> da linha 4 foi recusado.</dd>
+  <dt>[C]: in global 'setmetatable'</dt><dd>A primeira linha do rastro mostra que o erro saiu de dentro da função <code>setmetatable</code> (que é escrita em C, por isso o <code>[C]</code>), chamada na linha 4 do arquivo.</dd>
+</dl>
+
+<p>É o que o próprio Lua faz com os textos? Não: com os textos, <code>getmetatable("abc")</code> devolve a tabela de verdade, como você viu na seção 6. O <code>__metatable</code> é para as <strong>suas</strong> bibliotecas.</p>
+
+<div class="trylua">
+<p class="try-task"><strong>Experimente:</strong> rode e veja o que cada <code>print</code> mostra. Depois apague a linha do <code>__metatable</code> e rode de novo: o que muda no primeiro <code>print</code>? E o <code>setmetatable</code> da última linha ainda dá erro?</p>
+<pre class="script" data-file="main.lua">local regras = {
+  __metatable = "protegida",
+}
+local cofre = setmetatable({ moedas = 10 }, regras)
+print(getmetatable(cofre))
+print(getmetatable(cofre) == regras)
+print(cofre.moedas)
+setmetatable(cofre, {})
+print("trocou o manual!")
+</pre>
+</div>
+
+<hr>
+
+<h2 id="formas">Formas diferentes de fazer a mesma coisa</h2>
+<p>A mesma metatabela com <code>__add</code> pode ser montada de três jeitos:</p>
+
+<pre class="file" data-file="forma1.lua">-- 1) campo por campo, depois de criar a tabela vazia
+local regras = {}
+regras.__add = function (a, b) return { total = a.total + b.total } end
+</pre>
+
+<pre class="file" data-file="forma2.lua">-- 2) tudo dentro das chaves
+local regras = {
+  __add = function (a, b) return { total = a.total + b.total } end,
+}
+</pre>
+
+<pre class="file" data-file="forma3.lua">-- 3) uma função com nome, guardada depois
+local function somar_cestas(a, b)
+  return { total = a.total + b.total }
+end
+local regras = { __add = somar_cestas }
+</pre>
+
+<p>E para ligar o manual às tabelas:</p>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Situação</th><th>Qual usar</th></tr>
+<tr><td>Uma tabela só, já criada</td><td><code>setmetatable(t, regras)</code></td></tr>
+<tr><td>Criar e ligar de uma vez</td><td><code>local t = setmetatable({ … }, regras)</code></td></tr>
+<tr><td>Muitas tabelas do mesmo tipo</td><td>Uma função "fábrica" (<code>nova_cesta</code>) que faz o <code>setmetatable</code> por você: é o começo das <a href="classes.html">classes</a></td></tr>
+<tr><td>Metatabela com poucas funções curtas</td><td>Tudo dentro das chaves (forma 2)</td></tr>
+<tr><td>Funções longas, ou usadas também fora do manual</td><td>Funções com nome (forma 3)</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+
+<div class="cenario">
+<strong>Escreveu o <code>__add</code>, mas esqueceu o <code>setmetatable</code></strong>
+<pre class="file" data-file="esqueceu.lua">local regras = {}
+regras.__add = function (a, b)
+  return { total = a.total + b.total }
+end
+
+local cesta_ana = { total = 30 }
+local cesta_bia = { total = 12 }
+
+local juntas = cesta_ana + cesta_bia
+print(juntas.total)
+</pre>
+<pre class="term">$ lua esqueceu.lua
+lua: esqueceu.lua:9: attempt to perform arithmetic on a table value (local 'cesta_ana')
+stack traceback:
+	esqueceu.lua:9: in main chunk
+	[C]: in ?</pre>
+<p>A mesma mensagem da seção 1. Ter uma tabela chamada <code>regras</code> com um <code>__add</code> não basta: o Lua não adivinha que ela é o manual das cestas. Sem <code>setmetatable</code>, as cestas continuam sem metatabela. <strong>Como consertar:</strong> <code>local cesta_ana = setmetatable({ total = 30 }, regras)</code> (e o mesmo para a outra), ou use uma função fábrica como a <code>nova_cesta</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Esqueceu os dois sublinhados</strong>
+<pre class="file" data-file="semsublinhado.lua">local regras = {}
+regras.add = function (a, b)
+  return { total = a.total + b.total }
+end
+local c1 = setmetatable({ total = 30 }, regras)
+local c2 = setmetatable({ total = 12 }, regras)
+print((c1 + c2).total)
+</pre>
+<pre class="term">$ lua semsublinhado.lua
+lua: semsublinhado.lua:7: attempt to perform arithmetic on a table value (local 'c1')
+stack traceback:
+	semsublinhado.lua:7: in main chunk
+	[C]: in ?</pre>
+<p>Agora o <code>setmetatable</code> está lá, mas o campo se chama <code>add</code>, e o Lua só procura <code>__add</code>, com <strong>dois</strong> sublinhados (<code>_</code> <code>_</code>). Um nome errado num metamétodo não dá erro nenhum na hora de escrever: o campo vira um campo comum da metatabela, que o Lua ignora. O erro só aparece quando a conta é feita. <strong>Como consertar:</strong> <code>regras.__add</code>. Os nomes certos de todos os metamétodos estão em <a href="ref-metametodos.html">Referência: Metamétodos</a>.</p>
+</div>
+
+<div class="cenario">
+<strong>Tentou dar metatabela a um texto</strong>
+<pre class="file" data-file="texto.lua">local nome = "Ana"
+setmetatable(nome, {})
+</pre>
+<pre class="term">$ lua texto.lua
+lua: texto.lua:2: bad argument #1 to 'setmetatable' (table expected, got string)
+stack traceback:
+	[C]: in global 'setmetatable'
+	texto.lua:2: in main chunk
+	[C]: in ?</pre>
+<p>"Argumento ruim nº 1 para <code>setmetatable</code> (era esperada uma tabela, veio uma string)". O <strong>primeiro</strong> argumento (o <code>#1</code>) tem de ser uma tabela. Com um número, a mensagem seria a mesma, com <code>got number</code>. <strong>Como consertar:</strong> guarde o texto dentro de uma tabela (<code>{ nome = "Ana" }</code>) e dê a metatabela à tabela.</p>
+</div>
+
+<div class="cenario">
+<strong>Trocou a ordem ou passou algo que não é tabela como manual</strong>
+<pre class="file" data-file="semtabela.lua">local c = {}
+setmetatable(c, "regras")
+</pre>
+<pre class="term">$ lua semtabela.lua
+lua: semtabela.lua:2: bad argument #2 to 'setmetatable' (nil or table expected, got string)
+stack traceback:
+	[C]: in global 'setmetatable'
+	semtabela.lua:2: in main chunk
+	[C]: in ?</pre>
+<p>"Argumento ruim nº 2: era esperado <code>nil</code> ou uma tabela, veio uma string". O <strong>segundo</strong> argumento é o manual, e só pode ser uma tabela (ou <code>nil</code>, para tirar a metatabela). Aqui as aspas transformaram o nome da variável num texto. <strong>Como consertar:</strong> <code>setmetatable(c, regras)</code>, sem aspas.</p>
+</div>
+
+<div class="cenario">
+<strong>Tentou trocar uma metatabela protegida</strong>
+<p>Se a metatabela tem o campo <code>__metatable</code>, o <code>setmetatable</code> dá <code>cannot change a protected metatable</code> ("não é possível mudar uma metatabela protegida"), como na seção 7. Não é defeito: quem escreveu a biblioteca quis que aquele manual não fosse trocado. Use a tabela como ela veio.</p>
+</div>
+
+<hr>
+
+<h2>Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>O que faz</th></tr>
+<tr><td><code>setmetatable(t, mt)</code></td><td>Liga a metatabela <code>mt</code> à tabela <code>t</code> e devolve <code>t</code></td></tr>
+<tr><td><code>setmetatable(t, nil)</code></td><td>Tira a metatabela de <code>t</code></td></tr>
+<tr><td><code>getmetatable(t)</code></td><td>Devolve a metatabela de <code>t</code>, ou <code>nil</code> se ela não tiver; se a metatabela tiver <code>__metatable</code>, devolve o valor desse campo</td></tr>
+<tr><td><code>mt.__add = function (a, b) … end</code></td><td>Ensina o <code>+</code>: o Lua chama a função com os dois lados e usa o que ela devolver</td></tr>
+<tr><td><code>mt.__metatable = valor</code></td><td>Protege: <code>getmetatable</code> devolve <code>valor</code> e <code>setmetatable</code> dá erro</td></tr>
+<tr><td><code>getmetatable("texto").__index</code></td><td>A biblioteca <code>string</code>: é o que faz <code>("abc"):upper()</code> funcionar</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Mensagem</th><th>Causa provável</th></tr>
+<tr><td><code>attempt to perform arithmetic on a table value</code></td><td>Conta com uma tabela sem <code>__add</code> (ou sem metatabela; ou o nome do metamétodo está errado)</td></tr>
+<tr><td><code>bad argument #1 to 'setmetatable' (table expected, got string)</code></td><td>Tentou dar metatabela a algo que não é tabela</td></tr>
+<tr><td><code>bad argument #2 to 'setmetatable' (nil or table expected, got …)</code></td><td>O manual (2º argumento) não é tabela nem <code>nil</code></td></tr>
+<tr><td><code>cannot change a protected metatable</code></td><td>A metatabela tem <code>__metatable</code></td></tr>
+</table>
+</div>
+
+<div class="note">
+<strong>Em outras versões</strong>
+<p><code>setmetatable</code>, <code>getmetatable</code>, <code>__add</code> e <code>__metatable</code> funcionam igual no Lua 5.4, no 5.1 e no LuaJIT (os programas <code>cestas.lua</code>, <code>protegida.lua</code> e <code>tipos.lua</code> deram as mesmas respostas no lab com <code>lua5.4</code>, <code>lua5.1</code> e <code>luajit</code>). Só o rastro do erro muda um pouco: lá aparece <code>[C]: in function 'setmetatable'</code> em vez de <code>[C]: in global 'setmetatable'</code>. Veja <a href="versoes.html">as diferenças entre as versões</a>.</p>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. Complete a linha</h3>
+<p>Complete para ligar a metatabela <code>regras</code> à tabela <code>cesta</code>:</p>
+<div class="ex-code"><input data-answer="setmetatable" aria-label="nome da função">(cesta, <input data-answer="regras" aria-label="segundo argumento">)</div>
+</div>
+
+<div class="exercise">
+<h3>2. O nome do metamétodo</h3>
+<p>Qual é o nome do campo que ensina o <code>+</code> ao Lua? Escreva com os sublinhados.</p>
+<div class="ex-code">regras.<input data-answer="__add" aria-label="nome do metamétodo"> = function (a, b) … end</div>
+</div>
+
+<div class="exercise">
+<h3>3. O que aparece?</h3>
+<p>O que este programa mostra?</p>
+<pre class="file" data-file="ex3.lua">local t = {}
+print(getmetatable(t))
+</pre>
+<div class="ex-code">Mostra <input data-answer="nil" aria-label="saída"></div>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">4. O que o <code>setmetatable(t, mt)</code> devolve?</p>
+<label><input type="radio" name="q4"> A metatabela <code>mt</code></label>
+<label><input type="radio" name="q4"> A própria tabela <code>t</code></label>
+<label><input type="radio" name="q4"> Uma cópia de <code>t</code></label>
+<label><input type="radio" name="q4"> Nada (<code>nil</code>)</label>
+</div>
+
+<div class="mc" data-answer="3">
+<p class="mc-q">5. A Ana escreveu <code>regras.__add</code> certinho, mas a soma das cestas dá <code>attempt to perform arithmetic on a table value</code>. O que é mais provável?</p>
+<label><input type="radio" name="q5"> O Lua não sabe somar números</label>
+<label><input type="radio" name="q5"> Metatabelas só funcionam no modo interativo</label>
+<label><input type="radio" name="q5"> Ela esqueceu de chamar <code>setmetatable</code> nas cestas</label>
+<label><input type="radio" name="q5"> O <code>__add</code> precisa se chamar <code>add</code></label>
+</div>
+
+<div class="mc" data-answer="1">
+<p class="mc-q">6. Uma metatabela tem o campo <code>__metatable = "fechado"</code>. O que <code>getmetatable(t)</code> devolve?</p>
+<label><input type="radio" name="q6"> O texto <code>"fechado"</code></label>
+<label><input type="radio" name="q6"> A metatabela de verdade</label>
+<label><input type="radio" name="q6"> <code>nil</code></label>
+<label><input type="radio" name="q6"> Dá erro</label>
+</div>
+
+<h3>Missão final: a cesta que soma de novo</h3>
+
+<div class="trylua" data-goal="out:Semana: 210;;semerro">
+<p class="try-task"><strong>Missão:</strong> o <code>Dia</code> sai certo, mas a <code>Semana</code> dá erro: a cesta que o <code>__add</code> devolve foi criada com <code>{ }</code> puro e não tem manual, então não sabe somar de novo. Troque o <code>return</code> do <code>__add</code> para ele devolver uma cesta criada com <code>nova_cesta</code>. A semana deve dar <code>210</code>.</p>
+<pre class="script" data-file="main.lua">local regras = {}
+
+local function nova_cesta(total)
+  return setmetatable({ total = total }, regras)
+end
+
+regras.__add = function (a, b)
+  return { total = a.total + b.total }
+end
+
+local manha = nova_cesta(30)
+local tarde = nova_cesta(12)
+local dia = manha + tarde
+print("Dia: " .. dia.total)
+local semana = dia + dia + dia + dia + dia
+print("Semana: " .. semana.total)
+</pre>
+<pre class="solucao" data-file="main.lua">local regras = {}
+
+local function nova_cesta(total)
+  return setmetatable({ total = total }, regras)
+end
+
+regras.__add = function (a, b)
+  return nova_cesta(a.total + b.total)
+end
+
+local manha = nova_cesta(30)
+local tarde = nova_cesta(12)
+local dia = manha + tarde
+print("Dia: " .. dia.total)
+local semana = dia + dia + dia + dia + dia
+print("Semana: " .. semana.total)
+</pre>
+</div>
+
+<p>No lab, o código inicial mostrou <code>Dia: 42</code> e depois <code>attempt to perform arithmetic on a table value (local 'dia')</code>, na linha 15. Com o conserto, saiu <code>Dia: 42</code> e <code>Semana: 210</code>. Repare na ordem do programa: a <code>regras</code> nasce vazia, a <code>nova_cesta</code> vem depois, e só então o <code>__add</code> é guardado. Assim, cada um pode usar o outro.</p>
+
+<div class="note">
+<strong>Curiosidade: por que <code>c1 + c2 + c3</code> funcionava?</strong>
+<p>Com o <code>__add</code> antigo (que devolve <code>{ }</code> puro), <code>c1 + c2 + c3</code> deu <code>50</code> no lab, sem erro. O Lua faz <code>(c1 + c2) + c3</code>: o lado esquerdo não tem manual, mas o direito (<code>c3</code>) tem, e basta um. Já <code>juntas + juntas</code> falhou, porque nenhum dos dois lados tinha. Devolver tabelas com o manual ligado evita essa surpresa.</p>
+</div>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li>Uma <strong>metatabela</strong> é uma tabela comum que funciona como o <strong>manual de instruções</strong> de outra tabela: diz ao Lua o que fazer em situações que ele não sabe resolver sozinho.</li>
+  <li>Cada instrução é um <strong>metamétodo</strong>: uma função num campo de nome especial, que começa com dois sublinhados (<code>__add</code>, <code>__index</code>, <code>__tostring</code>…). Quem chama é o Lua, na hora certa.</li>
+  <li><code>setmetatable(t, mt)</code> liga o manual e devolve <code>t</code>; <code>getmetatable(t)</code> consulta; <code>setmetatable(t, nil)</code> tira.</li>
+  <li>Sem <code>__add</code>, somar tabelas dá <code>attempt to perform arithmetic on a table value</code>. Com ele, o <code>+</code> chama a sua função com os dois lados.</li>
+  <li>O normal é <strong>uma</strong> metatabela para <strong>muitas</strong> tabelas, com uma função fábrica que já liga o manual.</li>
+  <li>Só tabelas recebem metatabela pelo <code>setmetatable</code>; os textos já vêm com uma, do próprio Lua. O campo <code>__metatable</code> protege o manual contra trocas.</li>
+  <li>Próximo passo: todos os operadores que você pode ensinar, em <a href="metametodos-aritmeticos.html">Metamétodos de Operadores</a>.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
