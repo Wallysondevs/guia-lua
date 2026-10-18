@@ -1,0 +1,550 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua load, loadfile e dofile — rodando código que está num texto | Guia Lua</title>
+<meta name="description" content="load, loadfile e dofile no Lua 5.5: transformar um texto em função, o erro de sintaxe devolvido em vez de parar o programa, o nome do pedaço, uma calculadora, o ambiente (env) para ler um arquivo de configuração, o modo &quot;t&quot;, dofile × require, e o perigo de rodar código que veio de fora, com as saídas e os erros reais.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">load, loadfile e dofile</span></h1>
+
+<p class="intro">Até agora, o código dos seus programas estava escrito no arquivo <code>.lua</code> antes de rodar. Mas o Lua consegue fazer uma coisa curiosa: pegar um <strong>texto</strong> que só aparece com o programa já rodando (digitado pela pessoa, lido de um arquivo) e <strong>rodá-lo como código</strong>. Quem faz isso é a função <code>load</code> ("carregar"), com as irmãs <code>loadfile</code> e <code>dofile</code>. É um recurso poderoso, usado para arquivos de configuração e calculadoras, e também perigoso, como você vai ver no fim.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>Como o <code>load</code> transforma um texto numa <strong>função</strong>, que você chama quando quiser.</li>
+  <li>O que acontece com um erro de sintaxe no texto: o <code>load</code> <strong>devolve</strong> a mensagem em vez de parar o programa.</li>
+  <li>Uma calculadora que entende contas digitadas, e o nome do pedaço nas mensagens de erro.</li>
+  <li>O <strong>ambiente</strong> (<code>env</code>): rodar o texto numa tabela separada, para ler um arquivo de configuração sem bagunçar as suas variáveis.</li>
+  <li><code>loadfile</code> e <code>dofile</code>, e a diferença para o <code>require</code>.</li>
+  <li>O perigo de rodar código que veio de fora, e como diminuir o risco.</li>
+</ul>
+</div>
+
+<p>As saídas são do <strong>Lua 5.5</strong> da máquina da Ana, numa pasta <code>carga</code>. Esta aula usa <a href="funcoes-valores.html">funções como valores</a>, <a href="pcall.html">pcall</a> e o <a href="env.html">_ENV</a>; se algum desses ainda for novidade, dê uma olhada antes.</p>
+
+<hr>
+
+<h2>A ideia: o bilhete com a receita</h2>
+<p>A dona da padaria deixa, todo dia, um bilhete com a receita especial do dia. O padeiro não sabe de antemão o que vai estar escrito: ele lê o bilhete e <strong>segue as instruções</strong>. Duas coisas podem dar errado:</p>
+<ul>
+  <li>o bilhete está <strong>ilegível</strong> (um erro de escrita): o padeiro nem começa, e avisa "não entendi o bilhete";</li>
+  <li>o bilhete foi trocado por alguém de má-fé, com "jogue fora todo o estoque": um padeiro que segue tudo sem pensar faria isso.</li>
+</ul>
+<p>O <code>load</code> é o padeiro: recebe o texto, confere se ele é Lua válido e, se for, devolve uma <strong>função</strong> pronta para rodar aquelas instruções. As duas coisas que podem dar errado são exatamente as seções 2 e 6 desta aula.</p>
+
+<hr>
+
+<h2>1. <code>load</code>: do texto para a função</h2>
+
+<pre class="file" data-file="soma.lua">local f = load("return 2 + 3")
+print(type(f))
+print(f())
+local g = load("print('Olá do texto!')")
+g()
+g()
+</pre>
+
+<pre class="term" data-cwd="~/carga">$ lua soma.lua
+function
+5
+Olá do texto!
+Olá do texto!</pre>
+
+<dl class="anatomy">
+  <dt>load("return 2 + 3")</dt><dd>O <code>load</code> lê o texto, confere que é Lua válido e devolve uma <strong>função</strong> com aquele código dentro. Ele <strong>não roda</strong> nada ainda.</dd>
+  <dt>type(f) → function</dt><dd>Confirmado: o que voltou é uma função (o texto virou um "pedaço" de programa; o manual chama de <em>chunk</em>).</dd>
+  <dt>f() → 5</dt><dd>Só agora o código roda. O <code>return</code> do texto vira o valor devolvido pela função.</dd>
+  <dt>g() duas vezes</dt><dd>A mesma função pode ser chamada quantas vezes você quiser: o texto foi lido uma vez, e roda a cada chamada.</dd>
+</dl>
+
+<p>O texto que vai para o <code>load</code> é um programa Lua completo, como um arquivo <code>.lua</code> em miniatura. Por isso, para <strong>receber um valor</strong> de volta, ele precisa do <code>return</code>: <code>load("2 + 3")</code> não serve (seção 2).</p>
+
+<h3>Passando valores para o pedaço</h3>
+<p>A função criada pelo <code>load</code> recebe os argumentos nos <a href="varargs.html">três pontinhos</a> (<code>...</code>), como um arquivo recebe os da linha de comando:</p>
+<pre class="file" data-file="args.lua">local f = load("local a, b = ... return a * b")
+print(f(6, 7))
+</pre>
+<pre class="term" data-cwd="~/carga">$ lua args.lua
+42</pre>
+
+<hr>
+
+<h2>2. Quando o texto tem erro de sintaxe</h2>
+<p>Se o texto não for Lua válido, o <code>load</code> <strong>não para o programa</strong>. Ele devolve <code>nil</code> e, como segundo valor, a mensagem de erro (é o mesmo jeito do <a href="io-open.html">io.open</a>):</p>
+
+<pre class="file" data-file="sintaxe.lua">local f, erro = load("return 2 +")
+print(f)
+print(erro)
+local g, erro2 = load("return 2 +", "=calculadora")
+print(erro2)
+</pre>
+
+<pre class="term" data-cwd="~/carga">$ lua sintaxe.lua
+nil
+[string "return 2 +"]:1: unexpected symbol near &lt;eof&gt;
+calculadora:1: unexpected symbol near &lt;eof&gt;</pre>
+
+<dl class="anatomy">
+  <dt>nil</dt><dd>Não deu para criar a função.</dd>
+  <dt>[string "return 2 +"]:1:</dt><dd>De onde veio o erro. Num arquivo, aqui estaria o nome dele (<code>main.lua:1:</code>); para um texto, o Lua mostra o começo do próprio texto entre <code>[string "…"]</code>, e a linha (1).</dd>
+  <dt>unexpected symbol near &lt;eof&gt;</dt><dd>"Símbolo inesperado perto do <em>fim do arquivo</em>" (<em>end of file</em>): depois do <code>+</code> o texto acabou, e faltou o segundo número.</dd>
+  <dt>load(texto, "=calculadora")</dt><dd>O segundo argumento é o <strong>nome do pedaço</strong>, que aparece nas mensagens. Começando com <code>=</code>, ele é usado do jeito que está: <code>calculadora:1:</code>. Dê sempre um nome que ajude a achar de onde o texto veio.</dd>
+</dl>
+
+<p>Já um erro que só aparece <strong>rodando</strong> (não de escrita) acontece quando você chama a função, e para o programa como qualquer erro:</p>
+
+<pre class="file" data-file="runtime.lua">local f = load("local t = nil\nreturn t.x")
+f()
+</pre>
+<pre class="term" data-cwd="~/carga">$ lua runtime.lua
+lua: [string "local t = nil..."]:2: attempt to index a nil value (local 't')
+stack traceback:
+	[string "local t = nil..."]:2: in local 'f'
+	runtime.lua:2: in main chunk
+	[C]: in ?</pre>
+<p>O <code>load</code> funcionou (o texto é Lua válido). O erro veio na <strong>linha 2 do texto</strong> (o <code>\n</code> é a quebra de linha), quando o <code>runtime.lua</code> chamou <code>f()</code> na linha 2 dele. Como o texto tem duas linhas, o Lua mostrou só a primeira, seguida de <code>...</code>. Para não deixar um erro desses parar tudo, chame com <code>pcall(f)</code>.</p>
+
+<hr>
+
+<h2>3. Uma calculadora</h2>
+<p>Juntando as duas coisas: a Ana quer um programa que pergunta uma conta, em texto, e mostra o resultado. Sem o <code>load</code>, ela teria de escrever um programa que entende <code>+</code>, <code>*</code>, parênteses… Com ele, quem entende a conta é o próprio Lua:</p>
+
+<pre class="file" data-file="calc.lua">io.write("Conta: ")
+local conta = io.read()
+local f, erro = load("return " .. conta, "=conta")
+if not f then
+  print("Não entendi: " .. erro)
+else
+  local ok, resultado = pcall(f)
+  if ok then
+    print("Resultado: " .. tostring(resultado))
+  else
+    print("Deu erro: " .. resultado)
+  end
+end
+</pre>
+
+<pre class="term" data-cwd="~/carga">$ printf '12 * 3 + 4\n' | lua calc.lua
+Conta: Resultado: 40
+$ printf '(10 + 5) / 2\n' | lua calc.lua
+Conta: Resultado: 7.5
+$ printf '2 +* 3\n' | lua calc.lua
+Conta: Não entendi: conta:1: unexpected symbol near '*'
+$ printf 'x + 1\n' | lua calc.lua
+Conta: Deu erro: conta:1: attempt to perform arithmetic on a nil value (global 'x')</pre>
+
+<p>(O <code>printf … |</code> "digita" a conta para o programa; por isso ela não aparece depois de <code>Conta:</code>. Veja <a href="io-read.html">io.read</a>.) Os três caminhos do programa aparecem: a conta certa, o erro de <strong>escrita</strong> (o <code>load</code> devolveu <code>nil</code>), e o erro <strong>rodando</strong> (o <code>pcall</code> devolveu <code>false</code>: a variável <code>x</code> não existe).</p>
+
+<div class="trylua" data-stdin="7 * 6" data-goal="out:Resultado: 42;;semerro">
+<p class="try-task"><strong>Missão:</strong> a caixa vai "digitar" <code>7 * 6</code>. O programa responde "Não entendi", porque o texto vai para o <code>load</code> sem o <code>return</code>, e <code>7 * 6</code> sozinho não é um comando Lua. Conserte a linha do <code>load</code> para aparecer <code>Resultado: 42</code>.</p>
+<pre class="script" data-file="main.lua">io.write("Conta: ")
+local conta = io.read()
+local f, erro = load(conta, "=conta")
+if not f then
+  print("Não entendi: " .. erro)
+else
+  print("Resultado: " .. tostring(f()))
+end
+</pre>
+<pre class="solucao" data-file="main.lua">io.write("Conta: ")
+local conta = io.read()
+local f, erro = load("return " .. conta, "=conta")
+if not f then
+  print("Não entendi: " .. erro)
+else
+  print("Resultado: " .. tostring(f()))
+end
+</pre>
+</div>
+
+<hr>
+
+<h2>4. O ambiente: rodar o texto numa tabela separada</h2>
+<p>Quando o texto cria variáveis globais (<code>nome = 'Ana'</code>), onde elas vão parar? Normalmente, nas globais do <strong>seu</strong> programa, misturadas com as suas. O <code>load</code> aceita um quarto argumento, o <strong>ambiente</strong> (em inglês, <em>environment</em>, o <code>env</code>): uma tabela que faz o papel das variáveis globais para aquele pedaço (é o <a href="env.html">_ENV</a> dele).</p>
+
+<pre class="file" data-file="env.lua">local config = {}
+local f = load("nome = 'Ana'\nidade = 30", "=config", "t", config)
+f()
+print(config.nome, config.idade)
+print(nome, idade)
+</pre>
+
+<pre class="term" data-cwd="~/carga">$ lua env.lua
+Ana	30
+nil	nil</pre>
+
+<dl class="anatomy">
+  <dt>load(texto, "=config", "t", config)</dt><dd>Os quatro argumentos: o texto, o nome do pedaço, o <strong>modo</strong> e o <strong>ambiente</strong>.</dd>
+  <dt>"t"</dt><dd>O modo: <code>"t"</code> aceita só <strong>texto</strong> (código Lua escrito). O padrão, <code>"bt"</code>, aceita também código já compilado ("binário", feito pelo <code>luac</code> ou pelo <code>string.dump</code>), que é ilegível e pode ser malformado de propósito. Para textos que vêm de fora, use sempre <code>"t"</code>.</dd>
+  <dt>config</dt><dd>O ambiente: as "globais" que o texto criou (<code>nome</code>, <code>idade</code>) foram parar <strong>dentro</strong> da tabela <code>config</code>.</dd>
+  <dt>print(nome, idade) → nil nil</dt><dd>As globais do programa continuaram limpas.</dd>
+</dl>
+
+<p>Isso também quer dizer que o texto <strong>só enxerga</strong> o que está na tabela. Se ela está vazia, o texto não tem nem o <code>print</code>. É o começo de uma "caixa de areia" (<em>sandbox</em>), na seção 6.</p>
+
+<hr>
+
+<h2>5. <code>loadfile</code> e <code>dofile</code>: o texto está num arquivo</h2>
+<p>Um uso clássico: um arquivo de <strong>configuração</strong> escrito em Lua, que uma pessoa sem experiência consegue editar. A lojinha da Ana tem este:</p>
+
+<pre class="file" data-file="config.lua">-- configurações da lojinha
+nome_loja = "Doces da Ana"
+taxa_entrega = 7.5
+bairros = {"Centro", "Vila Nova"}
+</pre>
+
+<p>O <code>loadfile</code> é o <code>load</code> para arquivos: lê o arquivo e devolve a função (ou <code>nil</code> e o erro), com os mesmos argumentos de modo e ambiente:</p>
+
+<pre class="file" data-file="le_config.lua">local config = {}
+local f, erro = loadfile("config.lua", "t", config)
+if not f then
+  print("Problema na configuração: " .. erro)
+  return
+end
+f()
+print(config.nome_loja, config.taxa_entrega, #config.bairros)
+print(nome_loja)
+</pre>
+
+<pre class="term" data-cwd="~/carga">$ lua le_config.lua
+Doces da Ana	7.5	2
+nil</pre>
+
+<p>Os valores da configuração estão em <code>config</code>, e nada vazou para as globais (<code>nome_loja</code> é <code>nil</code>). Os erros também voltam como valor, sem parar o programa:</p>
+
+<pre class="term" data-cwd="~/carga">$ lua -e 'print(loadfile("nada.lua"))'
+nil	cannot open nada.lua: No such file or directory
+$ printf 'nome_loja = "Doces\ntaxa = 1\n' &gt; ruim.lua
+$ lua -e 'print(loadfile("ruim.lua"))'
+nil	ruim.lua:1: unfinished string near '"Doces'</pre>
+
+<p>"Não consigo abrir <code>nada.lua</code>: arquivo ou pasta não existe"; e, no arquivo com a aspa que não fecha, "texto não terminado perto de <code>"Doces</code>", com o nome do arquivo e a linha. Com esse <code>if not f then</code>, o programa pode avisar a pessoa e continuar com valores padrão.</p>
+
+<h3><code>dofile</code>: carrega e roda de uma vez</h3>
+<p>O <code>dofile</code> ("faça o arquivo") é o atalho: carrega e já roda, e devolve o que o arquivo devolver. Mas ele não tem ambiente nem modo, e os erros <strong>param o programa</strong>:</p>
+
+<pre class="term" data-cwd="~/carga">$ lua -e 'dofile("nada.lua")'
+lua: cannot open nada.lua: No such file or directory
+stack traceback:
+	[C]: in global 'dofile'
+	(command line):1: in main chunk
+	[C]: in ?
+$ lua -e 'dofile("ruim.lua")'
+lua: ruim.lua:1: unfinished string near '"Doces'
+stack traceback:
+	[C]: in global 'dofile'
+	(command line):1: in main chunk
+	[C]: in ?</pre>
+
+<h3><code>dofile</code> × <code>require</code></h3>
+<p>Os dois rodam um arquivo <code>.lua</code> e devolvem o resultado. A diferença aparece quando você chama duas vezes:</p>
+
+<pre class="file" data-file="dado.lua">print("rodando dado.lua")
+return { faces = 6 }
+</pre>
+<pre class="file" data-file="usa_dofile.lua">local a = dofile("dado.lua")
+local b = dofile("dado.lua")
+print(a.faces, a == b)
+local c = require("dado")
+local d = require("dado")
+print(c.faces, c == d)
+</pre>
+<pre class="term" data-cwd="~/carga">$ lua usa_dofile.lua
+rodando dado.lua
+rodando dado.lua
+6	false
+rodando dado.lua
+6	true</pre>
+
+<p>O <code>dofile</code> roda o arquivo <strong>toda vez</strong> (duas mensagens, e duas tabelas diferentes: <code>a == b</code> é <code>false</code>). O <code>require</code> roda uma vez e guarda em <code>package.loaded</code> (veja <a href="modulos.html">Módulos e require</a>). E o <code>dofile</code> recebe o <strong>caminho do arquivo</strong> (<code>"dado.lua"</code>), enquanto o <code>require</code> recebe o nome do módulo (<code>"dado"</code>) e procura pelo <a href="package-path.html">package.path</a>.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Função</th><th>Recebe</th><th>Devolve</th><th>Erro</th><th>Use para</th></tr>
+<tr><td><code>load(texto, nome, "t", env)</code></td><td>Um texto com código</td><td>Uma função (não roda)</td><td><code>nil, mensagem</code></td><td>Código que chega como texto</td></tr>
+<tr><td><code>loadfile(arquivo, "t", env)</code></td><td>O caminho de um arquivo</td><td>Uma função (não roda)</td><td><code>nil, mensagem</code></td><td>Arquivos de configuração</td></tr>
+<tr><td><code>dofile(arquivo)</code></td><td>O caminho de um arquivo</td><td>O que o arquivo devolver (já rodou)</td><td>Para o programa</td><td>Rodar um arquivo seu, rapidinho</td></tr>
+<tr><td><code>require(nome)</code></td><td>O nome de um módulo</td><td>O módulo (roda uma vez só)</td><td>Para o programa</td><td>Módulos: o jeito normal de dividir um programa</td></tr>
+</table>
+</div>
+
+<div class="trylua" data-goal="out:Loja: Doces da Ana (entrega R$ 7.50);;semerro;;src:loadfile">
+<p class="try-task"><strong>Missão:</strong> o programa lê a configuração da aba <code>config.lua</code> com <code>loadfile</code>, mas esqueceu de passar a tabela <code>config</code> como ambiente. Então os valores foram para as globais, e <code>config.nome_loja</code> é <code>nil</code>: rode e veja o erro. Passe o modo <code>"t"</code> e a tabela <code>config</code> para o <code>loadfile</code>.</p>
+<pre class="script" data-file="main.lua">local config = {}
+local f, erro = loadfile("config.lua")
+if not f then
+  print("Problema na configuração: " .. erro)
+  return
+end
+f()
+print(string.format("Loja: %s (entrega R$ %.2f)", config.nome_loja, config.taxa_entrega))
+</pre>
+<pre class="script" data-file="config.lua">-- configurações da lojinha
+nome_loja = "Doces da Ana"
+taxa_entrega = 7.5
+</pre>
+<pre class="solucao" data-file="main.lua">local config = {}
+local f, erro = loadfile("config.lua", "t", config)
+if not f then
+  print("Problema na configuração: " .. erro)
+  return
+end
+f()
+print(string.format("Loja: %s (entrega R$ %.2f)", config.nome_loja, config.taxa_entrega))
+</pre>
+</div>
+
+<hr>
+
+<h2>6. O perigo: rodar código que veio de fora</h2>
+<p>Volte à calculadora da seção 3. Ela roda <strong>qualquer</strong> texto que a pessoa digitar, como Lua, com acesso a tudo o que o seu programa pode fazer. A Ana tinha um arquivo de notas na pasta. Alguém "digitou uma conta":</p>
+
+<pre class="term" data-cwd="~/carga">$ printf 'Ana 9\nBia 7\n' &gt; notas.txt
+$ ls
+calc.lua
+env.lua
+notas.txt
+preso.lua
+runtime.lua
+sintaxe.lua
+soma.lua
+$ printf 'os.remove("notas.txt")\n' | lua calc.lua
+Conta: Resultado: true
+$ ls
+calc.lua
+env.lua
+preso.lua
+runtime.lua
+sintaxe.lua
+soma.lua</pre>
+
+<p>O <code>notas.txt</code> sumiu. O "resultado" <code>true</code> é a resposta do <a href="os-remove-rename.html">os.remove</a>: "apaguei". No lugar disso poderia estar um <code>os.execute</code> com um comando qualquer do sistema (veja <a href="os-execute.html">os.execute</a>). A regra é simples: <strong>nunca rode com <code>load</code> um texto em que você não confia</strong> (que veio da internet, de um formulário, de um arquivo que outra pessoa pode mexer) sem proteção.</p>
+
+<h3>Diminuindo o risco: um ambiente com pouca coisa</h3>
+<p>A proteção é o ambiente da seção 4: o texto só enxerga o que você põe na tabela. Um "visitante" que só pode imprimir:</p>
+
+<pre class="file" data-file="preso.lua">local cofre = { print = print }
+local f = load("print('posso imprimir') os.remove('notas.txt')", "=visitante", "t", cofre)
+print(pcall(f))
+</pre>
+
+<pre class="term" data-cwd="~/carga">$ lua preso.lua
+posso imprimir
+false	visitante:1: attempt to index a nil value (global 'os')</pre>
+
+<p>O <code>print</code> funcionou (estava no cofre). O <code>os</code>, não: para o visitante, <code>os</code> é uma global que não existe (<code>nil</code>). E o modo <code>"t"</code> impede que alguém mande código binário:</p>
+
+<pre class="term">$ lua -e 'print(load(string.dump(function () return 1 end), "=bin", "t"))'
+nil	attempt to load a binary chunk (mode is 't')</pre>
+
+<div class="warning">
+<strong>Ainda não é uma fortaleza</strong>
+<p>Um ambiente pequeno tira as ferramentas perigosas, mas não impede tudo: um texto com <code>while true do end</code> trava o seu programa para sempre, e um que monta uma tabela gigante pode acabar com a memória. Ponha no cofre <strong>só</strong> o necessário (nunca o <code>os</code>, o <code>io</code>, o <code>load</code>, o <code>require</code>, o <code>debug</code>, nem o próprio <code>_G</code>, que dá acesso a tudo), e, para coisas sérias, não rode código de estranhos.</p>
+</div>
+
+<div class="note">
+<strong>No Lua 5.1 e no LuaJIT</strong>
+<p>O <code>load</code> de lá só aceitava uma função, e para textos existia o <code>loadstring</code>; o ambiente se trocava com <code>setfenv</code>. No 5.5 os dois não existem (<code>print(loadstring, setfenv)</code> mostra <code>nil nil</code>; no <code>lua5.1</code>, os dois são <code>function</code>). Se você encontrar <code>loadstring(texto)</code> num código antigo, troque por <code>load(texto)</code>. Veja <a href="versoes.html">as diferenças entre versões</a>.</p>
+</div>
+
+<hr>
+
+<h2>7. Um detalhe: o <code>load</code> também aceita uma função</h2>
+<p>Em vez do texto inteiro, o <code>load</code> pode receber uma função que entrega o código <strong>em pedaços</strong>; ele a chama até receber <code>nil</code>. Serve para código que chega aos poucos (de um arquivo grande, da rede):</p>
+<pre class="file" data-file="pedacos.lua">local partes = {"return ", "10 ", "* ", "4"}
+local i = 0
+local f = load(function ()
+  i = i + 1
+  return partes[i]
+end)
+print(f())
+</pre>
+<pre class="term" data-cwd="~/carga">$ lua pedacos.lua
+40</pre>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+
+<div class="cenario">
+<strong>Chamou o resultado do <code>load</code> sem conferir</strong>
+<p>O <code>load(texto)()</code> numa linha só é tentador. Mas se o texto tiver erro de sintaxe, o <code>load</code> devolve <code>nil</code>, e chamar <code>nil</code> dá um erro que esconde o motivo verdadeiro:</p>
+<pre class="term">$ lua -e 'local r = load("return 2 +")()'
+lua: (command line):1: attempt to call a nil value
+stack traceback:
+	(command line):1: in main chunk
+	[C]: in ?</pre>
+<p>"Tentar chamar um valor nil": a mensagem de verdade (<code>unexpected symbol near &lt;eof&gt;</code>) se perdeu. <strong>Como consertar:</strong> guarde os dois valores e confira: <code>local f, erro = load(texto)</code> e <code>if not f then print(erro) end</code>. Ou use <code>assert(load(texto))</code>, que para o programa mostrando a mensagem certa.</p>
+</div>
+
+<div class="cenario">
+<strong>Esqueceu o <code>return</code> no texto</strong>
+<pre class="term">$ lua -e 'print(load("2 + 3"))'
+nil	[string "2 + 3"]:1: unexpected symbol near '2'
+$ lua -e 'print(load("return 2 + 3")())'
+5</pre>
+<p>Um texto para o <code>load</code> é um <strong>programa</strong>, e um programa não pode começar com um número solto ("símbolo inesperado perto de <code>2</code>"). Para calcular um valor, comece com <code>return</code>. (O modo interativo do <code>lua</code> aceita <code>2 + 3</code> sozinho porque ele mesmo põe o <code>return</code> na frente; o <code>load</code>, não. Veja <a href="repl.html">O Modo Interativo</a>.)</p>
+</div>
+
+<div class="cenario">
+<strong>O ambiente vazio não tem nem o <code>print</code></strong>
+<pre class="term">$ lua -e 'local f = load("print(1)", "=texto", "t", {}) f()'
+lua: texto:1: attempt to call a nil value (global 'print')
+stack traceback:
+	texto:1: in local 'f'
+	(command line):1: in main chunk
+	[C]: in ?</pre>
+<p>Com <code>{}</code> como ambiente, o pedaço não enxerga <strong>nenhuma</strong> global, nem o <code>print</code>, nem o <code>math</code>. <strong>Como consertar:</strong> ponha no ambiente o que o texto precisa: <code>{ print = print, math = math }</code>.</p>
+</div>
+
+<div class="trylua" data-stdin="os.exit(3)" data-goal="out:attempt to index a nil value (global 'os');;exit:0;;src:\{\s*math\s*=\s*math\s*\}">
+<p class="try-task"><strong>Missão:</strong> a calculadora roda qualquer coisa, e a caixa vai "digitar" <code>os.exit(3)</code>: o programa fecha na hora, sem mostrar nada (o código de saída vira 3). Proteja a calculadora: passe ao <code>load</code> o modo <code>"t"</code> e um ambiente que só tenha a biblioteca de matemática, <code>{ math = math }</code>. Aí o visitante recebe um erro em vez de fechar o programa.</p>
+<pre class="script" data-file="main.lua">io.write("Conta: ")
+local conta = io.read()
+local f, erro = load("return " .. conta, "=conta")
+if not f then
+  print("Não entendi: " .. erro)
+else
+  local ok, resultado = pcall(f)
+  if ok then
+    print("Resultado: " .. tostring(resultado))
+  else
+    print("Deu erro: " .. resultado)
+  end
+end
+</pre>
+<pre class="solucao" data-file="main.lua">io.write("Conta: ")
+local conta = io.read()
+local f, erro = load("return " .. conta, "=conta", "t", { math = math })
+if not f then
+  print("Não entendi: " .. erro)
+else
+  local ok, resultado = pcall(f)
+  if ok then
+    print("Resultado: " .. tostring(resultado))
+  else
+    print("Deu erro: " .. resultado)
+  end
+end
+</pre>
+</div>
+
+<p>Com a proteção, contas como <code>math.sqrt(81)</code> continuam funcionando, e o <code>os</code> deixa de existir para quem digita.</p>
+
+<hr>
+
+<h2>Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>O que faz</th></tr>
+<tr><td><code>load(texto)</code></td><td>Transforma o texto numa função; <code>nil, erro</code> se o texto tiver erro de sintaxe</td></tr>
+<tr><td><code>load(texto, "=nome")</code></td><td>O mesmo, com <code>nome:1:</code> nas mensagens</td></tr>
+<tr><td><code>load(texto, nome, "t", env)</code></td><td>Só aceita texto; as globais do pedaço são a tabela <code>env</code></td></tr>
+<tr><td><code>load(funcao)</code></td><td>O código vem em pedaços, até a função devolver <code>nil</code></td></tr>
+<tr><td><code>f(a, b)</code></td><td>Roda o pedaço; os argumentos chegam em <code>...</code></td></tr>
+<tr><td><code>loadfile(arquivo, "t", env)</code></td><td>O mesmo que o <code>load</code>, lendo de um arquivo</td></tr>
+<tr><td><code>dofile(arquivo)</code></td><td>Carrega e roda; devolve o resultado; erro para o programa</td></tr>
+<tr><td><code>assert(load(texto))</code></td><td>Para com a mensagem certa se o texto tiver erro</td></tr>
+<tr><td><code>loadstring</code>, <code>setfenv</code></td><td>Só no Lua 5.1/LuaJIT; no 5.5 use <code>load</code> com <code>env</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. Complete</h3>
+<p>Complete para a variável <code>f</code> virar uma função que devolve 10 vezes 5:</p>
+<div class="ex-code">local f = <input data-answer="load" aria-label="função">("<input data-answer="return" aria-label="palavra-chave"> 10 * 5")<br>print(f())</div>
+</div>
+
+<div class="exercise">
+<h3>2. O que aparece?</h3>
+<p>Qual é o primeiro valor que <code>load("x = = 1")</code> devolve?</p>
+<div class="ex-code"><input data-answer="nil" aria-label="valor"></div>
+</div>
+
+<div class="mc" data-answer="3">
+<p class="mc-q">3. Qual a diferença entre <code>dofile("dado.lua")</code> e <code>require("dado")</code>, chamados duas vezes?</p>
+<label><input type="radio" name="q3"> Nenhuma</label>
+<label><input type="radio" name="q3"> O <code>dofile</code> só funciona com arquivos de configuração</label>
+<label><input type="radio" name="q3"> O <code>dofile</code> roda o arquivo toda vez; o <code>require</code> roda uma vez e guarda em <code>package.loaded</code></label>
+<label><input type="radio" name="q3"> O <code>require</code> não devolve nada</label>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">4. Para que serve o quarto argumento de <code>load(texto, nome, "t", env)</code>?</p>
+<label><input type="radio" name="q4"> Diz quantas vezes o texto vai rodar</label>
+<label><input type="radio" name="q4"> É a tabela que faz o papel das variáveis globais para aquele texto</label>
+<label><input type="radio" name="q4"> É o nome do arquivo onde o texto será salvo</label>
+<label><input type="radio" name="q4"> Liga as mensagens de erro em português</label>
+</div>
+
+<div class="mc" data-answer="4">
+<p class="mc-q">5. Um site permite que os usuários mandem fórmulas, e o seu programa roda cada uma com <code>load(formula)()</code>. Qual é o problema?</p>
+<label><input type="radio" name="q5"> Nenhum: o <code>load</code> só aceita contas</label>
+<label><input type="radio" name="q5"> O <code>load</code> não funciona com textos longos</label>
+<label><input type="radio" name="q5"> As fórmulas ficam mais lentas</label>
+<label><input type="radio" name="q5"> A "fórmula" pode ser qualquer código Lua, como <code>os.remove(…)</code>; é preciso um ambiente restrito, e mesmo assim com cuidado</label>
+</div>
+
+<h3>Missão final: a calculadora com memória</h3>
+
+<div class="trylua" data-stdin="preco * 3" data-goal="out:Resultado: 22.5;;semerro;;src:load\(">
+<p class="try-task"><strong>Missão:</strong> a Ana quer usar nomes nas contas. A caixa vai "digitar" <code>preco * 3</code>. Monte o ambiente da calculadora com a tabela <code>valores</code> (que já tem o <code>preco</code>) e passe-o ao <code>load</code>, junto com o modo <code>"t"</code>. Assim o texto enxerga <code>preco</code> como se fosse uma global, e aparece <code>Resultado: 22.5</code>.</p>
+<pre class="script" data-file="main.lua">local valores = { preco = 7.5, math = math }
+io.write("Conta: ")
+local conta = io.read()
+local f, erro = load("return " .. conta, "=conta")
+if not f then
+  print("Não entendi: " .. erro)
+  return
+end
+local ok, resultado = pcall(f)
+print(ok and "Resultado: " .. tostring(resultado) or "Deu erro: " .. resultado)
+</pre>
+<pre class="solucao" data-file="main.lua">local valores = { preco = 7.5, math = math }
+io.write("Conta: ")
+local conta = io.read()
+local f, erro = load("return " .. conta, "=conta", "t", valores)
+if not f then
+  print("Não entendi: " .. erro)
+  return
+end
+local ok, resultado = pcall(f)
+print(ok and "Resultado: " .. tostring(resultado) or "Deu erro: " .. resultado)
+</pre>
+</div>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li><code>load(texto)</code> transforma um texto com código Lua numa <strong>função</strong>; o código só roda quando você a chama. Para devolver um valor, o texto precisa de <code>return</code>.</li>
+  <li>Com erro de sintaxe, o <code>load</code> devolve <code>nil</code> e a mensagem, sem parar o programa. Confira sempre (<code>if not f</code> ou <code>assert</code>), e use <code>pcall(f)</code> para os erros que aparecem rodando.</li>
+  <li>O segundo argumento dá nome ao pedaço (<code>"=calculadora"</code>); o terceiro, <code>"t"</code>, aceita só texto; o quarto, o ambiente, é a tabela das "globais" do pedaço.</li>
+  <li><code>loadfile</code> faz o mesmo com um arquivo (ótimo para configurações); <code>dofile</code> carrega e roda de uma vez, e roda de novo a cada chamada, ao contrário do <code>require</code>.</li>
+  <li>Rodar texto de fora é perigoso: ele pode fazer tudo o que o seu programa faz. Use <code>"t"</code> e um ambiente só com o necessário, e não confie cegamente nem assim.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
