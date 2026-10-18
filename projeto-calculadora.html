@@ -537,7 +537,7 @@ stack traceback:
         [C]: in ?
 $ echo $?
 1</pre>
-<p>O <code>^C</code> é o terminal mostrando a tecla. O Lua responde com <code>interrupted!</code> ("interrompido!") e o traceback mostra onde o programa estava: na linha 7, dentro da função <code>read</code> (o <code>[C]: in field 'read'</code>), esperando a operação. O código de saída 1 (o <code>echo $?</code>) diz "terminou com erro". Não é defeito: é o jeito normal de interromper.</p>
+<p>O <code>^C</code> é o terminal mostrando a tecla. O Lua responde com <code>interrupted!</code> ("interrompido!") e o traceback mostra onde o programa estava: na linha 7, dentro da função <code>read</code> (o <code>[C]: in field 'read'</code>), esperando a operação. O código de saída 1 (o <code>echo $?</code>) diz "terminou com erro". Não é defeito: é o jeito normal de interromper. (Numa caixa "Experimente", o <kbd>Ctrl</kbd>+<kbd>C</kbd> e o botão <strong>■ Parar</strong> encerram na hora e mostram só <code>^C</code> e <code>[programa interrompido]</code>, sem o <code>interrupted!</code>.)</p>
 <p>Já o <kbd>Ctrl</kbd>+<kbd>D</kbd> quer dizer "acabou a entrada". Aí o <code>io.read()</code> não tem linha nenhuma para devolver e devolve <code>nil</code>:</p>
 <pre class="term" data-cwd="~/projetos/calculadora">$ lua calculadora.lua
 === Calculadora da Ana ===
