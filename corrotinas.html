@@ -1,0 +1,531 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua Corrotinas — coroutine.create, resume e yield | Guia Lua</title>
+<meta name="description" content="Corrotinas no Lua 5.5 para quem está começando: coroutine.create, resume e yield (pausar e continuar uma função), passar valores nos dois sentidos, coroutine.status (suspended, running, normal, dead), isyieldable, running, coroutine.close com &lt;close&gt;, e os erros reais: cannot resume dead coroutine, attempt to yield from outside a coroutine, attempt to yield across a C-call boundary.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">Corrotinas</span></h1>
+
+<p class="intro">Uma função comum, quando é chamada, vai do começo ao fim de uma vez só. Uma <strong>corrotina</strong> (em inglês, <em>coroutine</em>) é uma função que pode <strong>pausar no meio</strong>, devolver o controle para quem a chamou, e depois <strong>continuar exatamente de onde parou</strong>, com todas as variáveis do jeito que estavam. É um dos recursos mais poderosos do Lua: os jogos usam corrotinas para animações que duram vários quadros, os editores (como o Neovim) para tarefas que esperam alguma coisa, e muita gente para escrever iteradores e "produtores" de dados de um jeito simples.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>Criar uma corrotina (<code>coroutine.create</code>), começar e continuar (<code>coroutine.resume</code>) e pausar (<code>coroutine.yield</code>).</li>
+  <li>Passar valores nos dois sentidos: o que o <code>yield</code> entrega e o que o <code>resume</code> manda de volta.</li>
+  <li>Os quatro estados de uma corrotina (<code>coroutine.status</code>): <code>suspended</code>, <code>running</code>, <code>normal</code> e <code>dead</code>.</li>
+  <li>O que acontece com um erro dentro de uma corrotina, e como encerrá-la antes do fim com <code>coroutine.close</code>.</li>
+  <li>As mensagens reais: <code>cannot resume dead coroutine</code>, <code>attempt to yield from outside a coroutine</code> e outras.</li>
+</ul>
+</div>
+
+<p>Todos os programas desta aula rodaram no <strong>Lua 5.5</strong> da máquina da Ana (usuária <code>ana</code>, computador <code>notebook</code>), na pasta pessoal dela, com <code>lua arquivo.lua</code>. Você precisa conhecer <a href="funcoes.html">funções</a> e <a href="funcoes-valores.html">funções como valores</a>.</p>
+
+<hr>
+
+<h2>A ideia: o marcador de página</h2>
+<p>A Ana está lendo um livro de receitas. No meio do capítulo de bolos, o telefone toca. Ela põe um <strong>marcador</strong> na página, atende, resolve o que precisa, e depois abre o livro <strong>no marcador</strong>: continua da mesma linha, lembrando de tudo o que já leu.</p>
+<p>Uma corrotina é o livro com marcador:</p>
+<ul>
+  <li><strong><code>coroutine.yield</code></strong> ("ceder", "dar a vez") é pôr o marcador e fechar o livro: a corrotina pausa ali.</li>
+  <li><strong><code>coroutine.resume</code></strong> ("retomar") é abrir no marcador: a corrotina continua da linha seguinte ao <code>yield</code>.</li>
+</ul>
+<p>Importante: só uma coisa acontece de cada vez. Enquanto a Ana lê, ela não está ao telefone, e vice-versa. As corrotinas do Lua são assim: <strong>não</strong> rodam ao mesmo tempo; elas se revezam, e cada uma decide quando dar a vez (é por isso que o manual as chama de "multitarefa colaborativa").</p>
+
+<hr>
+
+<h2>1. A primeira corrotina</h2>
+
+<pre class="file" data-file="co1.lua">local co = coroutine.create(function ()
+  print("passo 1")
+  coroutine.yield()
+  print("passo 2")
+  coroutine.yield()
+  print("passo 3")
+end)
+print(type(co), coroutine.status(co))
+coroutine.resume(co)
+print("-- a corrotina parou; o programa principal continua")
+coroutine.resume(co)
+print("-- de novo")
+coroutine.resume(co)
+print(coroutine.status(co))
+</pre>
+
+<dl class="anatomy">
+  <dt>coroutine.create(function () … end)</dt><dd>Cria a corrotina a partir de uma função (o <strong>corpo</strong> dela). Criar <strong>não roda nada</strong>: o livro está fechado, com o marcador na primeira página. O valor devolvido é do tipo <code>thread</code> ("linha de execução").</dd>
+  <dt>coroutine.yield()</dt><dd>Dentro do corpo: "pause aqui e devolva o controle a quem me retomou".</dd>
+  <dt>coroutine.resume(co)</dt><dd>No programa principal: "rode a corrotina <code>co</code> até ela pausar ou terminar". Na primeira vez, começa do início do corpo.</dd>
+  <dt>coroutine.status(co)</dt><dd>Diz em que estado ela está: <code>suspended</code> (pausada, ou ainda não começou), <code>running</code> (rodando), <code>normal</code> ou <code>dead</code> (terminou). Os estados estão explicados na seção 4.</dd>
+</dl>
+
+<pre class="term">$ lua co1.lua
+thread	suspended
+passo 1
+-- a corrotina parou; o programa principal continua
+passo 2
+-- de novo
+passo 3
+dead</pre>
+
+<p>Siga a ordem das linhas: o primeiro <code>resume</code> rodou o corpo até o primeiro <code>yield</code> (<code>passo 1</code>), e o controle voltou ao programa principal, que mostrou a linha <code>--</code>. O segundo <code>resume</code> continuou <strong>depois</strong> do primeiro <code>yield</code> (<code>passo 2</code>). O terceiro foi até o fim do corpo (<code>passo 3</code>), e aí a corrotina "morreu": <code>dead</code>.</p>
+
+<h3>O que o <code>resume</code> responde</h3>
+<p>O <code>resume</code> devolve <code>true</code> quando deu tudo certo, e <code>false</code> com uma mensagem quando não deu. Uma corrotina morta não volta:</p>
+
+<pre class="file" data-file="co2.lua">local co = coroutine.create(function ()
+  coroutine.yield()
+end)
+print(coroutine.resume(co))
+print(coroutine.resume(co))
+print(coroutine.resume(co))
+print(coroutine.status(co))
+</pre>
+
+<pre class="term">$ lua co2.lua
+true
+true
+false	cannot resume dead coroutine
+dead</pre>
+
+<p>Primeiro <code>resume</code>: rodou até o <code>yield</code> (<code>true</code>). Segundo: continuou do <code>yield</code> até o fim do corpo (<code>true</code>; agora ela está morta). Terceiro: <code>false</code> e <code>cannot resume dead coroutine</code>, "não dá para retomar uma corrotina morta". Repare que isso <strong>não</strong> é um erro que derruba o programa: o <code>resume</code> só devolveu <code>false</code>, e o programa continuou até o último <code>print</code>.</p>
+
+<hr>
+
+<h2>2. Passando valores: o <code>yield</code> entrega, o <code>resume</code> responde</h2>
+<p>O <code>yield</code> e o <code>resume</code> são uma <strong>conversa</strong>. O que a corrotina passa para o <code>yield</code> sai no <code>resume</code> de quem a chamou. E o que o programa principal passa para o próximo <code>resume</code> sai como resultado daquele <code>yield</code>, dentro da corrotina:</p>
+
+<pre class="file" data-file="co3.lua">local fornada = coroutine.create(function (sabor)
+  print("assando pão de " .. sabor)
+  local pedido = coroutine.yield("primeira fornada pronta")
+  print("cliente pediu: " .. pedido)
+  local outro = coroutine.yield("segunda fornada pronta")
+  print("cliente pediu: " .. outro)
+  return "padaria fechada"
+end)
+print(coroutine.resume(fornada, "queijo"))
+print(coroutine.resume(fornada, "6 pães"))
+print(coroutine.resume(fornada, "2 pães"))
+print(coroutine.resume(fornada, "mais 1"))
+</pre>
+
+<pre class="term">$ lua co3.lua
+assando pão de queijo
+true	primeira fornada pronta
+cliente pediu: 6 pães
+true	segunda fornada pronta
+cliente pediu: 2 pães
+true	padaria fechada
+false	cannot resume dead coroutine</pre>
+
+<p>Passo a passo:</p>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Chamada</th><th>Na corrotina</th><th>O <code>resume</code> devolveu</th></tr>
+<tr><td><code>resume(fornada, "queijo")</code></td><td>Começa: <code>"queijo"</code> vira o parâmetro <code>sabor</code>. Roda até o 1º <code>yield</code>.</td><td><code>true</code>, <code>"primeira fornada pronta"</code> (o que foi para o <code>yield</code>)</td></tr>
+<tr><td><code>resume(fornada, "6 pães")</code></td><td>O 1º <code>yield</code> "volta" valendo <code>"6 pães"</code>, que vai para <code>pedido</code>. Roda até o 2º <code>yield</code>.</td><td><code>true</code>, <code>"segunda fornada pronta"</code></td></tr>
+<tr><td><code>resume(fornada, "2 pães")</code></td><td>O 2º <code>yield</code> vale <code>"2 pães"</code> (<code>outro</code>). Roda até o <code>return</code>.</td><td><code>true</code>, <code>"padaria fechada"</code> (o que o <code>return</code> devolveu)</td></tr>
+<tr><td><code>resume(fornada, "mais 1")</code></td><td>Nada: ela já terminou.</td><td><code>false</code>, <code>"cannot resume dead coroutine"</code></td></tr>
+</table>
+</div>
+
+<p>O <code>yield</code> também funciona de dentro de outras funções que o corpo chamou. A pausa congela <strong>a pilha inteira</strong>:</p>
+
+<pre class="file" data-file="co15.lua">local function ajudante(x)
+  coroutine.yield("ajudante pausou com " .. x)
+  return x * 2
+end
+local co = coroutine.create(function ()
+  local r = ajudante(5)
+  return "fim: " .. r
+end)
+print(coroutine.resume(co))
+print(coroutine.resume(co))
+</pre>
+
+<pre class="term">$ lua co15.lua
+true	ajudante pausou com 5
+true	fim: 10</pre>
+
+<div class="trylua" data-goal="outre:fornada 3\ntrue\tforno desligado\n$;;src:coroutine\.yield">
+<p class="try-task"><strong>Missão:</strong> o programa chama <code>resume</code> 4 vezes, mas o forno só tem duas fornadas e o <code>return</code>, então a 4ª chamada dá <code>false</code> e <code>cannot resume dead coroutine</code>. Acrescente uma <strong>terceira fornada</strong> (<code>"fornada 3"</code>) ao corpo, para as 4 chamadas darem certo e a última mostrar <code>forno desligado</code>.</p>
+<pre class="script" data-file="main.lua">local forno = coroutine.create(function ()
+  coroutine.yield("fornada 1")
+  coroutine.yield("fornada 2")
+  return "forno desligado"
+end)
+for i = 1, 4 do
+  print(coroutine.resume(forno))
+end
+</pre>
+<pre class="solucao" data-file="main.lua">local forno = coroutine.create(function ()
+  coroutine.yield("fornada 1")
+  coroutine.yield("fornada 2")
+  coroutine.yield("fornada 3")
+  return "forno desligado"
+end)
+for i = 1, 4 do
+  print(coroutine.resume(forno))
+end
+</pre>
+</div>
+
+<p>No lab, o programa original mostrou <code>true	fornada 1</code>, <code>true	fornada 2</code>, <code>true	forno desligado</code> e <code>false	cannot resume dead coroutine</code>.</p>
+
+<hr>
+
+<h2>3. Repetindo até a corrotina terminar</h2>
+<p>Quase sempre você não sabe quantas pausas a corrotina vai fazer. Então o programa principal faz um laço: retoma, usa o valor, e para quando ela morrer:</p>
+
+<pre class="file" data-file="co13.lua">local co = coroutine.create(function ()
+  for i = 1, 3 do
+    coroutine.yield(i)
+  end
+end)
+while true do
+  local ok, valor = coroutine.resume(co)
+  if coroutine.status(co) == "dead" then break end
+  print("recebi", valor)
+end
+</pre>
+
+<pre class="term">$ lua co13.lua
+recebi	1
+recebi	2
+recebi	3</pre>
+
+<p>Por que testar o <code>status</code> <strong>depois</strong> do <code>resume</code>? Porque a corrotina dá 3 pausas e depois uma <strong>4ª volta</strong>, em que o <code>for</code> dela termina e o corpo chega ao fim sem <code>yield</code>. Esse último <code>resume</code> devolve só <code>true</code>, sem valor. Se o laço não parasse ali, mostraria <code>recebi nil</code>. (Esse vaivém de "pede um, recebe um" é o assunto da próxima aula, <a href="corrotinas-produtor.html">Produtor e Consumidor</a>, e a próxima depois dela mostra um jeito mais curto de escrever este laço: <a href="corrotinas-wrap.html">coroutine.wrap</a>.)</p>
+
+<hr>
+
+<h2>4. Os quatro estados</h2>
+
+<pre class="file" data-file="co4.lua">local co
+co = coroutine.create(function ()
+  print("dentro:", coroutine.status(co))
+  print("pode pausar?", coroutine.isyieldable())
+  coroutine.yield()
+end)
+print("antes:", coroutine.status(co))
+coroutine.resume(co)
+print("pausada:", coroutine.status(co))
+coroutine.resume(co)
+print("no fim:", coroutine.status(co))
+print("principal pode pausar?", coroutine.isyieldable())
+print(coroutine.running())
+</pre>
+
+<pre class="term">$ lua co4.lua
+antes:	suspended
+dentro:	running
+pode pausar?	true
+pausada:	suspended
+no fim:	dead
+principal pode pausar?	false
+thread: 0x563c4efa0598	true</pre>
+
+<p>(O <code>local co</code> fica numa linha separada para que a função do corpo já enxergue a variável <code>co</code>. O número <code>0x55…</code> é um endereço e muda a cada execução.)</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Estado</th><th>Quer dizer</th></tr>
+<tr><td><code>suspended</code></td><td>"Suspensa": criada e ainda não começou, ou pausada num <code>yield</code>. Dá para retomar.</td></tr>
+<tr><td><code>running</code></td><td>"Rodando": é ela que está rodando agora (só aparece quando a própria corrotina pergunta).</td></tr>
+<tr><td><code>normal</code></td><td>Está ativa, mas parada esperando: ela retomou <strong>outra</strong> corrotina, que está rodando.</td></tr>
+<tr><td><code>dead</code></td><td>"Morta": o corpo terminou, ou parou com um erro. Não volta mais.</td></tr>
+</table>
+</div>
+
+<p>O estado <code>normal</code> aparece quando uma corrotina retoma outra:</p>
+
+<pre class="file" data-file="co5.lua">local a, b
+a = coroutine.create(function ()
+  coroutine.resume(b)
+end)
+b = coroutine.create(function ()
+  print("a está:", coroutine.status(a))
+  print("b está:", coroutine.status(b))
+end)
+coroutine.resume(a)
+</pre>
+
+<pre class="term">$ lua co5.lua
+a está:	normal
+b está:	running</pre>
+
+<p>Duas funções de apoio:</p>
+<ul>
+  <li><strong><code>coroutine.isyieldable()</code></strong> ("pode ceder?"): <code>true</code> se o código que está rodando pode chamar <code>yield</code>. Dentro do corpo de uma corrotina, sim; no programa principal, não (ele não é uma corrotina: não há para quem devolver o controle).</li>
+  <li><strong><code>coroutine.running()</code></strong>: devolve a corrotina que está rodando e um booleano que é <code>true</code> se ela for a principal. No programa principal, saiu <code>thread: 0x…	true</code>: o próprio programa também é uma <code>thread</code>, a principal.</li>
+</ul>
+
+<hr>
+
+<h2>5. Erros dentro de uma corrotina</h2>
+<p>Um erro dentro do corpo não derruba o programa: ele para a corrotina, e o <code>resume</code> devolve <code>false</code> e a mensagem, como um <a href="pcall.html">pcall</a>:</p>
+
+<pre class="file" data-file="co6.lua">local co = coroutine.create(function ()
+  print("antes do erro")
+  local t = nil
+  print(t.nome)
+  print("nunca chega aqui")
+end)
+print(coroutine.resume(co))
+print(coroutine.status(co))
+print("o programa principal continua")
+</pre>
+
+<pre class="term">$ lua co6.lua
+antes do erro
+false	co6.lua:4: attempt to index a nil value (local 't')
+dead
+o programa principal continua</pre>
+
+<p>A corrotina morreu (<code>dead</code>), mas o programa principal seguiu. Por isso, sempre olhe o primeiro valor do <code>resume</code>: se for <code>false</code>, o segundo é a mensagem de erro.</p>
+
+<h3>Encerrando antes do fim: <code>coroutine.close</code></h3>
+<p>E se você não quiser mais uma corrotina que está pausada no meio? Se o corpo tiver variáveis <code>&lt;close&gt;</code> (aula <a href="close.html">&lt;close&gt;</a>), elas ficariam abertas para sempre, porque o bloco nunca termina. O <code>coroutine.close</code> encerra a corrotina e <strong>fecha</strong> essas variáveis:</p>
+
+<pre class="file" data-file="co10.lua">local co = coroutine.create(function ()
+  local porta &lt;close&gt; = setmetatable({}, { __close = function () print("porta fechada") end })
+  print("porta aberta")
+  coroutine.yield()
+  print("nunca chega aqui")
+end)
+coroutine.resume(co)
+print(coroutine.status(co))
+print(coroutine.close(co))
+print(coroutine.status(co))
+print(coroutine.resume(co))
+</pre>
+
+<pre class="term">$ lua co10.lua
+porta aberta
+suspended
+porta fechada
+true
+dead
+false	cannot resume dead coroutine</pre>
+
+<p>O <code>close</code> fechou a porta, devolveu <code>true</code> (deu certo) e deixou a corrotina morta. Numa corrotina que já tinha morrido com erro, ele devolve <code>false</code> e o erro: com um corpo que faz <code>error("forno quebrou")</code>, o lab mostrou <code>false	co11.lua:1: forno quebrou</code> no <code>resume</code> e de novo no <code>close</code>.</p>
+
+<div class="note">
+<strong><span class="versao">5.5</span> Fechar a corrotina de dentro dela</strong>
+<p>No Lua 5.5, uma corrotina pode chamar <code>coroutine.close()</code> nela mesma: ela se encerra ali, e quem a retomou recebe a resposta do <code>resume</code> (no lab, um corpo com <code>print(coroutine.close(co))</code> fez o <code>resume</code> devolver só <code>true</code>, e o <code>print</code> de dentro nunca rodou). No Lua 5.4, o mesmo programa dá <code>false	co12.lua:3: cannot close a running coroutine</code> ("não dá para fechar uma corrotina que está rodando").</p>
+</div>
+
+<hr>
+
+<h2 id="formas">Formas diferentes de fazer a mesma coisa</h2>
+<p>Entregar os números 1, 2 e 3, um de cada vez, de três jeitos:</p>
+
+<pre class="file" data-file="formas.lua">-- 1) uma lista pronta: tudo calculado antes
+local lista = { 1, 2, 3 }
+for _, n in ipairs(lista) do print(n) end
+
+-- 2) um iterador com closure: lembra onde parou numa variável
+local function contagem(max)
+  local i = 0
+  return function () i = i + 1; if i &lt;= max then return i end end
+end
+for n in contagem(3) do print(n) end
+
+-- 3) uma corrotina: lembra onde parou "no meio do código"
+local co = coroutine.create(function () for i = 1, 3 do coroutine.yield(i) end end)
+while true do
+  local ok, n = coroutine.resume(co)
+  if coroutine.status(co) == "dead" then break end
+  print(n)
+end
+</pre>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Situação</th><th>Qual usar</th></tr>
+<tr><td>Poucos valores, que dá para calcular antes</td><td>Uma lista (tabela)</td></tr>
+<tr><td>Um percurso simples, cujo "onde parou" cabe numa variável</td><td>Um iterador (aula <a href="iteradores.html">Iteradores Próprios</a>)</td></tr>
+<tr><td>Uma tarefa longa com várias etapas, que precisa pausar e voltar (uma animação, uma conversa, uma receita passo a passo)</td><td>Uma corrotina</td></tr>
+<tr><td>Uma corrotina usada só para entregar valores um a um</td><td><code>coroutine.wrap</code> (aula <a href="corrotinas-wrap.html">coroutine.wrap e Geradores</a>)</td></tr>
+</table>
+</div>
+
+<div class="note">
+<strong>E nas outras versões?</strong>
+<p>As corrotinas existem desde o Lua 5.0, e o básico (<code>create</code>, <code>resume</code>, <code>yield</code>, <code>status</code>) funciona igual: o <code>co3.lua</code> desta aula deu exatamente a mesma saída no <code>lua5.1</code>, no <code>luajit</code> e no <code>lua5.4</code> do lab. Duas funções são mais novas: no lab, o <code>lua5.1</code> não tem nem <code>coroutine.close</code> nem <code>coroutine.isyieldable</code> (<code>nil	nil</code>); o LuaJIT tem só o <code>isyieldable</code>; o 5.4 tem as duas. E o exemplo do <code>coroutine.close</code> com <code>&lt;close&gt;</code> não roda no LuaJIT (<code>unexpected symbol near '&lt;'</code>). Veja <a href="versoes.html">as diferenças entre as versões</a>.</p>
+</div>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+
+<div class="cenario">
+<strong>Retomou uma corrotina que já terminou</strong>
+<pre class="term">$ lua co2.lua
+true
+true
+false	cannot resume dead coroutine
+dead</pre>
+<p>"Não dá para retomar uma corrotina morta". Ela já chegou ao fim do corpo (ou parou com erro). Não é um erro que para o programa: o <code>resume</code> devolve <code>false</code>. <strong>Como evitar:</strong> confira <code>coroutine.status(co) ~= "dead"</code> antes, ou pare o laço quando ela morrer (seção 3). Se precisar recomeçar, crie uma corrotina nova com <code>coroutine.create</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Chamou <code>yield</code> fora de uma corrotina</strong>
+<pre class="file" data-file="co7.lua">coroutine.yield()
+</pre>
+<pre class="term">$ lua co7.lua
+lua: attempt to yield from outside a coroutine
+stack traceback:
+	[C]: in field 'yield'
+	co7.lua:1: in main chunk
+	[C]: in ?</pre>
+<p>"Tentativa de ceder de fora de uma corrotina". O programa principal não tem para quem devolver o controle. Repare que a mensagem não tem o <code>co7.lua:1:</code> na frente: quem dá o erro é a própria função <code>yield</code> (o <code>[C]: in field 'yield'</code> do rastro); a linha está no rastro, logo abaixo. <strong>Como consertar:</strong> o <code>yield</code> só pode rodar dentro do corpo de uma corrotina (ou de uma função chamada por ele).</p>
+</div>
+
+<div class="cenario">
+<strong>Passou outra coisa no lugar da corrotina ou da função</strong>
+<pre class="term">$ lua co8.lua
+lua: co8.lua:1: bad argument #1 to 'resume' (thread expected, got number)
+stack traceback:
+	[C]: in field 'resume'
+	co8.lua:1: in main chunk
+	[C]: in ?
+$ lua co9.lua
+lua: co9.lua:1: bad argument #1 to 'create' (function expected, got number)
+stack traceback:
+	[C]: in field 'create'
+	co9.lua:1: in main chunk
+	[C]: in ?</pre>
+<p>O <code>resume</code> quer uma <code>thread</code> (o que o <code>create</code> devolveu); o <code>create</code> quer uma <code>function</code>. Os dois receberam o número 42 (<code>print(coroutine.resume(42))</code> e <code>coroutine.create(42)</code>). Um engano comum é passar a <strong>função</strong> para o <code>resume</code>, em vez da corrotina criada a partir dela.</p>
+</div>
+
+<div class="cenario">
+<strong>Tentou pausar dentro de uma função do próprio Lua</strong>
+<pre class="file" data-file="co14.lua">local co = coroutine.create(function ()
+  local t = {}
+  table.sort({3, 1, 2}, function (a, b) coroutine.yield() return a &lt; b end)
+end)
+print(coroutine.resume(co))
+</pre>
+<pre class="term">$ lua co14.lua
+false	attempt to yield across a C-call boundary</pre>
+<p>"Tentativa de ceder através de uma fronteira de chamada C". O <code>table.sort</code> é escrito em C, e ele chamou a nossa função de comparação. Uma pausa ali teria de congelar o <code>table.sort</code> no meio, e o Lua não sabe fazer isso com funções em C. É exatamente o caso em que o <code>isyieldable</code> responde <code>false</code>: no lab, ele deu <code>true</code> no corpo da corrotina e <code>false</code> dentro da comparação do <code>table.sort</code>. <strong>Como consertar:</strong> não chame <code>yield</code> em funções passadas para <code>table.sort</code>, <code>string.gsub</code> e outras funções da biblioteca.</p>
+</div>
+
+<hr>
+
+<h2>Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Função</th><th>O que faz</th></tr>
+<tr><td><code>coroutine.create(f)</code></td><td>Cria uma corrotina com o corpo <code>f</code> (não roda nada); devolve uma <code>thread</code></td></tr>
+<tr><td><code>coroutine.resume(co, …)</code></td><td>Começa ou continua; devolve <code>true</code> + valores do <code>yield</code>/<code>return</code>, ou <code>false</code> + erro</td></tr>
+<tr><td><code>coroutine.yield(…)</code></td><td>Pausa a corrotina; os valores vão para o <code>resume</code>; devolve o que o próximo <code>resume</code> mandar</td></tr>
+<tr><td><code>coroutine.status(co)</code></td><td><code>"suspended"</code>, <code>"running"</code>, <code>"normal"</code> ou <code>"dead"</code></td></tr>
+<tr><td><code>coroutine.isyieldable()</code></td><td><code>true</code> se dá para chamar <code>yield</code> aqui</td></tr>
+<tr><td><code>coroutine.running()</code></td><td>A corrotina atual e <code>true</code> se for a principal</td></tr>
+<tr><td><code>coroutine.close(co)</code></td><td>Encerra uma corrotina pausada (ou morta), fechando os <code>&lt;close&gt;</code> dela</td></tr>
+<tr><td><code>coroutine.wrap(f)</code></td><td>Cria e devolve uma função que retoma (aula <a href="corrotinas-wrap.html">coroutine.wrap</a>)</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. Complete</h3>
+<div class="ex-code">local co = coroutine.<input data-answer="create" aria-label="função">(function ()<br>&nbsp;&nbsp;print("oi")<br>&nbsp;&nbsp;coroutine.<input data-answer="yield" aria-label="função">()<br>&nbsp;&nbsp;print("tchau")<br>end)<br>coroutine.<input data-answer="resume" aria-label="função">(co)</div>
+</div>
+
+<div class="exercise">
+<h3>2. Qual o estado?</h3>
+<p>Uma corrotina acabou de ser criada e ninguém chamou <code>resume</code> ainda. O que <code>coroutine.status(co)</code> devolve?</p>
+<div class="ex-code"><input data-answer="suspended" aria-label="estado"></div>
+</div>
+
+<div class="mc" data-answer="3">
+<p class="mc-q">3. Um corpo tem 2 <code>yield</code> e depois termina. Quantos <code>resume</code> devolvem <code>true</code>?</p>
+<label><input type="radio" name="q3"> 1</label>
+<label><input type="radio" name="q3"> 2</label>
+<label><input type="radio" name="q3"> 3</label>
+<label><input type="radio" name="q3"> Infinitos</label>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">4. Dentro da corrotina, <code>local x = coroutine.yield("a")</code>. O programa principal faz <code>coroutine.resume(co, "b")</code> em seguida. Quanto vale <code>x</code>?</p>
+<label><input type="radio" name="q4"> <code>"a"</code></label>
+<label><input type="radio" name="q4"> <code>"b"</code></label>
+<label><input type="radio" name="q4"> <code>true</code></label>
+<label><input type="radio" name="q4"> <code>nil</code></label>
+</div>
+
+<div class="mc" data-answer="1">
+<p class="mc-q">5. O que acontece com o programa quando dá um erro dentro de uma corrotina?</p>
+<label><input type="radio" name="q5"> A corrotina morre, e o <code>resume</code> devolve <code>false</code> e a mensagem; o programa continua</label>
+<label><input type="radio" name="q5"> O programa inteiro para na hora</label>
+<label><input type="radio" name="q5"> A corrotina pula a linha errada e continua</label>
+<label><input type="radio" name="q5"> Ela volta para <code>suspended</code></label>
+</div>
+
+<h3>Missão final: as senhas da fila</h3>
+
+<div class="trylua" data-goal="outre:senha 1: Ana\nsenha 2: Bia\nsenha 3: Caio\nfim do atendimento;;src:coroutine\.yield">
+<p class="try-task"><strong>Missão:</strong> o programa principal já está pronto: ele retoma a corrotina <code>atendimento</code> e mostra cada chamada, até ela não entregar mais nada. Escreva o <strong>corpo</strong> da corrotina: para cada nome da <code>fila</code>, ele deve ceder (<code>coroutine.yield</code>) o texto <code>"senha 1: Ana"</code>, <code>"senha 2: Bia"</code>… (Dica: <code>for i, nome in ipairs(fila) do … end</code>.)</p>
+<pre class="script" data-file="main.lua">local fila = { "Ana", "Bia", "Caio" }
+local atendimento = coroutine.create(function ()
+  -- para cada pessoa da fila, ceda "senha N: NOME"
+end)
+while true do
+  local ok, chamada = coroutine.resume(atendimento)
+  if not chamada then break end
+  print(chamada)
+end
+print("fim do atendimento")
+</pre>
+<pre class="solucao" data-file="main.lua">local fila = { "Ana", "Bia", "Caio" }
+local atendimento = coroutine.create(function ()
+  for i, nome in ipairs(fila) do
+    coroutine.yield("senha " .. i .. ": " .. nome)
+  end
+end)
+while true do
+  local ok, chamada = coroutine.resume(atendimento)
+  if not chamada then break end
+  print(chamada)
+end
+print("fim do atendimento")
+</pre>
+</div>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li>Uma corrotina é uma função que pode <strong>pausar</strong> (<code>coroutine.yield</code>) e <strong>continuar de onde parou</strong> (<code>coroutine.resume</code>), lembrando tudo.</li>
+  <li><code>coroutine.create(f)</code> só cria; o primeiro <code>resume</code> começa o corpo, e os argumentos dele viram os parâmetros de <code>f</code>.</li>
+  <li>O que vai no <code>yield</code> sai no <code>resume</code> (depois do <code>true</code>); o que vai no próximo <code>resume</code> sai do <code>yield</code>.</li>
+  <li>Estados: <code>suspended</code>, <code>running</code>, <code>normal</code>, <code>dead</code>. Uma corrotina morta não volta: <code>cannot resume dead coroutine</code>.</li>
+  <li>Erro dentro dela não derruba o programa: o <code>resume</code> devolve <code>false</code> e a mensagem. <code>coroutine.close</code> encerra uma corrotina pausada e fecha os <code>&lt;close&gt;</code> dela.</li>
+  <li>Corrotinas não rodam ao mesmo tempo: elas se revezam, e cada uma decide quando ceder a vez.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
