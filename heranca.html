@@ -495,7 +495,7 @@ stack traceback:
 	recursao2.lua:17: in main chunk
 	[C]: in ?</pre>
 <p>O <code>self</code> é uma poupança, então <code>self:sacar</code> acha… o <code>sacar</code> da <code>Poupanca</code>, o mesmo que está rodando. Ele chama a si mesmo, que chama a si mesmo, até a pilha de chamadas encher: <code>stack overflow</code> ("estouro da pilha"). No lab, o <code>saque na poupança</code> apareceu <strong>333.322 vezes</strong> antes do erro, e o rastro pulou 333.303 níveis. (Separamos a saída do erro para contar; num terminal, as linhas passam voando.) <strong>Como consertar:</strong> para usar a versão da mãe, <code>Conta.sacar(self, valor)</code>.</p>
-<p>E se a linha fosse <code>return self:sacar(valor)</code>? Aí seria uma <a href="chamada-cauda.html">chamada de cauda</a>, que não ocupa a pilha: o programa <strong>não termina nunca</strong>. No lab, o <code>timeout 3</code> teve de pará-lo (código de saída 124). No editor do guia, ele seria parado depois de 10 segundos.</p>
+<p>E se a linha fosse <code>return self:sacar(valor)</code>? Aí seria uma <a href="chamada-cauda.html">chamada de cauda</a>, que não ocupa a pilha: o programa <strong>não termina nunca</strong>. No lab, o <code>timeout 3</code> teve de pará-lo (código de saída 124). No editor do guia, como ele escreve <code>saque na poupança</code> sem parar, ele é parado em menos de um segundo pelo limite de saída: <code>(o programa escreveu demais: mais de 2 milhões de caracteres; o editor o parou)</code>. (Sem o <code>print</code>, seria parado depois de 10 segundos.)</p>
 </div>
 
 <div class="cenario">
