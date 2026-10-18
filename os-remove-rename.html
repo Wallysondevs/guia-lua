@@ -1,0 +1,565 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua os.remove e os.rename — apagando, renomeando e movendo arquivos | Guia Lua</title>
+<meta name="description" content="os.remove e os.rename do Lua 5.5 para quem nunca programou: apagar um arquivo (sem lixeira), apagar uma pasta vazia, renomear e mover entre pastas, o rename que passa por cima de outro arquivo, saber se um arquivo existe, fazer uma cópia de segurança .bak, e as mensagens reais de erro do Lua.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">os.remove</span> e <span class="hl">os.rename</span></h1>
+
+<p class="intro">Você já sabe abrir, ler e escrever arquivos. Falta cuidar deles como você faz no gerenciador de arquivos: <strong>apagar</strong> o rascunho que não serve mais, <strong>renomear</strong> a lista de compras do mês, <strong>mover</strong> um arquivo para outra pasta, guardar uma <strong>cópia de segurança</strong> antes de mexer. Para isso o Lua tem duas funções na biblioteca <code>os</code> (de <em>operating system</em>, "sistema operacional"): <code>os.remove</code> ("remover") e <code>os.rename</code> ("renomear").</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>Como apagar um arquivo com <code>os.remove</code>, e por que não existe lixeira.</li>
+  <li>O que as duas funções devolvem: <code>true</code>, ou <code>nil</code> com a mensagem e o código do erro.</li>
+  <li>Como apagar uma pasta (só se estiver vazia).</li>
+  <li>Como renomear e mover com <code>os.rename</code>, e o perigo: ele passa por cima de um arquivo que já existe.</li>
+  <li>Como saber se um arquivo existe, e como fazer uma cópia de segurança (<code>.bak</code>) antes de gravar.</li>
+  <li>Os erros reais: arquivo que não existe, pasta com coisas dentro, sem permissão, e os enganos de escrita.</li>
+</ul>
+</div>
+
+<p>Todos os programas desta aula rodaram no <strong>Lua 5.5</strong> da máquina da Ana (usuária <code>ana</code>, computador <code>notebook</code>), em <code>/home/ana</code>. Os comandos <code>ls</code> (lista os arquivos da pasta) e <code>cat</code> (mostra o conteúdo) do terminal servem para conferir o que mudou.</p>
+
+<hr>
+
+<h2>A ideia: o fichário da secretária</h2>
+<p>Pense numa secretária com um fichário de pastas. Duas tarefas dela não têm nada a ver com <strong>ler</strong> ou <strong>escrever</strong> as folhas:</p>
+<ul>
+  <li><strong>Jogar uma ficha fora.</strong> E esta secretária não tem cesto de papel: ela passa a ficha no picotador. Não tem volta.</li>
+  <li><strong>Trocar a etiqueta</strong> de uma ficha, ou <strong>mudar a ficha de gaveta</strong>. A folha continua a mesma; muda o nome ou o lugar.</li>
+</ul>
+<p>No Lua, a primeira é o <code>os.remove</code>, e a segunda é o <code>os.rename</code>. Nenhuma das duas abre o arquivo: você não usa <code>io.open</code> nem <code>close</code> com elas.</p>
+
+<hr>
+
+<h2>1. Apagando um arquivo: <code>os.remove</code></h2>
+<p>A Ana tem um <code>rascunho.txt</code> que não serve mais:</p>
+
+<pre class="term">$ printf 'rascunho da redação\n' &gt; rascunho.txt
+$ ls
+Documentos
+Downloads
+Imagens
+Modelos
+Música
+Público
+Vídeos
+rascunho.txt
+Área de trabalho</pre>
+
+<pre class="file" data-file="apagar.lua">print(os.remove("rascunho.txt"))
+</pre>
+
+<pre class="term">$ lua apagar.lua
+true
+$ ls
+Documentos
+Downloads
+Imagens
+Modelos
+Música
+Público
+Vídeos
+apagar.lua
+Área de trabalho</pre>
+
+<dl class="anatomy">
+  <dt>os.remove</dt><dd>A função que apaga. Ela é da biblioteca <code>os</code>, por isso o ponto (<code>os.remove</code>), como no <code>io.open</code>.</dd>
+  <dt>"rascunho.txt"</dt><dd>O nome do arquivo, do mesmo jeito que no <code>io.open</code>: sem pasta, na pasta atual do terminal; com pasta, <code>"Documentos/velho.txt"</code>.</dd>
+  <dt>true</dt><dd>O que ela devolve quando conseguiu apagar. O <code>rascunho.txt</code> sumiu do <code>ls</code>.</dd>
+</dl>
+
+<div class="warning">
+<strong>Não existe lixeira</strong>
+<p>O arquivo apagado pelo <code>os.remove</code> <strong>não vai para a Lixeira</strong> da área de trabalho. Ele some de vez, como com o comando <code>rm</code> do terminal. Não tem "desfazer". Antes de escrever um programa que apaga arquivos, confira duas vezes o nome, e prefira testar numa pasta com cópias.</p>
+</div>
+
+<h3>Quando não dá para apagar</h3>
+<p>Rodando o mesmo programa de novo, o rascunho já não existe:</p>
+
+<pre class="term">$ lua apagar.lua
+nil	rascunho.txt: No such file or directory	2</pre>
+
+<p>É o mesmo trio do <code>io.open</code> (veja <a href="io-open.html">Abrindo Arquivos</a>): <code>nil</code> no lugar do <code>true</code>, a mensagem (o nome e "não existe tal arquivo ou pasta") e o código do erro (2). O <code>os.remove</code> <strong>não para o programa</strong>; ele só avisa. Um programa bem-feito olha o aviso:</p>
+
+<pre class="file" data-file="apagar_tratando.lua">local nome = "rascunho.txt"
+local ok, mensagem = os.remove(nome)
+if ok then
+  print("Apaguei " .. nome)
+else
+  print("Não apaguei: " .. mensagem)
+end
+</pre>
+
+<pre class="term">$ lua apagar_tratando.lua
+Não apaguei: rascunho.txt: No such file or directory
+$ printf 'oi\n' &gt; rascunho.txt
+$ lua apagar_tratando.lua
+Apaguei rascunho.txt</pre>
+
+<p>A primeira vez, não havia o que apagar; a Ana criou o arquivo de novo, e a segunda deu certo.</p>
+
+<div class="trylua" data-goal="out:O rascunho sumiu.;;src:os\.remove">
+<p class="try-task"><strong>Missão:</strong> o programa cria um <code>rascunho.txt</code> e depois confere se ele ainda existe. Escreva, no lugar do comentário, a linha que <strong>apaga</strong> o rascunho, até o programa dizer <code>O rascunho sumiu.</code></p>
+<pre class="script" data-file="main.lua">local f = assert(io.open("rascunho.txt", "w"))
+f:write("rascunho da redação\n")
+f:close()
+
+-- apague o rascunho aqui
+
+local g = io.open("rascunho.txt", "r")
+if g then
+  g:close()
+  print("O rascunho ainda existe.")
+else
+  print("O rascunho sumiu.")
+end
+</pre>
+<pre class="solucao" data-file="main.lua">local f = assert(io.open("rascunho.txt", "w"))
+f:write("rascunho da redação\n")
+f:close()
+
+print(os.remove("rascunho.txt"))
+
+local g = io.open("rascunho.txt", "r")
+if g then
+  g:close()
+  print("O rascunho ainda existe.")
+else
+  print("O rascunho sumiu.")
+end
+</pre>
+</div>
+
+<hr>
+
+<h2>2. Apagando pastas: só se estiverem vazias</h2>
+<p>O <code>os.remove</code> também apaga <strong>pastas</strong>, mas só pastas <strong>vazias</strong>. A Ana criou duas, com o comando <code>mkdir</code> ("criar pasta"): <code>fotos_velhas</code>, com uma foto dentro, e <code>pasta_vazia</code>, sem nada:</p>
+
+<pre class="term">$ mkdir fotos_velhas
+$ printf 'x' &gt; fotos_velhas/praia.jpg
+$ mkdir pasta_vazia</pre>
+
+<pre class="file" data-file="pastas.lua">print(os.remove("fotos_velhas"))
+print(os.remove("pasta_vazia"))
+</pre>
+
+<pre class="term">$ lua pastas.lua
+nil	fotos_velhas: Directory not empty	39
+true
+$ ls -d fotos_velhas pasta_vazia
+ls: não é possível acessar 'pasta_vazia': Arquivo ou diretório inexistente
+fotos_velhas</pre>
+
+<p>A <code>fotos_velhas</code> foi recusada: <code>Directory not empty</code>, "a pasta não está vazia" (código 39). A <code>pasta_vazia</code> foi apagada: o <code>ls</code> já não a encontra (essa mensagem do <code>ls</code> sai em português, porque o terminal da Ana está em português; as do Lua saem em inglês). É uma proteção: o <code>os.remove</code> nunca apaga um monte de arquivos de uma vez. Para apagar uma pasta com coisas dentro, apague antes cada arquivo (e cada subpasta), e por último a pasta.</p>
+
+<div class="note">
+<strong>E criar uma pasta?</strong>
+<p>O Lua puro não tem função para <strong>criar</strong> pastas, nem para listar o que tem dentro de uma. A biblioteca padrão do Lua é pequena de propósito: ela só usa o que existe em qualquer sistema com a linguagem C. Para isso existe a biblioteca LuaFileSystem (<code>lfs.mkdir</code>, <code>lfs.dir</code>), que se instala com o LuaRocks (veja <a href="luarocks.html">LuaRocks</a>), ou o caminho de chamar o comando <code>mkdir</code> com <code>os.execute</code> (veja <a href="os-execute.html">Rodando Outros Programas</a>).</p>
+</div>
+
+<hr>
+
+<h2>3. Renomeando: <code>os.rename</code></h2>
+<p>O <code>os.rename</code> recebe <strong>dois</strong> nomes: o atual e o novo. A lista de compras vai ganhar o nome do mês:</p>
+
+<pre class="file" data-file="renomear.lua">print(os.rename("compras.txt", "compras-outubro.txt"))
+</pre>
+
+<pre class="term">$ lua renomear.lua
+true
+$ ls
+Documentos
+Downloads
+Imagens
+Modelos
+Música
+Público
+Vídeos
+apagar.lua
+apagar_tratando.lua
+compras-outubro.txt
+fotos_velhas
+pastas.lua
+renomear.lua
+sem_permissao.lua
+trancada
+Área de trabalho</pre>
+
+<dl class="anatomy">
+  <dt>"compras.txt"</dt><dd>O nome <strong>de agora</strong> (o primeiro argumento). O arquivo precisa existir.</dd>
+  <dt>"compras-outubro.txt"</dt><dd>O nome <strong>novo</strong> (o segundo). O conteúdo continua igual; só a "etiqueta" muda.</dd>
+  <dt>true</dt><dd>Deu certo. O <code>compras.txt</code> sumiu do <code>ls</code>, e o <code>compras-outubro.txt</code> apareceu.</dd>
+</dl>
+
+<p>Rodando de novo, o <code>compras.txt</code> já não existe:</p>
+
+<pre class="term">$ lua renomear.lua
+nil	No such file or directory	2</pre>
+
+<p>Repare numa diferença: aqui a mensagem <strong>não diz o nome</strong> do arquivo. É só <code>No such file or directory</code>. O <code>os.rename</code> mexe com dois nomes, e o Lua não sabe dizer qual dos dois deu problema (pode ter sido o primeiro, que não existe, ou a pasta do segundo, como você vai ver na seção 4). Quando quiser uma mensagem clara, junte você os nomes: <code>print("Não renomeei " .. velho .. ": " .. mensagem)</code>.</p>
+
+<div class="trylua" data-goal="arquivo:compras-outubro.txt~leite;;semerro">
+<p class="try-task"><strong>Missão:</strong> o programa quer renomear o <code>compras.txt</code> (a segunda aba) para <code>compras-outubro.txt</code>, mas para com um erro. Leia a mensagem (ela não diz o nome!), descubra o engano e conserte. Quando der certo, o programa mostra a lista com o nome novo.</p>
+<pre class="script" data-file="main.lua">assert(os.rename("compra.txt", "compras-outubro.txt"))
+for linha in io.lines("compras-outubro.txt") do
+  print(linha)
+end
+</pre>
+<pre class="script" data-file="compras.txt">pão
+leite
+café
+</pre>
+<pre class="solucao" data-file="main.lua">assert(os.rename("compras.txt", "compras-outubro.txt"))
+for linha in io.lines("compras-outubro.txt") do
+  print(linha)
+end
+</pre>
+</div>
+
+<hr>
+
+<h2>4. Movendo para outra pasta</h2>
+<p>Se o nome novo tiver outra pasta, o <code>os.rename</code> <strong>move</strong> o arquivo para lá. É o mesmo "trocar a etiqueta", só que a etiqueta inclui a gaveta:</p>
+
+<pre class="file" data-file="mover.lua">print(os.rename("compras-outubro.txt", "Documentos/compras-outubro.txt"))
+print(os.rename("Documentos/compras-outubro.txt", "Documentoss/compras-outubro.txt"))
+</pre>
+
+<pre class="term">$ lua mover.lua
+true
+nil	No such file or directory	2
+$ ls Documentos
+compras-outubro.txt</pre>
+
+<p>O primeiro <code>os.rename</code> moveu a lista para a pasta <code>Documentos</code>. O segundo tentou mover para <code>Documentoss</code> (com dois "s"), uma pasta que não existe: <code>No such file or directory</code>. Foi o caso em que o problema estava no <strong>segundo</strong> nome, e a mensagem é a mesma de quando o primeiro não existe. Assim como o <code>io.open</code>, o <code>os.rename</code> não cria pastas.</p>
+
+<div class="note">
+<strong>Mover para outro disco</strong>
+<p>O <code>os.rename</code> só funciona dentro do mesmo disco (o mesmo "sistema de arquivos"). Na máquina da Ana, a pasta <code>/tmp</code> fica em outro (ela mora na memória), e mover para lá falha:</p>
+<pre class="term">$ printf "oi\n" &gt; x.txt
+$ lua -e 'print(os.rename("x.txt", "/tmp/x.txt"))'
+nil	Invalid cross-device link	18</pre>
+<p>"Ligação inválida entre dispositivos", código 18. O mesmo acontece ao mover para um pen drive. Nesse caso, o jeito é copiar (ler o arquivo de um lado e escrever do outro, com <code>io.open</code>) e depois apagar o original com <code>os.remove</code>.</p>
+</div>
+
+<hr>
+
+<h2>5. O perigo: o <code>os.rename</code> passa por cima</h2>
+<p>Se já existir um arquivo com o nome novo, o <code>os.rename</code> <strong>não pergunta</strong>: ele substitui. A Ana tinha uma lista velha, importante, e uma nova:</p>
+
+<pre class="term">$ printf 'lista NOVA\n' &gt; nova.txt
+$ printf 'lista VELHA, importante\n' &gt; velha.txt</pre>
+
+<pre class="file" data-file="sobrescreve.lua">print(os.rename("nova.txt", "velha.txt"))
+</pre>
+
+<pre class="term">$ lua sobrescreve.lua
+true
+$ ls nova.txt velha.txt
+ls: não é possível acessar 'nova.txt': Arquivo ou diretório inexistente
+velha.txt
+$ cat velha.txt
+lista NOVA</pre>
+
+<p><code>true</code>, sem aviso nenhum. A <code>lista VELHA, importante</code> se perdeu: no lugar dela ficou a nova, com o nome da velha. Isso é o comportamento do Linux (e do macOS). No Windows, o <code>os.rename</code> para um nome que já existe <strong>falha</strong> em vez de substituir (ilustrativo: não foi rodado num Windows). Nos dois casos, a regra é a mesma: confira antes.</p>
+
+<h3>Conferindo se um arquivo existe</h3>
+<p>O Lua não tem uma função "existe?". O jeito tradicional é tentar <strong>abrir</strong> o arquivo para ler: se abrir, ele existe (e você fecha logo em seguida).</p>
+
+<pre class="file" data-file="existe.lua">local function existe(nome)
+  local f = io.open(nome, "r")
+  if f then
+    f:close()
+    return true
+  end
+  return false
+end
+
+print(existe("velha.txt"))
+print(existe("nova.txt"))
+</pre>
+
+<pre class="term">$ lua existe.lua
+true
+false</pre>
+
+<p>Com ela, o programa só renomeia quando não vai estragar nada (o <code>Documentos/compras-outubro.txt</code> já existe desde a seção 4):</p>
+
+<pre class="file" data-file="renomear_seguro.lua">local function existe(nome)
+  local f = io.open(nome, "r")
+  if f then f:close() return true end
+  return false
+end
+
+local velho, novo = "velha.txt", "Documentos/compras-outubro.txt"
+if existe(novo) then
+  print("Já existe um " .. novo .. "; não vou passar por cima.")
+else
+  assert(os.rename(velho, novo))
+  print("Pronto.")
+end
+</pre>
+
+<pre class="term">$ lua renomear_seguro.lua
+Já existe um Documentos/compras-outubro.txt; não vou passar por cima.</pre>
+
+<p>(Esse <code>existe</code> responde <code>false</code> também para um arquivo que existe mas que você não pode ler. Para o uso de todo dia, serve bem.)</p>
+
+<hr>
+
+<h2>6. A cópia de segurança (<code>.bak</code>)</h2>
+<p>Um uso clássico das duas funções juntas: antes de gravar a lista nova por cima da antiga, guarde a antiga com outro nome. Se algo der errado, ela está lá. O costume é pôr <code>.bak</code> (de <em>backup</em>, "cópia de segurança") no fim do nome:</p>
+
+<pre class="file" data-file="backup.lua">local nome = "compras.txt"
+os.remove(nome .. ".bak")
+assert(os.rename(nome, nome .. ".bak"))
+
+local f = assert(io.open(nome, "w"))
+f:write("arroz\nfeijão\n")
+f:close()
+print("Lista nova gravada; a antiga está em " .. nome .. ".bak")
+</pre>
+
+<dl class="anatomy">
+  <dt>os.remove(nome .. ".bak")</dt><dd>Apaga a cópia anterior, se houver. Se não houver, devolve <code>nil</code> e a mensagem, e o programa nem olha: aqui, "não existia" está ótimo. (No Linux o <code>rename</code> passaria por cima mesmo; o <code>remove</code> antes deixa claro que a intenção é essa, e evita a falha do Windows.)</dd>
+  <dt>assert(os.rename(nome, nome .. ".bak"))</dt><dd><code>compras.txt</code> vira <code>compras.txt.bak</code>. Com o <code>assert</code>, se não der para renomear, o programa para <strong>antes</strong> de gravar por cima (veja <a href="assert.html">assert</a>).</dd>
+  <dt>io.open(nome, "w")</dt><dd>Agora o <code>compras.txt</code> não existe mais, e o <code>"w"</code> cria um novo, com a lista nova.</dd>
+</dl>
+
+<pre class="term">$ printf 'pão\nleite\n' &gt; compras.txt
+$ lua backup.lua
+Lista nova gravada; a antiga está em compras.txt.bak
+$ cat compras.txt compras.txt.bak
+arroz
+feijão
+pão
+leite</pre>
+
+<p>O <code>cat</code> com dois arquivos mostra um depois do outro: a lista nova (<code>arroz</code>, <code>feijão</code>) e, na cópia, a antiga (<code>pão</code>, <code>leite</code>). Rodando de novo, a cópia passa a ser a lista que estava valendo:</p>
+
+<pre class="term">$ lua backup.lua
+Lista nova gravada; a antiga está em compras.txt.bak
+$ cat compras.txt.bak
+arroz
+feijão</pre>
+
+<p>Repare: só existe <strong>uma</strong> cópia, a da vez anterior. É assim que muitos editores de texto fazem o arquivo <code>~</code> ou <code>.bak</code> que aparece ao lado do original.</p>
+
+<hr>
+
+<h2 id="formas">Formas diferentes de lidar com o erro</h2>
+<p>O <code>os.remove</code> e o <code>os.rename</code> respondem do mesmo jeito que o <code>io.open</code>, então as formas de tratar também são as mesmas:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Forma</th><th>O que acontece se falhar</th><th>Quando usar</th></tr>
+<tr><td><code>local ok, msg = os.remove(nome)</code> + <code>if ok then … else … end</code></td><td>O programa avisa do seu jeito e continua</td><td>Quando a falha é normal ou esperada (o arquivo pode já não existir)</td></tr>
+<tr><td><code>assert(os.rename(velho, novo))</code></td><td>O programa para, com a mensagem</td><td>Quando os passos seguintes dependem desse dar certo (o backup antes de gravar)</td></tr>
+<tr><td><code>os.remove(nome)</code> sem olhar</td><td>Nada; ninguém fica sabendo</td><td>Só quando você não se importa mesmo, como o <code>.bak</code> velho da seção 6</td></tr>
+</table>
+</div>
+
+<p>Com <code>assert</code>, a mensagem do erro fica assim:</p>
+
+<pre class="file" data-file="assert_remove.lua">assert(os.remove("relatorio.txt"))
+print("apagado")
+</pre>
+
+<pre class="term">$ lua assert_remove.lua
+lua: assert_remove.lua:1: relatorio.txt: No such file or directory
+stack traceback:
+	[C]: in global 'assert'
+	assert_remove.lua:1: in main chunk
+	[C]: in ?</pre>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+
+<div class="cenario">
+<strong>Sem permissão</strong>
+<p>Para apagar ou renomear um arquivo, quem precisa de permissão é a <strong>pasta</strong> em que ele está (é a pasta que "guarda os nomes"). A Ana criou a pasta <code>trancada</code> com um contrato dentro e tirou dela a permissão de escrita (<code>chmod 555</code>: todos podem ler e entrar, ninguém pode mudar):</p>
+<pre class="term">$ mkdir trancada
+$ printf 'importante\n' &gt; trancada/contrato.txt
+$ chmod 555 trancada</pre>
+<pre class="file" data-file="sem_permissao.lua">print(os.remove("trancada/contrato.txt"))
+print(os.rename("trancada/contrato.txt", "contrato.txt"))
+</pre>
+<pre class="term">$ lua sem_permissao.lua
+nil	trancada/contrato.txt: Permission denied	13
+nil	Permission denied	13</pre>
+<p>"Permissão negada", código 13, nos dois. (De novo, o <code>rename</code> sem o nome do arquivo.) É o que acontece também ao tentar apagar arquivos do sistema, como os de <code>/etc</code>. <strong>Como consertar:</strong> não é coisa do programa; ou o arquivo não é seu para apagar, ou a permissão da pasta precisa mudar.</p>
+</div>
+
+<div class="cenario">
+<strong>Dois-pontos no lugar do ponto</strong>
+<p>Depois de tanto <code>f:read</code> e <code>f:close</code>, a mão escorrega:</p>
+<pre class="file" data-file="ponto.lua">os:remove("compras.txt")
+</pre>
+<pre class="term">$ lua ponto.lua
+lua: ponto.lua:1: calling 'remove' on bad self (string expected, got table)
+stack traceback:
+	[C]: in method 'remove'
+	ponto.lua:1: in main chunk
+	[C]: in ?</pre>
+<p>"Chamando <code>remove</code> com um <em>self</em> ruim (esperava uma string, veio uma tabela)". Com os dois-pontos, o Lua entregou a própria biblioteca <code>os</code> (que é uma tabela) como primeiro argumento, no lugar do nome do arquivo. <strong>Como consertar:</strong> <code>os.remove</code> e <code>os.rename</code> são com <strong>ponto</strong>: eles são da biblioteca, não de um arquivo aberto. Os dois-pontos são para <code>f:read</code>, <code>f:write</code>, <code>f:close</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Esqueceu o nome novo</strong>
+<pre class="file" data-file="um_arg.lua">os.rename("compras.txt")
+</pre>
+<pre class="term">$ lua um_arg.lua
+lua: um_arg.lua:1: bad argument #2 to 'rename' (string expected, got no value)
+stack traceback:
+	[C]: in field 'rename'
+	um_arg.lua:1: in main chunk
+	[C]: in ?</pre>
+<p>"Argumento ruim nº 2 para o <code>rename</code> (esperava uma string, não veio nada)". O <code>os.rename</code> precisa dos dois nomes: <strong>de</strong> e <strong>para</strong>. Este erro para o programa, porque é um engano de quem escreveu, não um problema com o arquivo.</p>
+</div>
+
+<hr>
+
+<h2>Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>O que faz</th><th>Devolve</th></tr>
+<tr><td><code>os.remove(nome)</code></td><td>Apaga o arquivo (sem lixeira) ou a pasta <strong>vazia</strong></td><td><code>true</code>, ou <code>nil</code>, mensagem (com o nome), código</td></tr>
+<tr><td><code>os.rename(velho, novo)</code></td><td>Renomeia; com outra pasta no nome novo, move. No Linux, substitui o <code>novo</code> se ele existir</td><td><code>true</code>, ou <code>nil</code>, mensagem (sem o nome), código</td></tr>
+<tr><td><code>io.open(nome, "r")</code> + <code>close</code></td><td>Jeito tradicional de saber se um arquivo existe</td><td>o arquivo, ou <code>nil</code></td></tr>
+<tr><td><code>os.tmpname()</code></td><td>Inventa um nome livre para um arquivo temporário (no lab, <code>/tmp/lua_jsNSlv</code>; muda a cada vez). Apague-o com <code>os.remove</code> quando terminar</td><td>o nome</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Mensagem</th><th>Código</th><th>Causa provável</th></tr>
+<tr><td><code>No such file or directory</code></td><td>2</td><td>O arquivo não existe, ou (no <code>rename</code>) a pasta de destino não existe</td></tr>
+<tr><td><code>Permission denied</code></td><td>13</td><td>A pasta não deixa mudar o que tem dentro</td></tr>
+<tr><td><code>Directory not empty</code></td><td>39</td><td><code>os.remove</code> numa pasta com coisas dentro</td></tr>
+<tr><td><code>calling 'remove' on bad self</code></td><td>—</td><td><code>os:remove</code> com dois-pontos</td></tr>
+<tr><td><code>bad argument #2 to 'rename' (string expected, got no value)</code></td><td>—</td><td>Faltou o nome novo</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. Complete</h3>
+<p>Complete para trocar o nome de <code>foto.jpg</code> para <code>praia.jpg</code>:</p>
+<div class="ex-code">os.<input data-answer="rename" aria-label="função">("foto.jpg", "<input data-answer="praia.jpg" aria-label="nome novo">")</div>
+</div>
+
+<div class="exercise">
+<h3>2. O que devolve?</h3>
+<p>O <code>os.remove("lixo.txt")</code> apagou o arquivo. Qual é o valor que ele devolve?</p>
+<div class="ex-code">Devolve <input data-answer="true" aria-label="valor">.</div>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">3. Para onde vai um arquivo apagado com <code>os.remove</code>?</p>
+<label><input type="radio" name="q3"> Para a Lixeira</label>
+<label><input type="radio" name="q3"> Para lugar nenhum: some de vez</label>
+<label><input type="radio" name="q3"> Para a pasta <code>/tmp</code></label>
+<label><input type="radio" name="q3"> Vira um arquivo <code>.bak</code></label>
+</div>
+
+<div class="mc" data-answer="3">
+<p class="mc-q">4. No Linux, existem <code>a.txt</code> e <code>b.txt</code>. O que acontece com <code>os.rename("a.txt", "b.txt")</code>?</p>
+<label><input type="radio" name="q4"> Devolve <code>nil</code>, porque <code>b.txt</code> já existe</label>
+<label><input type="radio" name="q4"> Junta os dois arquivos</label>
+<label><input type="radio" name="q4"> O conteúdo de <code>a.txt</code> passa a se chamar <code>b.txt</code>, e o <code>b.txt</code> antigo se perde</label>
+<label><input type="radio" name="q4"> O Lua pergunta se pode substituir</label>
+</div>
+
+<div class="mc" data-answer="1">
+<p class="mc-q">5. <code>os.remove("fotos")</code> devolveu <code>nil	fotos: Directory not empty	39</code>. Por quê?</p>
+<label><input type="radio" name="q5"> <code>fotos</code> é uma pasta com arquivos dentro, e o <code>os.remove</code> só apaga pastas vazias</label>
+<label><input type="radio" name="q5"> A pasta não existe</label>
+<label><input type="radio" name="q5"> Faltou o modo <code>"w"</code></label>
+<label><input type="radio" name="q5"> O <code>os.remove</code> não apaga pastas</label>
+</div>
+
+<h3>Missão final: guardar a lista antiga antes de gravar a nova</h3>
+
+<div class="trylua" data-goal="arquivo:compras.txt.bak~leite;;arquivo:compras.txt~arroz;;semerro">
+<p class="try-task"><strong>Missão:</strong> o programa grava a lista nova por cima do <code>compras.txt</code>, e a lista antiga (a da segunda aba) se perde. Antes do <code>io.open</code>, renomeie o <code>compras.txt</code> para <code>compras.txt.bak</code> (com <code>assert</code>, para não gravar se a cópia falhar). O fim do programa mostra os dois arquivos.</p>
+<pre class="script" data-file="main.lua">local nome = "compras.txt"
+-- guarde a lista antiga aqui
+
+local f = assert(io.open(nome, "w"))
+f:write("arroz\nfeijão\n")
+f:close()
+
+for _, arquivo in ipairs({nome, nome .. ".bak"}) do
+  local g = io.open(arquivo, "r")
+  if g then
+    print("== " .. arquivo)
+    io.write(g:read("a"))
+    g:close()
+  else
+    print("== " .. arquivo .. ": não existe")
+  end
+end
+</pre>
+<pre class="script" data-file="compras.txt">pão
+leite
+café
+</pre>
+<pre class="solucao" data-file="main.lua">local nome = "compras.txt"
+assert(os.rename(nome, nome .. ".bak"))
+
+local f = assert(io.open(nome, "w"))
+f:write("arroz\nfeijão\n")
+f:close()
+
+for _, arquivo in ipairs({nome, nome .. ".bak"}) do
+  local g = io.open(arquivo, "r")
+  if g then
+    print("== " .. arquivo)
+    io.write(g:read("a"))
+    g:close()
+  else
+    print("== " .. arquivo .. ": não existe")
+  end
+end
+</pre>
+</div>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li><code>os.remove(nome)</code> apaga um arquivo de vez (não há lixeira) ou uma pasta <strong>vazia</strong>.</li>
+  <li><code>os.rename(velho, novo)</code> renomeia; com uma pasta no nome novo, move. Não cria pastas, e no Linux <strong>substitui sem perguntar</strong> um arquivo que já tenha o nome novo.</li>
+  <li>Os dois devolvem <code>true</code>, ou <code>nil</code> + mensagem + código (como o <code>io.open</code>), sem parar o programa. A mensagem do <code>os.rename</code> não traz o nome do arquivo.</li>
+  <li>Para saber se um arquivo existe, tente <code>io.open(nome, "r")</code> e feche logo.</li>
+  <li>Antes de gravar por cima, guarde a versão anterior: <code>assert(os.rename(nome, nome .. ".bak"))</code>.</li>
+  <li><code>os.remove</code> e <code>os.rename</code> são com ponto (são da biblioteca <code>os</code>), e não precisam de <code>io.open</code> nem <code>close</code>.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
