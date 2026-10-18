@@ -1,0 +1,471 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua strings — textos entre aspas | Guia Lua</title>
+<meta name="description" content="Strings (textos) no Lua para quem nunca programou: aspas duplas e simples, o texto vazio, &quot;10&quot; × 10, por que um texto nunca muda (imutável), comparar textos (maiúsculas, ordem alfabética, &quot;10&quot; &lt; &quot;9&quot;), e os erros reais do Lua 5.5: unfinished string, aspas curvas copiadas do editor de texto, attempt to index a string value e attempt to compare number with string.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">strings</span> (textos)</h1>
+
+<p class="intro">Nomes, recados, endereços, a lista de compras, as mensagens que o programa mostra: quase tudo o que uma pessoa lê é <strong>texto</strong>. Em programação, um texto se chama <strong>string</strong> (em inglês, "cordão" ou "fio": uma fileira de caracteres, um atrás do outro, como contas num colar). Você já usou strings desde o primeiro <code>print("Olá, mundo!")</code>. Esta aula é sobre elas.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>Como escrever uma string: aspas <strong>duplas</strong> ou <strong>simples</strong>, e quando usar cada uma.</li>
+  <li>O texto vazio (<code>""</code>) e a diferença entre ele e o <code>nil</code>.</li>
+  <li>A diferença entre o texto <code>"10"</code> e o número <code>10</code>.</li>
+  <li>Que uma string <strong>nunca muda</strong>: as funções de texto devolvem um texto novo.</li>
+  <li>Como comparar textos: maiúsculas contam, e a "ordem alfabética" do Lua tem surpresas.</li>
+  <li>Os erros reais: aspas sem fechar, aspas dentro de aspas, as aspas curvas do editor de texto, e outros.</li>
+</ul>
+</div>
+
+<p>Todos os programas desta aula rodaram no <strong>Lua 5.5</strong> da máquina da Ana (usuária <code>ana</code>, computador <code>notebook</code>), salvos na pasta pessoal dela e executados com <code>lua arquivo.lua</code> (veja <a href="executar.html">Rodando um Programa</a>). Você pode rodar cada um no editor do guia.</p>
+
+<hr>
+
+<h2>A ideia: o que está entre aspas é "ao pé da letra"</h2>
+<p>Quando a Ana deixa um bilhete para o filho dizendo <em>escreva "pão" na lista</em>, as aspas avisam: não é para ir buscar pão, é para escrever a <strong>palavra</strong> pão. No Lua é igual:</p>
+<ul>
+  <li><code>nome</code>, sem aspas, é uma <strong>variável</strong>: o Lua vai buscar o valor guardado nela.</li>
+  <li><code>"nome"</code>, com aspas, é um <strong>texto</strong>: as quatro letras n, o, m, e, ao pé da letra.</li>
+</ul>
+<p>As aspas marcam onde o texto começa e onde ele termina. Elas não fazem parte do texto: <code>print("Ana")</code> mostra <code>Ana</code>, sem aspas.</p>
+
+<hr>
+
+<h2>1. Aspas duplas ou simples</h2>
+<p>No Lua, tanto faz escrever um texto entre aspas <strong>duplas</strong> (<code>"</code>) ou <strong>simples</strong> (<code>'</code>, o apóstrofo). O resultado é exatamente o mesmo:</p>
+
+<pre class="file" data-file="aspas.lua">print("Ana")
+print('Ana')
+print("Copo d'água")
+print('Ela disse "bom dia"')
+print("Ana" == 'Ana')
+print(type("Ana"), type('Ana'))
+</pre>
+
+<pre class="term">$ lua aspas.lua
+Ana
+Ana
+Copo d'água
+Ela disse "bom dia"
+true
+string	string</pre>
+
+<dl class="anatomy">
+  <dt>"Ana" e 'Ana'</dt><dd>As duas formas criam o mesmo texto. A única regra é <strong>fechar com a mesma aspa que abriu</strong>.</dd>
+  <dt>"Copo d'água"</dt><dd>Para um texto que tem apóstrofo dentro, use aspas duplas por fora: o <code>'</code> do meio vira só mais uma letra.</dd>
+  <dt>'Ela disse "bom dia"'</dt><dd>E para um texto com aspas duplas dentro, use simples por fora.</dd>
+  <dt>"Ana" == 'Ana'</dt><dd>A comparação dá <code>true</code>: para o Lua, os dois são o mesmo texto (veja <a href="operadores-comparacao.html">Comparações</a>).</dd>
+  <dt>type(…)</dt><dd>O tipo de um texto é <code>string</code>, qualquer que seja a aspa (veja <a href="type.html">type</a>).</dd>
+</dl>
+
+<p>E se o texto tiver os dois tipos de aspas, ou uma quebra de linha? Aí entram os <strong>caracteres de escape</strong> (<code>\"</code>, <code>\n</code>), na aula <a href="strings-escape.html">Caracteres de Escape</a>, e os <strong>textos longos</strong> (<code>[[ … ]]</code>), em <a href="strings-longas.html">Textos Longos</a>.</p>
+
+<div class="tip">
+<strong>Escolha uma e seja coerente</strong>
+<p>Neste guia, usamos <strong>aspas duplas</strong> como padrão, e as simples só quando o texto tem aspas duplas dentro. Muitos projetos de Lua fazem assim; outros preferem as simples. O importante é não ficar misturando sem motivo (veja <a href="estilo.html">Estilo de Código</a>).</p>
+</div>
+
+<div class="trylua" data-goal="out:Ela disse &quot;bom dia&quot;;;semerro">
+<p class="try-task"><strong>Missão:</strong> este programa para com um erro, porque as aspas de dentro "fecham" o texto antes da hora. Troque as aspas <strong>de fora</strong> por aspas simples para ele mostrar <code>Ela disse "bom dia"</code>.</p>
+<pre class="script" data-file="main.lua">print("Ela disse "bom dia"")
+</pre>
+<pre class="solucao" data-file="main.lua">print('Ela disse "bom dia"')
+</pre>
+</div>
+
+<hr>
+
+<h2>2. O texto vazio</h2>
+<p>Duas aspas sem nada no meio, <code>""</code>, formam o <strong>texto vazio</strong>: uma string de tamanho zero. Ele é diferente de <code>nil</code> (veja <a href="nil.html">O Valor nil</a>): o texto vazio é uma folha em branco, e o <code>nil</code> é não ter folha nenhuma.</p>
+
+<pre class="file" data-file="vazio.lua">local vazio = ""
+local nada = nil
+print(type(vazio), #vazio)
+print(type(nada))
+print(vazio == nil)
+print("[" .. vazio .. "]")
+print("[" .. " " .. "]")
+</pre>
+
+<pre class="term">$ lua vazio.lua
+string	0
+nil
+false
+[]
+[ ]</pre>
+
+<ul>
+  <li>O texto vazio é do tipo <code>string</code> e tem tamanho 0 (o <code>#</code> mede o tamanho; veja <a href="operador-tamanho.html">O Operador de Tamanho</a>).</li>
+  <li><code>vazio == nil</code> dá <code>false</code>: são coisas diferentes.</li>
+  <li>Os colchetes em volta mostram a diferença entre <code>""</code> (nada entre eles) e <code>" "</code> (um espaço). Na tela, um espaço é invisível; os colchetes são um truque para enxergá-lo.</li>
+</ul>
+<p>Uma diferença prática: o texto vazio pode ser concatenado com <code>..</code>; o <code>nil</code> não (dá <code>attempt to concatenate a nil value</code>; veja <a href="concatenacao.html">Juntando Textos</a>).</p>
+
+<hr>
+
+<h2>3. <code>"10"</code> não é <code>10</code></h2>
+<p>Um número escrito entre aspas é um <strong>texto</strong> que, por acaso, só tem algarismos. Um texto e um número são coisas diferentes, mesmo quando parecem iguais:</p>
+
+<pre class="file" data-file="numero_texto.lua">local texto = "10"
+local numero = 10
+print(type(texto), type(numero))
+print(texto == numero)
+print(texto + 1, numero + 1)
+print(texto .. 1, numero .. 1)
+print(tonumber(texto) == numero, tostring(numero) == texto)
+</pre>
+
+<pre class="term">$ lua numero_texto.lua
+string	number
+false
+11	11
+101	101
+true	true</pre>
+
+<dl class="anatomy">
+  <dt>texto == numero → false</dt><dd>O <code>==</code> compara também o <strong>tipo</strong>: um texto nunca é igual a um número.</dd>
+  <dt>texto + 1 → 11</dt><dd>Nas contas, o Lua é camarada: ele converte o texto <code>"10"</code> em número sozinho. Isso se chama <strong>coerção</strong>.</dd>
+  <dt>numero .. 1 → 101</dt><dd>No <code>..</code>, é o contrário: o número vira texto, e os dois são colados.</dd>
+  <dt>tonumber / tostring</dt><dd>As funções para converter de propósito: <code>tonumber("10")</code> dá o número 10, e <code>tostring(10)</code> dá o texto <code>"10"</code>. Aula própria: <a href="conversao.html">Conversão</a>.</dd>
+</dl>
+
+<p>Esse assunto importa porque tudo o que vem do teclado (<code>io.read()</code>; veja <a href="io-read.html">io.read()</a>) e de arquivos chega como <strong>texto</strong>. Converta com <code>tonumber</code> antes de comparar com números.</p>
+
+<hr>
+
+<h2>4. Uma string nunca muda</h2>
+<p>Depois de criado, um texto <strong>não muda nunca</strong>. Os programadores dizem que as strings do Lua são <strong>imutáveis</strong>. Parece estranho, porque existem funções como <code>upper</code> ("maiúsculas"); mas olhe o que elas fazem de verdade:</p>
+
+<pre class="file" data-file="imutavel.lua">local nome = "ana"
+local maiusculo = nome:upper()
+print(nome)
+print(maiusculo)
+nome = nome:upper()
+print(nome)
+</pre>
+
+<pre class="term">$ lua imutavel.lua
+ana
+ANA
+ANA</pre>
+
+<dl class="anatomy">
+  <dt>nome:upper()</dt><dd>Chama a função <code>upper</code> no texto de <code>nome</code>. Ela não mexe em <code>"ana"</code>: ela fabrica um texto <strong>novo</strong>, <code>"ANA"</code>, e o devolve. (O <code>:</code> é um jeito curto de escrever <code>string.upper(nome)</code>; as funções de texto têm aula própria: <a href="string-metodos.html">Funções de Texto</a>.)</dd>
+  <dt>print(nome) → ana</dt><dd>A prova: depois do <code>upper</code>, <code>nome</code> continua em minúsculas.</dd>
+  <dt>nome = nome:upper()</dt><dd>Para a variável passar a ter o texto em maiúsculas, guarde o texto novo <strong>nela</strong>. O texto antigo, <code>"ana"</code>, não foi alterado: a variável é que passou a apontar para outro texto.</dd>
+</dl>
+
+<p>Pense na variável como uma <strong>etiqueta</strong> presa num texto (veja <a href="variaveis.html">Variáveis</a>). <code>nome = nome:upper()</code> não reescreve o texto: ela descola a etiqueta do <code>"ana"</code> e cola no <code>"ANA"</code>.</p>
+
+<div class="trylua" data-goal="out:ANA LIMA">
+<p class="try-task"><strong>Missão:</strong> o programa chama <code>nome:upper()</code>, mas continua mostrando o nome em minúsculas, porque jogou o resultado fora. Guarde o resultado de volta em <code>nome</code> para ele mostrar <code>ANA LIMA</code>.</p>
+<pre class="script" data-file="main.lua">local nome = "ana lima"
+nome:upper()
+print(nome)
+</pre>
+<pre class="solucao" data-file="main.lua">local nome = "ana lima"
+nome = nome:upper()
+print(nome)
+</pre>
+</div>
+
+<h3>Não dá para trocar uma letra</h3>
+<p>Por ser imutável, uma string não deixa você trocar uma letra no meio. Nem dá para pegar uma letra com colchetes, como numa lista:</p>
+
+<pre class="file" data-file="indice.lua">local nome = "Ana"
+print(nome[1])
+print(nome:sub(1, 1))
+</pre>
+
+<pre class="term">$ lua indice.lua
+nil
+A</pre>
+
+<p><code>nome[1]</code> deu <code>nil</code>, sem erro: os colchetes não pegam letras de um texto. Para isso existe o <code>sub</code> ("<em>substring</em>", pedaço do texto): <code>nome:sub(1, 1)</code> é o pedaço que vai da 1ª à 1ª letra (veja <a href="string-sub.html">Pedaços de Texto</a>). E para "trocar" a primeira letra, monte um texto novo com os pedaços:</p>
+
+<pre class="file" data-file="troca2.lua">local nome = "Ana"
+nome = "E" .. nome:sub(2)
+print(nome)
+</pre>
+
+<pre class="term">$ lua troca2.lua
+Ena</pre>
+
+<p><code>nome:sub(2)</code> é o texto da 2ª letra até o fim (<code>"na"</code>), e o <code>..</code> cola o <code>"E"</code> na frente.</p>
+
+<hr>
+
+<h2>5. Comparando textos</h2>
+
+<pre class="file" data-file="comparar.lua">print("Ana" == "Ana")
+print("ana" == "Ana")
+print("Ana" == "Ana ")
+print("abacate" &lt; "banana")
+print("Bia" &lt; "ana")
+print("10" &lt; "9")
+print(10 &lt; 9)
+print(("ana"):upper() == ("ANA"):upper())
+</pre>
+
+<pre class="term">$ lua comparar.lua
+true
+false
+false
+true
+true
+true
+false
+true</pre>
+
+<dl class="anatomy">
+  <dt>"ana" == "Ana" → false</dt><dd>Maiúsculas e minúsculas são letras <strong>diferentes</strong> para o computador.</dd>
+  <dt>"Ana" == "Ana " → false</dt><dd>Um espaço a mais no fim também faz diferença. Isso acontece muito com o que a pessoa digita.</dd>
+  <dt>"abacate" &lt; "banana" → true</dt><dd>Com <code>&lt;</code> e <code>&gt;</code>, os textos são comparados letra por letra, como na ordem do dicionário: "a" vem antes de "b".</dd>
+  <dt>"Bia" &lt; "ana" → true</dt><dd>Surpresa: para o computador, <strong>todas as maiúsculas vêm antes de todas as minúsculas</strong>. Ele compara os <strong>códigos</strong> das letras (o "B" é 66, o "a" é 97), não a ordem do dicionário. Letras com acento ficam ainda mais longe.</dd>
+  <dt>"10" &lt; "9" → true</dt><dd>Outra surpresa: como <strong>textos</strong>, "10" vem antes de "9", porque a comparação começa pelo primeiro caractere, e "1" vem antes de "9". Como <strong>números</strong>, <code>10 &lt; 9</code> é <code>false</code>, como esperado.</dd>
+  <dt>("ana"):upper() == ("ANA"):upper()</dt><dd>Para comparar sem ligar para maiúsculas, transforme os dois lados em maiúsculas (ou os dois em minúsculas, com <code>lower</code>) antes. Os parênteses em volta de <code>"ana"</code> são obrigatórios para chamar uma função com <code>:</code> num texto escrito direto.</dd>
+</dl>
+
+<div class="warning">
+<strong>Números guardados como texto se comparam errado</strong>
+<p>Se as notas da turma vierem de um arquivo como textos (<code>"10"</code>, <code>"9"</code>, <code>"7"</code>), compará-las com <code>&lt;</code> dá a ordem errada. Converta com <code>tonumber</code> antes de comparar ou ordenar.</p>
+</div>
+
+<hr>
+
+<h2 id="formas">Formas diferentes de fazer a mesma coisa</h2>
+<p>As funções de texto do Lua podem ser chamadas de dois jeitos. Os dois dão o mesmo resultado:</p>
+
+<pre class="file" data-file="metodos.lua">local nome = "Ana Lima"
+print(nome:upper())
+print(string.upper(nome))
+print(nome:lower(), nome:len(), nome:rep(2, " / "))
+</pre>
+
+<pre class="term">$ lua metodos.lua
+ANA LIMA
+ANA LIMA
+ana lima	8	Ana Lima / Ana Lima</pre>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Situação</th><th>Qual usar</th></tr>
+<tr><td>Texto com apóstrofo (<code>d'água</code>)</td><td>Aspas duplas por fora</td></tr>
+<tr><td>Texto com aspas duplas dentro</td><td>Aspas simples por fora (ou <code>\"</code>, em <a href="strings-escape.html">Caracteres de Escape</a>)</td></tr>
+<tr><td>Texto com várias linhas</td><td><code>[[ … ]]</code> (<a href="strings-longas.html">Textos Longos</a>) ou <code>\n</code></td></tr>
+<tr><td>Chamar uma função de texto</td><td><code>nome:upper()</code> (mais comum) ou <code>string.upper(nome)</code></td></tr>
+<tr><td>Montar um texto com valores</td><td><code>..</code> (<a href="concatenacao.html">Juntando Textos</a>) ou <code>string.format</code> (<a href="string-format.html">string.format</a>)</td></tr>
+<tr><td>Comparar ignorando maiúsculas</td><td><code>a:lower() == b:lower()</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+
+<div class="cenario">
+<strong>Esqueceu de fechar as aspas</strong>
+<pre class="file" data-file="aberta.lua">print("Olá, Ana)
+</pre>
+<pre class="term">$ lua aberta.lua
+lua: aberta.lua:1: unfinished string near '"Olá, Ana)'</pre>
+<p>Linha por linha:</p>
+<dl class="anatomy">
+  <dt>lua: aberta.lua:1:</dt><dd>O problema está na linha 1 do arquivo.</dd>
+  <dt>unfinished string</dt><dd>"String não terminada": o Lua abriu um texto com <code>"</code> e chegou ao fim da linha sem encontrar outra <code>"</code>.</dd>
+  <dt>near '"Olá, Ana)'</dt><dd>"Perto de…": o Lua mostra o texto que ficou aberto. Repare que o <code>)</code> foi engolido: para o Lua, ele faz parte do texto.</dd>
+</dl>
+<p>É um erro de <strong>sintaxe</strong>: o programa nem começa (por isso não há <code>stack traceback</code>). <strong>Como consertar:</strong> <code>print("Olá, Ana")</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Abriu com uma aspa e fechou com outra</strong>
+<pre class="file" data-file="misturada.lua">print("Olá, Ana')
+</pre>
+<pre class="term">$ lua misturada.lua
+lua: misturada.lua:1: unfinished string near '"Olá, Ana')'</pre>
+<p>A mesma mensagem: para um texto aberto com <code>"</code>, o <code>'</code> é só mais uma letra, e o texto continua aberto. <strong>Como consertar:</strong> feche com a mesma aspa que abriu.</p>
+</div>
+
+<div class="cenario">
+<strong>Quebrou a linha no meio do texto</strong>
+<pre class="file" data-file="multi.lua">local recado = "Comprar pão
+e leite"
+print(recado)
+</pre>
+<pre class="term">$ lua multi.lua
+lua: multi.lua:1: unfinished string near '"Comprar pão'</pre>
+<p>Um texto entre aspas não pode atravessar a linha. <strong>Como consertar:</strong> use <code>"Comprar pão\ne leite"</code> (o <code>\n</code> é a quebra de linha; veja <a href="strings-escape.html">Caracteres de Escape</a>) ou um texto longo, <code>[[Comprar pão</code> / <code>e leite]]</code> (veja <a href="strings-longas.html">Textos Longos</a>).</p>
+</div>
+
+<div class="cenario">
+<strong>Aspas iguais dentro do texto</strong>
+<pre class="file" data-file="dentro.lua">print("Ela disse "bom dia"")
+</pre>
+<pre class="term">$ lua dentro.lua
+lua: dentro.lua:1: ')' expected near 'bom'</pre>
+<p>"Era esperado um <code>)</code> perto de <code>bom</code>". A segunda <code>"</code> fechou o texto <code>"Ela disse "</code>, e o Lua achou que <code>bom</code> fosse um nome solto depois dele, onde deveria vir o <code>)</code>. A mensagem não fala em aspas, mas a causa é essa. <strong>Como consertar:</strong> <code>'Ela disse "bom dia"'</code> ou <code>"Ela disse \"bom dia\""</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Aspas curvas, copiadas de um editor de texto</strong>
+<p>Programas como o Word, o LibreOffice e alguns sites trocam as aspas retas (<code>"</code>) por aspas "bonitas", curvas (<code>“</code> e <code>”</code>). Quem copia um código de lá e cola no arquivo <code>.lua</code> leva junto as aspas curvas:</p>
+<pre class="file" data-file="curvas.lua">print(“Olá”)
+</pre>
+<pre class="term">$ lua curvas.lua
+lua: curvas.lua:1: unexpected symbol near '&lt;\226&gt;'</pre>
+<p>"Símbolo inesperado perto de <code>&lt;\226&gt;</code>". O Lua só reconhece as aspas retas. A aspa curva, em UTF-8, ocupa 3 bytes, e o primeiro deles vale 226; como o Lua não sabe que caractere é aquele, ele mostra o número do byte entre <code>&lt;\</code> e <code>&gt;</code>. <strong>Como consertar:</strong> apague as aspas e digite-as de novo no editor de código (não no editor de texto).</p>
+</div>
+
+<div class="cenario">
+<strong>Tentou trocar uma letra com colchetes</strong>
+<pre class="file" data-file="troca.lua">local nome = "Ana"
+nome[1] = "E"
+</pre>
+<pre class="term">$ lua troca.lua
+lua: troca.lua:2: attempt to index a string value (local 'nome')
+stack traceback:
+	troca.lua:2: in main chunk
+	[C]: in ?</pre>
+<p>"Tentativa de indexar (usar colchetes em) um valor do tipo string". Os colchetes com <code>=</code> servem para guardar algo numa <strong>tabela</strong>, e uma string não é tabela; além disso, ela é imutável. <strong>Como consertar:</strong> monte um texto novo: <code>nome = "E" .. nome:sub(2)</code> (seção 4).</p>
+</div>
+
+<div class="cenario">
+<strong>Comparou um texto com um número</strong>
+<pre class="file" data-file="comp_num.lua">local idade = "30"
+print(idade &gt; 18)
+</pre>
+<pre class="term">$ lua comp_num.lua
+lua: comp_num.lua:2: attempt to compare number with string
+stack traceback:
+	comp_num.lua:2: in main chunk
+	[C]: in ?</pre>
+<p>"Tentativa de comparar um número com uma string". Com <code>==</code>, um texto e um número só dão <code>false</code>; com <code>&lt;</code> e <code>&gt;</code>, o programa para. (A mensagem diz "number with string", na ordem contrária à do código, porque o Lua transforma <code>a &gt; b</code> em <code>b &lt; a</code> por dentro.) <strong>Como consertar:</strong> <code>tonumber(idade) &gt; 18</code>.</p>
+</div>
+
+<hr>
+
+<h2>Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>O que é / faz</th></tr>
+<tr><td><code>"texto"</code> ou <code>'texto'</code></td><td>Uma string; as duas aspas são equivalentes</td></tr>
+<tr><td><code>""</code></td><td>O texto vazio (tamanho 0; não é <code>nil</code>)</td></tr>
+<tr><td><code>type("Ana")</code></td><td><code>string</code></td></tr>
+<tr><td><code>#texto</code></td><td>O tamanho em bytes (<a href="operador-tamanho.html">aula</a>)</td></tr>
+<tr><td><code>a .. b</code></td><td>Junta dois textos (<a href="concatenacao.html">aula</a>)</td></tr>
+<tr><td><code>texto:upper()</code>, <code>texto:lower()</code></td><td>Um texto novo em maiúsculas / minúsculas</td></tr>
+<tr><td><code>texto:sub(i, j)</code></td><td>O pedaço da posição <code>i</code> à <code>j</code> (<a href="string-sub.html">aula</a>)</td></tr>
+<tr><td><code>a == b</code>, <code>a &lt; b</code></td><td>Compara (maiúsculas contam; ordem pelos códigos das letras)</td></tr>
+<tr><td><code>tonumber("10")</code>, <code>tostring(10)</code></td><td>Converte texto ↔ número</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Mensagem</th><th>Causa provável</th></tr>
+<tr><td><code>unfinished string near '…'</code></td><td>Aspas sem fechar, fechadas com a aspa errada, ou quebra de linha no meio do texto</td></tr>
+<tr><td><code>')' expected near '…'</code></td><td>Aspas iguais dentro do texto</td></tr>
+<tr><td><code>unexpected symbol near '&lt;\226&gt;'</code></td><td>Aspas curvas (<code>“ ”</code>) copiadas de um editor de texto</td></tr>
+<tr><td><code>attempt to index a string value</code></td><td>Tentou guardar algo num texto com colchetes</td></tr>
+<tr><td><code>attempt to compare number with string</code></td><td>Comparou texto com número usando <code>&lt;</code>/<code>&gt;</code>: use <code>tonumber</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. Escolha as aspas</h3>
+<p>Complete com a aspa certa (a mesma nas duas lacunas) para o texto <code>Pão d'Ana</code> funcionar:</p>
+<div class="ex-code">print(<input data-answer="&quot;" aria-label="aspa de abertura">Pão d'Ana<input data-answer="&quot;" aria-label="aspa de fechamento">)</div>
+</div>
+
+<div class="exercise">
+<h3>2. Verdadeiro ou falso?</h3>
+<p>Responda <code>true</code> ou <code>false</code>, como o Lua mostraria.</p>
+<div class="ex-code"><code>"ana" == "Ana"</code> → <input data-answer="false" aria-label="ana igual Ana"><br><code>"10" == 10</code> → <input data-answer="false" aria-label="texto 10 igual número 10"><br><code>"abacate" &lt; "banana"</code> → <input data-answer="true" aria-label="abacate menor que banana"></div>
+</div>
+
+<div class="mc" data-answer="3">
+<p class="mc-q">3. Depois de <code>local s = "oi"</code> e <code>s:upper()</code> (sem guardar o resultado), quanto vale <code>s</code>?</p>
+<label><input type="radio" name="q3"> <code>OI</code></label>
+<label><input type="radio" name="q3"> <code>nil</code></label>
+<label><input type="radio" name="q3"> <code>oi</code></label>
+<label><input type="radio" name="q3"> Dá erro</label>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">4. Qual a diferença entre <code>""</code> e <code>nil</code>?</p>
+<label><input type="radio" name="q4"> Nenhuma: os dois querem dizer "nada"</label>
+<label><input type="radio" name="q4"> <code>""</code> é um texto de tamanho 0; <code>nil</code> é a ausência de valor</label>
+<label><input type="radio" name="q4"> <code>nil</code> é um texto com a palavra nil</label>
+<label><input type="radio" name="q4"> <code>""</code> dá erro</label>
+</div>
+
+<div class="mc" data-answer="1">
+<p class="mc-q">5. O programa parou com <code>unfinished string near '"Bom dia)'</code>. O que falta?</p>
+<label><input type="radio" name="q5"> Fechar as aspas depois de <code>Bom dia</code></label>
+<label><input type="radio" name="q5"> Um <code>end</code></label>
+<label><input type="radio" name="q5"> Trocar as aspas por apóstrofos</label>
+<label><input type="radio" name="q5"> Um <code>..</code></label>
+</div>
+
+<div class="mc" data-answer="4">
+<p class="mc-q">6. O que <code>print("10" &lt; "9")</code> mostra?</p>
+<label><input type="radio" name="q6"> <code>false</code>, porque 10 é maior que 9</label>
+<label><input type="radio" name="q6"> Um erro: não dá para comparar textos</label>
+<label><input type="radio" name="q6"> <code>nil</code></label>
+<label><input type="radio" name="q6"> <code>true</code>, porque como textos a comparação começa pelo "1"</label>
+</div>
+
+<h3>Missão final: o login sem frescura</h3>
+
+<div class="trylua" data-goal="out:Mesmo nome? true;;src:lower|upper">
+<p class="try-task"><strong>Missão:</strong> a Ana se cadastrou como <code>ana</code>, mas digitou <code>ANA</code> na hora de entrar, e o programa diz que não é o mesmo nome. Faça a comparação ignorar maiúsculas, usando <code>:lower()</code> (ou <code>:upper()</code>) nos <strong>dois</strong> lados.</p>
+<pre class="script" data-file="main.lua">local cadastrado = "ana"
+local digitado = "ANA"
+print("Mesmo nome? " .. tostring(digitado == cadastrado))
+</pre>
+<pre class="solucao" data-file="main.lua">local cadastrado = "ana"
+local digitado = "ANA"
+print("Mesmo nome? " .. tostring(digitado:lower() == cadastrado:lower()))
+</pre>
+</div>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li>Uma <strong>string</strong> é um texto entre aspas. Aspas duplas e simples são equivalentes; feche com a mesma que abriu, e use uma para conter a outra.</li>
+  <li><code>""</code> é o texto vazio (tamanho 0), diferente de <code>nil</code>.</li>
+  <li><code>"10"</code> é texto, <code>10</code> é número: <code>"10" == 10</code> é <code>false</code>. Nas contas o Lua converte sozinho; para comparar, use <code>tonumber</code>.</li>
+  <li>Strings são <strong>imutáveis</strong>: <code>upper</code>, <code>sub</code> e companhia devolvem um texto novo. Para a variável mudar, guarde o resultado: <code>nome = nome:upper()</code>.</li>
+  <li>Na comparação, maiúsculas contam, espaços contam, e a ordem é a dos códigos das letras (<code>"Bia" &lt; "ana"</code>, <code>"10" &lt; "9"</code>).</li>
+  <li>Erros comuns: <code>unfinished string</code> (aspas sem fechar ou quebra de linha), aspas iguais dentro do texto, aspas curvas copiadas (<code>&lt;\226&gt;</code>).</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
