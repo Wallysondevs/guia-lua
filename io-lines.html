@@ -1,0 +1,511 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua io.lines — percorrendo um arquivo linha por linha | Guia Lua</title>
+<meta name="description" content="io.lines do Lua 5.5 para quem nunca programou: for linha in io.lines(nome), que abre, lê e fecha sozinho; contar linhas, procurar com break, ler um CSV, números com &quot;n&quot;, f:lines() num arquivo já aberto, io.lines() sem arquivo lendo o teclado ou um pipe, e os erros reais do Lua.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">io.lines</span></h1>
+
+<p class="intro">Na aula <a href="arquivos-ler.html">Lendo Arquivos</a>, para passar por todas as linhas de um arquivo, você abriu o arquivo, leu uma linha antes do laço, escreveu um <code>while</code>, leu de novo no fim do bloco e fechou o arquivo. Funciona, mas são muitas peças para uma tarefa tão comum. O <code>io.lines</code> ("linhas") faz tudo isso numa linha só: <code>for linha in io.lines("compras.txt") do … end</code>.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O <code>for … in io.lines(nome)</code>: o que cada parte faz e por que ele dispensa o <code>io.open</code> e o <code>close</code>.</li>
+  <li>Os usos de todo dia: contar linhas, procurar uma linha e parar com <code>break</code>, pular linhas vazias, ler um CSV.</li>
+  <li>Os formatos do <code>io.lines</code>: números com <code>"n"</code>, a linha com o Enter com <code>"L"</code>, várias leituras por volta.</li>
+  <li>O <code>f:lines()</code>, para um arquivo que você já abriu (e que você mesmo fecha).</li>
+  <li>O <code>io.lines()</code> <strong>sem</strong> arquivo, que lê o teclado ou o que chega por um pipe (<code>|</code>, <code>&lt;</code>).</li>
+  <li>A diferença entre <code>io.lines</code> e <code>io.open</code> quando o arquivo não existe, e outros erros reais.</li>
+</ul>
+</div>
+
+<p>Todos os programas desta aula rodaram no <strong>Lua 5.5</strong> da máquina da Ana (usuária <code>ana</code>, computador <code>notebook</code>), em <code>/home/ana</code>, com o mesmo <code>compras.txt</code> das aulas anteriores (<code>pão</code>, <code>leite</code>, <code>café</code>, uma por linha).</p>
+
+<hr>
+
+<h2>A ideia: a esteira do caixa</h2>
+<p>No caixa do supermercado, a Ana não pega a sacola inteira do cliente nem vai buscar os produtos um por um no carrinho. Os produtos vêm sozinhos pela <strong>esteira</strong>: ela pega o que chegou, passa no leitor, e a esteira traz o próximo. Quando a esteira fica vazia, acabou a compra, e alguém desliga a esteira.</p>
+<p>O <code>io.lines</code> é essa esteira. A cada volta do <code>for</code>, ele entrega a <strong>próxima linha</strong> do arquivo. Quando o arquivo acaba, o <code>for</code> termina, e o próprio <code>io.lines</code> fecha o arquivo. Você só cuida do que fazer com cada linha.</p>
+
+<hr>
+
+<h2>1. O primeiro <code>io.lines</code></h2>
+
+<pre class="file" data-file="lista.lua">for linha in io.lines("compras.txt") do
+  print("- " .. linha)
+end
+</pre>
+
+<pre class="term">$ lua lista.lua
+- pão
+- leite
+- café</pre>
+
+<dl class="anatomy">
+  <dt>for … in … do … end</dt><dd>É o <strong>for genérico</strong>, o mesmo do <code>for i, item in ipairs(lista)</code> (veja <a href="ipairs.html">ipairs</a>): "para cada coisa que vier, faça". A diferença está no que vem depois do <code>in</code>.</dd>
+  <dt>io.lines("compras.txt")</dt><dd>Abre o arquivo para leitura e prepara a "esteira": uma função que, cada vez que o <code>for</code> pede, lê a próxima linha.</dd>
+  <dt>linha</dt><dd>A variável que recebe a linha da vez, <strong>sem</strong> a quebra de linha do fim (como o <code>f:read("l")</code>). Ela só existe dentro do <code>for</code>; o nome é você quem escolhe.</dd>
+  <dt>print("- " .. linha)</dt><dd>O corpo do laço: o que fazer com cada linha.</dd>
+  <dt>end</dt><dd>Quando o arquivo acaba, o <code>for</code> termina <strong>e o arquivo é fechado sozinho</strong>. Não há <code>f</code>, não há <code>close</code>.</dd>
+</dl>
+
+<p>Compare com o mesmo programa escrito com <code>io.open</code> e <code>while</code>:</p>
+
+<pre class="file" data-file="lista_while.lua">local f = assert(io.open("compras.txt", "r"))
+local linha = f:read("l")
+while linha do
+  print("- " .. linha)
+  linha = f:read("l")
+end
+f:close()
+</pre>
+
+<p>Os dois fazem a mesma coisa, linha por linha. Por dentro, o <code>io.lines</code> faz exatamente isso: abre, lê com <code>"l"</code> até vir <code>nil</code>, e fecha. Só que você não tem como esquecer a segunda leitura (o laço infinito) nem o <code>close</code>.</p>
+
+<hr>
+
+<h2>2. Contando as linhas</h2>
+<p>Um contador antes do laço, mais 1 a cada volta:</p>
+
+<pre class="file" data-file="contar.lua">local numero = 0
+for linha in io.lines("compras.txt") do
+  numero = numero + 1
+  print(numero, linha, #linha)
+end
+print("Total de linhas: " .. numero)
+</pre>
+
+<pre class="term">$ lua contar.lua
+1	pão	4
+2	leite	5
+3	café	5
+Total de linhas: 3</pre>
+
+<p>O <code>#linha</code> mostra o tamanho de cada linha em <strong>bytes</strong>: <code>pão</code> tem 3 letras e 4 bytes, por causa do "ã" (veja <a href="utf8.html">Acentos e a Biblioteca utf8</a>). E nenhuma linha contou a quebra de linha: ela não vem junto.</p>
+
+<p>Repare que o <code>numero</code> foi criado <strong>fora</strong> do laço. A variável <code>linha</code>, ao contrário, só existe dentro dele: depois do <code>end</code>, ela não vale mais nada. Para saber algo do arquivo depois do laço (quantas linhas, a soma, se achou), guarde numa variável criada antes.</p>
+
+<div class="trylua" data-goal="out:Total: 4 itens;;src:io\.lines">
+<p class="try-task"><strong>Missão:</strong> o programa mostra as tarefas da aba <code>tarefas.txt</code>, mas a Ana quer saber também <strong>quantas</strong> são. Crie um contador antes do <code>for</code>, some 1 a cada volta e, depois do laço, mostre <code>Total: 4 itens</code>.</p>
+<pre class="script" data-file="main.lua">for linha in io.lines("tarefas.txt") do
+  print("- " .. linha)
+end
+</pre>
+<pre class="script" data-file="tarefas.txt">varrer a casa
+lavar a louça
+regar as plantas
+pagar a luz
+</pre>
+<pre class="solucao" data-file="main.lua">local total = 0
+for linha in io.lines("tarefas.txt") do
+  print("- " .. linha)
+  total = total + 1
+end
+print("Total: " .. total .. " itens")
+</pre>
+</div>
+
+<hr>
+
+<h2>3. Procurando e parando no meio: <code>break</code></h2>
+<p>Tem leite na lista? Basta olhar até achar. Quando achar, não precisa ler o resto: o <a href="break.html">break</a> sai do laço na hora.</p>
+
+<pre class="file" data-file="procurar.lua">local procurado = "leite"
+local achou = false
+for linha in io.lines("compras.txt") do
+  print("olhando: " .. linha)
+  if linha == procurado then
+    achou = true
+    break
+  end
+end
+print(achou and "Tem leite na lista." or "Falta leite.")
+</pre>
+
+<pre class="term">$ lua procurar.lua
+olhando: pão
+olhando: leite
+Tem leite na lista.</pre>
+
+<p>O <code>café</code> nem foi olhado. E o arquivo? Desde o Lua 5.4, o <code>io.lines</code> também fecha o arquivo quando o laço termina no meio, por um <code>break</code> ou por um erro. (No 5.1, no LuaJIT e no 5.3, ele só fechava quando chegava ao fim do arquivo; com um <code>break</code>, o arquivo ficava aberto até o coletor de lixo passar ou o programa terminar. Veja <a href="versoes.html">as diferenças entre as versões</a>.) A última linha usa o <a href="and-or-ternario.html">truque do and/or</a> para escolher a frase.</p>
+
+<hr>
+
+<h2>4. Um CSV de verdade: separar, converter e pular linhas vazias</h2>
+<p>A professora exportou as notas para o <code>notas.csv</code>, com <code>nome;nota</code> em cada linha. No meio, sem querer, ficou uma linha vazia:</p>
+
+<pre class="term">$ printf 'Ana;9.5\nBia;7\n\nCaio;8.25\nDani;6\n' &gt; notas.csv
+$ cat notas.csv
+Ana;9.5
+Bia;7
+
+Caio;8.25
+Dani;6</pre>
+
+<pre class="file" data-file="csv.lua">local soma, alunos = 0, 0
+for linha in io.lines("notas.csv") do
+  if linha ~= "" then
+    local nome, nota = linha:match("^(.-);(.+)$")
+    nota = tonumber(nota)
+    print(string.format("%-5s %5.2f", nome, nota))
+    soma = soma + nota
+    alunos = alunos + 1
+  end
+end
+print(string.format("Média da turma: %.2f", soma / alunos))
+</pre>
+
+<dl class="anatomy">
+  <dt>if linha ~= "" then</dt><dd>Só trabalha com linhas que <strong>não</strong> são vazias. Uma linha vazia chega como <code>""</code> (um texto sem nada), não como <code>nil</code>: o arquivo não acabou ali.</dd>
+  <dt>linha:match("^(.-);(.+)$")</dt><dd>Separa a linha em duas partes: o que vem antes do <code>;</code> e o que vem depois. É um <strong>padrão</strong>, assunto das aulas <a href="string-find.html">Procurando no Texto</a> e <a href="padroes.html">Padrões</a>; por enquanto, leia como "pegue (um pedaço) ponto e vírgula (outro pedaço)".</dd>
+  <dt>nota = tonumber(nota)</dt><dd>O que vem do arquivo é sempre <strong>texto</strong>. O <a href="conversao.html">tonumber</a> transforma <code>"9.5"</code> no número <code>9.5</code>, para poder somar e formatar com <code>%5.2f</code>.</dd>
+</dl>
+
+<pre class="term">$ lua csv.lua
+Ana    9.50
+Bia    7.00
+Caio   8.25
+Dani   6.00
+Média da turma: 7.69</pre>
+
+<p>Quatro alunos, a linha vazia pulada, média de 30.75 / 4 = 7.6875, mostrada com duas casas: <code>7.69</code>.</p>
+
+<hr>
+
+<h2>5. Formatos: números, a linha com o Enter, várias por volta</h2>
+<p>O <code>io.lines</code> aceita, depois do nome, os mesmos formatos do <code>f:read</code> (<code>"l"</code>, <code>"L"</code>, <code>"n"</code>, <code>"a"</code> ou um número de bytes). Sem formato, é <code>"l"</code>. Com <code>"n"</code>, cada volta entrega um <strong>número</strong>, e não importa se eles estão na mesma linha ou em linhas diferentes:</p>
+
+<pre class="term">$ printf '7.5 8\n6.25\n10\n' &gt; notas.txt</pre>
+
+<pre class="file" data-file="numeros.lua">local soma = 0
+for nota in io.lines("notas.txt", "n") do
+  soma = soma + nota
+end
+print("Soma: " .. soma)
+</pre>
+
+<pre class="term">$ lua numeros.lua
+Soma: 31.75</pre>
+
+<p>7.5 + 8 + 6.25 + 10 = 31.75. Nada de <code>tonumber</code>: o <code>"n"</code> já entrega números. O laço para no fim do arquivo, ou no primeiro pedaço que não for número.</p>
+
+<p>Com <strong>dois</strong> formatos, cada volta lê duas vezes e entrega dois valores:</p>
+
+<pre class="file" data-file="dois.lua">for a, b in io.lines("compras.txt", "l", "l") do
+  print(a, b)
+end
+</pre>
+
+<pre class="term">$ lua dois.lua
+pão	leite
+café	nil</pre>
+
+<p>Primeira volta: <code>pão</code> e <code>leite</code>. Segunda: <code>café</code> e, como não havia uma quarta linha, <code>nil</code>. Na terceira, a primeira leitura já deu <code>nil</code> e o laço terminou. Útil para arquivos em que cada registro ocupa duas linhas (um nome numa, o telefone na outra).</p>
+
+<hr>
+
+<h2>6. <code>f:lines()</code>: num arquivo que você já abriu</h2>
+<p>Às vezes você precisa fazer algo antes do laço, como ler a primeira linha (um título, um cabeçalho) em separado. Aí você abre com <code>io.open</code> e usa o <code>f:lines()</code>, que é a mesma esteira, só que no arquivo <code>f</code>, a partir de onde o marcador estiver:</p>
+
+<pre class="file" data-file="f_lines.lua">local f = assert(io.open("compras.txt", "r"))
+local titulo = f:read("l")
+print("Primeiro item: " .. titulo)
+for linha in f:lines() do
+  print("depois: " .. linha)
+end
+print(io.type(f))
+f:close()
+print(io.type(f))
+</pre>
+
+<pre class="term">$ lua f_lines.lua
+Primeiro item: pão
+depois: leite
+depois: café
+file
+closed file</pre>
+
+<p>O <code>f:read("l")</code> leu o <code>pão</code>, e o <code>f:lines()</code> continuou do <code>leite</code>. Repare no <code>io.type(f)</code> depois do laço: <code>file</code>, ainda <strong>aberto</strong>. O <code>f:lines()</code> não fecha o arquivo, porque não foi ele quem abriu. Quem abriu com <code>io.open</code> fecha com <code>f:close()</code>.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th></th><th><code>io.lines(nome)</code></th><th><code>f:lines()</code></th></tr>
+<tr><td>Quem abre</td><td>Ele mesmo</td><td>Você, com <code>io.open</code></td></tr>
+<tr><td>Começa de onde</td><td>Do começo do arquivo</td><td>De onde o marcador estiver</td></tr>
+<tr><td>Fecha no fim</td><td><strong>Sim</strong></td><td><strong>Não</strong>: você fecha com <code>f:close()</code></td></tr>
+<tr><td>Arquivo que não existe</td><td>Para o programa com erro (seção 8)</td><td>O <code>io.open</code> devolve <code>nil</code>, e você decide</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>7. <code>io.lines()</code> sem arquivo: o teclado e o pipe</h2>
+<p>Sem nome de arquivo, o <code>io.lines()</code> lê a <strong>entrada padrão</strong>: o teclado, quando você roda o programa normalmente, ou o que chega por um pipe. Este programa soma os números que receber, linha por linha, e reclama do que não for número:</p>
+
+<pre class="file" data-file="teclado.lua">local soma, quantos = 0, 0
+for linha in io.lines() do
+  local n = tonumber(linha)
+  if n then
+    soma = soma + n
+    quantos = quantos + 1
+  else
+    print("Ignorei: " .. linha)
+  end
+end
+print("Somei " .. quantos .. " números: " .. soma)
+</pre>
+
+<h3>Digitando</h3>
+<p>Cada <kbd>Enter</kbd> entrega uma linha. Mas como o programa sabe que você terminou? Com o teclado não existe "fim do arquivo"; você <strong>avisa</strong> apertando <kbd>Ctrl</kbd>+<kbd>D</kbd> numa linha vazia. A Ana digitou <code>10</code>, <code>20</code>, <code>abc</code> e apertou <kbd>Ctrl</kbd>+<kbd>D</kbd>:</p>
+
+<pre class="term">$ lua teclado.lua
+10
+20
+abc
+Ignorei: abc
+                                 « aqui a Ana apertou Ctrl+D
+Somei 2 números: 30</pre>
+
+<p>O <code>abc</code> foi recusado na hora; os números, guardados. O <kbd>Ctrl</kbd>+<kbd>D</kbd> é o "fim de entrada" do terminal do Linux (e do macOS); para o programa, é como se o arquivo tivesse acabado. No Windows, o equivalente é <kbd>Ctrl</kbd>+<kbd>Z</kbd> seguido de <kbd>Enter</kbd> (ilustrativo: não foi rodado num Windows). No editor do guia, o <kbd>Ctrl</kbd>+<kbd>D</kbd> também funciona, no campo onde você digita.</p>
+
+<h3>Por um pipe, ou de um arquivo com <code>&lt;</code></h3>
+<p>O mesmo programa, sem mudar nada, também soma o que vier de outro comando (o <code>|</code>) ou de um arquivo (o <code>&lt;</code>):</p>
+
+<pre class="term">$ printf '10\n20\nabc\n5.5\n' | lua teclado.lua
+Ignorei: abc
+Somei 3 números: 35.5
+$ printf '10\n20\n' &gt; dois_numeros.txt
+$ lua teclado.lua &lt; dois_numeros.txt
+Somei 2 números: 30</pre>
+
+<p>O <code>&lt; dois_numeros.txt</code> faz o terminal entregar o arquivo no lugar do teclado. Quem abriu o arquivo foi o terminal, não o Lua: por isso o programa não precisa saber o nome dele. Programas assim, que leem a entrada padrão, se encaixam em qualquer lugar.</p>
+
+<div class="trylua" data-stdin="10\n25\n7.5" data-goal="out:Total: 42.5;;src:io\.lines">
+<p class="try-task"><strong>Missão:</strong> a caixa vai "digitar" três preços: <code>10</code>, <code>25</code> e <code>7.5</code>. O programa lê só o primeiro, com <code>io.read</code>, e mostra <code>Total: 10</code>. Troque por um <code>for linha in io.lines() do</code> que some <strong>todos</strong> (lembre do <code>tonumber</code>), até mostrar <code>Total: 42.5</code>.</p>
+<pre class="script" data-file="main.lua">local total = 0
+local linha = io.read("l")
+total = total + tonumber(linha)
+print("Total: " .. total)
+</pre>
+<pre class="solucao" data-file="main.lua">local total = 0
+for linha in io.lines() do
+  total = total + tonumber(linha)
+end
+print("Total: " .. total)
+</pre>
+</div>
+
+<hr>
+
+<h2 id="formas">Formas diferentes de percorrer as linhas</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Forma</th><th>Quando usar</th></tr>
+<tr><td><code>for linha in io.lines(nome) do</code></td><td><strong>O jeito comum.</strong> Ler um arquivo do começo ao fim, linha por linha. Abre e fecha sozinho; para o programa se o arquivo não existir</td></tr>
+<tr><td><code>local f = io.open(nome)</code> + <code>for linha in f:lines() do</code> + <code>f:close()</code></td><td>Quando você quer tratar o arquivo que não abre com <code>if not f</code>, ou ler um cabeçalho antes do laço</td></tr>
+<tr><td><code>local linha = f:read("l")</code> + <code>while linha do … end</code></td><td>Quando a leitura muda conforme a linha (ler mais uma linha só em certos casos). Veja <a href="arquivos-ler.html">Lendo Arquivos</a></td></tr>
+<tr><td><code>for linha in io.lines() do</code></td><td>Ler o teclado até o <kbd>Ctrl</kbd>+<kbd>D</kbd>, ou o que chega por <code>|</code> e <code>&lt;</code></td></tr>
+<tr><td><code>f:read("a")</code> + <code>gmatch</code></td><td>Arquivo pequeno que você quer inteiro na memória (veja <a href="gmatch.html">gmatch</a>)</td></tr>
+</table>
+</div>
+
+<div class="note">
+<strong>O que o <code>io.lines</code> devolve, por dentro</strong>
+<p>O <code>for</code> genérico funciona com qualquer função que entregue um valor por vez. O <code>io.lines</code> devolve essa função e mais algumas coisas:</p>
+<pre class="term">$ lua retornos.lua
+function: 0x561488240530	nil	nil	file (0x561488240300)</pre>
+<p>(<code>retornos.lua</code> é só <code>print(io.lines("compras.txt"))</code>; os endereços mudam a cada execução.) O primeiro valor é a função da "esteira"; o último é o arquivo aberto. É esse quarto valor que, desde o Lua 5.4, faz o <code>for</code> fechar o arquivo mesmo quando sai com <code>break</code>. Como montar uma função dessas você mesmo está em <a href="iteradores.html">Iteradores Próprios</a>; o fechamento automático em geral está em <a href="close.html">Fechamento Automático (&lt;close&gt;)</a>.</p>
+</div>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+
+<div class="cenario">
+<strong>O arquivo não existe: aqui é erro de verdade</strong>
+<pre class="file" data-file="nao_existe.lua">for linha in io.lines("compra.txt") do
+  print(linha)
+end
+print("fim")
+</pre>
+<pre class="term">$ lua nao_existe.lua
+lua: nao_existe.lua:1: cannot open file 'compra.txt' (No such file or directory)
+stack traceback:
+	[C]: in field 'lines'
+	nao_existe.lua:1: in main chunk
+	[C]: in ?</pre>
+<p>"Não consigo abrir o arquivo <code>compra.txt</code> (não existe tal arquivo ou pasta)". Esta é a grande diferença para o <code>io.open</code>: o <code>io.open</code> devolve <code>nil</code> e deixa você decidir; o <code>io.lines</code> <strong>para o programa</strong> (por isso o <code>fim</code> não apareceu). O <code>[C]: in field 'lines'</code> mostra que o erro veio de dentro do <code>io.lines</code>. <strong>Como consertar:</strong> confira o nome. E se o arquivo puder mesmo faltar (um arquivo que o programa cria na primeira vez), abra com <code>io.open</code>, teste com <code>if not f</code> e use <code>f:lines()</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Duas variáveis, como no <code>ipairs</code></strong>
+<p>Quem se acostumou com <code>for i, item in ipairs(lista)</code> tenta o mesmo aqui:</p>
+<pre class="file" data-file="dois_valores.lua">for i, linha in io.lines("compras.txt") do
+  print(i .. ": " .. linha)
+end
+</pre>
+<pre class="term">$ lua dois_valores.lua
+lua: dois_valores.lua:2: attempt to concatenate a nil value (local 'linha')
+stack traceback:
+	dois_valores.lua:2: in main chunk
+	[C]: in ?</pre>
+<p>O <code>io.lines</code> entrega <strong>um</strong> valor por volta (a linha), não dois. A linha foi para a primeira variável, <code>i</code>, e a segunda, <code>linha</code>, ficou <code>nil</code>. <strong>Como consertar:</strong> uma variável só (<code>for linha in io.lines(…)</code>) e um contador próprio, como na seção 2.</p>
+</div>
+
+<div class="cenario">
+<strong><code>f:lines()</code> depois de fechar</strong>
+<pre class="file" data-file="fechado.lua">local f = assert(io.open("compras.txt", "r"))
+f:close()
+for linha in f:lines() do
+  print(linha)
+end
+</pre>
+<pre class="term">$ lua fechado.lua
+lua: fechado.lua:3: attempt to use a closed file
+stack traceback:
+	[C]: in method 'lines'
+	fechado.lua:3: in main chunk
+	[C]: in ?</pre>
+<p>"Tentativa de usar um arquivo fechado". <strong>Como consertar:</strong> o <code>f:close()</code> vai <strong>depois</strong> do <code>end</code> do laço.</p>
+</div>
+
+<div class="cenario">
+<strong>O programa não termina: <code>io.lines()</code> esperando o teclado</strong>
+<p>Você escreveu <code>io.lines()</code> e esqueceu o nome do arquivo. O programa não mostra nada e não termina: ele está esperando você digitar. Não é travamento. Aperte <kbd>Ctrl</kbd>+<kbd>D</kbd> para encerrar a entrada (ou <kbd>Ctrl</kbd>+<kbd>C</kbd> para interromper) e ponha o nome: <code>io.lines("compras.txt")</code>.</p>
+</div>
+
+<hr>
+
+<h2>Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>O que faz</th></tr>
+<tr><td><code>for linha in io.lines(nome) do … end</code></td><td>Cada linha do arquivo, sem o <code>\n</code>; fecha no fim (e no <code>break</code>, desde o 5.4)</td></tr>
+<tr><td><code>io.lines(nome, "n")</code></td><td>Um número por volta</td></tr>
+<tr><td><code>io.lines(nome, "L")</code></td><td>Cada linha <strong>com</strong> o <code>\n</code></td></tr>
+<tr><td><code>io.lines(nome, "l", "l")</code></td><td>Duas leituras por volta, dois valores</td></tr>
+<tr><td><code>io.lines(nome, 100)</code></td><td>Pedaços de 100 bytes (para arquivos binários)</td></tr>
+<tr><td><code>for linha in f:lines() do … end</code></td><td>As linhas de um arquivo já aberto, a partir do marcador; <strong>não</strong> fecha</td></tr>
+<tr><td><code>for linha in io.lines() do … end</code></td><td>As linhas da entrada padrão: teclado (até o <kbd>Ctrl</kbd>+<kbd>D</kbd>), <code>|</code> ou <code>&lt;</code></td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Sintoma</th><th>Causa provável</th></tr>
+<tr><td><code>cannot open file '…' (No such file or directory)</code></td><td>O arquivo do <code>io.lines</code> não existe (aqui o programa para)</td></tr>
+<tr><td><code>attempt to concatenate a nil value (local 'linha')</code> com <code>for i, linha</code></td><td>O <code>io.lines</code> entrega um valor só por volta</td></tr>
+<tr><td><code>attempt to use a closed file</code> no <code>lines</code></td><td><code>f:close()</code> antes do laço</td></tr>
+<tr><td>Nada acontece e o programa não termina</td><td><code>io.lines()</code> sem nome: está lendo o teclado</td></tr>
+<tr><td>Linhas vazias atrapalham a conta</td><td>Elas chegam como <code>""</code>: pule com <code>if linha ~= "" then</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. Complete o laço</h3>
+<p>Complete para mostrar cada linha de <code>nomes.txt</code>:</p>
+<div class="ex-code"><input data-answer="for" aria-label="palavra-chave"> nome <input data-answer="in" aria-label="palavra-chave"> io.<input data-answer="lines" aria-label="função">("nomes.txt") do<br>&nbsp;&nbsp;print(nome)<br>end</div>
+</div>
+
+<div class="exercise">
+<h3>2. Quantas voltas?</h3>
+<p>O arquivo <code>dias.txt</code> tem 7 linhas. Quantas voltas dá <code>for d in io.lines("dias.txt") do … end</code>?</p>
+<div class="ex-code">Dá <input data-answer="7" aria-label="número de voltas"> voltas.</div>
+</div>
+
+<div class="mc" data-answer="3">
+<p class="mc-q">3. O que acontece com <code>for l in io.lines("nao_existe.txt") do … end</code>?</p>
+<label><input type="radio" name="q3"> O laço não dá nenhuma volta e o programa continua</label>
+<label><input type="radio" name="q3"> O <code>l</code> recebe <code>nil</code> uma vez</label>
+<label><input type="radio" name="q3"> O programa para com <code>cannot open file 'nao_existe.txt' (No such file or directory)</code></label>
+<label><input type="radio" name="q3"> O Lua cria o arquivo vazio</label>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">4. Depois de <code>for linha in f:lines() do … end</code>, num <code>f</code> aberto com <code>io.open</code>, o arquivo está…</p>
+<label><input type="radio" name="q4"> fechado, porque o laço terminou</label>
+<label><input type="radio" name="q4"> aberto: quem abriu com <code>io.open</code> fecha com <code>f:close()</code></label>
+<label><input type="radio" name="q4"> apagado</label>
+<label><input type="radio" name="q4"> de volta ao começo</label>
+</div>
+
+<div class="mc" data-answer="1">
+<p class="mc-q">5. Num programa com <code>for linha in io.lines() do</code>, rodando no terminal, como a Ana diz que terminou de digitar?</p>
+<label><input type="radio" name="q5"> <kbd>Ctrl</kbd>+<kbd>D</kbd> numa linha vazia</label>
+<label><input type="radio" name="q5"> Digitando <code>fim</code></label>
+<label><input type="radio" name="q5"> <kbd>Enter</kbd> duas vezes</label>
+<label><input type="radio" name="q5"> <kbd>Esc</kbd></label>
+</div>
+
+<h3>Missão final: quem passou de ano</h3>
+
+<div class="trylua" data-goal="out:Aprovados: 3;;src:io\.lines;;semerro">
+<p class="try-task"><strong>Missão:</strong> a aba <code>notas.csv</code> tem cinco alunos. O programa já separa o nome e a nota de cada linha, mas conta todo mundo como aprovado (<code>Aprovados: 5</code>). Só passa quem tirou <strong>7 ou mais</strong>: ponha o <code>print</code> e a contagem dentro de um <code>if nota &gt;= 7 then</code>. O certo é <code>Aprovados: 3</code>.</p>
+<pre class="script" data-file="main.lua">local aprovados = 0
+for linha in io.lines("notas.csv") do
+  local nome, nota = linha:match("^(.-);(.+)$")
+  nota = tonumber(nota)
+  print("Passou: " .. nome)
+  aprovados = aprovados + 1
+end
+print("Aprovados: " .. aprovados)
+</pre>
+<pre class="script" data-file="notas.csv">Ana;9.5
+Bia;6.5
+Caio;7
+Dani;4
+Edu;8.25
+</pre>
+<pre class="solucao" data-file="main.lua">local aprovados = 0
+for linha in io.lines("notas.csv") do
+  local nome, nota = linha:match("^(.-);(.+)$")
+  nota = tonumber(nota)
+  if nota &gt;= 7 then
+    print("Passou: " .. nome)
+    aprovados = aprovados + 1
+  end
+end
+print("Aprovados: " .. aprovados)
+</pre>
+</div>
+
+<p>Passam a Ana, o Caio (7 conta: é "7 <strong>ou mais</strong>", o <code>&gt;=</code>) e o Edu. Experimente pôr uma linha vazia no meio da aba <code>notas.csv</code> e rodar: o <code>match</code> não acha o <code>;</code>, o <code>nome</code> e a <code>nota</code> viram <code>nil</code>, e o programa para com <code>attempt to compare number with nil</code> (comparar número com nil). O <code>if linha ~= "" then</code> da seção 4 resolve.</p>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li><code>for linha in io.lines(nome) do … end</code> passa por cada linha do arquivo, sem o <code>\n</code>, e <strong>fecha o arquivo sozinho</strong> no fim (e no <code>break</code>, desde o Lua 5.4).</li>
+  <li>Para saber algo depois do laço (quantas linhas, a soma), use uma variável criada <strong>antes</strong> do <code>for</code>. Para parar no meio, <code>break</code>.</li>
+  <li>Depois do nome vêm os formatos do <code>f:read</code>: <code>"n"</code> (números), <code>"L"</code> (com o <code>\n</code>), vários de uma vez.</li>
+  <li><code>f:lines()</code> percorre um arquivo que você abriu com <code>io.open</code>, a partir do marcador, e <strong>não</strong> fecha: o <code>f:close()</code> é seu.</li>
+  <li><code>io.lines()</code> sem nome lê a entrada padrão: o teclado até o <kbd>Ctrl</kbd>+<kbd>D</kbd>, ou o que chega por <code>|</code> e <code>&lt;</code>.</li>
+  <li>Arquivo que não existe: o <code>io.lines</code> <strong>para o programa</strong> (<code>cannot open file</code>); o <code>io.open</code> devolve <code>nil</code>. Escolha conforme o arquivo puder ou não faltar.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
