@@ -1,0 +1,597 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua Módulos e require — usando o código de outro arquivo | Guia Lua</title>
+<meta name="description" content="Módulos no Lua 5.5 para quem nunca programou: o que é um módulo (um arquivo que devolve uma tabela), como o require carrega, por que ele roda o arquivo uma vez só (package.loaded), as bibliotecas que já vêm carregadas, e os erros reais: module not found com a lista de caminhos, o módulo sem return, o erro de sintaxe dentro do módulo e o require sem local.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">Módulos e require</span></h1>
+
+<p class="intro">Até agora, cada programa seu morou num arquivo só. Quando o programa cresce, isso vira uma bagunça: centenas de linhas, funções de assuntos diferentes misturadas, e a mesma função copiada e colada em vários programas. A saída é separar o código em <strong>módulos</strong>: arquivos com um pedaço do trabalho, que outros programas podem <strong>pedir emprestado</strong>. Quem faz o pedido é a função <code>require</code>, que em inglês quer dizer "exigir, precisar de".</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O que é um módulo no Lua: um arquivo <code>.lua</code> que <strong>devolve uma tabela</strong> cheia de funções.</li>
+  <li>Como usar um módulo com <code>local contas = require("contas")</code>, e o que cada parte dessa linha faz.</li>
+  <li>Por que o <code>require</code> roda o arquivo <strong>uma vez só</strong>, mesmo que você peça duas vezes (a tabela <code>package.loaded</code>).</li>
+  <li>Que <code>string</code>, <code>math</code>, <code>table</code> e companhia também são módulos, que já vêm carregados.</li>
+  <li>Os erros reais: <code>module 'x' not found</code> (com a lista de lugares onde o Lua procurou), o módulo que esqueceu o <code>return</code>, o erro de sintaxe dentro do módulo e o <code>require</code> sem <code>local</code>.</li>
+</ul>
+</div>
+
+<p>Todos os programas desta aula rodaram no <strong>Lua 5.5</strong> da máquina da Ana (usuária <code>ana</code>, computador <code>notebook</code>), numa pasta chamada <code>loja</code>, com <code>lua arquivo.lua</code> (veja <a href="executar.html">Rodando um Programa</a>). Nas caixas "Experimente", o módulo aparece numa <strong>aba</strong> ao lado do <code>main.lua</code>.</p>
+
+<hr>
+
+<h2>A ideia: a caixa de ferramentas emprestada</h2>
+<p>A Ana tem uma lojinha e escreveu, com muito cuidado, as contas que ela faz todo dia: somar a compra, dar desconto, calcular o troco. Agora ela quer usar essas mesmas contas em três programas: o do caixa, o do estoque e o do relatório do mês. Copiar e colar as funções nos três tem dois problemas:</p>
+<ul>
+  <li>se ela achar um erro no desconto, vai ter de consertar <strong>três vezes</strong> (e um dia vai esquecer uma);</li>
+  <li>cada programa fica comprido, cheio de coisa que não é assunto dele.</li>
+</ul>
+<p>O jeito melhor é guardar as contas numa <strong>caixa de ferramentas</strong> com etiqueta, num lugar só, e cada programa <strong>pedir a caixa emprestada</strong> quando precisar. No Lua:</p>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Na vida real</th><th>No Lua</th></tr>
+<tr><td>A caixa de ferramentas</td><td>Uma <strong>tabela</strong> com funções dentro (veja <a href="tabelas.html">Tabelas</a>)</td></tr>
+<tr><td>O armário onde a caixa fica guardada</td><td>Um arquivo, por exemplo <code>contas.lua</code></td></tr>
+<tr><td>A etiqueta da caixa</td><td>O nome do arquivo sem o <code>.lua</code>: <code>"contas"</code></td></tr>
+<tr><td>"Me empresta a caixa de contas?"</td><td><code>require("contas")</code></td></tr>
+<tr><td>Usar uma ferramenta da caixa</td><td><code>contas.somar(12, 30)</code></td></tr>
+</table>
+</div>
+<p>Um <strong>módulo</strong>, então, é só isso: <strong>um arquivo que, no fim, devolve uma tabela</strong> (com <code>return</code>). Não existe palavra especial nem comando novo para criar um. Nesta aula você vai <strong>usar</strong> um módulo; na próxima, <a href="modulos-proprios.html">Criando seu Módulo</a>, vai aprender a escrever os seus com todos os detalhes.</p>
+
+<hr>
+
+<h2>1. O módulo e o programa que usa</h2>
+<p>A Ana criou dois arquivos na pasta <code>loja</code>. O primeiro é o módulo, com as contas:</p>
+
+<pre class="file" data-file="contas.lua">print("carregando o módulo contas...")
+local contas = {}
+
+function contas.somar(a, b)
+  return a + b
+end
+
+function contas.desconto(preco, porcento)
+  return preco - preco * porcento / 100
+end
+
+return contas
+</pre>
+
+<dl class="anatomy">
+  <dt>print("carregando o módulo contas...")</dt><dd>Uma linha só para a gente <strong>ver</strong> quando o arquivo roda. Módulos de verdade quase nunca imprimem nada ao carregar; aqui ela vai ajudar a entender o <code>require</code>.</dd>
+  <dt>local contas = {}</dt><dd>A caixa de ferramentas: uma tabela vazia, guardada numa variável <a href="local.html">local</a>.</dd>
+  <dt>function contas.somar(a, b)</dt><dd>Põe uma função <strong>dentro</strong> da tabela, no campo <code>somar</code>. É o mesmo que <code>contas.somar = function (a, b) … end</code> (veja <a href="funcoes-valores.html">Funções São Valores</a>).</dd>
+  <dt>function contas.desconto(preco, porcento)</dt><dd>Mais uma ferramenta: o preço menos a porcentagem de desconto.</dd>
+  <dt>return contas</dt><dd>A linha mais importante: o arquivo <strong>devolve</strong> a tabela. É isso que o <code>require</code> vai entregar a quem pediu.</dd>
+</dl>
+
+<p>O segundo arquivo é o programa principal, que <strong>usa</strong> o módulo:</p>
+
+<pre class="file" data-file="main.lua">local contas = require("contas")
+print(contas.somar(12, 30))
+print(contas.desconto(80, 10))
+</pre>
+
+<dl class="anatomy">
+  <dt>require("contas")</dt><dd>"Preciso do módulo <code>contas</code>." O Lua procura um arquivo <code>contas.lua</code>, roda o arquivo inteiro e devolve o que ele deu no <code>return</code>: a tabela com as funções. Repare: você escreve o nome <strong>sem</strong> o <code>.lua</code>.</dd>
+  <dt>local contas =</dt><dd>Guarda a tabela recebida numa variável local. O nome da variável é você que escolhe; usar o mesmo nome do módulo é o costume, porque fica claro de onde ele veio.</dd>
+  <dt>contas.somar(12, 30)</dt><dd>Chama a ferramenta <code>somar</code> que mora dentro da tabela: nome da tabela, ponto, nome da função.</dd>
+</dl>
+
+<pre class="term" data-cwd="~/loja">$ lua main.lua
+carregando o módulo contas...
+42
+72.0</pre>
+
+<p>Primeiro apareceu o <code>carregando o módulo contas...</code>: foi o <code>require</code> rodando o <code>contas.lua</code>. Depois, os resultados das duas contas. O desconto deu <code>72.0</code>, com <code>.0</code>, porque a divisão <code>/</code> sempre dá um número com vírgula, um <em>float</em> (veja <a href="divisao.html">Divisão: /, // e %</a>).</p>
+
+<h3>Passo a passo: o que o Lua fez</h3>
+<ol class="passo">
+  <li>Começou a rodar o <code>main.lua</code>, linha 1: encontrou <code>require("contas")</code>.</li>
+  <li>Procurou um arquivo chamado <code>contas.lua</code> numa lista de lugares (você vai ver a lista daqui a pouco) e o achou na pasta atual: <code>./contas.lua</code>.</li>
+  <li>Rodou o <code>contas.lua</code> do começo ao fim: imprimiu a mensagem, criou a tabela, pôs as duas funções nela e chegou ao <code>return contas</code>.</li>
+  <li>Guardou essa tabela num lugar especial, a tabela <code>package.loaded</code> (seção 3).</li>
+  <li>Entregou a tabela ao <code>main.lua</code>, que a guardou na variável <code>contas</code> e seguiu para a linha 2.</li>
+</ol>
+
+<div class="trylua" data-goal="out:40.0;;src:contas\.desconto">
+<p class="try-task"><strong>Missão:</strong> o módulo está na aba <code>contas.lua</code>. No <code>main.lua</code>, troque o comentário por um <code>print</code> que mostre o preço de um produto de <strong>R$ 50</strong> com <strong>20%</strong> de desconto, usando a ferramenta <code>contas.desconto</code>. Dê uma olhada na aba do módulo antes.</p>
+<pre class="script" data-file="main.lua">local contas = require("contas")
+print(contas.somar(12, 30))
+-- mostre aqui o preço de 50 reais com 20% de desconto
+</pre>
+<pre class="script" data-file="contas.lua">print("carregando o módulo contas...")
+local contas = {}
+
+function contas.somar(a, b)
+  return a + b
+end
+
+function contas.desconto(preco, porcento)
+  return preco - preco * porcento / 100
+end
+
+return contas
+</pre>
+<pre class="solucao" data-file="main.lua">local contas = require("contas")
+print(contas.somar(12, 30))
+print(contas.desconto(50, 20))
+</pre>
+</div>
+
+<hr>
+
+<h2>2. O <code>require</code> devolve a tabela, e não cria nada sozinho</h2>
+<p>Uma confusão comum: achar que o <code>require</code> "instala" o nome <code>contas</code> no programa. Ele não faz isso. Ele <strong>devolve</strong> a tabela, e é você que a guarda numa variável. Veja o que acontece com um <code>require</code> solto, sem guardar o resultado:</p>
+
+<pre class="file" data-file="global.lua">require("contas")
+print(contas.somar(2, 3))
+</pre>
+
+<pre class="term" data-cwd="~/loja">$ lua global.lua
+carregando o módulo contas...
+lua: global.lua:2: attempt to index a nil value (global 'contas')
+stack traceback:
+	global.lua:2: in main chunk
+	[C]: in ?</pre>
+
+<p>O módulo foi carregado (a mensagem apareceu), mas a tabela que ele devolveu foi jogada fora. Na linha 2, o nome <code>contas</code> não existe: o Lua o procura como variável <strong>global</strong> (<code>global 'contas'</code>), acha <code>nil</code>, e "tentar indexar um valor nil" quer dizer "tentar pegar <code>.somar</code> de uma coisa que não existe". O conserto é a linha que você já conhece: <code>local contas = require("contas")</code>.</p>
+
+<div class="note">
+<strong>Por que o módulo usa <code>local contas</code> lá dentro?</strong>
+<p>Dentro do <code>contas.lua</code>, a tabela também é <code>local</code>. Por isso o nome <code>contas</code> do módulo <strong>não vaza</strong> para o programa que o carregou: o único jeito de chegar às funções é pelo que o <code>require</code> devolve. Isso é bom: dois módulos diferentes podem ter, cada um, a sua variável <code>contas</code> sem um atrapalhar o outro. (Em programas muito antigos, do Lua 5.1, você pode encontrar a função <code>module(...)</code>, que criava variáveis globais. Ela não existe mais: no 5.5, <code>type(module)</code> dá <code>nil</code>. Veja <a href="versoes.html">as diferenças entre versões</a>.)</p>
+</div>
+
+<h3>O segundo valor: onde o arquivo estava</h3>
+<p>Desde o Lua 5.4, o <code>require</code> devolve <strong>dois</strong> valores: a tabela do módulo e o caminho do arquivo que ele achou (veja <a href="retornos-multiplos.html">Vários Retornos</a>):</p>
+
+<pre class="file" data-file="volta.lua">local contas, onde = require("contas")
+print(type(contas), onde)
+</pre>
+
+<pre class="term" data-cwd="~/loja">$ lua volta.lua
+carregando o módulo contas...
+table	./contas.lua
+$ lua5.1 volta.lua                « o mesmo arquivo no Lua 5.1
+carregando o módulo contas...
+table	nil</pre>
+
+<p><code>./contas.lua</code> quer dizer "o arquivo <code>contas.lua</code> da pasta atual" (o <code>.</code> é a pasta onde você está). No 5.1 (e no LuaJIT, que segue o 5.1) esse segundo valor não existe, por isso deu <code>nil</code>. Quase ninguém usa esse segundo valor; ele serve para descobrir <strong>qual</strong> arquivo foi carregado quando você está em dúvida.</p>
+
+<hr>
+
+<h2>3. O <code>require</code> carrega uma vez só: <code>package.loaded</code></h2>
+<p>E se o programa pedir o mesmo módulo duas vezes? Isso acontece muito: o programa principal pede <code>contas</code>, e o módulo de estoque, que o programa também usa, pede <code>contas</code> de novo. Veja:</p>
+
+<pre class="file" data-file="duas.lua">local c1 = require("contas")
+local c2 = require("contas")
+print(c1 == c2)
+print(package.loaded["contas"] == c1)
+</pre>
+
+<pre class="term" data-cwd="~/loja">$ lua duas.lua
+carregando o módulo contas...
+true
+true</pre>
+
+<p>Três coisas para reparar:</p>
+<ul>
+  <li>A mensagem <code>carregando o módulo contas...</code> apareceu <strong>uma vez só</strong>. O arquivo <strong>não</strong> rodou de novo no segundo <code>require</code>.</li>
+  <li><code>c1 == c2</code> deu <code>true</code>: as duas variáveis apontam para <strong>a mesma tabela</strong>, não para duas cópias (veja <a href="tabelas-referencia.html">Tabelas São Referências</a>).</li>
+  <li>Essa tabela está guardada em <code>package.loaded["contas"]</code>.</li>
+</ul>
+
+<p>O <code>package.loaded</code> é o <strong>caderninho de empréstimos</strong> do <code>require</code>: uma tabela comum, onde a chave é o nome do módulo e o valor é o que ele devolveu. Antes de procurar qualquer arquivo, o <code>require</code> olha o caderninho:</p>
+<ol class="passo">
+  <li>Tem <code>package.loaded["contas"]</code>? <strong>Sim</strong> → devolve na hora, sem rodar nada.</li>
+  <li><strong>Não</strong> → procura o arquivo, roda, anota o resultado no caderninho e devolve.</li>
+</ol>
+<p>Isso deixa o programa mais rápido (o arquivo é lido uma vez) e garante que todo mundo usa <strong>o mesmo</strong> módulo. A aula <a href="modulos-proprios.html">Criando seu Módulo</a> mostra uma consequência curiosa disso: um módulo que guarda um contador é compartilhado por todos que o pedem.</p>
+
+<div class="tip">
+<strong>E se eu mudar o arquivo do módulo com o programa rodando?</strong>
+<p>O <code>require</code> não vai perceber, porque ele só olha o caderninho. Para forçar uma nova leitura (raro, mas útil no <a href="repl.html">modo interativo</a> enquanto você testa), apague a anotação antes: <code>package.loaded["contas"] = nil</code>, e chame <code>require("contas")</code> de novo.</p>
+</div>
+
+<h3>As bibliotecas que já vêm prontas também são módulos</h3>
+<p>O <code>string</code>, o <code>math</code>, o <code>table</code> que você já usou são módulos que o próprio <code>lua</code> carrega antes de o seu programa começar. Eles estão no caderninho desde o início:</p>
+
+<pre class="term">$ lua -e 'print(require("string") == string, package.loaded.math == math)'
+true	true
+$ lua -e 'for _, nome in ipairs({"_G", "coroutine", "debug", "io", "math", "os", "package", "string", "table", "utf8"}) do print(nome, package.loaded[nome] ~= nil) end'
+_G	true
+coroutine	true
+debug	true
+io	true
+math	true
+os	true
+package	true
+string	true
+table	true
+utf8	true</pre>
+
+<p>(O <code>lua -e '…'</code> roda um pedacinho de código direto da linha de comando, sem arquivo.) Por isso <code>require("math")</code> funciona e devolve a mesma tabela <code>math</code> de sempre, sem procurar arquivo nenhum. Você não precisa pedir: elas já estão lá, nas variáveis globais <code>string</code>, <code>math</code> etc.</p>
+
+<hr>
+
+<h2>4. Onde o <code>require</code> procura: o primeiro olhar</h2>
+<p>Quando o módulo não está no caderninho, o <code>require</code> sai procurando um arquivo numa <strong>lista de lugares</strong>. O jeito mais fácil de ver essa lista é pedir um módulo que não existe. A Ana errou o nome (<code>conta</code> em vez de <code>contas</code>):</p>
+
+<pre class="term" data-cwd="~/loja">$ lua -e 'local c = require("conta")'
+lua: (command line):1: module 'conta' not found:
+	no field package.preload['conta']
+	no file '/usr/local/share/lua/5.5/conta.lua'
+	no file '/usr/local/share/lua/5.5/conta/init.lua'
+	no file '/usr/local/lib/lua/5.5/conta.lua'
+	no file '/usr/local/lib/lua/5.5/conta/init.lua'
+	no file '/usr/share/lua/5.5/conta.lua'
+	no file '/usr/share/lua/5.5/conta/init.lua'
+	no file './conta.lua'
+	no file './conta/init.lua'
+	no file '/usr/local/lib/lua/5.5/conta.so'
+	no file '/usr/lib/x86_64-linux-gnu/lua/5.5/conta.so'
+	no file '/usr/lib/lua/5.5/conta.so'
+	no file '/usr/local/lib/lua/5.5/loadall.so'
+	no file './conta.so'
+stack traceback:
+	[C]: in global 'require'
+	(command line):1: in main chunk
+	[C]: in ?
+$ echo $?
+1</pre>
+
+<p>Assusta, mas é uma mensagem muito honesta. Linha por linha:</p>
+<dl class="anatomy">
+  <dt>module 'conta' not found:</dt><dd>"Módulo <code>conta</code> não encontrado". Em seguida vem a lista de <strong>tudo</strong> o que ele tentou.</dd>
+  <dt>no field package.preload['conta']</dt><dd>Primeiro ele olhou uma tabela de módulos "pré-carregados" que um programa pode registrar (é raro; está em <a href="package-path.html">Onde o require Procura</a>). Não tinha.</dd>
+  <dt>no file '/usr/local/share/lua/5.5/conta.lua' …</dt><dd>"Nenhum arquivo" em cada pasta do sistema onde ficam as bibliotecas do Lua 5.5. Repare no <code>5.5</code> no caminho: cada versão do Lua tem as suas pastas.</dd>
+  <dt>no file './conta.lua'</dt><dd>A tentativa que interessa a você: o arquivo <code>conta.lua</code> <strong>na pasta atual</strong>. Não existe, porque o arquivo se chama <code>contas.lua</code>.</dd>
+  <dt>no file './conta/init.lua'</dt><dd>Ele também aceita uma <strong>pasta</strong> <code>conta</code> com um <code>init.lua</code> dentro (você vai ver isso na próxima aula).</dd>
+  <dt>no file '…/conta.so'</dt><dd>Os arquivos <code>.so</code> são módulos escritos em C (a linguagem em que o próprio Lua é feito). Ele também procura esses.</dd>
+  <dt>[C]: in global 'require'</dt><dd>No rastro (<em>stack traceback</em>), o erro aconteceu <strong>dentro</strong> do <code>require</code>, que foi chamado na linha 1.</dd>
+</dl>
+
+<p>Quando aparecer essa mensagem, procure a linha <code>no file './NOME.lua'</code> e confira duas coisas: o <strong>nome</strong> está escrito igualzinho ao do arquivo (maiúsculas contam: <code>require("Contas")</code> não acha <code>contas.lua</code>)? E você está rodando o <code>lua</code> <strong>da pasta</strong> onde o arquivo está? A segunda pegadinha está em <a href="#errado">Quando dá errado</a>, e a lista inteira, com como mudar, tem uma aula só para ela: <a href="package-path.html">Onde o require Procura (package.path)</a>.</p>
+
+<div class="note">
+<strong>No editor do guia</strong>
+<p>A caixa "Experimente" imita a pasta da Ana: as abas viram arquivos na mesma pasta do <code>main.lua</code>, e o <code>require</code> procura nos mesmos lugares, na mesma ordem (conferido: a lista do erro sai idêntica). A diferença é que lá não há nenhuma biblioteca instalada nas pastas do sistema: só o que está nas abas.</p>
+</div>
+
+<hr>
+
+<h2>5. Três jeitos de escrever o <code>require</code></h2>
+
+<pre class="file" data-file="curto.lua">local somar = require("contas").somar
+print(somar(2, 3))
+require "contas"
+print(contas)
+</pre>
+
+<pre class="term" data-cwd="~/loja">$ lua curto.lua
+carregando o módulo contas...
+5
+nil</pre>
+
+<ul>
+  <li><code>require("contas").somar</code> pega a tabela e, na mesma hora, só a função <code>somar</code> dela. Prático quando você só precisa de uma ferramenta.</li>
+  <li><code>require "contas"</code>, sem parênteses: no Lua, uma função chamada com <strong>um único texto</strong> pode dispensar os parênteses (o mesmo vale para <code>print "oi"</code>). É muito comum ver o <code>require</code> escrito assim.</li>
+  <li>O último <code>print(contas)</code> deu <code>nil</code>, como na seção 2: ninguém guardou a tabela no nome <code>contas</code>. Reparou que a mensagem de carregamento apareceu uma vez só? O segundo <code>require</code> veio do caderninho.</li>
+</ul>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Forma</th><th>Quando usar</th></tr>
+<tr><td><code>local contas = require("contas")</code></td><td>O jeito de sempre: no começo do arquivo, um <code>require</code> por módulo. Use esta.</td></tr>
+<tr><td><code>local contas = require "contas"</code></td><td>O mesmo, sem parênteses. Questão de gosto; escolha uma forma e use sempre a mesma.</td></tr>
+<tr><td><code>local somar = require("contas").somar</code></td><td>Quando você só precisa de uma função do módulo e quer chamá-la sem o <code>contas.</code> na frente.</td></tr>
+<tr><td><code>require("contas")</code> sozinho</td><td>Só para módulos que fazem algo ao carregar e não devolvem nada útil (raro). Para usar as funções, não serve.</td></tr>
+</table>
+</div>
+
+<div class="tip">
+<strong>Boa prática: os <code>require</code> no topo</strong>
+<p>Ponha todos os <code>require</code> nas primeiras linhas do arquivo, cada um numa variável <code>local</code>. Quem abrir o arquivo vê logo de quais módulos ele depende, e um nome errado dá erro logo no começo, e não no meio do programa.</p>
+</div>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+
+<div class="cenario">
+<strong>Escreveu o <code>.lua</code> no nome</strong>
+<pre class="term" data-cwd="~/loja">$ lua -e 'local c = require("contas.lua")'
+lua: (command line):1: module 'contas.lua' not found:
+	no field package.preload['contas.lua']
+	no file '/usr/local/share/lua/5.5/contas/lua.lua'
+	no file '/usr/local/share/lua/5.5/contas/lua/init.lua'
+	no file '/usr/local/lib/lua/5.5/contas/lua.lua'
+	no file '/usr/local/lib/lua/5.5/contas/lua/init.lua'
+	no file '/usr/share/lua/5.5/contas/lua.lua'
+	no file '/usr/share/lua/5.5/contas/lua/init.lua'
+	no file './contas/lua.lua'
+	no file './contas/lua/init.lua'
+	no file '/usr/local/lib/lua/5.5/contas/lua.so'
+	no file '/usr/lib/x86_64-linux-gnu/lua/5.5/contas/lua.so'
+	no file '/usr/lib/lua/5.5/contas/lua.so'
+	no file '/usr/local/lib/lua/5.5/loadall.so'
+	no file './contas/lua.so'
+	no file '/usr/local/lib/lua/5.5/contas.so'
+	no file '/usr/lib/x86_64-linux-gnu/lua/5.5/contas.so'
+	no file '/usr/lib/lua/5.5/contas.so'
+	no file '/usr/local/lib/lua/5.5/loadall.so'
+	no file './contas.so'
+stack traceback:
+	[C]: in global 'require'
+	(command line):1: in main chunk
+	[C]: in ?</pre>
+<p>O arquivo <code>contas.lua</code> está bem ali, e mesmo assim não foi achado. Olhe a linha <code>no file './contas/lua.lua'</code>: para o <code>require</code>, o <strong>ponto</strong> no nome quer dizer "pasta". Ele entendeu "o arquivo <code>lua.lua</code> dentro da pasta <code>contas</code>". (As últimas cinco linhas são uma tentativa extra com módulos em C, que você pode ignorar.) <strong>Como consertar:</strong> o nome vai sem a extensão: <code>require("contas")</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Rodou o programa de outra pasta</strong>
+<p>A Ana estava na pasta pessoal dela (<code>~</code>) e mandou rodar o programa que está dentro de <code>loja</code>:</p>
+<pre class="term">$ lua loja/main.lua
+lua: loja/main.lua:1: module 'contas' not found:
+	no field package.preload['contas']
+	no file '/usr/local/share/lua/5.5/contas.lua'
+	no file '/usr/local/share/lua/5.5/contas/init.lua'
+	no file '/usr/local/lib/lua/5.5/contas.lua'
+	no file '/usr/local/lib/lua/5.5/contas/init.lua'
+	no file '/usr/share/lua/5.5/contas.lua'
+	no file '/usr/share/lua/5.5/contas/init.lua'
+	no file './contas.lua'
+	no file './contas/init.lua'
+	no file '/usr/local/lib/lua/5.5/contas.so'
+	no file '/usr/lib/x86_64-linux-gnu/lua/5.5/contas.so'
+	no file '/usr/lib/lua/5.5/contas.so'
+	no file '/usr/local/lib/lua/5.5/loadall.so'
+	no file './contas.so'
+stack traceback:
+	[C]: in global 'require'
+	loja/main.lua:1: in main chunk
+	[C]: in ?</pre>
+<p>O <code>contas.lua</code> está ao lado do <code>main.lua</code>, mas o <code>./</code> de <code>./contas.lua</code> é a pasta onde <strong>você</strong> está (<code>/home/ana</code>), e <strong>não</strong> a pasta onde o programa está. Ele procurou <code>/home/ana/contas.lua</code>, que não existe. <strong>Como consertar:</strong> entre na pasta antes (<code>cd loja</code> e depois <code>lua main.lua</code>). Outras saídas estão em <a href="package-path.html">Onde o require Procura</a>.</p>
+</div>
+
+<div class="cenario">
+<strong>O módulo esqueceu o <code>return</code></strong>
+<pre class="file" data-file="semret.lua">local contas = {}
+function contas.somar(a, b) return a + b end
+</pre>
+<pre class="term" data-cwd="~/loja">$ lua -e 'local c = require("semret") print(c) print(c.somar(1, 2))'
+true
+lua: (command line):1: attempt to index a boolean value (local 'c')
+stack traceback:
+	(command line):1: in main chunk
+	[C]: in ?</pre>
+<p>O arquivo foi achado e rodou sem erro, mas não devolveu nada. Nesse caso o <code>require</code> devolve <code>true</code> (quer dizer só "carreguei"). O primeiro <code>print</code> mostrou esse <code>true</code>; o segundo tentou pegar <code>.somar</code> de um booleano: "tentar indexar um valor booleano (a local <code>c</code>)". <strong>Como consertar:</strong> a última linha do módulo tem de ser <code>return contas</code>. Quando você vir <code>attempt to index a boolean value</code> logo depois de um <code>require</code>, desconfie disso.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro de sintaxe dentro do módulo</strong>
+<pre class="file" data-file="quebrado.lua">local contas = {}
+function contas.somar(a, b)
+  return a + b
+return contas
+</pre>
+<pre class="term" data-cwd="~/loja">$ lua -e 'local c = require("quebrado")'
+lua: error loading module 'quebrado' from file './quebrado.lua':
+	./quebrado.lua:4: 'end' expected (to close 'function' at line 2) near 'return'
+stack traceback:
+	[C]: in ?
+	[C]: in global 'require'
+	(command line):1: in main chunk
+	[C]: in ?</pre>
+<dl class="anatomy">
+  <dt>error loading module 'quebrado' from file './quebrado.lua':</dt><dd>"Erro ao carregar o módulo <code>quebrado</code> do arquivo <code>./quebrado.lua</code>". Desta vez o arquivo <strong>foi achado</strong>; o problema está dentro dele.</dd>
+  <dt>./quebrado.lua:4: 'end' expected (to close 'function' at line 2) near 'return'</dt><dd>O erro de verdade, com o arquivo e a linha <strong>do módulo</strong>: "era esperado um <code>end</code> (para fechar o <code>function</code> da linha 2) perto do <code>return</code>". Faltou o <code>end</code> da função.</dd>
+</dl>
+<p><strong>Como consertar:</strong> abra o arquivo do <strong>módulo</strong> (não o <code>main.lua</code>) na linha indicada. Para conferir a sintaxe de um arquivo sem rodá-lo, use <code>luac -p quebrado.lua</code> (veja <a href="erros.html">Lendo uma Mensagem de Erro</a>).</p>
+</div>
+
+<div class="cenario">
+<strong>Chamou uma função que o módulo não tem</strong>
+<pre class="file" data-file="erro1.lua">local contas = require("contas")
+print(contas.subtrair(10, 3))
+</pre>
+<pre class="term" data-cwd="~/loja">$ lua erro1.lua
+carregando o módulo contas...
+lua: erro1.lua:2: attempt to call a nil value (field 'subtrair')
+stack traceback:
+	erro1.lua:2: in main chunk
+	[C]: in ?</pre>
+<p>"Tentar chamar um valor nil (o campo <code>subtrair</code>)". A tabela <code>contas</code> existe, mas não tem nada no campo <code>subtrair</code>. Ou o nome está errado (<code>somar</code>? <code>Somar</code>?), ou a função não existe no módulo. <strong>Como descobrir o que tem lá dentro:</strong> liste as chaves da tabela, em ordem (veja <a href="pairs.html">pairs</a> e <a href="table-sort.html">table.sort</a>):</p>
+<pre class="file" data-file="nomes.lua">local c = require("contas")
+local nomes = {}
+for k in pairs(c) do nomes[#nomes + 1] = k end
+table.sort(nomes)
+print(table.concat(nomes, ", "))
+</pre>
+<pre class="term" data-cwd="~/loja">$ lua nomes.lua
+carregando o módulo contas...
+desconto, somar</pre>
+</div>
+
+<div class="cenario">
+<strong>O erro acontece dentro do módulo</strong>
+<pre class="file" data-file="erro2.lua">local contas = require("contas")
+print(contas.somar(10, "três"))
+</pre>
+<pre class="term" data-cwd="~/loja">$ lua erro2.lua
+carregando o módulo contas...
+lua: ./contas.lua:5: attempt to add a 'number' with a 'string'
+stack traceback:
+	[C]: in metamethod 'add'
+	./contas.lua:5: in field 'somar'
+	erro2.lua:2: in main chunk
+	[C]: in ?</pre>
+<p>A primeira linha aponta para <code>./contas.lua:5</code>, o <code>return a + b</code> do módulo: "tentar somar um número com um texto". Mas o culpado não é o módulo! Leia o rastro de cima para baixo: o erro foi na linha 5 do <code>contas.lua</code>, <strong>dentro da função <code>somar</code></strong> (<code>in field 'somar'</code>), que foi chamada pela <strong>linha 2 do <code>erro2.lua</code></strong>. Foi lá que alguém passou <code>"três"</code> por extenso. <strong>Como consertar:</strong> quando o erro aponta para um módulo que já funcionava, desça no rastro até achar o <strong>seu</strong> arquivo.</p>
+</div>
+
+<div class="trylua" data-goal="out:Total: 5;;semerro">
+<p class="try-task"><strong>Missão:</strong> rode e veja o erro <code>attempt to index a nil value (global 'contas')</code>. Conserte a primeira linha do <code>main.lua</code> para que o programa mostre <code>Total: 5</code>.</p>
+<pre class="script" data-file="main.lua">require("contas")
+print("Total: " .. contas.somar(2, 3))
+</pre>
+<pre class="script" data-file="contas.lua">local contas = {}
+
+function contas.somar(a, b)
+  return a + b
+end
+
+return contas
+</pre>
+<pre class="solucao" data-file="main.lua">local contas = require("contas")
+print("Total: " .. contas.somar(2, 3))
+</pre>
+</div>
+
+<hr>
+
+<h2>Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>O que faz</th></tr>
+<tr><td><code>local m = require("nome")</code></td><td>Carrega o módulo <code>nome</code> (o arquivo <code>nome.lua</code>) e guarda a tabela que ele devolve</td></tr>
+<tr><td><code>require "nome"</code></td><td>O mesmo, sem parênteses (função chamada com um texto só)</td></tr>
+<tr><td><code>local m, caminho = require("nome")</code></td><td>Também pega o caminho do arquivo carregado (5.4 e 5.5)</td></tr>
+<tr><td><code>require("pasta.nome")</code></td><td>O ponto vira pasta: procura <code>pasta/nome.lua</code></td></tr>
+<tr><td><code>package.loaded["nome"]</code></td><td>O módulo já carregado (o "caderninho"); <code>nil</code> se ainda não foi</td></tr>
+<tr><td><code>package.loaded["nome"] = nil</code></td><td>Faz o próximo <code>require</code> ler o arquivo de novo</td></tr>
+<tr><td><code>string</code>, <code>math</code>, <code>table</code>, <code>io</code>, <code>os</code>, <code>utf8</code>, <code>coroutine</code>, <code>debug</code></td><td>Módulos que já vêm carregados</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Mensagem</th><th>Causa provável</th></tr>
+<tr><td><code>module 'x' not found:</code> + lista de <code>no file</code></td><td>Nome errado (maiúsculas, <code>.lua</code> no nome) ou o <code>lua</code> foi rodado de outra pasta</td></tr>
+<tr><td><code>error loading module 'x' from file './x.lua':</code></td><td>O arquivo do módulo tem erro de sintaxe (a linha vem logo abaixo)</td></tr>
+<tr><td><code>attempt to index a boolean value</code> depois do <code>require</code></td><td>O módulo não tem <code>return</code>: o <code>require</code> devolveu <code>true</code></td></tr>
+<tr><td><code>attempt to index a nil value (global 'x')</code></td><td>Chamou <code>require</code> sem guardar o resultado numa variável</td></tr>
+<tr><td><code>attempt to call a nil value (field 'f')</code></td><td>O módulo não tem a função <code>f</code> (nome errado?)</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. Complete a linha</h3>
+<p>Complete para carregar o módulo do arquivo <code>estoque.lua</code> e guardá-lo numa variável local:</p>
+<div class="ex-code"><input data-answer="local" aria-label="palavra-chave"> estoque = <input data-answer="require" aria-label="função">("<input data-answer="estoque" aria-label="nome do módulo">")</div>
+</div>
+
+<div class="exercise">
+<h3>2. Quantas vezes?</h3>
+<p>O arquivo <code>aviso.lua</code> tem um <code>print("oi")</code> e um <code>return {}</code>. Quantas vezes aparece <code>oi</code> neste programa?</p>
+<pre class="file" data-file="main.lua">local a = require("aviso")
+local b = require("aviso")
+local c = require("aviso")
+</pre>
+<div class="ex-code">Aparece <input data-answer="1|uma" aria-label="número de vezes"> vez(es).</div>
+</div>
+
+<div class="mc" data-answer="3">
+<p class="mc-q">3. A Ana escreveu <code>require("contas.lua")</code> e recebeu <code>module 'contas.lua' not found</code>. Por quê?</p>
+<label><input type="radio" name="q3"> O arquivo precisa se chamar <code>contas.lua.lua</code></label>
+<label><input type="radio" name="q3"> O <code>require</code> só funciona com as bibliotecas do sistema</label>
+<label><input type="radio" name="q3"> O ponto no nome quer dizer "pasta": ele procurou <code>contas/lua.lua</code></label>
+<label><input type="radio" name="q3"> Faltou o <code>local</code></label>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">4. Um módulo terminou sem <code>return</code>. O que o <code>require</code> devolve?</p>
+<label><input type="radio" name="q4"> <code>nil</code></label>
+<label><input type="radio" name="q4"> <code>true</code></label>
+<label><input type="radio" name="q4"> Uma tabela vazia</label>
+<label><input type="radio" name="q4"> Dá erro de sintaxe</label>
+</div>
+
+<div class="mc" data-answer="1">
+<p class="mc-q">5. Onde o <code>require</code> anota os módulos que já carregou?</p>
+<label><input type="radio" name="q5"> <code>package.loaded</code></label>
+<label><input type="radio" name="q5"> <code>package.path</code></label>
+<label><input type="radio" name="q5"> Nas variáveis globais com o nome do módulo</label>
+<label><input type="radio" name="q5"> Em lugar nenhum: ele lê o arquivo toda vez</label>
+</div>
+
+<h3>Missão final: o caixa da padaria</h3>
+
+<div class="trylua" data-goal="out:Total com desconto: R$ 27.00;;semerro;;src:contas\.desconto">
+<p class="try-task"><strong>Missão:</strong> o programa do caixa soma os itens com o módulo <code>contas</code>, mas não roda: leia a mensagem de erro e conserte o nome do módulo (olhe o nome da aba). Depois, aplique <strong>10%</strong> de desconto no total com <code>contas.desconto</code>, para aparecer <code>Total com desconto: R$ 27.00</code>.</p>
+<pre class="script" data-file="main.lua">local contas = require("Contas")
+
+local precos = {12.5, 8, 9.5}
+local total = 0
+for _, p in ipairs(precos) do
+  total = contas.somar(total, p)
+end
+print(string.format("Total: R$ %.2f", total))
+-- mostre aqui o total com 10% de desconto
+</pre>
+<pre class="script" data-file="contas.lua">local contas = {}
+
+function contas.somar(a, b)
+  return a + b
+end
+
+function contas.desconto(preco, porcento)
+  return preco - preco * porcento / 100
+end
+
+return contas
+</pre>
+<pre class="solucao" data-file="main.lua">local contas = require("contas")
+
+local precos = {12.5, 8, 9.5}
+local total = 0
+for _, p in ipairs(precos) do
+  total = contas.somar(total, p)
+end
+print(string.format("Total: R$ %.2f", total))
+print(string.format("Total com desconto: R$ %.2f", contas.desconto(total, 10)))
+</pre>
+</div>
+
+<p>A soma dá R$ 30,00, e 10% de 30 são 3: sobra R$ 27,00. O <code>%.2f</code> do <a href="string-format.html">string.format</a> mostra o número com duas casas, o jeito de escrever dinheiro.</p>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li>Um <strong>módulo</strong> é um arquivo <code>.lua</code> que, no fim, <strong>devolve uma tabela</strong> (<code>return contas</code>) com as suas funções.</li>
+  <li><code>local contas = require("contas")</code> procura o arquivo <code>contas.lua</code>, roda, e guarda a tabela devolvida. O nome vai <strong>sem</strong> <code>.lua</code>, e um ponto no nome quer dizer pasta.</li>
+  <li>O <code>require</code> não cria variáveis sozinho: guarde o resultado numa <code>local</code>.</li>
+  <li>Cada módulo roda <strong>uma vez só</strong>: o resultado fica em <code>package.loaded</code>, e todo <code>require</code> seguinte devolve a mesma tabela.</li>
+  <li><code>string</code>, <code>math</code>, <code>table</code> e as outras bibliotecas padrão são módulos que já vêm carregados.</li>
+  <li>No erro <code>module 'x' not found</code>, procure a linha <code>no file './x.lua'</code>: confira o nome e a pasta de onde você rodou o <code>lua</code>.</li>
+  <li>Próximas aulas: <a href="modulos-proprios.html">Criando seu Módulo</a> e <a href="package-path.html">Onde o require Procura</a>.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
