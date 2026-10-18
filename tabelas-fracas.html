@@ -1,0 +1,518 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua Tabelas Fracas — __mode, chaves e valores fracos | Guia Lua</title>
+<meta name="description" content="Tabelas fracas do Lua 5.5 para quem está começando: o que é uma referência fraca, __mode = &quot;v&quot; (valores fracos), __mode = &quot;k&quot; (chaves fracas) e &quot;kv&quot;, collectgarbage() para ver o item sumir, cache que se limpa sozinho, o que nunca sai de uma tabela fraca (números, textos, booleanos) e os erros reais.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">Tabelas Fracas</span></h1>
+
+<p class="intro">Toda tabela que você criou até aqui <strong>segura</strong> o que está dentro dela: enquanto um item estiver guardado na tabela, o Lua nunca o apaga da memória. Quase sempre é isso que você quer. Mas às vezes a tabela é só um <strong>lembrete</strong> ("se eu ainda tiver isto, me lembre") e não deveria impedir que a coisa vá embora. Para isso existem as <strong>tabelas fracas</strong> (em inglês, <em>weak tables</em>): tabelas que guardam itens <strong>sem segurá-los</strong>. Você liga isso com um campo da metatabela chamado <code>__mode</code> ("modo").</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O que o coletor de lixo faz e o que é uma referência <strong>forte</strong> e uma <strong>fraca</strong>.</li>
+  <li>Como fazer uma tabela de <strong>valores fracos</strong> (<code>__mode = "v"</code>) e ver, com <code>collectgarbage()</code>, um item sumir.</li>
+  <li>Como fazer uma tabela de <strong>chaves fracas</strong> (<code>__mode = "k"</code>) para anotar coisas sobre objetos dos outros.</li>
+  <li>O que <strong>nunca</strong> sai de uma tabela fraca: números, textos e booleanos.</li>
+  <li>Um cache que se limpa sozinho e os erros mais comuns (inclusive o mais traiçoeiro: o item que "não quer sumir").</li>
+</ul>
+</div>
+
+<p>Todos os programas desta aula rodaram no <strong>Lua 5.5</strong> da máquina da Ana (usuária <code>ana</code>, computador <code>notebook</code>), salvos na pasta pessoal dela e executados com <code>lua arquivo.lua</code>. Para entender esta aula, você precisa saber o que é uma metatabela (aula <a href="metatabelas.html">Metatabelas</a>) e que uma tabela é uma <strong>referência</strong> (aula <a href="tabelas-referencia.html">Tabelas São Referências</a>).</p>
+
+<hr>
+
+<h2>A ideia: o caderno de fiado e a lista de achados e perdidos</h2>
+<p>Pense em duas listas penduradas na padaria do bairro:</p>
+<ul>
+  <li>O <strong>caderno de fiado</strong>: o que está anotado ali, o padeiro <strong>não deixa sumir</strong>. Enquanto o nome estiver no caderno, a conta continua existindo. Isso é uma referência <strong>forte</strong>.</li>
+  <li>O <strong>quadro de achados e perdidos</strong>: "guarda-chuva azul, guardado no balcão". Quando o dono passa e leva o guarda-chuva, a linha do quadro <strong>some sozinha</strong>: ninguém precisa apagá-la. O quadro só <strong>aponta</strong> para o guarda-chuva; não o prende na padaria. Isso é uma referência <strong>fraca</strong>.</li>
+</ul>
+<p>No Lua, quem leva embora as coisas que ninguém mais usa é o <strong>coletor de lixo</strong> (em inglês, <em>garbage collector</em>). De tempos em tempos, ele procura tabelas, funções e outros objetos que <strong>nenhuma variável e nenhuma tabela</strong> consegue mais alcançar, e libera a memória deles. Ele trabalha sozinho, sem você pedir (a aula <a href="coleta-lixo.html">Coleta de Lixo</a> mostra os detalhes).</p>
+<p>A regra dele é simples: <strong>se alguém ainda segura o objeto, ele fica</strong>. Uma tabela comum segura tudo o que guarda. Uma tabela fraca guarda sem segurar: para o coletor, o que só está numa tabela fraca é como se não estivesse em lugar nenhum.</p>
+
+<hr>
+
+<h2>1. Primeiro, uma tabela comum: nada some</h2>
+<p>Para comparar depois, veja o que acontece com uma tabela normal. A Ana guarda as fichas de duas clientes numa tabela <code>cache</code> ("cache" é o nome que os programadores dão a um lugar onde se guardam coisas para usar de novo depois). Depois ela chama <code>collectgarbage()</code>, que manda o coletor de lixo fazer uma faxina <strong>completa agora</strong>:</p>
+
+<pre class="file" data-file="forte.lua">local cache = {}
+cache.ana = { nome = "Ana" }
+cache.bia = { nome = "Bia" }
+collectgarbage()
+local n = 0
+for _ in pairs(cache) do n = n + 1 end
+print("itens:", n)
+</pre>
+
+<pre class="term">$ lua forte.lua
+itens:	2</pre>
+
+<p>As duas fichas continuam lá. A própria tabela <code>cache</code> segura as duas, então o coletor não pode levar nenhuma. O laço com <code>pairs</code> só conta os itens (o <code>#</code> não serve aqui, porque as chaves são textos; veja <a href="pairs.html">pairs</a>).</p>
+
+<hr>
+
+<h2>2. Valores fracos: <code>__mode = "v"</code></h2>
+<p>Agora o mesmo cache, com uma diferença: ele ganha uma metatabela com o campo <code>__mode = "v"</code>. O <code>"v"</code> é de <em>value</em>, "valor": os <strong>valores</strong> desta tabela são fracos. E desta vez a Ana guarda a ficha dela também numa variável, <code>guardada</code>:</p>
+
+<pre class="file" data-file="fraca_v.lua">local cache = setmetatable({}, { __mode = "v" })
+cache.ana = { nome = "Ana" }
+cache.bia = { nome = "Bia" }
+local guardada = cache.ana
+local function conta(t)
+  local n = 0
+  for _ in pairs(t) do n = n + 1 end
+  return n
+end
+print("antes:", conta(cache))
+collectgarbage()
+print("depois:", conta(cache))
+print(cache.ana, cache.bia)
+print(cache.ana == guardada, cache.bia)
+</pre>
+
+<dl class="anatomy">
+  <dt>setmetatable({}, { __mode = "v" })</dt><dd>Cria uma tabela vazia e dá a ela uma metatabela. O <code>setmetatable</code> devolve a própria tabela, por isso dá para criar e guardar numa linha só. A metatabela tem um único campo, <code>__mode</code>, com o texto <code>"v"</code>.</dd>
+  <dt>cache.ana = { nome = "Ana" }</dt><dd>Guarda uma tabela nova no cache. Neste momento, quem segura a ficha da Ana? Só o cache, e fracamente.</dd>
+  <dt>local guardada = cache.ana</dt><dd>Agora a variável <code>guardada</code> também aponta para a ficha da Ana. Uma variável é uma referência <strong>forte</strong>: enquanto ela existir, a ficha da Ana não pode ir embora.</dd>
+  <dt>local function conta(t)</dt><dd>Uma função pequena que conta quantos pares chave/valor a tabela tem.</dd>
+  <dt>collectgarbage()</dt><dd>"Colete o lixo": pede uma coleta completa <strong>agora</strong>. Num programa normal você não precisa chamar isso; aqui é só para ver o efeito na hora, em vez de esperar o coletor passar sozinho.</dd>
+</dl>
+
+<pre class="term">$ lua fraca_v.lua
+antes:	2
+depois:	1
+table: 0x55f79b171d20	nil
+true	nil</pre>
+
+<p>A ficha da <strong>Bia</strong> sumiu, e sozinha: ninguém escreveu <code>cache.bia = nil</code>. Só o cache apontava para ela, e o cache é fraco, então o coletor a levou e o Lua tirou o par <code>bia</code> da tabela. A ficha da <strong>Ana</strong> ficou, porque a variável <code>guardada</code> ainda a segura. A última linha confirma: <code>cache.ana</code> é a mesma tabela que está em <code>guardada</code> (<code>true</code>), e <code>cache.bia</code> agora é <code>nil</code>.</p>
+<p>O número <code>0x55f79b171d20</code> é o endereço da tabela na memória. Ele muda a cada vez que você roda (no editor do guia ele também é diferente); o que importa é o resto.</p>
+
+<div class="tip">
+<strong>"Fraco" não quer dizer "apaga já"</strong>
+<p>Uma tabela fraca não apaga nada por conta própria. Ela só <strong>deixa</strong> o coletor levar o que ninguém mais segura. Sem o <code>collectgarbage()</code>, a ficha da Bia sumiria mais tarde, quando o coletor passasse sozinho: talvez daqui a um milissegundo, talvez só quando o programa tivesse criado muita coisa nova. Por isso, num programa de verdade, <strong>nunca conte</strong> que um item ainda está numa tabela fraca: sempre teste se ele veio <code>nil</code>.</p>
+</div>
+
+<div class="trylua" data-goal="out:depois: 1;;src:__mode">
+<p class="try-task"><strong>Missão:</strong> este cache é uma tabela comum, então depois da faxina continuam os 3 itens (<code>depois: 3</code>). Faça os valores do cache serem <strong>fracos</strong>, para sobrar só a ficha que a variável <code>guardada</code> ainda segura (<code>depois: 1</code>).</p>
+<pre class="script" data-file="main.lua">local cache = {}
+cache.ana = { nome = "Ana" }
+cache.bia = { nome = "Bia" }
+cache.caio = { nome = "Caio" }
+local guardada = cache.ana
+local function conta(t)
+  local n = 0
+  for _ in pairs(t) do n = n + 1 end
+  return n
+end
+print("antes: " .. conta(cache))
+collectgarbage()
+print("depois: " .. conta(cache))
+</pre>
+<pre class="solucao" data-file="main.lua">local cache = setmetatable({}, { __mode = "v" })
+cache.ana = { nome = "Ana" }
+cache.bia = { nome = "Bia" }
+cache.caio = { nome = "Caio" }
+local guardada = cache.ana
+local function conta(t)
+  local n = 0
+  for _ in pairs(t) do n = n + 1 end
+  return n
+end
+print("antes: " .. conta(cache))
+collectgarbage()
+print("depois: " .. conta(cache))
+</pre>
+</div>
+
+<p>No lab, a solução mostrou <code>antes: 3</code> e <code>depois: 1</code>. Experimente depois apagar a linha <code>local guardada = cache.ana</code>: aí ninguém segura ficha nenhuma, e o "depois" vira 0.</p>
+
+<hr>
+
+<h2>3. Chaves fracas: <code>__mode = "k"</code></h2>
+<p>O <code>"k"</code> é de <em>key</em>, "chave": as <strong>chaves</strong> da tabela são fracas. Isso serve quando a chave é um objeto (uma tabela) que pertence a outra parte do programa, e você quer <strong>anotar alguma coisa sobre ele</strong> sem atrapalhar a vida dele.</p>
+<p>A lojinha da Ana tem as fichas das clientes. Ela quer contar quantas visitas cada uma fez, mas sem mexer nas fichas (que podem ser de outro módulo). Então ela usa a <strong>própria ficha como chave</strong> de uma tabela <code>visitas</code>:</p>
+
+<pre class="file" data-file="fraca_k.lua">local visitas = setmetatable({}, { __mode = "k" })
+local ana = { nome = "Ana" }
+local bia = { nome = "Bia" }
+visitas[ana] = 3
+visitas[bia] = 1
+local function conta(t)
+  local n = 0
+  for _ in pairs(t) do n = n + 1 end
+  return n
+end
+print("antes:", conta(visitas))
+bia = nil
+collectgarbage()
+print("depois:", conta(visitas))
+print(visitas[ana])
+</pre>
+
+<pre class="term">$ lua fraca_k.lua
+antes:	2
+depois:	1
+3</pre>
+
+<p>Linha por linha:</p>
+<ul>
+  <li><code>visitas[ana] = 3</code>: a chave é a <strong>tabela</strong> da Ana (não o texto <code>"Ana"</code>). Qualquer valor pode ser chave no Lua, inclusive uma tabela.</li>
+  <li><code>bia = nil</code>: a ficha da Bia deixou de ser usada pelo programa (por exemplo, ela saiu do cadastro). A única coisa que ainda aponta para ela é a chave em <code>visitas</code>, e essa chave é fraca.</li>
+  <li>Depois da faxina, o par da Bia sumiu <strong>inteiro</strong> (a chave e o número 1). O da Ana ficou, porque a variável <code>ana</code> ainda a segura: <code>visitas[ana]</code> continua 3.</li>
+</ul>
+<p>Sem o <code>__mode = "k"</code>, a tabela <code>visitas</code> seguraria para sempre todas as fichas que já passaram por ela, mesmo as de clientes que o resto do programa já esqueceu. Num programa que roda o dia inteiro (um jogo, um servidor), esse tipo de tabela que só cresce é uma das causas mais comuns de <strong>vazamento de memória</strong>.</p>
+
+<div class="note">
+<strong>Quando sai um, sai o par</strong>
+<p>O manual do Lua diz: se a chave <strong>ou</strong> o valor for coletado, o par inteiro sai da tabela. Por isso, com <code>"v"</code>, a chave <code>bia</code> também sumiu (seção 2), e com <code>"k"</code>, o número 1 também sumiu.</p>
+</div>
+
+<h3>Os dois ao mesmo tempo: <code>"kv"</code></h3>
+<p>Com <code>__mode = "kv"</code>, chaves e valores são fracos: o par sai se qualquer um dos dois não for mais seguro por ninguém. É bem menos usado que os outros dois.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th><code>__mode</code></th><th>O que fica fraco</th><th>Uso típico</th></tr>
+<tr><td><code>"v"</code></td><td>os valores</td><td>cache: "guarde esta ficha enquanto alguém a estiver usando"</td></tr>
+<tr><td><code>"k"</code></td><td>as chaves</td><td>anotações sobre objetos dos outros: "quantas visitas esta ficha teve"</td></tr>
+<tr><td><code>"kv"</code></td><td>chaves e valores</td><td>raro: ligações entre objetos que podem sumir dos dois lados</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>4. O que nunca sai de uma tabela fraca</h2>
+<p>Só sai de uma tabela fraca o que é <strong>objeto</strong>: tabelas, funções e corrotinas, coisas que foram <strong>criadas</strong> (com <code>{}</code>, <code>function</code>…). Números, booleanos e textos se comportam como <strong>valores</strong>: o número 10 não "pertence" a ninguém, e o texto <code>"texto"</code> é igual a qualquer outro <code>"texto"</code>. Eles nunca saem. Veja uma tabela com tudo fraco (<code>"kv"</code>) e um pouco de cada coisa:</p>
+
+<pre class="file" data-file="strings.lua">local t = setmetatable({}, { __mode = "kv" })
+t[1] = "texto"
+t.x = 10
+t.y = true
+t.z = {}
+t[{}] = "chave tabela"
+t.f = function () end
+collectgarbage()
+local chaves = {}
+for k, v in pairs(t) do chaves[#chaves + 1] = tostring(type(k)) .. "=" .. type(v) end
+table.sort(chaves)
+print(table.concat(chaves, " "))
+</pre>
+
+<pre class="term">$ lua strings.lua
+number=string string=boolean string=number</pre>
+
+<p>Sobraram 3 pares: <code>t[1] = "texto"</code> (chave número, valor texto), <code>t.y = true</code> e <code>t.x = 10</code>. Sumiram os três que tinham uma tabela ou uma função que ninguém mais segurava: <code>t.z = {}</code>, <code>t[{}]</code> e <code>t.f</code>. (O <code>table.sort</code> está lá para a lista sair sempre na mesma ordem: a ordem do <code>pairs</code> não é garantida.)</p>
+
+<hr>
+
+<h2>5. Um cache que se limpa sozinho</h2>
+<p>O uso mais famoso das chaves fracas é <strong>lembrar um resultado já calculado</strong> para cada objeto (em inglês, <em>memoization</em>, "memorização"). Calcular a área de um retângulo é rápido, mas imagine que fosse uma conta demorada:</p>
+
+<pre class="file" data-file="memo.lua">local cache = setmetatable({}, { __mode = "k" })
+local function area(retangulo)
+  local r = cache[retangulo]
+  if r then
+    print("  (do cache)")
+    return r
+  end
+  print("  (calculando)")
+  r = retangulo.largura * retangulo.altura
+  cache[retangulo] = r
+  return r
+end
+local sala = { largura = 4, altura = 5 }
+print(area(sala))
+print(area(sala))
+</pre>
+
+<pre class="term">$ lua memo.lua
+  (calculando)
+20
+  (do cache)
+20</pre>
+
+<p>Na primeira chamada, o resultado não estava no cache: a função calculou e guardou. Na segunda, achou pronto. E como a chave é fraca, quando o programa parar de usar a <code>sala</code>, o resultado guardado vai embora junto, sem ninguém precisar limpar o cache.</p>
+
+<div class="trylua">
+<p class="try-task"><strong>Experimente:</strong> crie um segundo retângulo (<code>local quarto = { largura = 3, altura = 3 }</code>) e chame <code>area(quarto)</code> duas vezes. Depois troque o <code>__mode = "k"</code> por <code>"v"</code> e pense: os valores aqui são números. Eles sairiam do cache algum dia?</p>
+<pre class="script" data-file="main.lua">local cache = setmetatable({}, { __mode = "k" })
+local function area(retangulo)
+  local r = cache[retangulo]
+  if r then
+    print("  (do cache)")
+    return r
+  end
+  print("  (calculando)")
+  r = retangulo.largura * retangulo.altura
+  cache[retangulo] = r
+  return r
+end
+local sala = { largura = 4, altura = 5 }
+print(area(sala))
+print(area(sala))
+</pre>
+</div>
+
+<p>(Resposta: com <code>"v"</code>, não. Números nunca saem de uma tabela fraca, e as chaves passariam a ser fortes: o cache seguraria todos os retângulos para sempre. Para este cache, o certo é <code>"k"</code>.)</p>
+
+<hr>
+
+<h2>6. Chave fraca que aparece no próprio valor</h2>
+<p>E se o valor guardado apontar de volta para a chave? Por exemplo, a ficha do dono de cada carro guarda o próprio carro:</p>
+
+<pre class="file" data-file="efemero.lua">local dono = setmetatable({}, { __mode = "k" })
+local carro = { placa = "ABC1D23" }
+dono[carro] = { carro = carro, nome = "Ana" }
+carro = nil
+collectgarbage()
+print(next(dono))
+</pre>
+
+<pre class="term">$ lua efemero.lua
+nil</pre>
+
+<p>O valor <code>{ carro = carro, … }</code> segura o carro com força, então parece que o carro nunca poderia sumir. Mas o Lua é esperto: numa tabela de chaves fracas, um valor só conta como "vivo" se a <strong>chave</strong> dele estiver viva por outro caminho. Como só o próprio valor apontava para o carro, o par inteiro saiu (<code>next(dono)</code> deu <code>nil</code>: a tabela ficou vazia). O manual chama esse tipo de tabela de <strong>tabela efêmera</strong> (<em>ephemeron table</em>).</p>
+
+<hr>
+
+<h2 id="formas">Formas diferentes de fazer a mesma coisa</h2>
+<p>A metatabela pode ser criada na hora, como em todos os exemplos, ou ficar guardada numa variável e ser usada por várias tabelas:</p>
+
+<pre class="file" data-file="formas.lua">-- 1) metatabela criada na hora
+local cache1 = setmetatable({}, { __mode = "v" })
+
+-- 2) uma metatabela só, para várias tabelas fracas
+local fraca_v = { __mode = "v" }
+local cache2 = setmetatable({}, fraca_v)
+local cache3 = setmetatable({}, fraca_v)
+
+-- 3) a tabela primeiro, a metatabela depois
+local cache4 = {}
+setmetatable(cache4, { __mode = "v" })
+</pre>
+
+<p>E, claro, a outra forma de fazer um item sumir é a de sempre: apagá-lo você mesmo com <code>cache.bia = nil</code>.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Situação</th><th>Qual usar</th></tr>
+<tr><td>Você sabe exatamente quando o item deixa de servir</td><td>Uma tabela comum e <code>t[chave] = nil</code> na hora certa: é mais claro e previsível</td></tr>
+<tr><td>Guardar objetos para reaproveitar enquanto alguém ainda os usa</td><td><code>__mode = "v"</code></td></tr>
+<tr><td>Anotar dados sobre objetos que não são seus (contadores, resultados calculados)</td><td><code>__mode = "k"</code></td></tr>
+<tr><td>Os valores são números, textos ou booleanos</td><td><code>"v"</code> não adianta: eles nunca saem</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+
+<div class="cenario">
+<strong>Pôs o <code>__mode</code> na própria tabela, sem metatabela</strong>
+<pre class="file" data-file="esqueceu.lua">local cache = { __mode = "v" }
+cache.ana = { nome = "Ana" }
+collectgarbage()
+print(cache.ana)
+</pre>
+<pre class="term">$ lua esqueceu.lua
+table: 0x55f8db55d4e0</pre>
+<p>Nenhum erro, e nada some. Aqui <code>__mode</code> é só um campo comum da tabela <code>cache</code>, como seria <code>cor</code> ou <code>nome</code>. O Lua só olha o <code>__mode</code> que está na <strong>metatabela</strong>. <strong>Como consertar:</strong> <code>local cache = setmetatable({}, { __mode = "v" })</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>O item "não quer sumir"</strong>
+<pre class="file" data-file="ainda.lua">local cache = setmetatable({}, { __mode = "v" })
+local ana = { nome = "Ana" }
+cache.ana = ana
+collectgarbage()
+print(cache.ana.nome)
+</pre>
+<pre class="term">$ lua ainda.lua
+Ana</pre>
+<p>A tabela é fraca, mas a ficha continua lá. Não é defeito: a variável local <code>ana</code> ainda segura a ficha com força. Enquanto houver <strong>qualquer</strong> referência forte (uma variável, outra tabela comum, uma closure que use o objeto), o coletor não leva nada. Quando um item não some, procure quem ainda está segurando ele.</p>
+</div>
+
+<div class="cenario">
+<strong>Usou o item sem conferir se ele ainda existe</strong>
+<pre class="file" data-file="nome.lua">local cache = setmetatable({}, { __mode = "v" })
+cache.bia = { nome = "Bia" }
+collectgarbage()
+print(cache.bia.nome)
+</pre>
+<pre class="term">$ lua nome.lua
+lua: nome.lua:4: attempt to index a nil value (field 'bia')
+stack traceback:
+	nome.lua:4: in main chunk
+	[C]: in ?</pre>
+<p>Linha por linha:</p>
+<dl class="anatomy">
+  <dt>lua: nome.lua:4:</dt><dd>O erro foi no arquivo <code>nome.lua</code>, na <strong>linha 4</strong>.</dd>
+  <dt>attempt to index a nil value (field 'bia')</dt><dd>"Tentativa de indexar um valor nil (o campo 'bia')": o programa tentou pegar o <code>.nome</code> de uma coisa que é <code>nil</code>. Essa coisa é o campo <code>bia</code>, que o coletor levou.</dd>
+  <dt>stack traceback: …</dt><dd>O rastro das chamadas: o erro aconteceu no programa principal (<code>main chunk</code>), que foi chamado pelo próprio <code>lua</code> (<code>[C]: in ?</code>).</dd>
+</dl>
+<p><strong>Como consertar:</strong> numa tabela fraca, todo item pode virar <code>nil</code> a qualquer momento. Teste antes: <code>local ficha = cache.bia; if ficha then print(ficha.nome) end</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Escreveu o modo errado</strong>
+<pre class="term">$ lua -e 'local t = setmetatable({}, {__mode="x"}) t[{}]=1 collectgarbage() print(next(t))'
+table: 0x564354d1e970	1</pre>
+<p>O Lua não reclama de um <code>__mode</code> estranho (<code>"x"</code>, <code>"V"</code>, <code>"chave"</code>): ele simplesmente não vê nem <code>k</code> nem <code>v</code>, e a tabela continua forte. O item que ninguém segura não saiu. Os únicos valores que o manual aceita são <code>"k"</code>, <code>"v"</code> e <code>"kv"</code>, em minúsculas.</p>
+</div>
+
+<div class="cenario">
+<strong>Tentou dar metatabela a um texto</strong>
+<pre class="term">$ lua -e 'setmetatable("abc", { __mode = "k" })'
+lua: (command line):1: bad argument #1 to 'setmetatable' (table expected, got string)
+stack traceback:
+	[C]: in global 'setmetatable'
+	(command line):1: in main chunk
+	[C]: in ?</pre>
+<p>"Argumento ruim nº 1 para o <code>setmetatable</code> (era esperada uma tabela, veio um texto)". Só tabelas podem ser fracas, e o <code>setmetatable</code> do Lua só aceita tabelas. O <code>[C]: in global 'setmetatable'</code> do rastro diz que o erro foi descoberto dentro da função <code>setmetatable</code>, que é escrita em C.</p>
+</div>
+
+<hr>
+
+<h2>Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>O que faz</th></tr>
+<tr><td><code>setmetatable({}, { __mode = "v" })</code></td><td>Tabela de valores fracos</td></tr>
+<tr><td><code>setmetatable({}, { __mode = "k" })</code></td><td>Tabela de chaves fracas</td></tr>
+<tr><td><code>setmetatable({}, { __mode = "kv" })</code></td><td>Chaves e valores fracos</td></tr>
+<tr><td><code>collectgarbage()</code></td><td>Faz uma coleta de lixo completa agora (bom para testes; num programa normal, não precisa)</td></tr>
+<tr><td><code>next(t) == nil</code></td><td>Testa se a tabela ficou vazia</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Sai de uma tabela fraca quando ninguém mais segura</th><th>Nunca sai</th></tr>
+<tr><td>tabelas, funções, corrotinas</td><td>números, textos (strings), <code>true</code>/<code>false</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. Complete o cache de valores fracos</h3>
+<div class="ex-code">local cache = <input data-answer="setmetatable" aria-label="função">({}, { <input data-answer="__mode" aria-label="campo"> = "<input data-answer="v" aria-label="modo">" })</div>
+</div>
+
+<div class="exercise">
+<h3>2. Quantos sobram?</h3>
+<p>Depois do <code>collectgarbage()</code>, quantos pares sobram em <code>t</code>?</p>
+<pre class="file" data-file="quantos.lua">local t = setmetatable({}, { __mode = "v" })
+local guardada = {}
+t.a = guardada
+t.b = {}
+t.c = 42
+t.d = "oi"
+collectgarbage()
+</pre>
+<div class="ex-code">Sobram <input data-answer="3" aria-label="número de pares"> pares.</div>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">3. Você quer anotar quantas vezes cada tabela de jogador foi salva, sem impedir que o jogador saia da memória quando o jogo o descartar. Qual modo?</p>
+<label><input type="radio" name="q3"> <code>__mode = "v"</code></label>
+<label><input type="radio" name="q3"> <code>__mode = "k"</code></label>
+<label><input type="radio" name="q3"> Nenhum: uma tabela comum</label>
+<label><input type="radio" name="q3"> <code>__mode = "kv"</code> é obrigatório</label>
+</div>
+
+<div class="mc" data-answer="3">
+<p class="mc-q">4. Numa tabela com <code>__mode = "v"</code>, um item continua lá depois do <code>collectgarbage()</code>. O motivo mais provável é:</p>
+<label><input type="radio" name="q4"> o <code>collectgarbage()</code> só funciona na segunda vez</label>
+<label><input type="radio" name="q4"> tabelas fracas só funcionam no Lua 5.5</label>
+<label><input type="radio" name="q4"> alguma variável ou tabela comum ainda segura aquele item</label>
+<label><input type="radio" name="q4"> o item tem mais de 10 campos</label>
+</div>
+
+<div class="mc" data-answer="1">
+<p class="mc-q">5. <code>local t = { __mode = "k" }</code>. A tabela <code>t</code> tem chaves fracas?</p>
+<label><input type="radio" name="q5"> Não: o <code>__mode</code> só vale dentro da metatabela</label>
+<label><input type="radio" name="q5"> Sim</label>
+<label><input type="radio" name="q5"> Dá erro de sintaxe</label>
+<label><input type="radio" name="q5"> Só depois do <code>collectgarbage()</code></label>
+</div>
+
+<h3>Missão final: o registro de visitas</h3>
+
+<div class="trylua" data-goal="out:depois: 1;;src:__mode\s*=\s*&quot;k&quot;">
+<p class="try-task"><strong>Missão:</strong> a Ana usou o modo errado: as <strong>chaves</strong> aqui são as fichas, e os valores são números (que nunca saem). Por isso a ficha da Bia, que o programa já esqueceu, continua presa no registro (<code>depois: 2</code>). Troque o modo para o registro largar a ficha da Bia (<code>depois: 1</code>).</p>
+<pre class="script" data-file="main.lua">local visitas = setmetatable({}, { __mode = "v" })
+local ana = { nome = "Ana" }
+local bia = { nome = "Bia" }
+visitas[ana] = 3
+visitas[bia] = 1
+local function conta(t)
+  local n = 0
+  for _ in pairs(t) do n = n + 1 end
+  return n
+end
+print("antes: " .. conta(visitas))
+bia = nil
+collectgarbage()
+print("depois: " .. conta(visitas))
+print("visitas da Ana: " .. visitas[ana])
+</pre>
+<pre class="solucao" data-file="main.lua">local visitas = setmetatable({}, { __mode = "k" })
+local ana = { nome = "Ana" }
+local bia = { nome = "Bia" }
+visitas[ana] = 3
+visitas[bia] = 1
+local function conta(t)
+  local n = 0
+  for _ in pairs(t) do n = n + 1 end
+  return n
+end
+print("antes: " .. conta(visitas))
+bia = nil
+collectgarbage()
+print("depois: " .. conta(visitas))
+print("visitas da Ana: " .. visitas[ana])
+</pre>
+</div>
+
+<div class="note">
+<strong>E nas outras versões?</strong>
+<p>Tabelas fracas existem há muito tempo: o <code>fraca_k.lua</code> desta aula deu o mesmo resultado no Lua 5.4, no 5.1 e no LuaJIT do lab (<code>antes: 2</code>, <code>depois: 1</code>, <code>3</code>). O que mudou ao longo das versões foram detalhes do coletor (veja <a href="versoes.html">as diferenças entre as versões</a>).</p>
+</div>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li>O coletor de lixo leva os objetos que ninguém mais segura. Uma tabela comum segura tudo o que guarda; uma <strong>tabela fraca</strong> guarda sem segurar.</li>
+  <li>A fraqueza vem do campo <code>__mode</code> da <strong>metatabela</strong>: <code>"v"</code> (valores fracos), <code>"k"</code> (chaves fracas) ou <code>"kv"</code>.</li>
+  <li>Quando a chave ou o valor é coletado, o <strong>par inteiro</strong> sai da tabela, sem ninguém escrever <code>= nil</code>.</li>
+  <li>Só saem objetos (tabelas, funções, corrotinas). Números, textos e booleanos nunca saem.</li>
+  <li>Use <code>"v"</code> para caches de objetos e <code>"k"</code> para anotar dados sobre objetos dos outros. Sempre teste se o item ainda existe antes de usá-lo.</li>
+  <li><code>collectgarbage()</code> força uma coleta agora: ótimo para ver o efeito numa aula ou num teste; num programa normal, deixe o coletor trabalhar sozinho.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
