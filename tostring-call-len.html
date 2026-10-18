@@ -1,0 +1,581 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua __tostring, __call e __len — mostrar, chamar e medir tabelas | Guia Lua</title>
+<meta name="description" content="Os metamétodos __tostring, __name, __call e __len do Lua para quem nunca programou: print(preco) mostrando R$ 10,50, o nome do tipo nas mensagens de erro, uma tabela de preços que se chama como função, a máquina de senhas, o # que conta certo numa tabela só de leitura, e os erros reais do Lua 5.5.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">__tostring, __call e __len</span></h1>
+
+<p class="intro">Três metamétodos que deixam as suas tabelas mais "educadas": o <code>__tostring</code> ensina o <code>print</code> a mostrar a tabela de um jeito legível (em vez de <code>table: 0x55d6312ad780</code>); o <code>__call</code> deixa você <strong>chamar</strong> uma tabela como se ela fosse uma função; e o <code>__len</code> ensina o operador <code>#</code> a medir a tabela do jeito que você quiser. De brinde, o campo <code>__name</code>, que dá nome ao seu tipo nas mensagens de erro.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>Por que <code>print</code> de uma tabela mostra <code>table: 0x…</code>, e como trocar isso por <code>R$ 10,50</code> com o <code>__tostring</code>.</li>
+  <li>Onde o <code>__tostring</code> funciona (<code>print</code>, <code>tostring</code>, <code>%s</code>) e onde <strong>não</strong> funciona (o <code>..</code>).</li>
+  <li>O campo <code>__name</code>: o nome do tipo em <code>tostring</code> e nas mensagens de erro.</li>
+  <li>O <code>__call</code>: uma tabela de preços que responde a <code>tabela_precos("pao", 6)</code>, e uma máquina de senhas.</li>
+  <li>O <code>__len</code>: o <code>#</code> certo numa tabela só de leitura e num estoque.</li>
+  <li>Os erros reais: <code>'__tostring' must return a string</code>, <code>attempt to call a table value</code> e outros.</li>
+</ul>
+</div>
+
+<p>Todos os programas rodaram no <strong>Lua 5.5</strong> da máquina da Ana (usuária <code>ana</code>, computador <code>notebook</code>) com <code>lua arquivo.lua</code>. Antes, faça <a href="metatabelas.html">Metatabelas</a>, <a href="metametodos-aritmeticos.html">Metamétodos de Operadores</a> (de onde vem o tipo <code>Dinheiro</code>) e <a href="index-newindex.html">__index e __newindex</a>.</p>
+
+<hr>
+
+<h2>A ideia: crachá, campainha e régua</h2>
+<p>Pense nas tabelas como funcionários de uma loja. Os três metamétodos desta aula dão a eles três coisas:</p>
+<ul>
+  <li>um <strong>crachá</strong> (<code>__tostring</code> e <code>__name</code>): quando alguém pergunta "quem é você?", em vez de responder um número de matrícula sem sentido, ele mostra o nome;</li>
+  <li>uma <strong>campainha</strong> (<code>__call</code>): você "aperta" a tabela com <code>()</code>, como faz com uma função, e ela faz alguma coisa;</li>
+  <li>uma <strong>régua</strong> (<code>__len</code>): quando alguém mede com <code>#</code>, ele diz o próprio tamanho, do jeito que faz sentido para ele.</li>
+</ul>
+
+<hr>
+
+<h2>1. O <code>print</code> de uma tabela</h2>
+
+<pre class="file" data-file="mostrar.lua">local preco = { centavos = 1050 }
+print(preco)
+print(tostring(preco))
+</pre>
+
+<pre class="term">$ lua mostrar.lua
+table: 0x55d6312ad780
+table: 0x55d6312ad780
+$ lua mostrar.lua
+table: 0x55e3d8b6c780
+table: 0x55e3d8b6c780</pre>
+
+<p>O <code>print</code> transforma cada valor em texto com o <code>tostring</code>. Para uma tabela comum, o texto é <code>table:</code> seguido do <strong>endereço</strong> da tabela na memória do computador, em hexadecimal (o <code>0x</code>…). Ele serve para saber se duas tabelas são a mesma, mas não diz nada do conteúdo, e <strong>muda a cada execução</strong> (rodamos duas vezes, e o número mudou). No editor do guia, o endereço também é outro.</p>
+
+<hr>
+
+<h2>2. <code>__tostring</code>: o crachá</h2>
+<p>Quando a metatabela tem <code>__tostring</code>, o <code>tostring</code> chama essa função com a tabela e usa o <strong>texto</strong> que ela devolver:</p>
+
+<pre class="file" data-file="tostring.lua">local Dinheiro = {}
+
+local function reais(centavos)
+  return setmetatable({ centavos = centavos }, Dinheiro)
+end
+
+Dinheiro.__tostring = function (d)
+  return string.format("R$ %d,%02d", d.centavos // 100, d.centavos % 100)
+end
+
+local preco = reais(1050)
+print(preco)
+print(tostring(preco))
+print(string.format("O pão custa %s.", preco))
+print("Lista:", reais(150), reais(800))
+local texto = tostring(preco)
+print(type(texto), #texto)
+</pre>
+
+<pre class="term">$ lua tostring.lua
+R$ 10,50
+R$ 10,50
+O pão custa R$ 10,50.
+Lista:	R$ 1,50	R$ 8,00
+string	8</pre>
+
+<dl class="anatomy">
+  <dt>Dinheiro.__tostring = function (d)</dt><dd>Recebe a tabela que está sendo mostrada e devolve o texto que a representa. É a antiga função <code>mostrar</code> da aula anterior, agora no manual.</dd>
+  <dt>print(preco)</dt><dd>O <code>print</code> usa o <code>tostring</code>, que acha o <code>__tostring</code>: aparece <code>R$ 10,50</code>.</dd>
+  <dt>string.format("… %s …", preco)</dt><dd>O <code>%s</code> do <a href="string-format.html">string.format</a> também passa pelo <code>tostring</code>, então usa o <code>__tostring</code>.</dd>
+  <dt>print("Lista:", reais(150), reais(800))</dt><dd>Com vários valores, cada um é transformado em texto (e separados por TAB, como sempre).</dd>
+  <dt>tostring(preco) → string, 8</dt><dd>O resultado é um texto de verdade (<code>"R$ 10,50"</code>, com 8 caracteres), que você pode guardar e usar.</dd>
+</dl>
+
+<p>No modo interativo, o <code>&gt;</code> também mostra o valor com o <code>__tostring</code>:</p>
+
+<pre class="term">$ lua
+Lua 5.5.0  Copyright (C) 1994-2025 Lua.org, PUC-Rio
+&gt; t = setmetatable({}, { __tostring = function () return "sou a tabela t" end })
+&gt; t
+sou a tabela t
+&gt; print(t)
+sou a tabela t
+&gt; os.exit()</pre>
+
+<h3>O <code>..</code> não usa o <code>__tostring</code></h3>
+<p>Uma surpresa comum: o operador de juntar textos <strong>não</strong> consulta o <code>__tostring</code>. Ele tem o seu próprio metamétodo, o <code>__concat</code> (veja <a href="metametodos-aritmeticos.html">Metamétodos de Operadores</a>):</p>
+
+<pre class="file" data-file="concat_tostring.lua">local Dinheiro = {}
+Dinheiro.__tostring = function (d)
+  return string.format("R$ %d,%02d", d.centavos // 100, d.centavos % 100)
+end
+local preco = setmetatable({ centavos = 1050 }, Dinheiro)
+print("Preço: " .. tostring(preco))
+print("Preço: " .. preco)
+</pre>
+
+<pre class="term">$ lua concat_tostring.lua
+Preço: R$ 10,50
+lua: concat_tostring.lua:7: attempt to concatenate a table value (local 'preco')
+stack traceback:
+	concat_tostring.lua:7: in main chunk
+	[C]: in ?</pre>
+
+<p>Com o <code>tostring(preco)</code> explícito, a linha 6 funcionou. A linha 7 tentou juntar o texto direto com a tabela. Os dois consertos: chamar <code>tostring</code> (o mais simples) ou escrever um <code>__concat</code>.</p>
+
+<div class="trylua" data-goal="out:Retângulo 3x4;;semerro">
+<p class="try-task"><strong>Missão:</strong> a Ana está desenhando figuras. O <code>print(janela)</code> mostra <code>table: 0x…</code>. Escreva um <code>Retangulo.__tostring</code> que devolva <code>"Retângulo " .. r.largura .. "x" .. r.altura</code>, para aparecer <code>Retângulo 3x4</code>.</p>
+<pre class="script" data-file="main.lua">local Retangulo = {}
+
+local function retangulo(largura, altura)
+  return setmetatable({ largura = largura, altura = altura }, Retangulo)
+end
+
+local janela = retangulo(3, 4)
+print(janela)
+</pre>
+<pre class="solucao" data-file="main.lua">local Retangulo = {}
+
+Retangulo.__tostring = function (r)
+  return "Retângulo " .. r.largura .. "x" .. r.altura
+end
+
+local function retangulo(largura, altura)
+  return setmetatable({ largura = largura, altura = altura }, Retangulo)
+end
+
+local janela = retangulo(3, 4)
+print(janela)
+</pre>
+</div>
+
+<hr>
+
+<h2>3. <code>__name</code>: o nome do tipo</h2>
+<p>Às vezes você não quer escrever um <code>__tostring</code> completo, mas gostaria que o Lua soubesse <strong>como se chama</strong> o seu tipo. Para isso existe o campo <code>__name</code> na metatabela. Ele não é uma função: é só um texto.</p>
+
+<pre class="file" data-file="nome.lua">local Conta = { __name = "Conta" }
+local c = setmetatable({ saldo = 100 }, Conta)
+print(type(c))
+print((tostring(c):gsub("0x%x+", "0x...")))
+print(math.floor(c))
+</pre>
+
+<pre class="term">$ lua nome.lua
+table
+Conta: 0x...
+lua: nome.lua:5: bad argument #1 to 'floor' (number expected, got Conta)
+stack traceback:
+	[C]: in field 'floor'
+	nome.lua:5: in main chunk
+	[C]: in ?</pre>
+
+<dl class="anatomy">
+  <dt>type(c) → table</dt><dd>O <code>__name</code> não muda o tipo: para o <code>type</code>, continua sendo uma tabela.</dd>
+  <dt>tostring(c) → Conta: 0x…</dt><dd>Sem <code>__tostring</code>, o <code>tostring</code> usa o <code>__name</code> no lugar de <code>table</code>. (O <code>gsub</code> só troca o endereço, que muda a cada vez, por <code>0x...</code>, para a saída ficar igual sempre; veja <a href="gsub.html">gsub</a>.)</dd>
+  <dt>(number expected, got Conta)</dt><dd>"Era esperado um número, veio uma Conta". As mensagens de erro das funções do Lua passam a usar o nome do seu tipo, o que ajuda muito a achar o engano.</dd>
+</dl>
+
+<p>Outras mensagens que o lab mostrou com <code>__name = "Conta"</code>: <code>c + 1</code> deu <code>attempt to perform arithmetic on a Conta value (local 'c')</code>, e <code>string.rep("-", c)</code> deu <code>bad argument #2 to 'rep' (number expected, got Conta)</code>.</p>
+
+<div class="note">
+<strong>Em outras versões</strong>
+<p>O <code>__name</code> é do Lua 5.3 em diante. No lab, o mesmo <code>nome.lua</code> mostrou <code>Conta: 0x...</code> e <code>got Conta</code> no <code>lua5.4</code>, mas <code>table: 0x...</code> e <code>got table</code> no <code>lua5.1</code>, que ignora o campo. O <code>__tostring</code> funciona em todas. Veja <a href="versoes.html">as diferenças entre as versões</a>.</p>
+</div>
+
+<hr>
+
+<h2>4. <code>__call</code>: a tabela que se chama</h2>
+<p>Os parênteses <code>( )</code> servem para chamar funções. Se você puser parênteses depois de uma tabela comum, o Lua reclama:</p>
+
+<pre class="file" data-file="chamar.lua">local precos = { pao = 150, cafe = 800 }
+print(precos("pao"))
+</pre>
+
+<pre class="term">$ lua chamar.lua
+lua: chamar.lua:2: attempt to call a table value (local 'precos')
+stack traceback:
+	chamar.lua:2: in main chunk
+	[C]: in ?</pre>
+
+<p>"Tentativa de chamar um valor tabela (a variável local <code>precos</code>)". É a mesma família do famoso <code>attempt to call a nil value</code>, de quando você erra o nome de uma função. Com o <code>__call</code> na metatabela, chamar a tabela passa a chamar a função do manual:</p>
+
+<pre class="file" data-file="call.lua">local tabela_precos = setmetatable({ pao = 150, cafe = 800 }, {
+  __call = function (self, produto, quantidade)
+    local unitario = self[produto]
+    if unitario == nil then
+      return nil, "não vendemos " .. produto
+    end
+    return unitario * (quantidade or 1)
+  end,
+})
+
+print(tabela_precos.pao)
+print(tabela_precos("pao"))
+print(tabela_precos("pao", 6))
+print(tabela_precos("pizza"))
+</pre>
+
+<pre class="term">$ lua call.lua
+150
+150
+900
+nil	não vendemos pizza</pre>
+
+<dl class="anatomy">
+  <dt>__call = function (self, produto, quantidade)</dt><dd>O <strong>primeiro</strong> parâmetro é sempre a própria tabela que foi chamada. Por tradição, ele se chama <code>self</code> ("si mesmo", em inglês): você vai vê-lo o tempo todo em <a href="metodos.html">Métodos</a>. Os parâmetros seguintes são o que veio dentro dos parênteses.</dd>
+  <dt>tabela_precos("pao", 6)</dt><dd>O Lua chamou <code>__call(tabela_precos, "pao", 6)</code>: <code>self["pao"]</code> é 150, vezes 6, dá 900.</dd>
+  <dt>quantidade or 1</dt><dd>Se a quantidade não veio (<code>tabela_precos("pao")</code>), ela é <code>nil</code>, e o <code>or</code> usa 1.</dd>
+  <dt>return nil, "não vendemos …"</dt><dd>O jeito Lua de avisar que deu errado sem parar o programa: devolver <code>nil</code> e uma mensagem (veja <a href="retornos-multiplos.html">Vários Retornos</a>).</dd>
+  <dt>tabela_precos.pao → 150</dt><dd>A tabela continua sendo uma tabela: dá para ler os campos normalmente.</dd>
+</dl>
+
+<h3>Uma tabela com memória: a máquina de senhas</h3>
+<p>Uma função comum não guarda nada entre uma chamada e outra (a não ser com <a href="closures.html">closures</a>). Uma tabela com <code>__call</code> guarda: os dados ficam nos campos dela. A máquina de senhas da padaria:</p>
+
+<pre class="file" data-file="contador.lua">local senhas = setmetatable({ atual = 0 }, {
+  __call = function (self)
+    self.atual = self.atual + 1
+    return string.format("Senha %03d", self.atual)
+  end,
+})
+
+print(senhas())
+print(senhas())
+print(senhas())
+print("Já chamamos", senhas.atual, "clientes")
+</pre>
+
+<pre class="term">$ lua contador.lua
+Senha 001
+Senha 002
+Senha 003
+Já chamamos	3	clientes</pre>
+
+<p>Cada <code>senhas()</code> soma 1 no campo <code>atual</code> da própria tabela (o <code>self</code>) e devolve o texto da senha. O <code>%03d</code> completa com zeros até 3 dígitos.</p>
+
+<div class="tip">
+<strong>Onde o <code>__call</code> aparece de verdade</strong>
+<p>Muitas bibliotecas de <a href="classes.html">classes</a> usam o <code>__call</code> para criar objetos com <code>Conta(100)</code>, em vez de <code>Conta.new(100)</code>. Você vai ver as duas formas nas próximas aulas.</p>
+</div>
+
+<div class="trylua" data-goal="out:6 pães: 900;;semerro">
+<p class="try-task"><strong>Missão:</strong> a última linha chama <code>tabela_precos("pao", 6)</code> e dá <code>attempt to call a table value</code>. Ponha na metatabela um <code>__call</code> que receba <code>(self, produto, quantidade)</code> e devolva <code>self[produto] * quantidade</code>.</p>
+<pre class="script" data-file="main.lua">local tabela_precos = setmetatable({ pao = 150, cafe = 800 }, {
+})
+
+print("6 pães: " .. tabela_precos("pao", 6))
+</pre>
+<pre class="solucao" data-file="main.lua">local tabela_precos = setmetatable({ pao = 150, cafe = 800 }, {
+  __call = function (self, produto, quantidade)
+    return self[produto] * quantidade
+  end,
+})
+
+print("6 pães: " .. tabela_precos("pao", 6))
+</pre>
+</div>
+
+<hr>
+
+<h2>5. <code>__len</code>: a régua do <code>#</code></h2>
+<p>Na aula <a href="index-newindex.html">__index e __newindex</a>, a tabela só de leitura dos dias da semana tinha um defeito: o <code>#</code> dava 0, porque a tabela da frente está vazia.</p>
+
+<pre class="file" data-file="len_sem.lua">local function somente_leitura(original)
+  return setmetatable({}, { __index = original })
+end
+local dias = somente_leitura({ "dom", "seg", "ter", "qua", "qui", "sex", "sáb" })
+print(#dias)
+</pre>
+
+<pre class="term">$ lua len_sem.lua
+0</pre>
+
+<p>O <code>__len</code> conserta: quando a tabela tem esse metamétodo, o <code>#</code> chama a função e usa o que ela devolver.</p>
+
+<pre class="file" data-file="len.lua">local function somente_leitura(original)
+  return setmetatable({}, {
+    __index = original,
+    __len = function (tabela)
+      return #original
+    end,
+  })
+end
+local dias = somente_leitura({ "dom", "seg", "ter", "qua", "qui", "sex", "sáb" })
+print(#dias)
+for i = 1, #dias do io.write(dias[i], " ") end
+print()
+</pre>
+
+<pre class="term">$ lua len.lua
+7
+dom seg ter qua qui sex sáb </pre>
+
+<dl class="anatomy">
+  <dt>__len = function (tabela)</dt><dd>Recebe a tabela que está sendo medida (a da frente, vazia). Por isso a função mede a <code>original</code>, que ela enxerga por ser uma <a href="closures.html">closure</a>.</dd>
+  <dt>#dias → 7</dt><dd>Agora o <code>#</code> pergunta à régua, e a resposta é 7.</dd>
+  <dt>for i = 1, #dias do</dt><dd>Com o <code>#</code> certo, o <a href="for-numerico.html">for numérico</a> volta a funcionar com a tabela só de leitura.</dd>
+</dl>
+
+<h3>Medir do seu jeito</h3>
+<p>O <code>#</code> normal conta os itens de uma <strong>lista</strong> (veja <a href="operador-tamanho.html">O Operador de Tamanho</a>); num dicionário, ele dá 0. Com o <code>__len</code>, você decide o que "tamanho" quer dizer. No estoque, a Ana quer saber quantos produtos ainda têm alguma unidade:</p>
+
+<pre class="file" data-file="len_estoque.lua">local estoque = setmetatable({ pao = 40, leite = 12, cafe = 0, bolo = 3 }, {
+  __len = function (t)
+    local tipos = 0
+    for _, quantidade in pairs(t) do
+      if quantidade &gt; 0 then tipos = tipos + 1 end
+    end
+    return tipos
+  end,
+})
+print(#estoque)
+print(rawlen(estoque))
+</pre>
+
+<pre class="term">$ lua len_estoque.lua
+3
+0</pre>
+
+<p>Três produtos com estoque (o café está zerado). E o <code>rawlen</code> mede "por baixo" do manual, sem chamar o <code>__len</code>: para esse dicionário, o tamanho de lista é 0. Ele faz parte da família da próxima aula, <a href="rawget-rawset.html">rawget, rawset e rawequal</a>.</p>
+
+<div class="note">
+<strong>O <code>__len</code> só vale para tabelas</strong>
+<p>O <code>#</code> de um texto conta os bytes, sempre, e não há como mudar isso com <code>setmetatable</code> (no lab, <code>#"Ana"</code> deu <code>3</code>). E no Lua 5.1 o <code>__len</code> de tabelas é ignorado: o <code>len.lua</code> mostrou <code>0</code> no <code>lua5.1</code> do lab (e <code>7</code> no <code>luajit</code>). Veja <a href="versoes.html">as diferenças entre as versões</a>.</p>
+</div>
+
+<hr>
+
+<h2>6. Os três juntos: a figura completa</h2>
+<p>Uma metatabela pode ter quantos metamétodos você quiser. O retângulo da Ana com crachá, campainha e régua:</p>
+
+<pre class="file" data-file="tudo.lua">local Retangulo = { __name = "Retangulo" }
+
+Retangulo.__tostring = function (r)
+  return "Retângulo " .. r.largura .. "x" .. r.altura
+end
+
+Retangulo.__call = function (r, nova_largura, nova_altura)
+  return setmetatable({ largura = nova_largura, altura = nova_altura }, Retangulo)
+end
+
+Retangulo.__len = function (r)
+  return 2 * (r.largura + r.altura)
+end
+
+local porta = setmetatable({ largura = 1, altura = 2 }, Retangulo)
+print(porta)
+print("perímetro:", #porta)
+local janela = porta(3, 4)
+print(janela, #janela)
+</pre>
+
+<pre class="term">$ lua tudo.lua
+Retângulo 1x2
+perímetro:	6
+Retângulo 3x4	14</pre>
+
+<p>O <code>__tostring</code> mostra a figura; o <code>__len</code> usa o <code>#</code> para o perímetro; e o <code>__call</code> faz qualquer retângulo "fabricar" outro: <code>porta(3, 4)</code> criou a janela. Funciona, mas repare que "o <code>#</code> de um retângulo é o perímetro" não é óbvio para quem lê o código. A próxima seção fala disso.</p>
+
+<hr>
+
+<h2 id="formas">Formas diferentes de fazer a mesma coisa</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Para…</th><th>Com metamétodo</th><th>Sem metamétodo</th></tr>
+<tr><td>Mostrar a tabela</td><td><code>__tostring</code>, e aí <code>print(preco)</code></td><td>Uma função: <code>print(mostrar(preco))</code></td></tr>
+<tr><td>Dar nome ao tipo nos erros</td><td><code>__name = "Conta"</code></td><td>Não há</td></tr>
+<tr><td>Fazer a tabela "agir"</td><td><code>__call</code>: <code>tabela_precos("pao", 6)</code></td><td>Uma função no campo: <code>tabela_precos.calcular("pao", 6)</code></td></tr>
+<tr><td>Medir</td><td><code>__len</code>: <code>#estoque</code></td><td>Uma função: <code>produtos_disponiveis(estoque)</code></td></tr>
+</table>
+</div>
+
+<p>Qual usar? O <strong><code>__tostring</code> vale quase sempre</strong>: deixa o <code>print</code> útil para conferir o programa, sem mudar mais nada. O <code>__name</code> é de graça e melhora as mensagens de erro. Já o <code>__call</code> e o <code>__len</code>, use quando o significado for <strong>óbvio</strong>: <code>#dias</code> ser 7 é óbvio; <code>#porta</code> ser o perímetro, não. Nesses casos, uma função com nome claro (<code>perimetro(porta)</code>) se explica sozinha.</p>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+
+<div class="cenario">
+<strong>Esqueceu o <code>return</code> no <code>__tostring</code></strong>
+<pre class="file" data-file="tostring_nil.lua">local Dinheiro = {}
+Dinheiro.__tostring = function (d)
+  string.format("R$ %d,%02d", d.centavos // 100, d.centavos % 100)
+end
+local preco = setmetatable({ centavos = 1050 }, Dinheiro)
+print(preco)
+</pre>
+<pre class="term">$ lua tostring_nil.lua
+lua: tostring_nil.lua:6: '__tostring' must return a string
+stack traceback:
+	[C]: in global 'print'
+	tostring_nil.lua:6: in main chunk
+	[C]: in ?</pre>
+<p>"O <code>__tostring</code> precisa devolver um texto". A função montou o texto mas não o devolveu, então devolveu <code>nil</code>. O rastro mostra que o erro saiu de dentro do <code>print</code> (<code>[C]: in global 'print'</code>), que foi quem pediu o texto. <strong>Como consertar:</strong> <code>return string.format(…)</code>. (Devolver um <strong>número</strong> passou no lab: um <code>__tostring</code> com <code>return d.centavos</code> mostrou <code>1050</code>, porque o Lua aceita número onde espera texto. Mas devolva sempre um texto.)</p>
+</div>
+
+<div class="cenario">
+<strong>Juntou a tabela com <code>..</code> esperando o <code>__tostring</code></strong>
+<p><code>"Preço: " .. preco</code> dá <code>attempt to concatenate a table value (local 'preco')</code> mesmo com <code>__tostring</code> (seção 2). <strong>Como consertar:</strong> <code>"Preço: " .. tostring(preco)</code>, ou <code>string.format("Preço: %s", preco)</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Chamou uma tabela sem <code>__call</code></strong>
+<p><code>precos("pao")</code> com uma tabela comum dá <code>attempt to call a table value (local 'precos')</code> (seção 4). Muitas vezes não é falta de <code>__call</code>, e sim um engano: a pessoa queria <code>precos["pao"]</code> (colchetes, para ler um campo) ou <code>precos.calcular("pao")</code> (uma função guardada na tabela). <strong>Como consertar:</strong> use colchetes para ler; parênteses só para chamar.</p>
+</div>
+
+<div class="cenario">
+<strong>Esqueceu o <code>self</code> nos parâmetros do <code>__call</code></strong>
+<pre class="file" data-file="call_sem_self.lua">local senhas = setmetatable({ atual = 0 }, {
+  __call = function ()
+    self.atual = self.atual + 1
+    return self.atual
+  end,
+})
+print(senhas())
+</pre>
+<pre class="term">$ lua call_sem_self.lua
+lua: call_sem_self.lua:3: attempt to index a nil value (global 'self')
+stack traceback:
+	call_sem_self.lua:3: in local 'senhas'
+	call_sem_self.lua:7: in main chunk
+	[C]: in ?</pre>
+<p>"Tentativa de indexar um valor <code>nil</code> (a global <code>self</code>)". O <code>self</code> não é uma palavra mágica: é só o nome do primeiro parâmetro. Sem ele na lista <code>function ()</code>, o Lua procura uma variável global chamada <code>self</code>, que não existe. Repare no rastro: <code>in local 'senhas'</code>, o Lua sabe que a função rodou porque a tabela <code>senhas</code> foi chamada. <strong>Como consertar:</strong> <code>function (self)</code>.</p>
+</div>
+
+<hr>
+
+<h2>Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Campo da metatabela</th><th>Quando o Lua usa</th><th>Recebe → devolve</th></tr>
+<tr><td><code>__tostring</code></td><td><code>tostring(t)</code>, <code>print(t)</code>, <code>%s</code> do <code>string.format</code>, o <code>&gt;</code> do modo interativo</td><td><code>(t)</code> → um texto</td></tr>
+<tr><td><code>__name</code></td><td><code>tostring(t)</code> sem <code>__tostring</code> (<code>Conta: 0x…</code>) e mensagens de erro (<code>got Conta</code>)</td><td>Não é função: é um texto</td></tr>
+<tr><td><code>__call</code></td><td><code>t(…)</code></td><td><code>(t, arg1, arg2, …)</code> → o que a chamada devolve</td></tr>
+<tr><td><code>__len</code></td><td><code>#t</code></td><td><code>(t)</code> → o tamanho</td></tr>
+<tr><td><code>rawlen(t)</code></td><td>(função, não metamétodo)</td><td>O tamanho sem chamar o <code>__len</code></td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Mensagem</th><th>Causa provável</th></tr>
+<tr><td><code>table: 0x55…</code> no <code>print</code></td><td>Não há <code>__tostring</code> (não é erro: é o padrão)</td></tr>
+<tr><td><code>'__tostring' must return a string</code></td><td>O <code>__tostring</code> não devolveu texto (faltou o <code>return</code>?)</td></tr>
+<tr><td><code>attempt to concatenate a table value</code></td><td>O <code>..</code> não usa o <code>__tostring</code>: use <code>tostring(t)</code></td></tr>
+<tr><td><code>attempt to call a table value</code></td><td>Parênteses depois de uma tabela sem <code>__call</code></td></tr>
+<tr><td><code>attempt to index a nil value (global 'self')</code></td><td>Faltou o <code>self</code> na lista de parâmetros</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. Qual metamétodo?</h3>
+<div class="ex-code">Para o <code>print(t)</code> mostrar um texto: <input data-answer="__tostring" aria-label="metamétodo do print"><br>Para o <code>#t</code>: <input data-answer="__len" aria-label="metamétodo do tamanho"><br>Para <code>t(1, 2)</code>: <input data-answer="__call" aria-label="metamétodo da chamada"></div>
+</div>
+
+<div class="exercise">
+<h3>2. O que aparece?</h3>
+<pre class="file" data-file="ex2.lua">local t = setmetatable({}, { __len = function () return 10 end })
+print(#t)
+</pre>
+<div class="ex-code">Mostra <input data-answer="10" aria-label="saída"></div>
+</div>
+
+<div class="mc" data-answer="3">
+<p class="mc-q">3. A metatabela de <code>preco</code> tem <code>__tostring</code>. Qual destas linhas dá erro?</p>
+<label><input type="radio" name="q3"> <code>print(preco)</code></label>
+<label><input type="radio" name="q3"> <code>print("Preço: " .. tostring(preco))</code></label>
+<label><input type="radio" name="q3"> <code>print("Preço: " .. preco)</code></label>
+<label><input type="radio" name="q3"> <code>print(string.format("%s", preco))</code></label>
+</div>
+
+<div class="mc" data-answer="1">
+<p class="mc-q">4. No <code>__call = function (self, a, b)</code>, o que chega em <code>self</code> quando você escreve <code>t(5, 7)</code>?</p>
+<label><input type="radio" name="q4"> A própria tabela <code>t</code></label>
+<label><input type="radio" name="q4"> O número 5</label>
+<label><input type="radio" name="q4"> A metatabela</label>
+<label><input type="radio" name="q4"> <code>nil</code></label>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">5. Para que serve o campo <code>__name</code>?</p>
+<label><input type="radio" name="q5"> Muda o resultado do <code>type(t)</code></label>
+<label><input type="radio" name="q5"> Dá nome ao tipo no <code>tostring</code> e nas mensagens de erro</label>
+<label><input type="radio" name="q5"> Cria uma variável global com aquele nome</label>
+<label><input type="radio" name="q5"> Substitui o <code>__tostring</code> sempre</label>
+</div>
+
+<h3>Missão final: a semana com régua</h3>
+
+<div class="trylua" data-goal="out:A semana tem 7 dias;;out:sáb;;semerro">
+<p class="try-task"><strong>Missão:</strong> o programa diz que a semana tem 0 dias e o <code>for</code> não mostra nada, porque a tabela da frente está vazia. Acrescente um <code>__len</code> na metatabela da <code>somente_leitura</code> que devolva <code>#original</code>.</p>
+<pre class="script" data-file="main.lua">local function somente_leitura(original)
+  return setmetatable({}, {
+    __index = original,
+    __newindex = function ()
+      error("tabela só de leitura", 2)
+    end,
+  })
+end
+
+local dias = somente_leitura({ "dom", "seg", "ter", "qua", "qui", "sex", "sáb" })
+print("A semana tem " .. #dias .. " dias")
+for i = 1, #dias do
+  print(i, dias[i])
+end
+</pre>
+<pre class="solucao" data-file="main.lua">local function somente_leitura(original)
+  return setmetatable({}, {
+    __index = original,
+    __newindex = function ()
+      error("tabela só de leitura", 2)
+    end,
+    __len = function ()
+      return #original
+    end,
+  })
+end
+
+local dias = somente_leitura({ "dom", "seg", "ter", "qua", "qui", "sex", "sáb" })
+print("A semana tem " .. #dias .. " dias")
+for i = 1, #dias do
+  print(i, dias[i])
+end
+</pre>
+</div>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li><code>__tostring</code>: <code>(t)</code> → texto. Usado por <code>print</code>, <code>tostring</code>, <code>%s</code> e pelo modo interativo. <strong>Não</strong> é usado pelo <code>..</code>.</li>
+  <li><code>__name</code>: um texto com o nome do tipo, que aparece em <code>Conta: 0x…</code> e em mensagens como <code>got Conta</code>.</li>
+  <li><code>__call</code>: deixa chamar a tabela com <code>t(…)</code>; o primeiro parâmetro é a própria tabela (o <code>self</code>). Bom para tabelas que "agem" e guardam estado.</li>
+  <li><code>__len</code>: o <code>#t</code> passa a devolver o que a função calcular; <code>rawlen</code> mede sem o manual.</li>
+  <li>Use <code>__tostring</code> e <code>__name</code> à vontade; <code>__call</code> e <code>__len</code> quando o significado for óbvio.</li>
+  <li>Próximo passo: como ler e gravar <strong>sem</strong> passar pelo manual, em <a href="rawget-rawset.html">rawget, rawset e rawequal</a>.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
