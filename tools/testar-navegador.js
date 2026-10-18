@@ -361,6 +361,13 @@ async function testeInterface(pg) {
   t = await texto("cx-repl-i");
   P(/^ana@notebook:~\$ lua -i main\.lua\nLua 5\.5\.0  Copyright \(C\) 1994-2025 Lua\.org, PUC-Rio\ncarregado!\n> dobro\(21\)\n42\n> \^C\n\[programa interrompido\]/.test(t), "cx-repl-i: " + JSON.stringify(t));
 
+  // 15. Rodar outra caixa enquanto uma espera o teclado (o Lua é reiniciado e a nova roda)
+  await clicar(sel("cx-input", ".ts-rodar"));
+  P(await campo("cx-input"), "cx-input: o campo não apareceu (troca de caixa)");
+  await clicar(sel("cx-ola", ".ts-rodar"));
+  P(await terminou("cx-ola", 20000) && /Olá, Ana!/.test(await texto("cx-ola")), "troca de caixa: cx-ola não rodou depois de interromper o cx-input: " + JSON.stringify(await texto("cx-ola")));
+  P(/\(outro programa foi iniciado nesta página\)\n\[programa interrompido\]/.test(await texto("cx-input")), "troca de caixa: o cx-input não mostra que foi interrompido");
+
   t = await pg.evaluate(() => LuaSim._estado().info);
   notas.push("Lua " + t.lua + " (" + t.versaoCompleta + "), JSPI " + (t.jspi ? "sim" : "não") + (semJspi ? " (--semjspi: modo por repetição)" : ""));
   return { problemas, notas };

@@ -12,7 +12,7 @@
    ===================================================================== */
 (function () {
   "use strict";
-  var LUA_BYTES = 345446;    // download na 1ª vez (lua.wasm; atualizado por tools/construir-lua.sh)
+  var LUA_BYTES = 338009;    // download na 1ª vez (lua.wasm; atualizado por tools/construir-lua.sh)
   var LUA_VERSAO = "5.5.0";
   var TEMPO_MAX = 10000;     // ms rodando sem parar (sem contar a espera pelo teclado)
   var MAX_LINHAS = 3000;     // linhas mostradas no terminal (o resto é resumido)
@@ -545,9 +545,22 @@
       linhaCmd(linhaComando(arqs[0].nome, args, soRepl ? "so" : repl));
       var s = sessao = { texto: "", fila: [], desenho: null, gasto: 0, desde: 0, esperando: false, fim: false, rodando: false };
       btn.textContent = "■ Parar"; btn.disabled = false;
+      function falhou() {
+        if (sessao !== s) return;
+        sessao = null; btn.textContent = TXT_RODAR; btn.disabled = false;
+        var fs = aoTerminar; aoTerminar = [];
+        fs.forEach(function (f) { try { f({ interrompido: true, motivo: "falha ao carregar", falhas: null }); } catch (e) {} });
+      }
       garantirLua().then(function () {
         if (sessao !== s) return;
-        if (dono && dono !== parar) dono("(outro programa foi iniciado nesta página)");
+        if (dono && dono !== parar) {
+          // outra caixa estava rodando (ou esperando o teclado): ela para e o Lua é reiniciado
+          dono("(outro programa foi iniciado nesta página)");
+          if (!worker || !carregado) { garantirLua().then(function () { if (sessao === s) comecar(); }, falhou); return; }
+        }
+        comecar();
+      }, falhou);
+      function comecar() {
         s.rodando = true; dono = parar;
         var stdin = entradaIn ? textoEntrada(entradaIn.value) : null;
         s.term = new Terminal();
@@ -571,12 +584,7 @@
         };
         var req = { arquivos: arqs, args: args, stdin: stdin, repl: repl, modo: window.LUASIM_SEM_JSPI ? "repeticao" : "auto", conferir: arquivosDaMeta(meta) };
         s.id = enviar({ op: "executar", req: req }, s.ouvinte);
-      }, function () {
-        if (sessao !== s) return;
-        sessao = null; btn.textContent = TXT_RODAR; btn.disabled = false;
-        var fs = aoTerminar; aoTerminar = [];
-        fs.forEach(function (f) { try { f({ interrompido: true, motivo: "falha ao carregar", falhas: null }); } catch (e) {} });
-      });
+      }
     }
     btn.addEventListener("click", rodar);
 
