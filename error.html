@@ -1,0 +1,516 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua error — lançando erros de propósito | Guia Lua</title>
+<meta name="description" content="A função error do Lua 5.5 para quem nunca programou: parar o programa com a sua própria mensagem, o nível do erro (1, 2, 0) e a linha que aparece na mensagem, mensagens com string.format, error com tabela e com __tostring, error sem mensagem, e quando usar error ou devolver nil e a mensagem. Saídas reais do lab.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">error</span>: Lançando Erros</h1>
+
+<p class="intro">Até agora, os erros apareciam sozinhos: o Lua tentava somar um <code>nil</code> e parava. Mas muitas vezes é <strong>você</strong> quem sabe que algo está errado, mesmo que o Lua ache tudo normal: um saque maior que o saldo, uma idade negativa, um produto que não existe no estoque. Para esses casos existe a função <code>error</code> ("erro"): ela para o programa na hora, com uma mensagem escrita por você, no mesmo formato das mensagens do Lua. Dizemos que o programa <strong>lança</strong> um erro.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>Como usar <code>error("mensagem")</code> para parar o programa quando um valor não faz sentido.</li>
+  <li>O que a mensagem e o <code>stack traceback</code> mostram, incluindo a linha <code>[C]: in global 'error'</code>.</li>
+  <li>O <strong>nível</strong> do erro (<code>error(msg, 2)</code>, <code>error(msg, 0)</code>) e como ele muda a linha que aparece na mensagem.</li>
+  <li>Mensagens com valores dentro, usando <code>string.format</code>.</li>
+  <li>Lançar uma <strong>tabela</strong> como erro (e o que o <code>lua</code> mostra quando ninguém a captura).</li>
+  <li>Quando usar <code>error</code> e quando é melhor devolver <code>nil, "mensagem"</code>.</li>
+</ul>
+</div>
+
+<p>Todos os programas desta aula rodaram no <strong>Lua 5.5</strong> da máquina da Ana (usuária <code>ana</code>, computador <code>notebook</code>) com <code>lua arquivo.lua</code>. Para entender as mensagens, vale ter lido <a href="erros.html">Lendo uma Mensagem de Erro</a>.</p>
+
+<hr>
+
+<h2>A ideia: o alarme do caixa</h2>
+<p>Na padaria da Ana, o caixa tem um botão de alarme. Se alguém tenta pagar com uma nota falsa, o funcionário <strong>não</strong> continua o atendimento como se nada fosse: ele aperta o botão, o atendimento para, e o gerente vem ver o que houve, com um bilhete explicando o problema.</p>
+<p>O <code>error</code> é esse botão. Quando uma função percebe que recebeu algo impossível, em vez de continuar e produzir uma resposta errada (que pode estragar o resto do programa sem ninguém perceber), ela "aperta o alarme": o programa para, e a mensagem diz o que aconteceu e onde. Quem é o "gerente" que pode atender o alarme sem fechar a loja? É o <a href="pcall.html">pcall</a>, assunto da próxima aula.</p>
+
+<hr>
+
+<h2>1. O problema: o Lua não reclama de tudo</h2>
+<p>Uma função de dividir, do jeito mais simples:</p>
+
+<pre class="file" data-file="dividir0.lua">local function dividir(a, b)
+  return a / b
+end
+print(dividir(10, 2))
+print(dividir(7, 0))
+print(dividir(0, 0))
+</pre>
+
+<pre class="term">$ lua dividir0.lua
+5.0
+inf
+-nan</pre>
+
+<p>Nenhum erro. Dividir por zero com <code>/</code> dá <code>inf</code> (de <em>infinity</em>, "infinito") e <code>0 / 0</code> dá <code>-nan</code> (<em>not a number</em>, "não é um número"). São valores válidos para o Lua, mas, para a conta da padaria, são lixo: se esse <code>inf</code> entrar no total do dia, o total vira <code>inf</code> também, e ninguém sabe de onde veio. (Só a divisão inteira <code>7 // 0</code> dá erro: <code>attempt to divide by zero</code>; veja <a href="divisao.html">Divisão</a>.) É melhor a função reclamar <strong>na hora</strong>.</p>
+
+<hr>
+
+<h2>2. O primeiro <code>error</code></h2>
+<p>A Ana tem R$ 100 na conta. Sacar mais do que isso não pode:</p>
+
+<pre class="file" data-file="sacar.lua">local saldo = 100
+
+local function sacar(valor)
+  if valor &gt; saldo then
+    error("saldo insuficiente")
+  end
+  saldo = saldo - valor
+  print("Sacou " .. valor .. ", saldo agora: " .. saldo)
+end
+
+sacar(30)
+sacar(50)
+sacar(40)
+print("Fim do dia")
+</pre>
+
+<dl class="anatomy">
+  <dt>if valor &gt; saldo then</dt><dd>A verificação: o saque é possível?</dd>
+  <dt>error("saldo insuficiente")</dt><dd>Se não for, lança um erro com essa mensagem. O <code>error</code> <strong>não volta</strong>: nada depois dele, nesta função ou no resto do programa, é executado.</dd>
+  <dt>saldo = saldo - valor</dt><dd>Só chega aqui quem passou na verificação. Por isso o saldo nunca fica negativo.</dd>
+</dl>
+
+<pre class="term">$ lua sacar.lua
+Sacou 30, saldo agora: 70
+Sacou 50, saldo agora: 20
+lua: sacar.lua:5: saldo insuficiente
+stack traceback:
+	[C]: in global 'error'
+	sacar.lua:5: in local 'sacar'
+	sacar.lua:13: in main chunk
+	[C]: in ?
+$ echo $?
+1</pre>
+
+<p>Os dois primeiros saques funcionaram. O terceiro (40, com só 20 de saldo) disparou o alarme. Linha por linha:</p>
+<dl class="anatomy">
+  <dt>lua: sacar.lua:5: saldo insuficiente</dt><dd>O formato de sempre, <code>arquivo:linha: mensagem</code>. A mensagem é <strong>a sua</strong>; o <code>sacar.lua:5:</code> o <code>error</code> acrescentou sozinho, dizendo a linha do <code>error</code>.</dd>
+  <dt>[C]: in global 'error'</dt><dd>A primeira linha do rastro é a própria função <code>error</code> (escrita em C). Ela aparece em todo erro lançado assim.</dd>
+  <dt>sacar.lua:5: in local 'sacar'</dt><dd>Quem chamou o <code>error</code>: a linha 5, dentro da função <code>sacar</code>.</dd>
+  <dt>sacar.lua:13: in main chunk</dt><dd>Quem chamou o <code>sacar</code>: a linha 13, o <code>sacar(40)</code>. É o saque problemático.</dd>
+  <dt>echo $? → 1</dt><dd>O programa terminou com erro. O <code>Fim do dia</code> nunca apareceu.</dd>
+</dl>
+
+<p>Para o Lua, não há diferença entre um erro que ele mesmo encontrou e um erro lançado por você: os dois param o programa, mostram a mensagem e o rastro, e dão código de saída 1. E os dois podem ser capturados com <a href="pcall.html">pcall</a>.</p>
+
+<div class="trylua" data-goal="erro:divisão por zero;;out:5.0">
+<p class="try-task"><strong>Missão:</strong> faça a função <code>dividir</code> lançar um erro com a mensagem <code>divisão por zero</code> quando o <code>b</code> for 0, em vez de devolver <code>inf</code>. A primeira divisão (10 / 2) deve continuar mostrando <code>5.0</code>.</p>
+<pre class="script" data-file="main.lua">local function dividir(a, b)
+  return a / b
+end
+print(dividir(10, 2))
+print(dividir(7, 0))
+</pre>
+<pre class="solucao" data-file="main.lua">local function dividir(a, b)
+  if b == 0 then
+    error("divisão por zero")
+  end
+  return a / b
+end
+print(dividir(10, 2))
+print(dividir(7, 0))
+</pre>
+</div>
+
+<hr>
+
+<h2>3. Mensagens com os valores dentro</h2>
+<p>"Saldo insuficiente" ajuda, mas "só temos 0 de leite, pediram 2" ajuda muito mais. Monte a mensagem com <code>..</code> ou, melhor, com <a href="string-format.html">string.format</a>:</p>
+
+<pre class="file" data-file="concat_err.lua">local function dividir(a, b)
+  if b == 0 then
+    error("divisão por zero: " .. a .. " / " .. b)
+  end
+  return a / b
+end
+print(dividir(10, 2))
+print(dividir(7, 0))
+</pre>
+
+<pre class="term">$ lua concat_err.lua
+5.0
+lua: concat_err.lua:3: divisão por zero: 7 / 0
+stack traceback:
+	[C]: in global 'error'
+	concat_err.lua:3: in local 'dividir'
+	concat_err.lua:8: in main chunk
+	[C]: in ?</pre>
+
+<p>Com <code>string.format</code>, o <code>%q</code> põe o texto entre aspas (bom para mostrar exatamente o que veio, inclusive espaços), e o <code>%d</code> mostra um inteiro:</p>
+
+<pre class="file" data-file="formatado2.lua">local estoque = { pao = 10, leite = 0 }
+local function vender(produto, qtd)
+  local tem = estoque[produto]
+  if tem == nil then
+    error(string.format("produto desconhecido: %q", produto), 2)
+  end
+  estoque[produto] = tem - qtd
+end
+vender("bolo", 1)
+</pre>
+
+<pre class="term">$ lua formatado2.lua
+lua: formatado2.lua:9: produto desconhecido: "bolo"
+stack traceback:
+	[C]: in global 'error'
+	formatado2.lua:5: in local 'vender'
+	formatado2.lua:9: in main chunk
+	[C]: in ?</pre>
+
+<p>Repare num detalhe: o <code>error</code> está na linha 5, mas a mensagem diz <code>formatado2.lua:9:</code>. É por causa daquele <code>2</code> no fim do <code>error(…, 2)</code>. Ele é o assunto da próxima seção, e é a parte mais útil do <code>error</code>.</p>
+
+<hr>
+
+<h2>4. O nível do erro: de quem é a culpa?</h2>
+<p>A função <code>cadastrar</code> só aceita idade em número. Quando alguém passa <code>"trinta"</code>, de quem é a culpa? Da função <code>cadastrar</code>, que está certinha? Não: é de <strong>quem chamou</strong> com o valor errado. O segundo argumento do <code>error</code>, o <strong>nível</strong>, diz qual linha a mensagem deve apontar.</p>
+
+<h3>Nível 1 (o padrão): a linha do próprio <code>error</code></h3>
+<pre class="file" data-file="nivel1.lua">local function cadastrar(idade)
+  if type(idade) ~= "number" then
+    error("a idade precisa ser um número")
+  end
+  print("Cadastrada com " .. idade .. " anos")
+end
+
+cadastrar(30)
+cadastrar("trinta")
+</pre>
+<pre class="term">$ lua nivel1.lua
+Cadastrada com 30 anos
+lua: nivel1.lua:3: a idade precisa ser um número
+stack traceback:
+	[C]: in global 'error'
+	nivel1.lua:3: in local 'cadastrar'
+	nivel1.lua:9: in main chunk
+	[C]: in ?</pre>
+<p>Sem o segundo argumento, o nível é 1: a mensagem aponta a linha 3, onde está o <code>error</code>. Quem lê vai olhar a linha 3, ver que ela está certa, e só descobrir no rastro que o culpado é a linha 9.</p>
+
+<h3>Nível 2: a linha de quem chamou a função</h3>
+<pre class="file" data-file="nivel2.lua">local function cadastrar(idade)
+  if type(idade) ~= "number" then
+    error("a idade precisa ser um número", 2)
+  end
+  print("Cadastrada com " .. idade .. " anos")
+end
+
+cadastrar(30)
+cadastrar("trinta")
+</pre>
+<pre class="term">$ lua nivel2.lua
+Cadastrada com 30 anos
+lua: nivel2.lua:9: a idade precisa ser um número
+stack traceback:
+	[C]: in global 'error'
+	nivel2.lua:3: in local 'cadastrar'
+	nivel2.lua:9: in main chunk
+	[C]: in ?</pre>
+<p>Agora a mensagem aponta a <strong>linha 9</strong>, o <code>cadastrar("trinta")</code>: exatamente onde está o engano. O rastro é o mesmo; só a primeira linha mudou. É assim que as funções prontas do Lua fazem: quando você escreve <code>table.insert(nil, 1)</code>, o erro aponta a <strong>sua</strong> linha, não uma linha de dentro do <code>table.insert</code>.</p>
+
+<div class="tip">
+<strong>Regra prática</strong>
+<p>Se o erro é "quem me chamou passou um valor errado" (validação de argumentos), use <strong>nível 2</strong>. Se o erro é "algo deu errado aqui dentro", deixe o nível 1.</p>
+</div>
+
+<h3>Nível 3, 4…: subindo mais</h3>
+<p>Se a verificação está numa função auxiliar, chamada por outra, o nível 2 apontaria a função do meio. Cada número a mais sobe um degrau no rastro:</p>
+<pre class="file" data-file="nivel3.lua">local function validar(idade)
+  if type(idade) ~= "number" then
+    error("a idade precisa ser um número", 3)
+  end
+end
+
+local function cadastrar(idade)
+  validar(idade)
+  print("Cadastrada com " .. idade .. " anos")
+end
+
+cadastrar(30)
+cadastrar("trinta")
+</pre>
+<pre class="term">$ lua nivel3.lua
+Cadastrada com 30 anos
+lua: nivel3.lua:13: a idade precisa ser um número
+stack traceback:
+	[C]: in global 'error'
+	nivel3.lua:3: in upvalue 'validar'
+	nivel3.lua:8: in local 'cadastrar'
+	nivel3.lua:13: in main chunk
+	[C]: in ?</pre>
+<p>Nível 1 seria a linha 3 (o <code>error</code>), nível 2 a linha 8 (o <code>validar(idade)</code>), nível 3 a linha 13 (o <code>cadastrar("trinta")</code>). Compare com o rastro: é contar as linhas de cima para baixo, pulando o <code>[C]: in global 'error'</code>.</p>
+
+<h3>Nível 0: sem posição nenhuma</h3>
+<pre class="file" data-file="nivel0.lua">local function cadastrar(idade)
+  if type(idade) ~= "number" then
+    error("a idade precisa ser um número", 0)
+  end
+  print("Cadastrada com " .. idade .. " anos")
+end
+
+cadastrar(30)
+cadastrar("trinta")
+</pre>
+<pre class="term">$ lua nivel0.lua
+Cadastrada com 30 anos
+lua: a idade precisa ser um número
+stack traceback:
+	[C]: in global 'error'
+	nivel0.lua:3: in local 'cadastrar'
+	nivel0.lua:9: in main chunk
+	[C]: in ?</pre>
+<p>Com nível 0, o <code>error</code> não acrescenta <code>arquivo:linha:</code>. Serve quando a mensagem vai ser mostrada para quem <strong>usa</strong> o programa (não para quem o escreveu): "a idade precisa ser um número" é mais amigável que "nivel0.lua:9: a idade…". Você vai ver esse uso com o <a href="pcall.html">pcall</a>, que captura a mensagem para mostrá-la do seu jeito.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>A mensagem começa com</th><th>Quando usar</th></tr>
+<tr><td><code>error(msg)</code> ou <code>error(msg, 1)</code></td><td>a linha do <code>error</code></td><td>O problema é dentro da própria função</td></tr>
+<tr><td><code>error(msg, 2)</code></td><td>a linha de quem chamou a função</td><td>Validar argumentos: a culpa é de quem chamou</td></tr>
+<tr><td><code>error(msg, 3)</code></td><td>a linha de quem chamou quem chamou</td><td>A verificação está numa função auxiliar</td></tr>
+<tr><td><code>error(msg, 0)</code></td><td>nada: só a mensagem</td><td>Mensagem para o usuário final, capturada com <code>pcall</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>5. Lançando uma tabela</h2>
+<p>A mensagem de erro não precisa ser um texto: o <code>error</code> aceita <strong>qualquer valor</strong>. Uma tabela permite carregar várias informações juntas, como um código e uma descrição:</p>
+
+<pre class="file" data-file="tabela.lua">error({ codigo = 404, mensagem = "produto não encontrado" })
+</pre>
+
+<pre class="term">$ lua tabela.lua
+lua: (error object is a table value)
+stack traceback:
+	[C]: in global 'error'
+	tabela.lua:1: in main chunk
+	[C]: in ?</pre>
+
+<p>"(O objeto de erro é um valor do tipo tabela)". O <code>lua</code> não sabe transformar uma tabela em texto, então só avisa o tipo. E repare: <strong>não há <code>tabela.lua:1:</code></strong> no começo. O <code>error</code> só acrescenta a posição quando a mensagem é um texto. A tabela faz sentido mesmo é quando alguém a captura com <code>pcall</code> e lê os campos (<code>erro.codigo</code>), como você vai ver na próxima aula.</p>
+
+<p>Se a tabela tiver um <a href="tostring-call-len.html">metamétodo <code>__tostring</code></a>, o <code>lua</code> o usa para escrever a mensagem:</p>
+
+<pre class="file" data-file="tabela_ts.lua">local erro = setmetatable(
+  { codigo = 404, mensagem = "produto não encontrado" },
+  { __tostring = function (e) return "Erro " .. e.codigo .. ": " .. e.mensagem end }
+)
+error(erro)
+</pre>
+
+<pre class="term">$ lua tabela_ts.lua
+lua: Erro 404: produto não encontrado
+$ echo $?
+1</pre>
+
+<p>Desta vez, saiu só a mensagem, <strong>sem</strong> <code>stack traceback</code>: quando o objeto de erro tem <code>__tostring</code>, o <code>lua</code> usa o texto dele e não acrescenta o rastro. Outros valores, conferidos no lab:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Código</th><th>O <code>lua</code> mostrou</th></tr>
+<tr><td><code>error(42)</code></td><td><code>lua: 42</code> (com o rastro; sem a posição, porque 42 não é texto)</td></tr>
+<tr><td><code>error()</code></td><td><code>lua: (error object is a nil value)</code> (com o rastro)</td></tr>
+<tr><td><code>error({…})</code></td><td><code>lua: (error object is a table value)</code> (com o rastro)</td></tr>
+<tr><td><code>error(tabela_com___tostring)</code></td><td>o texto do <code>__tostring</code>, sem rastro</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2 id="formas">Formas diferentes: <code>error</code> ou devolver <code>nil, "mensagem"</code>?</h2>
+<p>No Lua existe outro costume para avisar que algo deu errado, sem parar nada: a função devolve <code>nil</code> e, como segundo valor, uma mensagem. É o que as funções prontas de arquivos fazem:</p>
+
+<pre class="file" data-file="io_compara.lua">print(io.open("nao_existe.txt"))
+print(tonumber("abc"))
+</pre>
+<pre class="term">$ lua io_compara.lua
+nil	nao_existe.txt: No such file or directory	2
+nil</pre>
+
+<p>O <code>io.open</code> não conseguiu abrir e devolveu <code>nil</code>, a mensagem ("arquivo ou pasta inexistente") e um número de erro do sistema. O <code>tonumber</code> devolveu só <code>nil</code>. Ninguém parou. A sua função pode fazer igual:</p>
+
+<pre class="file" data-file="retorno_nil.lua">local saldo = 100
+
+local function sacar(valor)
+  if valor &gt; saldo then
+    return nil, "saldo insuficiente"
+  end
+  saldo = saldo - valor
+  return saldo
+end
+
+print(sacar(30))
+print(sacar(500))
+local novo, problema = sacar(500)
+if not novo then
+  print("Não deu: " .. problema)
+end
+print("O programa continua")
+</pre>
+<pre class="term">$ lua retorno_nil.lua
+70
+nil	saldo insuficiente
+Não deu: saldo insuficiente
+O programa continua</pre>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Situação</th><th>Qual usar</th></tr>
+<tr><td>Um <strong>engano de programação</strong>: argumento do tipo errado, valor impossível, "isto nunca deveria acontecer"</td><td><code>error(msg, 2)</code>: pare e aponte o culpado</td></tr>
+<tr><td>Um problema <strong>esperado</strong>, que faz parte da vida: arquivo que não existe, texto que não é número, saldo que não dá</td><td><code>return nil, "mensagem"</code>: quem chamou decide o que fazer</td></tr>
+<tr><td>Transformar um <code>nil, "mensagem"</code> em erro, numa linha</td><td><a href="assert.html">assert</a>: <code>assert(io.open(nome))</code></td></tr>
+<tr><td>Transformar um erro em <code>false, mensagem</code>, para o programa não parar</td><td><a href="pcall.html">pcall</a></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+
+<div class="cenario">
+<strong>A mensagem aponta a linha do <code>error</code>, e ela está certa</strong>
+<p>É o nível 1 da seção 4 (<code>nivel1.lua:3:</code>). Não há nada para consertar na linha 3: desça pelo rastro até a linha <code>in main chunk</code> (ou a primeira chamada sua) para ver quem passou o valor errado. Se a função é sua, troque para <code>error(msg, 2)</code> e a mensagem passa a apontar o lugar certo.</p>
+</div>
+
+<div class="cenario">
+<strong>A mensagem de erro deu erro</strong>
+<p>Montar a mensagem com <code>..</code> usando um valor <code>nil</code> dá um erro <strong>antes</strong> do seu, e a mensagem que aparece é outra. Se o <code>error("produto desconhecido: " .. produto)</code> receber <code>produto</code> igual a <code>nil</code>, o que aparece é outra coisa:</p>
+<pre class="file" data-file="msgnil.lua">local function vender(produto)
+  error("produto desconhecido: " .. produto)
+end
+vender(nil)
+</pre>
+<pre class="term">$ lua msgnil.lua
+lua: msgnil.lua:2: attempt to concatenate a nil value (local 'produto')
+stack traceback:
+	msgnil.lua:2: in local 'vender'
+	msgnil.lua:4: in main chunk
+	[C]: in ?</pre>
+<p>Repare que nem há <code>[C]: in global 'error'</code> no rastro: o <code>error</code> nem chegou a ser chamado. Com <code>string.format("produto desconhecido: %q", produto)</code> (ou <code>tostring(produto)</code>), o <code>nil</code> vira o texto <code>nil</code> e a sua mensagem sai inteira: <code>lua: msgnil2.lua:2: produto desconhecido: nil</code>. O mesmo cuidado vale para o <a href="assert.html">assert</a>.</p>
+</div>
+
+<div class="cenario">
+<strong>Lançou uma tabela e só apareceu <code>(error object is a table value)</code></strong>
+<p>A tabela de erro foi feita para ser capturada (<code>pcall</code>) e lida pelos campos. Se ninguém a captura, o <code>lua</code> não tem como mostrar o conteúdo. Para o terminal, use texto, ou dê à tabela um <code>__tostring</code> (seção 5).</p>
+</div>
+
+<div class="cenario">
+<strong>Usou <code>error</code> para algo que não é erro</strong>
+<p>Um usuário digitar "trinta" no lugar de 30 não é um defeito do programa: é algo que vai acontecer. Se a função de ler a idade lançar <code>error</code>, o programa fecha na cara do usuário. Para entradas do usuário, prefira devolver <code>nil, "mensagem"</code> e perguntar de novo (ou capture com <code>pcall</code>).</p>
+</div>
+
+<hr>
+
+<h2>Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>O que faz</th></tr>
+<tr><td><code>error("msg")</code></td><td>Para o programa com <code>arquivo:linha: msg</code> (a linha do <code>error</code>)</td></tr>
+<tr><td><code>error("msg", 2)</code></td><td>Idem, mas com a linha de quem chamou a função</td></tr>
+<tr><td><code>error("msg", 0)</code></td><td>Só a mensagem, sem <code>arquivo:linha:</code></td></tr>
+<tr><td><code>error(string.format("…%d…", x), 2)</code></td><td>Mensagem com valores dentro</td></tr>
+<tr><td><code>error({ codigo = 1, … })</code></td><td>Lança uma tabela (para ser capturada com <code>pcall</code>); não ganha posição</td></tr>
+<tr><td><code>return nil, "msg"</code></td><td>A alternativa sem parar: quem chamou decide</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. Complete</h3>
+<p>Complete para a função parar com a mensagem <code>nota inválida</code> quando a nota passar de 10, apontando a linha de quem chamou:</p>
+<div class="ex-code">if nota &gt; 10 then<br>&nbsp;&nbsp;<input data-answer="error" aria-label="função">("nota inválida", <input data-answer="2" aria-label="nível">)<br>end</div>
+</div>
+
+<div class="exercise">
+<h3>2. O que aparece?</h3>
+<p>O arquivo <code>teste.lua</code> tem uma linha só: <code>error("acabou o café", 0)</code>. O que aparece na primeira linha da mensagem?</p>
+<div class="ex-code"><input data-answer="lua: acabou o café" aria-label="primeira linha da mensagem"></div>
+</div>
+
+<div class="mc" data-answer="3">
+<p class="mc-q">3. O que acontece com as linhas que vêm depois de um <code>error</code> que foi executado (e não capturado)?</p>
+<label><input type="radio" name="q3"> Rodam normalmente</label>
+<label><input type="radio" name="q3"> Rodam só as da mesma função</label>
+<label><input type="radio" name="q3"> Nenhuma roda: o programa para ali</label>
+<label><input type="radio" name="q3"> Rodam, mas sem mostrar nada</label>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">4. Uma função de cadastro recebe um nome vazio e quer culpar <strong>quem a chamou</strong>. Qual nível usar?</p>
+<label><input type="radio" name="q4"> 0</label>
+<label><input type="radio" name="q4"> 2</label>
+<label><input type="radio" name="q4"> 1</label>
+<label><input type="radio" name="q4"> 10</label>
+</div>
+
+<div class="mc" data-answer="1">
+<p class="mc-q">5. <code>error({ codigo = 7 })</code> sem ninguém capturar. O que o <code>lua</code> mostra?</p>
+<label><input type="radio" name="q5"> <code>lua: (error object is a table value)</code></label>
+<label><input type="radio" name="q5"> <code>lua: codigo = 7</code></label>
+<label><input type="radio" name="q5"> <code>lua: 7</code></label>
+<label><input type="radio" name="q5"> Nada: tabelas não podem ser erros</label>
+</div>
+
+<h3>Missão final: culpe quem chamou</h3>
+
+<div class="trylua" data-goal="erro:main.lua:9: a idade precisa ser um número">
+<p class="try-task"><strong>Missão:</strong> rode e veja que a mensagem aponta <code>main.lua:3:</code>, a linha do <code>error</code>, que está certa. Mude o <strong>nível</strong> do erro para a mensagem apontar a linha 9, onde está a chamada com o valor errado.</p>
+<pre class="script" data-file="main.lua">local function cadastrar(idade)
+  if type(idade) ~= "number" then
+    error("a idade precisa ser um número")
+  end
+  print("Cadastrada com " .. idade .. " anos")
+end
+
+cadastrar(30)
+cadastrar("trinta")
+</pre>
+<pre class="solucao" data-file="main.lua">local function cadastrar(idade)
+  if type(idade) ~= "number" then
+    error("a idade precisa ser um número", 2)
+  end
+  print("Cadastrada com " .. idade .. " anos")
+end
+
+cadastrar(30)
+cadastrar("trinta")
+</pre>
+</div>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li><code>error(mensagem)</code> para o programa na hora, como um erro do próprio Lua: mensagem, <code>stack traceback</code> (começando com <code>[C]: in global 'error'</code>) e código de saída 1.</li>
+  <li>Use-o quando um valor não faz sentido e continuar produziria lixo (saque maior que o saldo, divisão por zero).</li>
+  <li>O segundo argumento é o <strong>nível</strong>: 1 (padrão) aponta a linha do <code>error</code>, 2 a de quem chamou a função, 0 não mostra posição.</li>
+  <li>Mensagens com valores: <code>string.format</code> (o <code>%q</code> mostra o texto entre aspas e não quebra com <code>nil</code>).</li>
+  <li>O erro pode ser uma tabela; sem captura, o <code>lua</code> só diz <code>(error object is a table value)</code>.</li>
+  <li>Para problemas esperados (arquivo que não existe, entrada do usuário), prefira <code>return nil, "mensagem"</code>. Para capturar um erro, a próxima aula: <a href="pcall.html">pcall</a>.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
