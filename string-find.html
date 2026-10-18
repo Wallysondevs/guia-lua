@@ -1,0 +1,473 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua string.find e string.match — procurando no texto | Guia Lua</title>
+<meta name="description" content="Procurar dentro de um texto no Lua, para quem nunca programou: string.find devolve onde o trecho começa e termina (ou nil), a posição de início, o quarto argumento plain para procurar ponto, parênteses e cifrão, string.match para pegar o texto achado, e os erros reais do Lua 5.5 (unfinished capture, malformed pattern).">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">find e match</span></h1>
+
+<p class="intro">A cliente escreveu <em>"quero 12 pães e um café"</em>. Tem "café" no pedido? Onde está o <code>@</code> do e-mail? Qual é o número que aparece na frase? Para responder, o programa precisa <strong>procurar</strong> dentro do texto. O Lua tem duas funções para isso: <code>string.find</code> (<em>find</em> = "achar") diz <strong>onde</strong> o trecho está, e <code>string.match</code> (<em>match</em> = "combinar") devolve <strong>o que</strong> foi achado.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>Como o <code>find</code> responde: a posição onde o trecho <strong>começa</strong> e onde <strong>termina</strong>, ou <code>nil</code> quando não acha.</li>
+  <li>Como transformar a resposta em <code>true</code>/<code>false</code> e por que maiúsculas importam.</li>
+  <li>Como começar a busca de outra posição (o terceiro argumento).</li>
+  <li>Como juntar o <code>find</code> com o <code>sub</code> para separar o usuário e o domínio de um e-mail.</li>
+  <li>Por que procurar um <code>.</code>, um <code>(</code> ou um <code>+</code> dá resultado estranho, e como o quarto argumento <code>plain</code> resolve.</li>
+  <li>Como o <code>match</code> devolve o texto achado, e uma primeira olhada nos <strong>padrões</strong> (<code>%d+</code>).</li>
+  <li>Os erros reais: <code>unfinished capture</code>, <code>malformed pattern</code> e a conta com <code>nil</code> quando nada foi achado.</li>
+</ul>
+</div>
+
+<p>Todos os programas desta aula rodaram no <strong>Lua 5.5</strong> da máquina da Ana (usuária <code>ana</code>, computador <code>notebook</code>), salvos na pasta pessoal dela e executados com <code>lua arquivo.lua</code>. Você pode rodar cada um no editor do guia. As posições são contadas como em <a href="string-sub.html">sub, byte e char</a>: a primeira letra é a 1.</p>
+
+<hr>
+
+<h2>A ideia: o marca-texto</h2>
+<p>Você pede para a Ana procurar a palavra "pão" numa receita. Ela passa o dedo pelo texto, acha e pinta com o marca-texto. Depois ela pode te dizer duas coisas diferentes:</p>
+<ul>
+  <li><strong>onde</strong> pintou: "começa na letra 14 e termina na 17" (é o que o <code>find</code> responde);</li>
+  <li><strong>o que</strong> pintou: "pão" (é o que o <code>match</code> responde). Parece bobo quando você já sabe o que procurava, mas fica muito útil quando você procura "qualquer número" e não sabe qual vai ser.</li>
+</ul>
+<p>E se não tiver "pão" na receita? Ela diz: "não achei". No Lua, o "não achei" é o <code>nil</code>.</p>
+
+<hr>
+
+<h2>1. <code>texto:find(trecho)</code>: onde começa e onde termina</h2>
+
+<pre class="file" data-file="achar.lua">local frase = "Ana gosta de pão de queijo"
+print(frase:find("pão"))
+print(frase:find("de"))
+print(string.find(frase, "queijo"))
+</pre>
+
+<dl class="anatomy">
+  <dt>frase:find("pão")</dt><dd>Procura <code>"pão"</code> dentro de <code>frase</code>, da esquerda para a direita. É o mesmo que <code>string.find(frase, "pão")</code> (o atalho do dois-pontos de <a href="string-metodos.html">Funções de Texto</a>).</dd>
+  <dt>14   17</dt><dd>O <code>find</code> devolve <strong>dois</strong> números: a posição da primeira letra do trecho e a da última. O <code>print</code> mostra os dois, separados por tabulação.</dd>
+  <dt>find("de")</dt><dd>Existem dois <code>"de"</code> na frase, mas o <code>find</code> para no <strong>primeiro</strong> que encontra.</dd>
+</dl>
+
+<pre class="term">$ lua achar.lua
+14	17
+11	12
+22	27</pre>
+
+<p>"pão" tem 3 letras, mas foi da posição 14 até a 17, que são 4 posições. Não é erro: o <code>ã</code> ocupa 2 bytes, e o <code>find</code>, como o <code>sub</code> e o <code>#</code>, conta bytes (veja <a href="utf8.html">Acentos e a Biblioteca utf8</a>). Para recortar, isso não atrapalha: <code>frase:sub(14, 17)</code> devolve <code>pão</code> inteirinho, porque as duas funções contam do mesmo jeito.</p>
+
+<hr>
+
+<h2>2. Quando não acha: <code>nil</code></h2>
+
+<pre class="file" data-file="nao-achou.lua">local frase = "Ana gosta de pão de queijo"
+print(frase:find("bolo"))
+print(frase:find("queijo") ~= nil, frase:find("bolo") ~= nil)
+</pre>
+
+<pre class="term">$ lua nao-achou.lua
+nil
+true	false</pre>
+
+<p>Sem achar, o <code>find</code> devolve um <code>nil</code> só (veja <a href="nil.html">O Valor nil</a>). Por isso a pergunta "tem queijo na frase?" pode ser escrita como <code>frase:find("queijo") ~= nil</code>, "a resposta do <code>find</code> é diferente de nada?" (o <code>~=</code> é o "diferente" do Lua; veja <a href="operadores-comparacao.html">Comparações</a>).</p>
+
+<div class="tip">
+<strong>No <code>if</code>, nem precisa do <code>~= nil</code></strong>
+<p>Para o Lua, qualquer valor que não seja <code>nil</code> nem <code>false</code> conta como verdadeiro. Então <code>if frase:find("queijo") then … end</code> já quer dizer "se achou queijo, então…". Você vai usar muito isso a partir da aula <a href="if.html">if … then</a>.</p>
+</div>
+
+<h3>Maiúsculas importam</h3>
+<pre class="file" data-file="caixa.lua">local frase = "Ana gosta de pão de queijo"
+print(frase:find("ana"))
+print(frase:lower():find("ana"))
+</pre>
+
+<pre class="term">$ lua caixa.lua
+nil
+1	3</pre>
+
+<p>Para o Lua, <code>A</code> e <code>a</code> são letras diferentes (códigos 65 e 97, como você viu em <a href="string-sub.html">string.byte</a>), então <code>"ana"</code> não aparece em <code>"Ana gosta…"</code>. Para procurar sem ligar para maiúsculas, passe o texto para minúsculas antes, com <code>lower()</code>, e procure em minúsculas.</p>
+
+<hr>
+
+<h2>3. Começar de outra posição: o terceiro argumento</h2>
+<p>E o segundo <code>"de"</code> da frase? Diga ao <code>find</code> de onde começar a procurar:</p>
+
+<pre class="file" data-file="inicio.lua">local frase = "Ana gosta de pão de queijo"
+print(frase:find("de"))
+print(frase:find("de", 12))
+print(frase:find("de", 13))
+print(frase:find("de", -10))
+</pre>
+
+<pre class="term">$ lua inicio.lua
+11	12
+19	20
+19	20
+19	20</pre>
+
+<dl class="anatomy">
+  <dt>find("de", 12)</dt><dd>Começa a procurar na posição 12. O primeiro <code>"de"</code> começa na 11, então ficou para trás; o próximo está em 19–20.</dd>
+  <dt>find("de", 13)</dt><dd>Mesma coisa: a partir da 13, o primeiro <code>"de"</code> é o da posição 19.</dd>
+  <dt>find("de", -10)</dt><dd>Posição negativa conta do fim, como no <code>sub</code>. A frase tem 27 bytes, então <code>-10</code> é a posição 18, o espaço logo depois de <code>pão</code>. Dali para frente, o primeiro <code>"de"</code> é o das posições 19–20. Com <code>find("de", -5)</code>, que começa já dentro de <code>"queijo"</code>, a resposta seria <code>nil</code>.</dd>
+</dl>
+
+<p>O truque para achar <strong>o próximo</strong>: comece a nova busca logo depois de onde terminou a anterior (<code>fim + 1</code>). A aula <a href="gmatch.html">gmatch</a> mostra um jeito mais fácil de passar por <strong>todos</strong> os achados.</p>
+
+<hr>
+
+<h2>4. <code>find</code> + <code>sub</code>: separar um e-mail</h2>
+<p>O <code>find</code> diz onde está o <code>@</code>; o <code>sub</code> recorta antes e depois dele:</p>
+
+<pre class="file" data-file="email.lua">local email = "bia@padaria.com"
+local arroba = email:find("@")
+print(arroba)
+print(email:sub(1, arroba - 1))
+print(email:sub(arroba + 1))
+</pre>
+
+<pre class="term">$ lua email.lua
+4
+bia
+padaria.com</pre>
+
+<dl class="anatomy">
+  <dt>local arroba = email:find("@")</dt><dd>O <code>find</code> devolve dois números (4 e 4), mas a variável só tem lugar para um: fica o primeiro, a posição de início. O segundo é descartado.</dd>
+  <dt>email:sub(1, arroba - 1)</dt><dd>Do começo até a letra <strong>antes</strong> do <code>@</code>: o usuário, <code>bia</code>.</dd>
+  <dt>email:sub(arroba + 1)</dt><dd>Da letra <strong>depois</strong> do <code>@</code> até o fim: o domínio, <code>padaria.com</code>.</dd>
+</dl>
+
+<p>E se o texto não tiver <code>@</code>? Aí o <code>arroba</code> é <code>nil</code> e a conta <code>arroba - 1</code> quebra o programa (está em <a href="#errado">Quando dá errado</a>).</p>
+
+<div class="trylua" data-goal="out:Usuário: carla;;out:Domínio: escola.edu.br;;semerro">
+<p class="try-task"><strong>Missão:</strong> o programa já achou o <code>@</code>. Troque os dois <code>?</code> por recortes com <code>email:sub(…)</code> para ele mostrar <code>Usuário: carla</code> e <code>Domínio: escola.edu.br</code>.</p>
+<pre class="script" data-file="main.lua">local email = "carla@escola.edu.br"
+local arroba = email:find("@")
+print("O @ está na posição " .. arroba)
+print("Usuário: ?")
+print("Domínio: ?")
+</pre>
+<pre class="solucao" data-file="main.lua">local email = "carla@escola.edu.br"
+local arroba = email:find("@")
+print("O @ está na posição " .. arroba)
+print("Usuário: " .. email:sub(1, arroba - 1))
+print("Domínio: " .. email:sub(arroba + 1))
+</pre>
+</div>
+
+<hr>
+
+<h2>5. O ponto que acha tudo: caracteres especiais e o <code>plain</code></h2>
+<p>A Ana quer achar o ponto do preço <code>"R$ 10.50"</code>. Olhe o que acontece:</p>
+
+<pre class="file" data-file="ponto.lua">local preco = "R$ 10.50"
+print(preco:find("."))
+print(preco:find(".", 1, true))
+print(("1+1=2"):find("1+1"))
+print(("1+1=2"):find("1+1", 1, true))
+</pre>
+
+<pre class="term">$ lua ponto.lua
+1	1
+6	6
+nil
+1	3</pre>
+
+<p>O primeiro <code>find</code> disse que o ponto está na posição <strong>1</strong>, onde está o <code>R</code>! E o <code>"1+1"</code>, que está bem ali no começo, "não existe". O motivo: o <code>find</code> não procura o texto ao pé da letra. Ele trata o que você pede como um <strong>padrão</strong>, uma espécie de molde em que alguns sinais têm significado especial. No padrão, o <code>.</code> quer dizer "<strong>qualquer</strong> caractere" (e o <code>R</code> é um caractere), e o <code>+</code> quer dizer "um ou mais do anterior". Os sinais especiais são estes 12:</p>
+
+<p><code>^ $ ( ) % . [ ] * + - ?</code></p>
+
+<p>Para procurar o texto <strong>exatamente como está escrito</strong>, passe <code>true</code> no <strong>quarto</strong> argumento, o <code>plain</code> ("simples", "comum"). Como ele é o quarto, o terceiro (onde começar) tem de vir antes, nem que seja o 1:</p>
+
+<dl class="anatomy">
+  <dt>preco:find(".", 1, true)</dt><dd>Procure <code>"."</code>, a partir da posição 1, <strong>sem padrão</strong> (ao pé da letra). Agora sim: o ponto está na posição 6.</dd>
+  <dt>("1+1=2"):find("1+1", 1, true)</dt><dd>Ao pé da letra, o <code>"1+1"</code> está nas posições 1 a 3.</dd>
+</dl>
+
+<div class="tip">
+<strong>Quando usar o <code>plain</code></strong>
+<p>Sempre que o trecho procurado vier de fora (o que a pessoa digitou, uma linha de um arquivo) ou tiver algum dos 12 sinais. É também um pouco mais rápido. Outra saída é "escapar" o sinal com <code>%</code> na frente: <code>preco:find("%.")</code> também acha o ponto na posição 6. A aula <a href="padroes.html">Padrões</a> explica o <code>%</code>.</p>
+</div>
+
+<div class="trylua">
+<p class="try-task"><strong>Experimente:</strong> rode e compare as duas linhas. Depois procure <code>"$"</code> com e sem o <code>, 1, true</code>.</p>
+<pre class="script" data-file="main.lua">local preco = "R$ 10.50"
+print("com padrão:", preco:find("."))
+print("ao pé da letra:", preco:find(".", 1, true))
+</pre>
+</div>
+
+<hr>
+
+<h2>6. Uma primeira olhada nos padrões</h2>
+<p>Os sinais especiais atrapalham quando você quer o texto exato, mas são uma ferramenta poderosa quando você <strong>não sabe</strong> o texto exato. Por exemplo: "ache um número, qualquer que seja". No padrão, <code>%d</code> quer dizer "um algarismo" (<em>digit</em>) e o <code>+</code> quer dizer "um ou mais":</p>
+
+<pre class="file" data-file="numero.lua">local pedido = "Preço: 12 reais"
+print(pedido:find("%d+"))
+</pre>
+
+<pre class="term">$ lua numero.lua
+9	10</pre>
+
+<p>O <code>find</code> achou "um ou mais algarismos" nas posições 9 e 10: o <code>12</code>. Mas e se você quiser o <strong>número</strong>, e não a posição? Para isso existe o <code>match</code>. Todos os sinais dos padrões (<code>%a</code>, <code>%s</code>, <code>[ ]</code>, <code>-</code>…) estão na aula <a href="padroes.html">Padrões (Patterns)</a>; aqui, só o <code>%d+</code> basta.</p>
+
+<hr>
+
+<h2>7. <code>texto:match(padrão)</code>: o que foi achado</h2>
+
+<pre class="file" data-file="match.lua">print(("Preço: 12 reais"):match("%d+"))
+print(("Preço: reais"):match("%d+"))
+print(("Total: 8"):match("Total: (%d+)"))
+print(("ana@email.com"):match("(.+)@(.+)"))
+local qtd = ("Pedido: 12 pães"):match("%d+")
+print(type(qtd), tonumber(qtd) * 2)
+</pre>
+
+<pre class="term">$ lua match.lua
+12
+nil
+8
+ana	email.com
+string	24</pre>
+
+<dl class="anatomy">
+  <dt>match("%d+")</dt><dd>Em vez das posições, devolve o <strong>pedaço achado</strong>: o texto <code>"12"</code>.</dd>
+  <dt>nil</dt><dd>Sem nenhum algarismo, não achou nada: <code>nil</code>, como no <code>find</code>.</dd>
+  <dt>match("Total: (%d+)")</dt><dd>Os <strong>parênteses</strong> marcam a parte que você quer de volta (o nome é <strong>captura</strong>). O padrão inteiro precisa combinar (<code>Total: </code> e o número), mas só o que está dentro dos parênteses volta: <code>8</code>.</dd>
+  <dt>match("(.+)@(.+)")</dt><dd>Duas capturas, duas respostas: o que vem antes do <code>@</code> e o que vem depois. O <code>.+</code> é "um ou mais caracteres quaisquer".</dd>
+  <dt>type(qtd) → string</dt><dd>O <code>match</code> sempre devolve <strong>texto</strong>, mesmo que pareça número. Para fazer conta com segurança, converta com <code>tonumber</code> (veja <a href="conversao.html">Conversão</a>).</dd>
+</dl>
+
+<p>O <code>find</code> também devolve as capturas, depois das duas posições: <code>("ana@email.com"):find("(.+)@(.+)")</code> dá <code>1	13	ana	email.com</code>. Na prática, quando você quer o texto, use o <code>match</code>; quando quer a posição, o <code>find</code>.</p>
+
+<hr>
+
+<h2 id="formas">Formas diferentes de fazer a mesma coisa</h2>
+<p>Pegar o usuário de um e-mail, de três jeitos:</p>
+
+<pre class="file" data-file="usuario.lua">local email = "bia@padaria.com"
+-- 1. find para achar o @, sub para recortar
+local arroba = email:find("@", 1, true)
+print(email:sub(1, arroba - 1))
+-- 2. match com uma captura: "tudo antes do @"
+print(email:match("(.+)@"))
+-- 3. match com um padrão de "letras, números, ponto..." (aula Padrões)
+print(email:match("^[%w._-]+"))
+</pre>
+
+<pre class="term">$ lua usuario.lua
+bia
+bia
+bia</pre>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Você quer…</th><th>Use</th></tr>
+<tr><td>Saber <strong>se</strong> um trecho exato aparece</td><td><code>s:find(trecho, 1, true) ~= nil</code></td></tr>
+<tr><td>Saber <strong>onde</strong> ele está (para recortar com <code>sub</code>)</td><td><code>local i, j = s:find(trecho, 1, true)</code></td></tr>
+<tr><td>Procurar ignorando maiúsculas</td><td><code>s:lower():find(trecho:lower(), 1, true)</code></td></tr>
+<tr><td>Pegar um pedaço que você <strong>não sabe</strong> qual é (um número, uma palavra)</td><td><code>s:match(padrão)</code>, como <code>s:match("%d+")</code></td></tr>
+<tr><td>Pegar só uma parte de um padrão maior</td><td><code>s:match("Total: (%d+)")</code>, com parênteses</td></tr>
+<tr><td>Passar por <strong>todos</strong> os achados</td><td><a href="gmatch.html">gmatch</a></td></tr>
+<tr><td>Trocar o que achou por outra coisa</td><td><a href="gsub.html">gsub</a></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+
+<div class="cenario">
+<strong>Não achou, e fez conta com o <code>nil</code></strong>
+<pre class="file" data-file="sem-arroba.lua">local email = "bia.padaria.com"
+local arroba = email:find("@")
+print(email:sub(1, arroba - 1))
+</pre>
+<pre class="term">$ lua sem-arroba.lua
+lua: sem-arroba.lua:3: attempt to perform arithmetic on a nil value (local 'arroba')
+stack traceback:
+	sem-arroba.lua:3: in main chunk
+	[C]: in ?</pre>
+<p>Linha por linha:</p>
+<dl class="anatomy">
+  <dt>lua: sem-arroba.lua:3:</dt><dd>O problema apareceu na <strong>linha 3</strong>, mas a causa está na linha 2: o <code>find</code> não achou o <code>@</code> e devolveu <code>nil</code>.</dd>
+  <dt>attempt to perform arithmetic on a nil value</dt><dd>"Tentativa de fazer conta com um valor <code>nil</code>": o <code>arroba - 1</code> virou <code>nil - 1</code>.</dd>
+  <dt>(local 'arroba')</dt><dd>O Lua diz o nome da variável culpada: a local <code>arroba</code>.</dd>
+  <dt>stack traceback: … in main chunk / [C]: in ?</dt><dd>O caminho até o erro: a linha 3 do programa principal, que foi rodado pelo <code>lua</code>.</dd>
+</dl>
+<p><strong>Como consertar:</strong> confira se achou antes de usar a posição. Com o <code>if</code> (aula <a href="if.html">if … then</a>): <code>if arroba then … else print("e-mail sem @") end</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Procurou um parêntese</strong>
+<pre class="term">$ lua -e 'print(("ana(2)"):find("("))'
+lua: (command line):1: unfinished capture
+stack traceback:
+	[C]: in method 'find'
+	(command line):1: in main chunk
+	[C]: in ?</pre>
+<p>"Captura não terminada". O <code>(</code> é especial no padrão: ele abre uma captura, e o Lua ficou esperando o <code>)</code> que a fecharia. (O <code>lua -e</code> roda um pedacinho de código direto no terminal; por isso o local do erro é <code>(command line):1</code>.) <strong>Como consertar:</strong> <code>find("(", 1, true)</code>, que dá <code>4	4</code>, ou escape com <code>%</code>: <code>find("%(")</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Procurou o sinal de porcentagem</strong>
+<pre class="term">$ lua -e 'print(("100%"):find("%"))'
+lua: (command line):1: malformed pattern (ends with '%')
+stack traceback:
+	[C]: in method 'find'
+	(command line):1: in main chunk
+	[C]: in ?</pre>
+<p>"Padrão malformado (termina com <code>%</code>)". O <code>%</code> é o sinal de escape dos padrões: ele sempre espera alguma coisa depois. <strong>Como consertar:</strong> <code>find("%", 1, true)</code>, ou <code>find("%%")</code> (dois <code>%</code> = um <code>%</code> de verdade).</p>
+</div>
+
+<div class="cenario">
+<strong>Procurou um colchete</strong>
+<pre class="term">$ lua -e 'print(("[a]"):find("["))'
+lua: (command line):1: malformed pattern (missing ']')
+stack traceback:
+	[C]: in method 'find'
+	(command line):1: in main chunk
+	[C]: in ?</pre>
+<p>"Padrão malformado (falta o <code>]</code>)". O <code>[</code> abre um <strong>conjunto</strong> de letras no padrão (aula <a href="padroes.html">Padrões</a>) e precisa ser fechado. <strong>Como consertar:</strong> <code>find("[", 1, true)</code> ou <code>find("%[")</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>O ponto "achado" no lugar errado</strong>
+<p>Este não dá mensagem: <code>("R$ 10.50"):find(".")</code> devolve <code>1	1</code> e o programa segue com a posição errada. É o engano mais comum com o <code>find</code>, justamente porque fica calado. <strong>Como consertar:</strong> para procurar texto ao pé da letra, sempre <code>find(trecho, 1, true)</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Esqueceu o que procurar</strong>
+<pre class="term">$ lua -e 'print(("abc"):find())'
+lua: (command line):1: bad argument #1 to 'find' (string expected, got no value)
+stack traceback:
+	[C]: in method 'find'
+	(command line):1: in main chunk
+	[C]: in ?</pre>
+<p>"Argumento ruim nº 1 para o <code>find</code> (esperava um texto, não recebeu nenhum valor)". Com o dois-pontos, o argumento nº 1 é o que vai entre os parênteses: o trecho procurado. Se a variável com o trecho estiver vazia, a mensagem termina em <code>got nil</code>. <strong>Como consertar:</strong> diga o que procurar, <code>("abc"):find("b")</code>.</p>
+</div>
+
+<hr>
+
+<h2>Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>Devolve</th><th>Exemplo → resultado</th></tr>
+<tr><td><code>s:find(p)</code></td><td>Início e fim do primeiro achado, ou <code>nil</code></td><td><code>("Ana Lima"):find("Lima")</code> → <code>5  8</code></td></tr>
+<tr><td><code>s:find(p, inicio)</code></td><td>O mesmo, procurando a partir de <code>inicio</code> (negativo conta do fim)</td><td><code>("de de"):find("de", 2)</code> → <code>4  5</code></td></tr>
+<tr><td><code>s:find(p, inicio, true)</code></td><td>Procura ao pé da letra (sem padrão)</td><td><code>("R$ 10.50"):find(".", 1, true)</code> → <code>6  6</code></td></tr>
+<tr><td><code>s:find(p)</code> com <code>( )</code> em <code>p</code></td><td>Início, fim e as capturas</td><td><code>("a=1"):find("(%d)")</code> → <code>3  3  1</code></td></tr>
+<tr><td><code>s:match(p)</code></td><td>O texto achado, ou <code>nil</code></td><td><code>("Preço: 12"):match("%d+")</code> → <code>12</code></td></tr>
+<tr><td><code>s:match(p)</code> com <code>( )</code> em <code>p</code></td><td>Só as capturas</td><td><code>("a@b.com"):match("(.+)@(.+)")</code> → <code>a  b.com</code></td></tr>
+<tr><td><code>s:match(p, inicio)</code></td><td>O mesmo, a partir de <code>inicio</code></td><td></td></tr>
+<tr><td>Sinais especiais</td><td colspan="2"><code>^ $ ( ) % . [ ] * + - ?</code>: use <code>plain</code> ou escape com <code>%</code> (<code>%.</code>, <code>%(</code>, <code>%%</code>)</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Sintoma</th><th>Causa provável</th></tr>
+<tr><td><code>nil</code> onde esperava uma posição</td><td>Não achou: confira maiúsculas, acentos e espaços</td></tr>
+<tr><td><code>attempt to perform arithmetic on a nil value</code> depois de um <code>find</code></td><td>Não achou, e o programa fez conta com o resultado</td></tr>
+<tr><td>Achou na posição 1 um ponto que não está lá</td><td>O <code>.</code> no padrão é "qualquer caractere": use <code>find(".", 1, true)</code></td></tr>
+<tr><td><code>unfinished capture</code></td><td>Procurou um <code>(</code> sem <code>plain</code></td></tr>
+<tr><td><code>malformed pattern (ends with '%')</code></td><td>Procurou um <code>%</code> sem <code>plain</code></td></tr>
+<tr><td><code>malformed pattern (missing ']')</code></td><td>Procurou um <code>[</code> sem <code>plain</code></td></tr>
+<tr><td>Conta com o resultado do <code>match</code> se comporta estranho</td><td>O <code>match</code> devolve texto: use <code>tonumber</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. Onde começa?</h3>
+<p>Qual é o <strong>primeiro</strong> número que <code>("banana"):find("na")</code> devolve?</p>
+<div class="ex-code">Devolve <input data-answer="3" aria-label="posição"></div>
+</div>
+
+<div class="exercise">
+<h3>2. Ao pé da letra</h3>
+<p>Complete para procurar o ponto de verdade:</p>
+<div class="ex-code">print(("ana.txt"):find(".", 1, <input data-answer="true" aria-label="valor">))</div>
+</div>
+
+<div class="exercise">
+<h3>3. O que o match devolve?</h3>
+<p>O que <code>print(("Mesa 7"):match("%d+"))</code> mostra?</p>
+<div class="ex-code">Mostra <input data-answer="7" aria-label="saída"></div>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">4. O que <code>("Ana"):find("ana")</code> devolve?</p>
+<label><input type="radio" name="q4"> <code>1  3</code></label>
+<label><input type="radio" name="q4"> <code>nil</code>, porque <code>A</code> e <code>a</code> são diferentes</label>
+<label><input type="radio" name="q4"> <code>false</code></label>
+<label><input type="radio" name="q4"> Dá erro</label>
+</div>
+
+<div class="mc" data-answer="3">
+<p class="mc-q">5. Por que <code>("R$ 10.50"):find(".")</code> devolve <code>1  1</code>?</p>
+<label><input type="radio" name="q5"> Porque o <code>find</code> sempre começa na posição 1</label>
+<label><input type="radio" name="q5"> Porque o ponto é invisível</label>
+<label><input type="radio" name="q5"> Porque no padrão o <code>.</code> quer dizer "qualquer caractere", e o <code>R</code> é um</label>
+<label><input type="radio" name="q5"> Porque o <code>$</code> atrapalha a busca</label>
+</div>
+
+<div class="mc" data-answer="1">
+<p class="mc-q">6. Você quer o <strong>número</strong> que aparece em <code>"Mesa 7"</code>, para fazer conta. Qual linha?</p>
+<label><input type="radio" name="q6"> <code>tonumber(("Mesa 7"):match("%d+"))</code></label>
+<label><input type="radio" name="q6"> <code>("Mesa 7"):find("%d+")</code></label>
+<label><input type="radio" name="q6"> <code>("Mesa 7"):match("7")</code></label>
+<label><input type="radio" name="q6"> <code>("Mesa 7"):sub("%d+")</code></label>
+</div>
+
+<h3>Missão final: o pedido da padaria</h3>
+
+<div class="trylua" data-goal="out:Total: R$ 9.60;;src:match|find">
+<p class="try-task"><strong>Missão:</strong> o pedido chegou como texto: <code>"Pedido: 12 pães"</code>. Cada pão custa R$ 0,80. Troque o <code>0</code> da linha 2 para o programa pegar a quantidade de dentro do pedido (<code>pedido:match("%d+")</code>, convertido com <code>tonumber</code>) e mostrar <code>Total: R$ 9.60</code>.</p>
+<pre class="script" data-file="main.lua">local pedido = "Pedido: 12 pães"
+local quantidade = 0
+print(string.format("Total: R$ %.2f", quantidade * 0.80))
+</pre>
+<pre class="solucao" data-file="main.lua">local pedido = "Pedido: 12 pães"
+local quantidade = tonumber(pedido:match("%d+"))
+print(string.format("Total: R$ %.2f", quantidade * 0.80))
+</pre>
+</div>
+
+<p>Antes de mudar, o programa mostra <code>Total: R$ 0.00</code>. O <code>%.2f</code> do <a href="string-format.html">string.format</a> mostra o número com 2 casas decimais. Depois de acertar, troque o pedido por <code>"Pedido: 30 pães"</code>: o programa se ajusta sozinho, porque não depende da posição do número.</p>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li><code>s:find(p)</code> devolve a posição de <strong>início</strong> e de <strong>fim</strong> do primeiro achado, ou <code>nil</code> se não achar. As posições são em bytes, como no <code>sub</code>.</li>
+  <li>O terceiro argumento diz de onde começar (negativo conta do fim). Maiúsculas importam: use <code>lower()</code> para ignorá-las.</li>
+  <li><code>find</code> + <code>sub</code> recortam por conteúdo: <code>s:sub(1, s:find("@") - 1)</code>. Antes, confira se achou.</li>
+  <li>O <code>find</code> trata o que você procura como <strong>padrão</strong>: os sinais <code>^ $ ( ) % . [ ] * + - ?</code> são especiais. Para procurar ao pé da letra: <code>s:find(trecho, 1, true)</code>.</li>
+  <li><code>s:match(p)</code> devolve o <strong>texto</strong> achado (ou só as capturas entre parênteses), sempre como string: use <code>tonumber</code> para fazer conta.</li>
+  <li>Os padrões completos estão em <a href="padroes.html">Padrões</a>; para todos os achados, <a href="gmatch.html">gmatch</a>; para trocar, <a href="gsub.html">gsub</a>.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
