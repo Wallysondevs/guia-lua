@@ -1,0 +1,536 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua table.unpack e table.pack — tirando e guardando vários valores | Guia Lua</title>
+<meta name="description" content="table.unpack e table.pack no Lua 5.5 para quem está começando: tirar os itens de uma lista como vários valores, guardar em variáveis, passar como argumentos para math.max e string.format, pegar um pedaço com i e j, por que o unpack no meio da lista só entrega um valor, o campo n do table.pack que conta até os nil, e os erros reais (unpack do Lua 5.1, lista nil, valor faltando, too many results), com missões no editor.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">table.unpack e table.pack</span></h1>
+
+<p class="intro">Uma lista guarda vários valores numa caixa só. Às vezes você precisa do contrário: <strong>tirar tudo da caixa</strong> e entregar os itens soltos, um ao lado do outro, para uma função ou para várias variáveis. É o que faz o <code>table.unpack</code> (em inglês, <em>unpack</em> = "desempacotar"). E o <code>table.pack</code> (<em>pack</em> = "empacotar") faz a viagem de volta: pega vários valores soltos e guarda numa tabela, anotando <strong>quantos</strong> eram.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>A tirar os itens de uma lista com <code>table.unpack(lista)</code> e guardar em várias variáveis de uma vez.</li>
+  <li>A passar os itens de uma lista como argumentos: <code>math.max(table.unpack(notas))</code>.</li>
+  <li>A pegar só um pedaço: <code>table.unpack(lista, 2, 4)</code>.</li>
+  <li>Por que o <code>table.unpack</code> no meio de uma lista de valores entrega <strong>um valor só</strong>.</li>
+  <li>A guardar valores soltos com <code>table.pack(...)</code> e a usar o campo <code>n</code>, que conta até os <code>nil</code>.</li>
+  <li>Os erros reais: o <code>unpack</code> do Lua 5.1, a lista que é <code>nil</code>, o valor que falta e o "too many results".</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>A ideia: a sacola de compras</h2>
+<p>A Ana chega da feira com uma sacola. A sacola é <strong>uma coisa só</strong>: dá para carregar, passar para alguém, guardar no armário. Mas para guardar as frutas na fruteira ela precisa <strong>tirar da sacola</strong> e pôr uma por uma em cima da mesa.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>No dia a dia</th><th>No Lua</th><th>O que sai</th></tr>
+<tr><td>Tirar as frutas da sacola e pôr na mesa</td><td><code>table.unpack(sacola)</code></td><td>Vários valores soltos: <code>"maçã", "pera", "uva"</code></td></tr>
+<tr><td>Juntar as frutas da mesa numa sacola e anotar quantas são</td><td><code>table.pack("maçã", "pera", "uva")</code></td><td>Uma tabela: <code>{"maçã", "pera", "uva", n = 3}</code></td></tr>
+</table>
+</div>
+
+<p>"Vários valores soltos" é uma ideia que você já viu na <a href="atribuicao-multipla.html">atribuição múltipla</a> (<code>local a, b = 1, 2</code>): o Lua sabe lidar com uma <strong>lista de valores</strong> separados por vírgula. O <code>table.unpack</code> transforma uma tabela nessa lista de valores.</p>
+
+<hr>
+
+<h2>1. Tirando os itens: <code>table.unpack(lista)</code></h2>
+
+<pre class="file" data-file="desempacotar.lua">local nomes = {"Ana", "Bia", "Caio"}
+print(nomes)
+print(table.unpack(nomes))
+print(nomes[1], nomes[2], nomes[3])
+</pre>
+
+<dl class="anatomy">
+  <dt>print(nomes)</dt><dd>Mostra a <strong>tabela</strong>, a sacola fechada. O <code>print</code> não abre a tabela: mostra só <code>table:</code> e um endereço de memória.</dd>
+  <dt>table.unpack(nomes)</dt><dd>A função <code>unpack</code> da biblioteca <code>table</code>. Ela devolve <code>nomes[1]</code>, <code>nomes[2]</code> e <code>nomes[3]</code>, <strong>como três valores separados</strong>, e o <code>print</code> recebe três argumentos.</dd>
+  <dt>print(nomes[1], nomes[2], nomes[3])</dt><dd>O jeito "na mão" de fazer a mesma coisa. Com 3 itens dá para escrever; com 30, não.</dd>
+</dl>
+
+<pre class="term">$ lua desempacotar.lua
+table: 0x555f97edb710
+Ana	Bia	Caio
+Ana	Bia	Caio
+</pre>
+
+<p>As duas últimas linhas são iguais: <code>print(table.unpack(nomes))</code> é o mesmo que escrever cada item entre as vírgulas. O <code>print</code> separa os valores com um TAB, como sempre. O endereço <code>0x555f97edb710</code> muda a cada execução: no seu computador vai sair outro número.</p>
+
+<h3>Guardando em várias variáveis</h3>
+<p>Junto com a atribuição múltipla, o <code>table.unpack</code> distribui os itens nas variáveis, na ordem:</p>
+
+<pre class="file" data-file="variaveis_unpack.lua">local ficha = {"Ana", 34, "Teresina"}
+local nome, idade, cidade = table.unpack(ficha)
+print(nome)
+print(idade)
+print(cidade)
+local a, b = table.unpack(ficha)
+print(a, b)
+local x, y, z, w = table.unpack(ficha)
+print(x, y, z, w)
+</pre>
+
+<pre class="term">$ lua variaveis_unpack.lua
+Ana
+34
+Teresina
+Ana	34
+Ana	34	Teresina	nil
+</pre>
+
+<dl class="anatomy">
+  <dt>local nome, idade, cidade = table.unpack(ficha)</dt><dd>Três variáveis, três valores: <code>nome</code> recebe o 1º item, <code>idade</code> o 2º, <code>cidade</code> o 3º.</dd>
+  <dt>local a, b = …</dt><dd>Sobrou valor (vieram 3, só há 2 variáveis): o terceiro, <code>"Teresina"</code>, é jogado fora, sem erro.</dd>
+  <dt>local x, y, z, w = …</dt><dd>Faltou valor (vieram 3, há 4 variáveis): a que sobra, <code>w</code>, fica <code>nil</code>. Também sem erro.</dd>
+</dl>
+
+<p>É a regra de sempre da atribuição múltipla: o que sobra some, o que falta vira <code>nil</code>.</p>
+
+<hr>
+
+<h2>2. Os itens como argumentos de uma função</h2>
+<p>O uso mais comum: uma função que aceita <strong>vários argumentos</strong> soltos, e você tem os valores <strong>numa lista</strong>. O <code>math.max</code> (o maior de vários números, aula <a href="math.html">A Biblioteca math</a>) é assim: <code>math.max(7, 9, 6)</code>. Ele não aceita uma tabela. O <code>table.unpack</code> faz a ponte:</p>
+
+<pre class="file" data-file="argumentos.lua">local notas = {7.5, 9, 6, 10, 8}
+print(math.max(table.unpack(notas)))
+print(math.min(table.unpack(notas)))
+local ficha = {"Ana", 34}
+print(string.format("%s tem %d anos", table.unpack(ficha)))
+</pre>
+
+<pre class="term">$ lua argumentos.lua
+10
+6
+Ana tem 34 anos
+</pre>
+
+<dl class="anatomy">
+  <dt>math.max(table.unpack(notas))</dt><dd>O Lua roda primeiro o de dentro: <code>table.unpack(notas)</code> vira <code>7.5, 9, 6, 10, 8</code>. Fica <code>math.max(7.5, 9, 6, 10, 8)</code>, que dá <code>10</code>.</dd>
+  <dt>string.format("%s tem %d anos", table.unpack(ficha))</dt><dd>Vira <code>string.format("%s tem %d anos", "Ana", 34)</code>: o <code>%s</code> recebe <code>"Ana"</code> e o <code>%d</code> recebe <code>34</code> (aula <a href="string-format.html">string.format</a>).</dd>
+</dl>
+
+<div class="trylua" data-goal="out:Maior nota: 10;;src:table\.unpack">
+<p class="try-task"><strong>Missão:</strong> o programa mostra <code>Maior nota: 0</code>. Troque o <code>0</code> por <code>math.max(table.unpack(notas))</code> para ele mostrar <code>Maior nota: 10</code>.</p>
+<pre class="script" data-file="main.lua">local notas = {7, 9, 6, 10, 8}
+print("Maior nota: " .. 0)
+</pre>
+<pre class="solucao" data-file="main.lua">local notas = {7, 9, 6, 10, 8}
+print("Maior nota: " .. math.max(table.unpack(notas)))
+</pre>
+</div>
+
+<hr>
+
+<h2>3. Só um pedaço: <code>table.unpack(lista, i, j)</code></h2>
+<p>O <code>table.unpack</code> aceita mais dois números, opcionais: <strong>de onde</strong> começar (<code>i</code>) e <strong>até onde</strong> ir (<code>j</code>). Sem eles, ele vai do 1 até o tamanho da lista (<code>#lista</code>).</p>
+
+<pre class="file" data-file="pedaco.lua">local semana = {"dom", "seg", "ter", "qua", "qui", "sex", "sáb"}
+print(table.unpack(semana, 2, 6))
+print(table.unpack(semana, 6))
+print(table.unpack(semana, 1, 3))
+print(table.unpack(semana, 5, 2))
+print(table.unpack(semana, 6, 9))
+</pre>
+
+<pre class="term">$ lua pedaco.lua
+seg	ter	qua	qui	sex
+sex	sáb
+dom	seg	ter
+
+sex	sáb	nil	nil
+</pre>
+
+<dl class="anatomy">
+  <dt>table.unpack(semana, 2, 6)</dt><dd>Do item 2 ao item 6: os dias úteis.</dd>
+  <dt>table.unpack(semana, 6)</dt><dd>Só o <code>i</code>: do 6 até o fim (o fim é <code>#semana</code>, 7).</dd>
+  <dt>table.unpack(semana, 1, 3)</dt><dd>Os três primeiros.</dd>
+  <dt>table.unpack(semana, 5, 2)</dt><dd>Começo depois do fim: não devolve <strong>nada</strong>. O <code>print</code> sem argumentos escreve uma linha em branco.</dd>
+  <dt>table.unpack(semana, 6, 9)</dt><dd>Passou do fim da lista: o <code>table.unpack</code> não reclama. Ele entrega <code>semana[8]</code> e <code>semana[9]</code>, que não existem, como <code>nil</code>.</dd>
+</dl>
+
+<div class="tip">
+<strong>O <code>j</code> diz exatamente quantos valores saem</strong>
+<p>Com <code>i</code> e <code>j</code>, saem sempre <code>j - i + 1</code> valores, existindo ou não. É isso que permite tirar de uma tabela uma lista que tem <code>nil</code> no meio (veja a seção 5).</p>
+</div>
+
+<hr>
+
+<h2>4. No meio, um valor só</h2>
+<p>Há uma pegadinha que pega todo mundo. O <code>table.unpack</code> só entrega <strong>todos</strong> os valores quando é o <strong>último</strong> de uma lista de valores (o último argumento, o último item de <code>{ }</code>, o último depois do <code>=</code>). Se vier qualquer coisa depois dele, ele é cortado para <strong>o primeiro valor</strong>:</p>
+
+<pre class="file" data-file="posicao.lua">local cores = {"vermelho", "verde", "azul"}
+print(table.unpack(cores), "fim")
+print("início", table.unpack(cores))
+local t = {table.unpack(cores), "preto"}
+print(#t, t[1], t[2])
+local u = {"preto", table.unpack(cores)}
+print(#u, u[1], u[4])
+</pre>
+
+<pre class="term">$ lua posicao.lua
+vermelho	fim
+início	vermelho	verde	azul
+2	vermelho	preto
+4	preto	azul
+</pre>
+
+<dl class="anatomy">
+  <dt>print(table.unpack(cores), "fim")</dt><dd>Tem <code>"fim"</code> depois: o <code>unpack</code> entregou só <code>"vermelho"</code>. O verde e o azul sumiram, <strong>sem erro</strong>.</dd>
+  <dt>print("início", table.unpack(cores))</dt><dd>Agora ele é o último: entregou os três.</dd>
+  <dt>{table.unpack(cores), "preto"}</dt><dd>Na tabela, a mesma regra: a tabela nova ficou com 2 itens, <code>"vermelho"</code> e <code>"preto"</code>.</dd>
+  <dt>{"preto", table.unpack(cores)}</dt><dd>Com o <code>unpack</code> no fim, a tabela ficou com os 4: <code>"preto"</code> e as três cores.</dd>
+</dl>
+
+<p>Essa regra não é só do <code>table.unpack</code>: vale para <strong>toda</strong> função que devolve vários valores (aula <a href="retornos-multiplos.html">Vários Retornos</a>). Para juntar duas listas inteiras, não use <code>unpack</code> no meio: use um laço com <code>table.insert</code> (aula <a href="table-insert-remove.html">table.insert e table.remove</a>).</p>
+
+<hr>
+
+<h2>5. Guardando valores soltos: <code>table.pack(...)</code></h2>
+<p>O <code>table.pack</code> recebe quantos valores você quiser e devolve uma <strong>tabela nova</strong> com eles nas posições 1, 2, 3… e mais um campo, <code>n</code>, com a quantidade.</p>
+
+<pre class="file" data-file="empacotar.lua">local p = table.pack("Ana", "Bia", "Caio")
+print(p[1], p[2], p[3])
+print(p.n)
+print(#p)
+local vazio = table.pack()
+print(vazio.n, #vazio)
+</pre>
+
+<pre class="term">$ lua empacotar.lua
+Ana	Bia	Caio
+3
+3
+0	0
+</pre>
+
+<dl class="anatomy">
+  <dt>table.pack("Ana", "Bia", "Caio")</dt><dd>Cria a tabela <code>{"Ana", "Bia", "Caio", n = 3}</code>.</dd>
+  <dt>p.n</dt><dd>O campo <code>n</code> ("número"): quantos valores entraram. Aqui, 3.</dd>
+  <dt>#p</dt><dd>O operador de tamanho também dá 3. Então para que o <code>n</code>? Para quando há <code>nil</code> no meio.</dd>
+  <dt>table.pack()</dt><dd>Sem nada: a tabela vazia, com <code>n = 0</code>.</dd>
+</dl>
+
+<h3>O <code>n</code> conta até os <code>nil</code></h3>
+<p>Uma lista "comum" não guarda bem um <code>nil</code>: um <code>nil</code> no meio é um <strong>buraco</strong>, e o <code>#</code> fica sem saber onde a lista acaba (aula <a href="sequencias.html">Sequências e Buracos</a>). O <code>table.pack</code> resolve isso anotando no <code>n</code> quantos valores chegaram, <code>nil</code> incluído:</p>
+
+<pre class="file" data-file="pack_nil.lua">local p = table.pack("leite", nil, "pão", nil)
+print(p.n)
+for i = 1, p.n do
+  print(i, p[i])
+end
+print(table.unpack(p, 1, p.n))
+</pre>
+
+<pre class="term">$ lua pack_nil.lua
+4
+1	leite
+2	nil
+3	pão
+4	nil
+leite	nil	pão	nil
+</pre>
+
+<dl class="anatomy">
+  <dt>p.n</dt><dd>Chegaram 4 valores, e o <code>n</code> diz 4, mesmo com dois deles sendo <code>nil</code>.</dd>
+  <dt>for i = 1, p.n do</dt><dd>Para percorrer uma tabela com buracos, use o <code>n</code> como fim do laço, nunca o <code>#</code>.</dd>
+  <dt>table.unpack(p, 1, p.n)</dt><dd>A volta completa: com <code>i = 1</code> e <code>j = p.n</code>, saem os 4 valores, os <code>nil</code> no lugar certo.</dd>
+</dl>
+
+<h3>Onde isso aparece: os argumentos de uma função</h3>
+<p>Uma função com <code>...</code> (aula <a href="varargs.html">Funções Variádicas</a>) recebe quantos argumentos vierem. Para saber <strong>quantos</strong> vieram, o <code>#{...}</code> não serve quando algum é <code>nil</code>. O <code>table.pack(...).n</code> serve sempre:</p>
+
+<pre class="file" data-file="contar_args.lua">local function quantos(...)
+  local t = {...}
+  local p = table.pack(...)
+  print("#t =", #t, "p.n =", p.n)
+end
+quantos("a", "b", "c")
+quantos()
+quantos(nil, nil)
+quantos("a", nil, "c", nil)
+</pre>
+
+<pre class="term">$ lua contar_args.lua
+#t =	3	p.n =	3
+#t =	0	p.n =	0
+#t =	0	p.n =	2
+#t =	1	p.n =	4
+</pre>
+
+<p>Nas duas primeiras chamadas, os dois concordam. Nas duas últimas, só o <code>p.n</code> acertou: foram 2 e 4 argumentos. O <code>#t</code> deu 0 e 1, e numa lista com buracos o <code>#</code> nem tem uma resposta garantida (a aula <a href="sequencias.html">Sequências e Buracos</a> mostra por quê). Outra forma de contar os argumentos é <code>select("#", ...)</code> (aula <a href="select.html">select</a>).</p>
+
+<div class="trylua" data-goal="out:chegaram 4 valores;;src:table\.pack">
+<p class="try-task"><strong>Missão:</strong> a função usa <code>#{...}</code> e erra a conta quando vem <code>nil</code>. Troque por <code>table.pack(...).n</code> para ela mostrar <code>chegaram 4 valores</code>.</p>
+<pre class="script" data-file="main.lua">local function contar(...)
+  local total = #{...}
+  print("chegaram " .. total .. " valores")
+end
+contar("arroz", nil, "feijão", nil)
+</pre>
+<pre class="solucao" data-file="main.lua">local function contar(...)
+  local total = table.pack(...).n
+  print("chegaram " .. total .. " valores")
+end
+contar("arroz", nil, "feijão", nil)
+</pre>
+</div>
+
+<h3>Ida e volta sem perder nada</h3>
+
+<pre class="file" data-file="ida_volta.lua">local function guardar(...)
+  return table.pack(...)
+end
+local caixa = guardar(10, nil, 30)
+print(caixa.n)
+print(table.unpack(caixa))
+print(table.unpack(caixa, 1, caixa.n))
+</pre>
+
+<pre class="term">$ lua ida_volta.lua
+3
+10
+10	nil	30
+</pre>
+
+<p>O <code>table.unpack(caixa)</code> sem <code>i</code> e <code>j</code> usa o <code>#caixa</code> como fim e, com o buraco na posição 2, aqui entregou só o <code>10</code>: o <code>30</code> se perdeu. Com <code>1, caixa.n</code>, voltaram os três. <strong>Regra prática:</strong> o que entrou com <code>table.pack</code> sai com <code>table.unpack(t, 1, t.n)</code>.</p>
+
+<div class="note">
+<strong>Novidade do <span class="versao">5.5</span>: a tabela dos <code>...</code> com nome</strong>
+<p>No Lua 5.5, uma função pode dar um nome à tabela dos argumentos extras, escrevendo <code>...t</code>; ela já vem com o <code>n</code>, como a do <code>table.pack</code>:</p>
+<pre class="term">$ lua -e 'local function f(...t) print(t.n, t[1]) end f("a", nil)'
+2	a
+</pre>
+<p>Esse jeito é assunto da aula <a href="varargs.html">Funções Variádicas</a>. Ele não existe no 5.4 nem antes; o <code>table.pack(...)</code> funciona do 5.2 em diante.</p>
+</div>
+
+<hr>
+
+<h2>Formas de fazer a mesma coisa</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Para…</th><th>Escreva</th><th>Quando usar</th></tr>
+<tr><td>Passar os itens de uma lista para uma função</td><td><code>f(table.unpack(lista))</code></td><td>Quando a função quer argumentos soltos (<code>math.max</code>, <code>string.format</code>, <code>print</code>)</td></tr>
+<tr><td>Guardar os primeiros itens em variáveis</td><td><code>local a, b = table.unpack(lista)</code></td><td>Lista curta, de tamanho conhecido (uma "ficha")</td></tr>
+<tr><td>O mesmo, na mão</td><td><code>local a, b = lista[1], lista[2]</code></td><td>Quando são só um ou dois itens: fica mais claro</td></tr>
+<tr><td>Guardar os <code>...</code> numa tabela</td><td><code>local t = {...}</code></td><td>Quando nunca vem <code>nil</code> (e você não precisa contar)</td></tr>
+<tr><td>Guardar e contar, com <code>nil</code> ou sem</td><td><code>local t = table.pack(...)</code> e <code>t.n</code></td><td>Sempre que um <code>nil</code> pode aparecer</td></tr>
+<tr><td>Devolver uma tabela com buracos</td><td><code>table.unpack(t, 1, t.n)</code></td><td>Depois de um <code>table.pack</code></td></tr>
+</table>
+</div>
+
+<div class="note">
+<strong>No Lua 5.1, LuaJIT, Neovim e LÖVE: <code>unpack</code>, sem <code>table.</code></strong>
+<p>No Lua 5.1 a função se chamava só <code>unpack</code>, solta, e não existia <code>table.pack</code>. No Lua 5.2 ela mudou para dentro da biblioteca <code>table</code>, e o <code>unpack</code> solto foi removido (no 5.4 e no 5.5 ele não existe). Conferido no laboratório:</p>
+<pre class="term">$ lua5.1 -e 'print(table.unpack, table.pack)'
+nil	nil
+$ luajit -e 'print(table.unpack, table.pack)'
+function: builtin#16	function: builtin#101
+</pre>
+<p>O LuaJIT do Ubuntu aceita os dois nomes, <code>unpack</code> e <code>table.unpack</code>. Se você copiar um código antigo que usa <code>unpack</code> e rodar no 5.5, dá o erro do primeiro cenário abaixo. Um truque comum em código que precisa rodar em todos é <code>local unpack = table.unpack or unpack</code>. Mais em <a href="versoes.html">Lua 5.1, LuaJIT, 5.4 e 5.5</a>.</p>
+</div>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+
+<div class="cenario">
+<strong>Código do Lua 5.1: <code>unpack</code> sem <code>table.</code></strong>
+<pre class="file" data-file="erro_unpack.lua">local nomes = {"Ana", "Bia"}
+print(unpack(nomes))
+</pre>
+<pre class="term">$ lua erro_unpack.lua
+lua: erro_unpack.lua:2: attempt to call a nil value (global 'unpack')
+stack traceback:
+	erro_unpack.lua:2: in main chunk
+	[C]: in ?
+</pre>
+<dl class="anatomy">
+  <dt>lua: erro_unpack.lua:2:</dt><dd>O erro foi na linha 2 do arquivo <code>erro_unpack.lua</code>.</dd>
+  <dt>attempt to call a nil value</dt><dd>"Tentativa de chamar um valor <code>nil</code>": o programa tentou usar como função algo que não existe.</dd>
+  <dt>(global 'unpack')</dt><dd>Esse algo é a variável global <code>unpack</code>, que não existe no Lua 5.5.</dd>
+  <dt>stack traceback:</dt><dd>"Rastro da pilha": o caminho até o erro. <code>in main chunk</code> é o corpo do arquivo; <code>[C]: in ?</code> é o próprio programa <code>lua</code>, que começou tudo.</dd>
+</dl>
+<p><strong>Como consertar:</strong> escreva <code>table.unpack(nomes)</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>A lista é <code>nil</code></strong>
+<pre class="file" data-file="erro_nil.lua">local lista
+print(table.unpack(lista))
+</pre>
+<pre class="term">$ lua erro_nil.lua
+lua: attempt to get length of a nil value
+stack traceback:
+	[C]: in field 'unpack'
+	erro_nil.lua:2: in main chunk
+	[C]: in ?
+</pre>
+<p>"Tentativa de pegar o tamanho de um valor <code>nil</code>": sem o <code>j</code>, o <code>table.unpack</code> calcula <code>#lista</code>, e <code>lista</code> é <code>nil</code> (a variável foi criada sem valor). Repare que <strong>a primeira linha não diz o número da linha</strong>: o erro aconteceu dentro do <code>unpack</code>, que é escrito em C. A linha está no rastro: <code>[C]: in field 'unpack'</code> (dentro do <code>unpack</code>), chamado de <code>erro_nil.lua:2</code>. <strong>Como consertar:</strong> confira se a variável tem mesmo uma tabela (um nome trocado, uma função que devolveu <code>nil</code>). Para não parar: <code>table.unpack(lista or {})</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Faltou um valor para o <code>string.format</code></strong>
+<pre class="file" data-file="erro_format.lua">local ficha = {"Ana"}
+print(string.format("%s tem %d anos", table.unpack(ficha)))
+</pre>
+<pre class="term">$ lua erro_format.lua
+lua: erro_format.lua:2: bad argument #3 to 'format' (no value)
+stack traceback:
+	[C]: in field 'format'
+	erro_format.lua:2: in main chunk
+	[C]: in ?
+</pre>
+<p>"Argumento ruim nº 3 para <code>format</code> (nenhum valor)". O 1º argumento é o texto, o 2º é <code>"Ana"</code>, e o 3º, que o <code>%d</code> pedia, não veio: a ficha só tem um item. <strong>Como consertar:</strong> confira se a lista tem um item para cada <code>%</code> do texto.</p>
+</div>
+
+<div class="cenario">
+<strong>Valores demais: <code>too many results to unpack</code></strong>
+<pre class="file" data-file="erro_muitos.lua">local t = {}
+print(select("#", table.unpack(t, 1, 100)))
+print(table.unpack(t, 1, 10000000))
+</pre>
+<pre class="term">$ lua erro_muitos.lua
+100
+lua: erro_muitos.lua:3: too many results to unpack
+stack traceback:
+	[C]: in field 'unpack'
+	erro_muitos.lua:3: in main chunk
+	[C]: in ?
+</pre>
+<p>Pedir 100 valores (todos <code>nil</code>, porque a tabela está vazia) funcionou: o <code>select("#", …)</code> contou 100. Pedir dez milhões não: "resultados demais para desempacotar". Os valores soltos ficam numa área de memória limitada (a <strong>pilha</strong>), que não comporta milhões. <strong>Como consertar:</strong> lista grande não se desempacota; percorra com um <code>for</code> (aula <a href="ipairs.html">ipairs</a>).</p>
+</div>
+
+<div class="cenario">
+<strong>Sumiram itens, sem erro nenhum</strong>
+<pre class="file" data-file="posicao.lua">local cores = {"vermelho", "verde", "azul"}
+print(table.unpack(cores), "fim")
+</pre>
+<pre class="term">$ lua posicao.lua
+vermelho	fim
+</pre>
+<p>O <code>unpack</code> não estava no fim da lista de argumentos e foi cortado para um valor (seção 4). <strong>Como consertar:</strong> deixe o <code>table.unpack</code> por último, ou junte o texto antes: <code>print(table.concat(cores, " ") .. " fim")</code> (aula <a href="table-concat.html">table.concat</a>).</p>
+</div>
+
+<hr>
+
+<h2>Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>O que faz</th></tr>
+<tr><td><code>table.unpack(t)</code></td><td>Devolve <code>t[1], t[2], …, t[#t]</code></td></tr>
+<tr><td><code>table.unpack(t, i)</code></td><td>Devolve de <code>t[i]</code> até <code>t[#t]</code></td></tr>
+<tr><td><code>table.unpack(t, i, j)</code></td><td>Devolve de <code>t[i]</code> até <code>t[j]</code>: sempre <code>j - i + 1</code> valores (os que faltam saem <code>nil</code>); nada se <code>i &gt; j</code></td></tr>
+<tr><td><code>local a, b = table.unpack(t)</code></td><td>Os primeiros itens em variáveis</td></tr>
+<tr><td><code>f(table.unpack(t))</code></td><td>Os itens como argumentos de <code>f</code></td></tr>
+<tr><td><code>table.pack(v1, v2, …)</code></td><td>Tabela nova <code>{v1, v2, …, n = quantidade}</code></td></tr>
+<tr><td><code>table.pack(...).n</code></td><td>Quantos argumentos chegaram, contando os <code>nil</code></td></tr>
+<tr><td><code>table.unpack(t, 1, t.n)</code></td><td>Devolve o que o <code>table.pack</code> guardou, sem perder nada</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Mensagem</th><th>Causa provável</th></tr>
+<tr><td><code>attempt to call a nil value (global 'unpack')</code></td><td>Código do Lua 5.1: troque por <code>table.unpack</code></td></tr>
+<tr><td><code>attempt to get length of a nil value</code> (com <code>in field 'unpack'</code>)</td><td>A tabela passada é <code>nil</code></td></tr>
+<tr><td><code>bad argument #N to 'format' (no value)</code></td><td>A lista tem menos itens do que o texto pede</td></tr>
+<tr><td><code>too many results to unpack</code></td><td>Lista grande demais para virar valores soltos</td></tr>
+<tr><td>Só o primeiro item apareceu</td><td>O <code>unpack</code> não era o último da lista de valores</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. Do segundo ao quarto</h3>
+<p>Complete para tirar os itens 2, 3 e 4 da lista <code>t</code>:</p>
+<div class="ex-code">print(table.unpack(t, <input data-answer="2, 4|2,4" aria-label="i e j">))</div>
+</div>
+
+<div class="exercise">
+<h3>2. Quantos chegaram?</h3>
+<p>Complete com o nome do campo que o <code>table.pack</code> cria com a quantidade de valores:</p>
+<div class="ex-code">print(table.pack(...).<input data-answer="n" aria-label="campo">)</div>
+</div>
+
+<div class="exercise">
+<h3>3. Quanto vale?</h3>
+<p>Quanto vale <code>table.pack(nil, nil, nil).n</code>?</p>
+<div class="ex-code"><input data-answer="3" aria-label="resposta"></div>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">4. O que <code>print(table.unpack({1, 2, 3}), 4)</code> mostra?</p>
+<label><input type="radio" name="q4"> <code>1 2 3 4</code></label>
+<label><input type="radio" name="q4"> <code>1 4</code></label>
+<label><input type="radio" name="q4"> <code>4</code></label>
+<label><input type="radio" name="q4"> Dá erro</label>
+</div>
+
+<div class="mc" data-answer="3">
+<p class="mc-q">5. Um código antigo usa <code>unpack(lista)</code> e, no Lua 5.5, dá <code>attempt to call a nil value (global 'unpack')</code>. O que fazer?</p>
+<label><input type="radio" name="q5"> Instalar a biblioteca <code>unpack</code></label>
+<label><input type="radio" name="q5"> Trocar por <code>table.pack(lista)</code></label>
+<label><input type="radio" name="q5"> Trocar por <code>table.unpack(lista)</code></label>
+<label><input type="radio" name="q5"> Trocar por <code>lista.unpack()</code></label>
+</div>
+
+<div class="mc" data-answer="1">
+<p class="mc-q">6. Com <code>local a, b, c = table.unpack({"x", "y"})</code>, quanto vale <code>c</code>?</p>
+<label><input type="radio" name="q6"> <code>nil</code></label>
+<label><input type="radio" name="q6"> <code>"y"</code></label>
+<label><input type="radio" name="q6"> <code>""</code></label>
+<label><input type="radio" name="q6"> Dá erro, porque falta um valor</label>
+</div>
+
+<h3>Missão final: o pódio da corrida</h3>
+
+<div class="trylua" data-goal="out:1º Bia, 2º Ana, 3º Caio;;src:table\.unpack">
+<p class="try-task"><strong>Missão:</strong> a lista <code>chegada</code> tem os corredores na ordem em que chegaram. Use <code>table.unpack</code> com <code>i</code> e <code>j</code> para entregar <strong>só os três primeiros</strong> ao <code>string.format</code>, e o programa mostrar <code>1º Bia, 2º Ana, 3º Caio</code>.</p>
+<pre class="script" data-file="main.lua">local chegada = {"Bia", "Ana", "Caio", "Davi", "Eva"}
+local podio = "1º %s, 2º %s, 3º %s"
+print(podio)
+</pre>
+<pre class="solucao" data-file="main.lua">local chegada = {"Bia", "Ana", "Caio", "Davi", "Eva"}
+local podio = "1º %s, 2º %s, 3º %s"
+print(string.format(podio, table.unpack(chegada, 1, 3)))
+</pre>
+</div>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li><code>table.unpack(t)</code> tira os itens da tabela como <strong>valores soltos</strong>: serve para várias variáveis (<code>local a, b = …</code>) e para argumentos (<code>math.max(table.unpack(notas))</code>).</li>
+  <li><code>table.unpack(t, i, j)</code> entrega do item <code>i</code> ao <code>j</code>, sempre <code>j - i + 1</code> valores.</li>
+  <li>Só no <strong>fim</strong> de uma lista de valores ele entrega tudo; no meio, entrega só o primeiro.</li>
+  <li><code>table.pack(...)</code> guarda valores soltos numa tabela e anota a quantidade em <code>n</code>, contando os <code>nil</code>. Volte com <code>table.unpack(t, 1, t.n)</code>.</li>
+  <li>No Lua 5.1 era <code>unpack</code>, sem <code>table.</code>; no 5.5, <code>unpack</code> sozinho é <code>nil</code>.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
