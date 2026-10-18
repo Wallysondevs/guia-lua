@@ -1,0 +1,513 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua &lt;close&gt; — fechamento automático de arquivos e recursos | Guia Lua</title>
+<meta name="description" content="O atributo &lt;close&gt; do Lua 5.5 para quem está começando: local f &lt;close&gt; = io.open(...) fecha o arquivo sozinho no fim do bloco, o metamétodo __close, a ordem de fechamento (do último para o primeiro), o que acontece com break, return e erro, os.exit, e os erros reais (non-closable value, multiple to-be-closed variables).">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">&lt;close&gt;</span></h1>
+
+<p class="intro">Quem abre a porta da padaria de manhã precisa fechá-la à noite. No programa é igual: quem abre um arquivo precisa fechá-lo com <code>f:close()</code>. O problema é que é fácil <strong>esquecer</strong>, e mais fácil ainda o programa <strong>pular</strong> o <code>f:close()</code> sem querer: um <code>return</code> no meio da função, um <code>break</code>, um erro. O atributo <code>&lt;close&gt;</code> ("fechar") resolve isso: você o põe na variável quando abre, e o Lua <strong>fecha sozinho</strong> quando a variável sai de cena, aconteça o que acontecer.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>Como abrir um arquivo com <code>local f &lt;close&gt; = io.open(…)</code> e deixar o Lua fechá-lo no fim do bloco.</li>
+  <li>O que é o metamétodo <code>__close</code> e como fazer o seu próprio "recurso que se fecha".</li>
+  <li>Em que ordem as coisas se fecham, e que o fechamento acontece também com <code>break</code>, <code>return</code> e <strong>erro</strong>.</li>
+  <li>O caso do <code>os.exit</code>, que pode pular o fechamento.</li>
+  <li>As mensagens de erro reais: <code>non-closable value</code>, <code>multiple to-be-closed variables</code> e outras.</li>
+</ul>
+</div>
+
+<p>Todos os programas desta aula rodaram no <strong>Lua 5.5</strong> da máquina da Ana (usuária <code>ana</code>, computador <code>notebook</code>), na pasta pessoal dela, com <code>lua arquivo.lua</code>. Você vai precisar de três aulas anteriores: <a href="const.html">&lt;const&gt;</a> (o <code>&lt;close&gt;</code> é parente dele), <a href="io-open.html">Abrindo Arquivos</a> e <a href="metatabelas.html">Metatabelas</a>.</p>
+
+<hr>
+
+<h2>A ideia: a porta com mola</h2>
+<p>Algumas portas de loja têm uma <strong>mola</strong>: você entra, solta a porta, e ela se fecha sozinha atrás de você. Não importa se você entrou devagar, correndo ou tropeçando: a porta fecha. O <code>&lt;close&gt;</code> é essa mola. Você a "instala" na hora de criar a variável:</p>
+<ul>
+  <li>a variável vive dentro de um <strong>bloco</strong> (um <code>do … end</code>, o corpo de uma função, de um <code>for</code>, de um <code>if</code>, ou o arquivo inteiro);</li>
+  <li>quando o programa <strong>sai</strong> desse bloco, por qualquer caminho, o Lua chama o fechamento do valor guardado nela.</li>
+</ul>
+<p>Os programadores chamam isso de variável <strong>"a ser fechada"</strong> (em inglês, <em>to-be-closed variable</em>). Você vai ver esse nome em inglês em algumas mensagens de erro.</p>
+
+<hr>
+
+<h2>1. Um arquivo que se fecha sozinho</h2>
+<p>A Ana grava a lista de compras num arquivo. Em vez de chamar <code>f:close()</code> no fim, ela põe o <code>&lt;close&gt;</code> na variável e deixa o arquivo dentro de um bloco <code>do … end</code>:</p>
+
+<pre class="file" data-file="arquivo.lua">local guardado
+do
+  local f &lt;close&gt; = assert(io.open("lista.txt", "w"))
+  f:write("pão\nleite\n")
+  guardado = f
+  print(io.type(guardado))
+end
+print(io.type(guardado))
+for linha in io.lines("lista.txt") do print(linha) end
+</pre>
+
+<dl class="anatomy">
+  <dt>local guardado</dt><dd>Uma variável comum, criada <strong>fora</strong> do bloco, só para a gente espiar o arquivo depois que o bloco acabar.</dd>
+  <dt>do … end</dt><dd>Um bloco. É no <code>end</code> dele que a variável <code>f</code> deixa de existir, e é aí que o fechamento acontece.</dd>
+  <dt>local f &lt;close&gt;</dt><dd>A variável com a "mola". O atributo vem depois do nome, como o <code>&lt;const&gt;</code>.</dd>
+  <dt>assert(io.open("lista.txt", "w"))</dt><dd>Abre o arquivo para escrever (<code>"w"</code>). O <code>assert</code> para o programa com a mensagem do <code>io.open</code> se a abertura falhar (veja <a href="assert.html">assert</a>).</dd>
+  <dt>io.type(guardado)</dt><dd>Diz o que é o valor: <code>"file"</code> (arquivo aberto), <code>"closed file"</code> (arquivo fechado) ou <code>nil</code> (não é arquivo).</dd>
+</dl>
+
+<pre class="term">$ lua arquivo.lua
+file
+closed file
+pão
+leite</pre>
+
+<p>Dentro do bloco, o arquivo estava aberto (<code>file</code>). Logo depois do <code>end</code>, já estava fechado (<code>closed file</code>), sem nenhum <code>f:close()</code> no código. E como foi fechado, tudo o que foi escrito chegou ao disco: o <code>io.lines</code> leu as duas linhas.</p>
+
+<div class="note">
+<strong>Por que fechar faz diferença</strong>
+<p>O <code>f:write</code> não escreve no disco na mesma hora: ele junta o texto num <strong>buffer</strong> (uma área de espera na memória) e grava de vez, de tempos em tempos ou quando o arquivo é fechado. Se você lê o arquivo antes de fechá-lo, pode encontrá-lo <strong>vazio</strong>. A missão abaixo mostra isso de verdade.</p>
+</div>
+
+<div class="trylua" data-goal="out:- leite;;src:&lt;close&gt;">
+<p class="try-task"><strong>Missão:</strong> a função <code>salvar</code> esqueceu de fechar o arquivo. Rode e veja: a lista sai <strong>vazia</strong> (só aparece <code>Na lista:</code> e <code>fim da lista</code>). Conserte com <code>&lt;close&gt;</code> na variável <code>f</code>: o arquivo vai se fechar quando a função terminar, antes de o programa ler a lista.</p>
+<pre class="script" data-file="main.lua">local function salvar(itens)
+  local f = assert(io.open("compras.txt", "w"))
+  for _, item in ipairs(itens) do
+    f:write(item, "\n")
+  end
+end
+salvar({ "pão", "leite", "café" })
+print("Na lista:")
+for linha in io.lines("compras.txt") do
+  print("- " .. linha)
+end
+print("fim da lista")
+</pre>
+<pre class="solucao" data-file="main.lua">local function salvar(itens)
+  local f &lt;close&gt; = assert(io.open("compras.txt", "w"))
+  for _, item in ipairs(itens) do
+    f:write(item, "\n")
+  end
+end
+salvar({ "pão", "leite", "café" })
+print("Na lista:")
+for linha in io.lines("compras.txt") do
+  print("- " .. linha)
+end
+print("fim da lista")
+</pre>
+</div>
+
+<p>No lab, o programa sem o <code>&lt;close&gt;</code> mostrou só <code>Na lista:</code> e <code>fim da lista</code>. Com ele, apareceram <code>- pão</code>, <code>- leite</code> e <code>- café</code>. Aqui o bloco é o corpo da função <code>salvar</code>: não precisou de <code>do … end</code>.</p>
+
+<hr>
+
+<h2>2. Por dentro: o metamétodo <code>__close</code></h2>
+<p>Como o Lua sabe <strong>como</strong> fechar um arquivo? Ele procura, na metatabela do valor, um campo chamado <code>__close</code>, e o chama. Os arquivos do Lua já vêm com esse campo. E você pode dar um <code>__close</code> às suas próprias tabelas:</p>
+
+<pre class="file" data-file="primeiro.lua">local function recurso(nome)
+  return setmetatable({ nome = nome }, {
+    __close = function (r, erro)
+      print("fechando " .. r.nome)
+    end
+  })
+end
+print("antes do bloco")
+do
+  local porta &lt;close&gt; = recurso("porta")
+  print("usando a " .. porta.nome)
+end
+print("depois do bloco")
+</pre>
+
+<dl class="anatomy">
+  <dt>recurso(nome)</dt><dd>Uma função que cria uma tabela <code>{ nome = … }</code> com uma metatabela. É a nossa "porta de mentirinha".</dd>
+  <dt>__close = function (r, erro)</dt><dd>O fechamento. O Lua chama essa função passando <strong>o próprio valor</strong> (<code>r</code>) e, se o bloco terminou por causa de um erro, <strong>o erro</strong> (<code>erro</code>). Se não houve erro, o segundo argumento não vem (fica <code>nil</code>).</dd>
+  <dt>local porta &lt;close&gt; = recurso("porta")</dt><dd>A variável com a mola. Quando o <code>do … end</code> acabar, o Lua chama o <code>__close</code> da tabela que está em <code>porta</code>.</dd>
+</dl>
+
+<pre class="term">$ lua primeiro.lua
+antes do bloco
+usando a porta
+fechando porta
+depois do bloco</pre>
+
+<p>O <code>fechando porta</code> apareceu exatamente entre o fim do bloco e a linha seguinte. Você não chamou o <code>__close</code> em lugar nenhum: o <code>end</code> chamou.</p>
+
+<h3>Vários ao mesmo tempo: do último para o primeiro</h3>
+
+<pre class="file" data-file="ordem.lua">local function recurso(nome)
+  print("abrindo " .. nome)
+  return setmetatable({ nome = nome }, {
+    __close = function (r) print("fechando " .. r.nome) end
+  })
+end
+do
+  local a &lt;close&gt; = recurso("forno")
+  local b &lt;close&gt; = recurso("caixa")
+  local c &lt;close&gt; = recurso("porta")
+  print("padaria funcionando")
+end
+</pre>
+
+<pre class="term">$ lua ordem.lua
+abrindo forno
+abrindo caixa
+abrindo porta
+padaria funcionando
+fechando porta
+fechando caixa
+fechando forno</pre>
+
+<p>Fecha na <strong>ordem contrária</strong> à de abertura, como um padeiro de verdade: o último a abrir foi a porta, e ela é a primeira a fechar; o forno, ligado primeiro, é desligado por último. Isso é importante quando uma coisa depende da outra (um arquivo aberto dentro de uma pasta temporária, por exemplo: feche o arquivo antes de apagar a pasta).</p>
+
+<div class="trylua">
+<p class="try-task"><strong>Experimente:</strong> crie mais um recurso, <code>local d &lt;close&gt; = recurso("luz")</code>, entre o forno e a caixa. Antes de rodar, tente adivinhar em que linha da saída aparece o <code>fechando luz</code>.</p>
+<pre class="script" data-file="main.lua">local function recurso(nome)
+  print("abrindo " .. nome)
+  return setmetatable({ nome = nome }, {
+    __close = function (r) print("fechando " .. r.nome) end
+  })
+end
+do
+  local a &lt;close&gt; = recurso("forno")
+  local b &lt;close&gt; = recurso("caixa")
+  local c &lt;close&gt; = recurso("porta")
+  print("padaria funcionando")
+end
+</pre>
+</div>
+
+<hr>
+
+<h2>3. Fecha por qualquer saída: <code>break</code>, <code>return</code> e erro</h2>
+<p>Esta é a grande vantagem sobre o <code>f:close()</code> escrito à mão. O mesmo <code>recurso</code>, agora mostrando também o segundo argumento do <code>__close</code> (o erro):</p>
+
+<pre class="file" data-file="saidas.lua">local function recurso(nome)
+  return setmetatable({ nome = nome }, {
+    __close = function (r, erro) print("  fechando " .. r.nome, erro) end
+  })
+end
+for i = 1, 3 do
+  local r &lt;close&gt; = recurso("volta " .. i)
+  if i == 2 then print("break!") break end
+  print("fim da volta " .. i)
+end
+local function f()
+  local r &lt;close&gt; = recurso("função")
+  print("return!")
+  return "resultado"
+end
+print(f())
+print(pcall(function ()
+  local r &lt;close&gt; = recurso("com erro")
+  error("o forno queimou")
+end))
+</pre>
+
+<pre class="term">$ lua saidas.lua
+fim da volta 1
+  fechando volta 1	nil
+break!
+  fechando volta 2	nil
+return!
+  fechando função	nil
+resultado
+  fechando com erro	saidas.lua:19: o forno queimou
+false	saidas.lua:19: o forno queimou</pre>
+
+<p>Cada caso:</p>
+<ul>
+  <li><strong>Fim normal de cada volta do <code>for</code></strong>: o corpo do laço é um bloco, então a cada volta o recurso daquela volta se fecha (<code>fechando volta 1</code>).</li>
+  <li><strong><code>break</code></strong>: na volta 2, o programa saiu do laço no meio, e mesmo assim <code>fechando volta 2</code> apareceu. A volta 3 nem começou.</li>
+  <li><strong><code>return</code></strong>: a função ia devolver <code>"resultado"</code>; antes de o valor chegar ao <code>print</code>, o recurso dela se fechou.</li>
+  <li><strong>Erro</strong>: o <code>error("o forno queimou")</code> interrompeu a função, e o <code>__close</code> rodou <strong>recebendo o erro</strong> no segundo argumento. Depois, o erro continuou seu caminho até o <code>pcall</code>, que devolveu <code>false</code> e a mensagem (veja <a href="pcall.html">pcall</a>).</li>
+</ul>
+<p>Nos três primeiros casos o segundo argumento é <code>nil</code>: não houve erro.</p>
+
+<h3>E se ninguém tratar o erro?</h3>
+<p>Mesmo quando o erro vai derrubar o programa, o fechamento acontece antes:</p>
+
+<pre class="file" data-file="erro_nao_tratado.lua">local r &lt;close&gt; = setmetatable({}, { __close = function (_, e) print("fechou! erro:", e) end })
+local t = nil
+print(t.x)
+</pre>
+
+<pre class="term">$ lua erro_nao_tratado.lua
+fechou! erro:	erro_nao_tratado.lua:3: attempt to index a nil value (local 't')
+stack traceback:
+	erro_nao_tratado.lua:3: in main chunk
+	[C]: in ?
+lua: erro_nao_tratado.lua:3: attempt to index a nil value (local 't')
+stack traceback:
+	erro_nao_tratado.lua:3: in main chunk
+	[C]: in ?</pre>
+
+<p>Aqui a variável <code>r</code> está no arquivo inteiro (o arquivo também é um bloco). O erro da linha 3 encerrou esse bloco, então o <code>__close</code> rodou e mostrou <code>fechou! erro:</code>, seguido do erro. A mensagem aparece duas vezes: a primeira é o <code>print</code> do nosso <code>__close</code>; a segunda, com o <code>lua:</code> na frente, é o próprio <code>lua</code> avisando que o programa parou. (O erro que o <code>__close</code> recebeu já veio com o <code>stack traceback</code> grudado: quando ninguém trata o erro, o <code>lua</code> monta o rastro antes de desfazer os blocos.)</p>
+
+<h3>O cuidado com o <code>os.exit</code></h3>
+
+<pre class="file" data-file="exit.lua">local r &lt;close&gt; = setmetatable({}, { __close = function () print("fechou!") end })
+print("saindo")
+os.exit(0)
+</pre>
+
+<pre class="term">$ lua exit.lua
+saindo</pre>
+
+<p>Nada de <code>fechou!</code>. O <code>os.exit(0)</code> encerra o programa <strong>na hora</strong>, sem desfazer os blocos. Para ele fechar tudo antes de sair, passe <code>true</code> como segundo argumento (veja <a href="os-funcoes.html">os.exit</a>):</p>
+
+<pre class="term">$ cat exit2.lua
+local r &lt;close&gt; = setmetatable({}, { __close = function () print("fechou!") end })
+print("saindo")
+os.exit(0, true)
+$ lua exit2.lua
+saindo
+fechou!</pre>
+
+<p>Quando o programa termina normalmente, na última linha, também fecha: com o mesmo <code>r</code> e só um <code>print("última linha")</code>, o lab mostrou <code>última linha</code> e depois <code>fechou!</code>.</p>
+
+<hr>
+
+<h2>4. Quando a abertura falha: <code>nil</code> é aceito</h2>
+<p>O manual do Lua diz que uma variável <code>&lt;close&gt;</code> pode receber <code>nil</code> ou <code>false</code>: nesse caso, não há o que fechar, e o Lua simplesmente ignora. Isso combina com o <code>io.open</code>, que devolve <code>nil</code> quando não consegue abrir:</p>
+
+<pre class="file" data-file="naoexiste.lua">local f &lt;close&gt; = io.open("nao_existe.txt")
+print(f)
+</pre>
+
+<pre class="term">$ lua naoexiste.lua
+nil</pre>
+
+<p>Sem erro na linha 1. Mas o programa precisa conferir o <code>f</code> antes de usá-lo (ou usar o <code>assert</code>, como na seção 1). Qualquer outro valor sem <code>__close</code> (uma tabela comum, um número, um texto) <strong>é erro</strong>: veja em <a href="#errado">Quando dá errado</a>.</p>
+
+<hr>
+
+<h2 id="formas">Formas diferentes de fazer a mesma coisa</h2>
+<p>Três jeitos de garantir que um arquivo seja fechado:</p>
+
+<pre class="file" data-file="formas.lua">-- 1) à mão: funciona, se nada pular o close
+local f1 = assert(io.open("a.txt", "w"))
+f1:write("oi\n")
+f1:close()
+
+-- 2) com &lt;close&gt; num bloco
+do
+  local f2 &lt;close&gt; = assert(io.open("b.txt", "w"))
+  f2:write("oi\n")
+end
+
+-- 3) io.lines, que abre e fecha sozinho quando a leitura termina
+for linha in io.lines("a.txt") do print(linha) end
+</pre>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Situação</th><th>Qual usar</th></tr>
+<tr><td>Ler um arquivo linha por linha, do começo ao fim</td><td><code>io.lines</code> (aula <a href="io-lines.html">io.lines</a>)</td></tr>
+<tr><td>Escrever ou ler num trecho com <code>return</code>, <code>break</code> ou risco de erro no meio</td><td><code>local f &lt;close&gt; = …</code></td></tr>
+<tr><td>Um programa curto, sem desvios, que precisa rodar também no Lua 5.1/LuaJIT</td><td><code>f:close()</code> à mão</td></tr>
+<tr><td>Um recurso seu (uma conexão, um cronômetro, um "trava/destrava")</td><td>Uma tabela com <code>__close</code> e <code>&lt;close&gt;</code></td></tr>
+</table>
+</div>
+
+<div class="note">
+<strong>E nas outras versões?</strong>
+<p>O <code>&lt;close&gt;</code> surgiu no <strong>Lua 5.4</strong>; o <code>ordem.lua</code> deu a mesma saída no <code>lua5.4</code> do lab. No <strong>Lua 5.1</strong> e no <strong>LuaJIT</strong> não existe: <code>luajit ordem.lua</code> → <code>luajit: ordem.lua:8: unexpected symbol near '&lt;'</code>. Lá, feche à mão (e use <code>pcall</code> para garantir o fechamento quando houver erro). Veja <a href="versoes.html">as diferenças entre as versões</a>.</p>
+</div>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+
+<div class="cenario">
+<strong>O valor não sabe se fechar</strong>
+<pre class="file" data-file="semclose.lua">local x &lt;close&gt; = { nome = "porta" }
+print("chegou aqui?")
+</pre>
+<pre class="term">$ lua semclose.lua
+lua: semclose.lua:1: variable 'x' got a non-closable value
+stack traceback:
+	semclose.lua:1: in main chunk
+	[C]: in ?</pre>
+<p>"A variável 'x' recebeu um valor que não pode ser fechado". A tabela não tem metatabela com <code>__close</code>, e então o Lua não saberia o que fazer no fim do bloco. Ele reclama logo na linha 1, ao <strong>rodar</strong> (repare no <code>stack traceback</code>: é um erro de execução, e o <code>chegou aqui?</code> não aparece). Com um número (<code>local x &lt;close&gt; = 42</code>), a mensagem é a mesma. <strong>Como consertar:</strong> só use <code>&lt;close&gt;</code> com arquivos, com tabelas que tenham <code>__close</code> ou com <code>nil</code>/<code>false</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Tentou trocar o valor da variável</strong>
+<pre class="file" data-file="atribuir.lua">local f &lt;close&gt; = io.open("lista.txt")
+f = nil
+</pre>
+<pre class="term">$ lua atribuir.lua
+lua: atribuir.lua:2: attempt to assign to const variable 'f'</pre>
+<p>Uma variável <code>&lt;close&gt;</code> também é <strong>constante</strong>: ela tem de continuar com o mesmo valor até o fim, para o Lua saber o que fechar. A mensagem é a mesma da aula <a href="const.html">&lt;const&gt;</a>, e também sai antes de o programa rodar.</p>
+</div>
+
+<div class="cenario">
+<strong>Dois <code>&lt;close&gt;</code> na mesma linha</strong>
+<pre class="file" data-file="dois.lua">local a &lt;close&gt;, b &lt;close&gt; = io.open("lista.txt"), io.open("lista.txt")
+</pre>
+<pre class="term">$ lua dois.lua
+lua: dois.lua:1: multiple to-be-closed variables in local list</pre>
+<p>"Várias variáveis a serem fechadas na mesma lista de <code>local</code>". O Lua só aceita <strong>uma</strong> por linha. <strong>Como consertar:</strong> uma linha para cada: <code>local a &lt;close&gt; = …</code> e, embaixo, <code>local b &lt;close&gt; = …</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Tentou com uma variável global</strong>
+<pre class="file" data-file="global.lua">global x &lt;close&gt; = io.open("lista.txt")
+</pre>
+<pre class="term">$ lua global.lua
+lua: global.lua:1: global variables cannot be to-be-closed</pre>
+<p>"Variáveis globais não podem ser a serem fechadas". Só variáveis <code>local</code> têm <code>&lt;close&gt;</code>: uma global não tem um bloco onde "acabar". (A palavra <code>global</code> é do Lua 5.5; veja <a href="global.html">A Declaração global</a>.)</p>
+</div>
+
+<div class="cenario">
+<strong>Erro dentro do próprio <code>__close</code></strong>
+<pre class="file" data-file="erroclose.lua">local r &lt;close&gt; = setmetatable({}, {
+  __close = function () error("deu ruim ao fechar") end
+})
+print("usando")
+</pre>
+<pre class="term">$ lua erroclose.lua
+usando
+lua: erroclose.lua:2: deu ruim ao fechar
+stack traceback:
+	[C]: in global 'error'
+	erroclose.lua:2: in metamethod 'close'
+	erroclose.lua:4: in main chunk
+	[C]: in ?</pre>
+<p>O programa rodou até o fim (<code>usando</code>), e o erro aconteceu na hora de fechar. O rastro conta isso: <code>in metamethod 'close'</code> ("no metamétodo close") mostra que o erro estava dentro do <code>__close</code>. Um erro ali é tratado como um erro comum do bloco. Se houver outros <code>&lt;close&gt;</code> pendentes, o manual garante que eles ainda são fechados.</p>
+</div>
+
+<hr>
+
+<h2>Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>O que faz</th></tr>
+<tr><td><code>local f &lt;close&gt; = assert(io.open(nome, "w"))</code></td><td>Abre o arquivo e o fecha sozinho no fim do bloco</td></tr>
+<tr><td><code>do … end</code></td><td>Cria um bloco só para limitar quando o fechamento acontece</td></tr>
+<tr><td><code>__close = function (valor, erro) … end</code></td><td>O fechamento de um valor seu; <code>erro</code> é <code>nil</code> se o bloco terminou sem erro</td></tr>
+<tr><td><code>io.type(f)</code></td><td><code>"file"</code>, <code>"closed file"</code> ou <code>nil</code></td></tr>
+<tr><td><code>os.exit(código, true)</code></td><td>Sai do programa fechando os pendentes (sem o <code>true</code>, não fecha)</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Mensagem</th><th>Causa</th></tr>
+<tr><td><code>variable 'x' got a non-closable value</code></td><td>O valor não tem <code>__close</code> (e não é <code>nil</code>/<code>false</code>)</td></tr>
+<tr><td><code>attempt to assign to const variable 'x'</code></td><td>Tentou trocar o valor de uma variável <code>&lt;close&gt;</code></td></tr>
+<tr><td><code>multiple to-be-closed variables in local list</code></td><td>Dois <code>&lt;close&gt;</code> no mesmo <code>local</code></td></tr>
+<tr><td><code>global variables cannot be to-be-closed</code></td><td><code>&lt;close&gt;</code> numa declaração <code>global</code></td></tr>
+<tr><td><code>in metamethod 'close'</code> no rastro</td><td>O erro aconteceu dentro do <code>__close</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. Complete o arquivo que se fecha sozinho</h3>
+<div class="ex-code">local f <input data-answer="&lt;close&gt;" aria-label="atributo"> = assert(io.open("notas.txt", "w"))</div>
+</div>
+
+<div class="exercise">
+<h3>2. O nome do metamétodo</h3>
+<p>Qual campo da metatabela o Lua chama para fechar um valor?</p>
+<div class="ex-code"><input data-answer="__close" aria-label="metamétodo"></div>
+</div>
+
+<div class="mc" data-answer="3">
+<p class="mc-q">3. Num bloco, foram criados, nesta ordem, <code>a &lt;close&gt;</code>, <code>b &lt;close&gt;</code> e <code>c &lt;close&gt;</code>. Em que ordem eles se fecham?</p>
+<label><input type="radio" name="q3"> a, b, c</label>
+<label><input type="radio" name="q3"> Em qualquer ordem</label>
+<label><input type="radio" name="q3"> c, b, a</label>
+<label><input type="radio" name="q3"> Só o último se fecha</label>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">4. Uma função tem <code>local f &lt;close&gt; = …</code> e, três linhas depois, dá um erro que só um <code>pcall</code> lá fora vai tratar. O arquivo é fechado?</p>
+<label><input type="radio" name="q4"> Não: com erro, nada se fecha</label>
+<label><input type="radio" name="q4"> Sim: o <code>__close</code> roda, recebendo o erro, e depois o erro segue até o <code>pcall</code></label>
+<label><input type="radio" name="q4"> Só se o <code>pcall</code> chamar <code>f:close()</code></label>
+<label><input type="radio" name="q4"> Só no Lua 5.1</label>
+</div>
+
+<div class="mc" data-answer="4">
+<p class="mc-q">5. Qual destas linhas dá <code>non-closable value</code>?</p>
+<label><input type="radio" name="q5"> <code>local f &lt;close&gt; = io.open("x.txt", "w")</code></label>
+<label><input type="radio" name="q5"> <code>local f &lt;close&gt; = nil</code></label>
+<label><input type="radio" name="q5"> <code>local f &lt;close&gt; = false</code></label>
+<label><input type="radio" name="q5"> <code>local f &lt;close&gt; = {}</code></label>
+</div>
+
+<h3>Missão final: o cronômetro da fornada</h3>
+
+<div class="trylua" data-goal="out:fornada encerrada;;src:&lt;close&gt;;;semerro">
+<p class="try-task"><strong>Missão:</strong> a função <code>fornada</code> tem um <code>return</code> no meio, quando o pão queima, e por isso o <code>encerrar(forno)</code> do fim nunca roda (o lab mostrou só <code>forno ligado</code> e <code>pão queimou!</code>). Dê ao forno uma metatabela com <code>__close</code> que mostre <code>fornada encerrada</code>, guarde-o numa variável <code>&lt;close&gt;</code> e apague a chamada a <code>encerrar</code>.</p>
+<pre class="script" data-file="main.lua">local function encerrar(forno)
+  print("fornada encerrada")
+end
+local function fornada(minutos)
+  local forno = { temperatura = 200 }
+  print("forno ligado")
+  if minutos &gt; 30 then
+    print("pão queimou!")
+    return false
+  end
+  print("pão pronto")
+  encerrar(forno)
+  return true
+end
+fornada(40)
+</pre>
+<pre class="solucao" data-file="main.lua">local function fornada(minutos)
+  local forno &lt;close&gt; = setmetatable({ temperatura = 200 }, {
+    __close = function () print("fornada encerrada") end
+  })
+  print("forno ligado")
+  if minutos &gt; 30 then
+    print("pão queimou!")
+    return false
+  end
+  print("pão pronto")
+  return true
+end
+fornada(40)
+</pre>
+</div>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li><code>local x &lt;close&gt; = valor</code> faz o Lua chamar o <code>__close</code> do valor quando o bloco da variável termina, <strong>por qualquer caminho</strong>: fim normal, <code>break</code>, <code>return</code> ou erro.</li>
+  <li>Arquivos já têm <code>__close</code>: <code>local f &lt;close&gt; = assert(io.open(…))</code> fecha sozinho. Para os seus valores, ponha <code>__close</code> na metatabela.</li>
+  <li>O <code>__close</code> recebe o valor e, se houve erro, o erro. Vários fecham do <strong>último para o primeiro</strong>.</li>
+  <li><code>nil</code> e <code>false</code> são aceitos (nada a fechar); outros valores sem <code>__close</code> dão <code>non-closable value</code>.</li>
+  <li>A variável <code>&lt;close&gt;</code> é constante, só local, e só uma por linha. <code>os.exit(0)</code> pula o fechamento; <code>os.exit(0, true)</code>, não.</li>
+  <li>Existe desde o Lua 5.4; não existe no 5.1 nem no LuaJIT.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
