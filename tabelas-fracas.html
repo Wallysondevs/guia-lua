@@ -99,7 +99,7 @@ table: 0x55f79b171d20	nil
 true	nil</pre>
 
 <p>A ficha da <strong>Bia</strong> sumiu, e sozinha: ninguém escreveu <code>cache.bia = nil</code>. Só o cache apontava para ela, e o cache é fraco, então o coletor a levou e o Lua tirou o par <code>bia</code> da tabela. A ficha da <strong>Ana</strong> ficou, porque a variável <code>guardada</code> ainda a segura. A última linha confirma: <code>cache.ana</code> é a mesma tabela que está em <code>guardada</code> (<code>true</code>), e <code>cache.bia</code> agora é <code>nil</code>.</p>
-<p>O número <code>0x55f79b171d20</code> é o endereço da tabela na memória. Ele muda a cada vez que você roda (no editor do guia ele também é diferente); o que importa é o resto.</p>
+<p>O número <code>0x55f79b171d20</code> é o endereço da tabela na memória. Ele muda a cada vez que você roda (no editor do guia ele é mais curto, algo como <code>0x80e9b0</code>, e costuma se repetir); o que importa é o resto.</p>
 
 <div class="tip">
 <strong>"Fraco" não quer dizer "apaga já"</strong>
