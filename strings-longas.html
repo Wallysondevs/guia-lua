@@ -1,0 +1,464 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua textos longos — [[ … ]] | Guia Lua</title>
+<meta name="description" content="Os textos longos do Lua ([[ … ]]) para quem nunca programou: textos de várias linhas sem \n, a primeira quebra de linha que some, a contrabarra que não é escape, os níveis [==[ … ]==] para textos que têm ]] dentro, o parentesco com o comentário --[[ ]], e os erros reais do Lua 5.5 (unfinished long string, o ]] que fecha antes da hora).">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">textos longos</span> ([[ ]])</h1>
+
+<p class="intro">O menu da padaria, uma tela de ajuda, um poema, um desenho feito com letras: textos com <strong>várias linhas</strong> ficam ilegíveis com um <code>\n</code> atrás do outro (veja <a href="strings-escape.html">Caracteres de Escape</a>). Para eles, o Lua tem um segundo jeito de escrever strings: entre <strong>colchetes duplos</strong>, <code>[[</code> e <code>]]</code>. O texto aparece no código exatamente como vai aparecer na tela.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>Como escrever um texto de várias linhas com <code>[[ … ]]</code>.</li>
+  <li>Por que a quebra de linha logo depois do <code>[[</code> não conta.</li>
+  <li>Que dentro de <code>[[ ]]</code> a contrabarra é só uma letra (<code>\n</code> fica <code>\n</code>).</li>
+  <li>Os <strong>níveis</strong> <code>[=[ … ]=]</code>, <code>[==[ … ]==]</code>, para textos que têm <code>]]</code> dentro.</li>
+  <li>O parentesco com o comentário de várias linhas, <code>--[[ … ]]</code>.</li>
+  <li>Os erros reais: o texto longo que não fecha e o <code>]]</code> que fecha antes da hora.</li>
+</ul>
+</div>
+
+<p>Todos os programas desta aula rodaram no <strong>Lua 5.5</strong> da máquina da Ana (usuária <code>ana</code>, computador <code>notebook</code>), salvos na pasta pessoal dela e executados com <code>lua arquivo.lua</code> (veja <a href="executar.html">Rodando um Programa</a>). Você pode rodar cada um no editor do guia.</p>
+
+<hr>
+
+<h2>A ideia: colar uma folha inteira</h2>
+<p>As aspas comuns são como uma <strong>etiqueta</strong>: cabe uma linha. Para escrever algo maior numa etiqueta, você precisa de truques (o <code>\n</code>). Os colchetes duplos são como <strong>colar uma folha inteira</strong> no programa: o que estiver escrito entre o <code>[[</code> e o <code>]]</code>, com as quebras de linha, os espaços e as aspas, vai do jeito que está. Sem truques, sem tradução.</p>
+
+<hr>
+
+<h2>1. O primeiro texto longo</h2>
+
+<pre class="file" data-file="menu.lua">local menu = [[
+=== Padaria do Bairro ===
+1 - Pão francês
+2 - Pão de queijo
+3 - Café
+0 - Sair]]
+print(menu)
+</pre>
+
+<pre class="term">$ lua menu.lua
+=== Padaria do Bairro ===
+1 - Pão francês
+2 - Pão de queijo
+3 - Café
+0 - Sair</pre>
+
+<dl class="anatomy">
+  <dt>[[</dt><dd>Abre o texto longo: dois colchetes de abrir, colados.</dd>
+  <dt>(a quebra de linha logo depois do [[)</dt><dd>É <strong>descartada</strong>: o texto começa na linha de baixo, em <code>===</code>. Isso deixa você escrever o <code>[[</code> no fim da linha do <code>local</code> e começar o texto na linha seguinte, que é mais bonito. A seção 2 mostra a prova.</dd>
+  <dt>=== Padaria do Bairro === … 0 - Sair</dt><dd>O conteúdo, com as quebras de linha de verdade. Não precisa de <code>\n</code>.</dd>
+  <dt>]]</dt><dd>Fecha o texto: dois colchetes de fechar. Aqui ele está colado no <code>Sair</code>, então o texto termina sem quebra de linha no fim (o <code>print</code> põe a dele).</dd>
+</dl>
+
+<p>O resultado é uma string como outra qualquer: o <code>type(menu)</code> é <code>string</code>, e dá para guardar, juntar com <code>..</code> e medir com <code>#</code>.</p>
+
+<div class="trylua" data-goal="out:3 - Bolo de fubá;;src:\[\[">
+<p class="try-task"><strong>Missão:</strong> acrescente a opção <code>3 - Bolo de fubá</code> no menu, numa linha nova, antes do <code>0 - Sair</code>. Basta digitar a linha, sem <code>\n</code>.</p>
+<pre class="script" data-file="main.lua">local menu = [[
+1 - Pão francês
+2 - Café
+0 - Sair]]
+print(menu)
+</pre>
+<pre class="solucao" data-file="main.lua">local menu = [[
+1 - Pão francês
+2 - Café
+3 - Bolo de fubá
+0 - Sair]]
+print(menu)
+</pre>
+</div>
+
+<hr>
+
+<h2>2. As quebras de linha do começo e do fim</h2>
+
+<pre class="file" data-file="primeira.lua">local a = [[
+oi]]
+local b = [[oi]]
+print(a == b, #a, #b)
+local c = [[oi
+]]
+print(#c)
+print("[" .. c .. "]")
+</pre>
+
+<pre class="term">$ lua primeira.lua
+true	2	2
+3
+[oi
+]</pre>
+
+<ul>
+  <li><code>a</code> e <code>b</code> são <strong>iguais</strong>, com 2 letras cada: a quebra logo depois do <code>[[</code> de <code>a</code> sumiu.</li>
+  <li><code>c</code> tem 3 caracteres: o <code>o</code>, o <code>i</code> e a quebra de linha que vem <strong>antes</strong> do <code>]]</code>. Essa não some.</li>
+  <li>Os colchetes em volta mostram onde o texto termina: o <code>]</code> foi parar na linha de baixo.</li>
+</ul>
+
+<p>Por isso, se você <strong>não</strong> quer uma linha em branco a mais no fim, cole o <code>]]</code> na última linha do texto, como no menu. Se o texto vai para um arquivo, ou para o <code>io.write</code>, às vezes você <strong>quer</strong> essa quebra no fim; aí ponha o <code>]]</code> sozinho na linha de baixo.</p>
+
+<hr>
+
+<h2>3. A contrabarra é só uma letra</h2>
+<p>Dentro de <code>[[ ]]</code>, o Lua não interpreta nada: nem <code>\n</code>, nem <code>\t</code>, nem as aspas.</p>
+
+<pre class="file" data-file="sem_escape.lua">print([[Linha com \n e \t e "aspas" e 'apóstrofos']])
+print([[C:\novo\tabela.txt]])
+</pre>
+
+<pre class="term">$ lua sem_escape.lua
+Linha com \n e \t e "aspas" e 'apóstrofos'
+C:\novo\tabela.txt</pre>
+
+<p>O caminho do Windows que virou bagunça na aula de <a href="strings-escape.html">Caracteres de Escape</a> sai perfeito aqui, sem dobrar as contrabarras. E aspas dos dois tipos convivem em paz. A contrapartida: se você <strong>quiser</strong> um <code>\n</code> ou um <code>\u{…}</code> funcionando, use aspas comuns.</p>
+
+<p>Um desenho feito com letras, com contrabarras e tudo, também sai do jeito que foi escrito:</p>
+
+<pre class="file" data-file="desenho.lua">print([[
+  /\_/\
+ ( o.o )
+  &gt; ^ &lt;]])
+</pre>
+
+<pre class="term">$ lua desenho.lua
+  /\_/\
+ ( o.o )
+  &gt; ^ &lt;</pre>
+
+<hr>
+
+<h2>4. Os espaços também entram</h2>
+<p>"Do jeito que está" vale para os espaços do começo das linhas. Se o texto longo estiver dentro de uma função (veja <a href="funcoes.html">Funções</a>), a indentação do código entra no texto:</p>
+
+<pre class="file" data-file="indentado.lua">local function ajuda()
+  local texto = [[
+    Uso: lua padaria.lua [opção]
+    -h   mostra esta ajuda]]
+  print(texto)
+end
+ajuda()
+</pre>
+
+<pre class="term">$ lua indentado.lua
+    Uso: lua padaria.lua [opção]
+    -h   mostra esta ajuda</pre>
+
+<p>Os 4 espaços do começo de cada linha apareceram na tela. Se você não quer isso, escreva as linhas do texto encostadas na margem esquerda do arquivo, mesmo dentro da função. Repare também que o <code>[opção]</code>, com um colchete só, não atrapalha: só <code>]]</code>, os <strong>dois</strong> colados, fecha o texto.</p>
+
+<hr>
+
+<h2>5. Textos com <code>]]</code> dentro: os níveis</h2>
+<p>E se o texto precisar conter <code>]]</code>? Por exemplo, um trecho de código Lua com <code>t[a[1]]</code>. Para isso, os colchetes aceitam <strong>sinais de igual</strong> no meio: <code>[==[</code> abre um texto que só fecha com <code>]==]</code>, com a <strong>mesma quantidade</strong> de <code>=</code>. Os programadores chamam a quantidade de <code>=</code> de <strong>nível</strong>.</p>
+
+<pre class="file" data-file="nivel.lua">local codigo = [==[
+local itens = {"pão", "leite"}
+print(itens[#itens])
+local x = t[a[1]]
+]==]
+io.write(codigo)
+</pre>
+
+<pre class="term">$ lua nivel.lua
+local itens = {"pão", "leite"}
+print(itens[#itens])
+local x = t[a[1]]</pre>
+
+<dl class="anatomy">
+  <dt>[==[</dt><dd>Abre um texto longo de <strong>nível 2</strong> (dois sinais de igual).</dd>
+  <dt>t[a[1]]</dt><dd>O <code>]]</code> aqui dentro é só texto: ele não tem os dois <code>=</code>, então não fecha nada.</dd>
+  <dt>]==]</dt><dd>Fecha o texto: dois <code>=</code>, igual à abertura. Um <code>]=]</code> ou um <code>]===]</code> também não fechariam.</dd>
+  <dt>io.write(codigo)</dt><dd>O <code>io.write</code> não acrescenta quebra de linha (veja <a href="io-write.html">io.write()</a>); a última quebra do texto, antes do <code>]==]</code>, já está lá dentro.</dd>
+</dl>
+
+<p>Pode usar quantos <code>=</code> quiser: <code>[=[ … ]=]</code>, <code>[===[ … ]===]</code>… O <code>[[ ]]</code> sem nenhum é o nível 0. Escolha um nível que <strong>não apareça</strong> dentro do texto.</p>
+
+<div class="trylua" data-goal="out:local x = t[a[1]];;semerro">
+<p class="try-task"><strong>Missão:</strong> este programa para com um erro, porque o <code>]]</code> de <code>t[a[1]]</code> fecha o texto antes da hora. Troque o <code>[[</code> por <code>[==[</code> e o <code>]]</code> do fim por <code>]==]</code>.</p>
+<pre class="script" data-file="main.lua">local codigo = [[
+local x = t[a[1]]
+print(x)
+]]
+print(codigo)
+</pre>
+<pre class="solucao" data-file="main.lua">local codigo = [==[
+local x = t[a[1]]
+print(x)
+]==]
+print(codigo)
+</pre>
+</div>
+
+<hr>
+
+<h2>6. O parente conhecido: o comentário <code>--[[ ]]</code></h2>
+<p>Você já viu os colchetes duplos na aula de <a href="comentarios.html">Comentários</a>: o comentário de várias linhas é um <code>--</code> seguido de um texto longo. As mesmas regras valem, inclusive os níveis:</p>
+
+<pre class="file" data-file="comentario.lua">--[[
+Este programa calcula o troco.
+Escrito pela Ana.
+]]
+print("Troco: " .. 20 - 13.5)
+--[==[
+print("isto não roda")
+]==]
+</pre>
+
+<pre class="term">$ lua comentario.lua
+Troco: 6.5</pre>
+
+<p>O segundo comentário "desliga" uma linha de código; se o trecho desligado tiver <code>]]</code> dentro (um <code>t[a[1]]</code>), o nível <code>[==[</code> evita que o comentário termine no meio.</p>
+
+<hr>
+
+<h2>7. No modo interativo</h2>
+<p>No <code>&gt;</code> do Lua (veja <a href="repl.html">O Modo Interativo</a>), um texto longo de uma linha funciona normalmente. Com várias linhas, guarde numa variável: o Lua mostra o <code>&gt;&gt;</code> enquanto o texto não fecha.</p>
+
+<pre class="term">$ lua
+Lua 5.5.0  Copyright (C) 1994-2025 Lua.org, PUC-Rio
+&gt; [[oi]]
+oi
+&gt; x = [[linha 1
+&gt;&gt; linha 2]]
+&gt; print(x)
+linha 1
+linha 2
+&gt; os.exit()</pre>
+
+<p>Uma curiosidade: digitar o texto de várias linhas <strong>sozinho</strong>, sem <code>x =</code> nem <code>print</code>, dá erro no modo interativo. O truque do <code>&gt;</code> de mostrar o valor de uma expressão só funciona quando ela cabe na primeira linha:</p>
+
+<pre class="term">$ lua
+Lua 5.5.0  Copyright (C) 1994-2025 Lua.org, PUC-Rio
+&gt; [[linha 1
+&gt;&gt; linha 2]]
+stdin:2: unexpected symbol near '[[linha 1
+linha 2]]'
+&gt; os.exit()</pre>
+
+<hr>
+
+<h2 id="formas">Formas diferentes de fazer a mesma coisa</h2>
+<p>As três strings deste programa são <strong>idênticas</strong>:</p>
+
+<pre class="file" data-file="igualzinho.lua">local a = "linha 1\nlinha 2"
+local b = [[
+linha 1
+linha 2]]
+local c = "linha 1\
+linha 2"
+print(a == b, b == c)
+</pre>
+
+<pre class="term">$ lua igualzinho.lua
+true	true</pre>
+
+<p>Um texto longo também combina bem com o <code>string.format</code> (aula <a href="string-format.html">string.format</a>): você escreve o "molde" com várias linhas e preenche as lacunas depois.</p>
+
+<pre class="file" data-file="formatado.lua">local recibo = [[
+Cliente: %s
+Total:   R$ %.2f]]
+print(string.format(recibo, "Ana", 13.5))
+</pre>
+
+<pre class="term">$ lua formatado.lua
+Cliente: Ana
+Total:   R$ 13.50</pre>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Situação</th><th>Qual usar</th></tr>
+<tr><td>Uma linha só</td><td><code>"…"</code> ou <code>'…'</code></td></tr>
+<tr><td>Duas ou três linhas curtas</td><td><code>"…\n…"</code></td></tr>
+<tr><td>Um bloco de texto: menu, ajuda, poema, desenho, modelo de recibo</td><td><code>[[ … ]]</code></td></tr>
+<tr><td>Texto com muitas contrabarras (caminhos do Windows) ou com os dois tipos de aspas</td><td><code>[[ … ]]</code></td></tr>
+<tr><td>Texto com <code>]]</code> dentro (trechos de código)</td><td><code>[==[ … ]==]</code></td></tr>
+<tr><td>Texto que precisa de <code>\t</code>, <code>\u{…}</code> ou outros escapes</td><td>Aspas comuns: o <code>[[ ]]</code> não interpreta escapes</td></tr>
+</table>
+</div>
+
+<div class="note">
+<strong>Contando um texto longo</strong>
+<p>As quebras de linha contam no tamanho, e acentos contam como 2 bytes (veja <a href="operador-tamanho.html">O Operador de Tamanho</a>):</p>
+<pre class="file" data-file="conta.lua">local poema = [[
+Batatinha quando nasce
+espalha a rama pelo chão]]
+print(#poema, utf8.len(poema))
+</pre>
+<pre class="term">$ lua conta.lua
+48	47</pre>
+<p>22 letras e espaços na primeira linha, 1 quebra de linha e 24 caracteres na segunda (47); o <code>ã</code> de "chão" ocupa 2 bytes (48).</p>
+</div>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+
+<div class="cenario">
+<strong>Esqueceu de fechar o texto longo</strong>
+<pre class="file" data-file="aberta.lua">local texto = [[
+Bom dia,
+Ana
+print(texto)
+</pre>
+<pre class="term">$ lua aberta.lua
+lua: aberta.lua:5: unfinished long string (starting at line 1) near &lt;eof&gt;</pre>
+<p>Linha por linha:</p>
+<dl class="anatomy">
+  <dt>lua: aberta.lua:5:</dt><dd>O Lua só percebeu o problema na linha 5, que é o fim do arquivo (o arquivo tem 4 linhas e termina com uma quebra de linha).</dd>
+  <dt>unfinished long string</dt><dd>"Texto longo não terminado": nenhum <code>]]</code> apareceu até o fim.</dd>
+  <dt>(starting at line 1)</dt><dd>"(começando na linha 1)": o Lua diz onde o texto <strong>abriu</strong>. É lá que você deve olhar.</dd>
+  <dt>near &lt;eof&gt;</dt><dd>"Perto do fim do arquivo" (<em>end of file</em>).</dd>
+</dl>
+<p>Repare que o <code>print(texto)</code> virou parte do texto: tudo depois do <code>[[</code> foi engolido. É erro de sintaxe; o programa nem começa. <strong>Como consertar:</strong> feche com <code>]]</code> depois de <code>Ana</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Abriu e fechou com níveis diferentes</strong>
+<pre class="file" data-file="nivel_errado.lua">local texto = [==[
+Bom dia
+]=]
+print(texto)
+</pre>
+<pre class="term">$ lua nivel_errado.lua
+lua: nivel_errado.lua:5: unfinished long string (starting at line 1) near &lt;eof&gt;</pre>
+<p>A mesma mensagem: o <code>]=]</code> (um <code>=</code>) não fecha um texto aberto com <code>[==[</code> (dois). <strong>Como consertar:</strong> conte os sinais de igual dos dois lados.</p>
+</div>
+
+<div class="cenario">
+<strong>O <code>]]</code> do meio fechou o texto antes da hora</strong>
+<pre class="file" data-file="fecha_cedo.lua">local codigo = [[
+local x = t[a[1]]
+print(x)
+]]
+print(codigo)
+</pre>
+<pre class="term">$ lua fecha_cedo.lua
+lua: fecha_cedo.lua:4: unexpected symbol near ']'</pre>
+<p>"Símbolo inesperado perto de <code>]</code>". O texto terminou no primeiro <code>]]</code>, o de <code>t[a[1]]</code> (linha 2). Para o Lua, a linha 3, <code>print(x)</code>, passou a ser código de verdade, e o <code>]]</code> da linha 4 ficou sobrando, sem nada que ele feche. A mensagem aponta a linha 4, mas o problema está na linha 2. <strong>Como consertar:</strong> use um nível: <code>[==[ … ]==]</code> (seção 5).</p>
+</div>
+
+<div class="cenario">
+<strong>Esperava que o <code>\n</code> funcionasse</strong>
+<p>Não é erro, é surpresa: <code>print([[a\nb]])</code> mostra <code>a\nb</code>, com a contrabarra e o <code>n</code>. Dentro de <code>[[ ]]</code> não há escapes (seção 3). <strong>Como consertar:</strong> quebre a linha de verdade dentro do texto, ou use aspas: <code>"a\nb"</code>.</p>
+</div>
+
+<hr>
+
+<h2>Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>O que é / faz</th></tr>
+<tr><td><code>[[ … ]]</code></td><td>Texto longo (nível 0): várias linhas, sem escapes</td></tr>
+<tr><td><code>[=[ … ]=]</code>, <code>[==[ … ]==]</code></td><td>Textos longos de nível 1, 2…: fecham só com a mesma quantidade de <code>=</code></td></tr>
+<tr><td>Quebra logo depois do <code>[[</code></td><td>É descartada</td></tr>
+<tr><td>Quebra logo antes do <code>]]</code></td><td>Faz parte do texto</td></tr>
+<tr><td>Espaços do começo das linhas</td><td>Fazem parte do texto</td></tr>
+<tr><td><code>--[[ … ]]</code>, <code>--[==[ … ]==]</code></td><td>Comentário de várias linhas (<a href="comentarios.html">Comentários</a>)</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Mensagem</th><th>Causa provável</th></tr>
+<tr><td><code>unfinished long string (starting at line N) near &lt;eof&gt;</code></td><td>Faltou o <code>]]</code>, ou o fechamento tem outra quantidade de <code>=</code>; olhe a linha N</td></tr>
+<tr><td><code>unexpected symbol near ']'</code></td><td>Um <code>]]</code> dentro do texto fechou-o antes da hora: use <code>[==[ … ]==]</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. Feche o texto</h3>
+<p>Complete para o texto ter nível 1:</p>
+<div class="ex-code">local s = [=[Olá, Ana<input data-answer="]=]" aria-label="fechamento"></div>
+</div>
+
+<div class="exercise">
+<h3>2. Quanto dá?</h3>
+<p>Responda com um número.</p>
+<div class="ex-code"><code>#[[abc]]</code> = <input data-answer="3" aria-label="tamanho de abc"><br><code>#[[a\nb]]</code> = <input data-answer="4" aria-label="tamanho de a\nb longo"></div>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">3. O que <code>print([[C:\temp]])</code> mostra?</p>
+<label><input type="radio" name="q3"> <code>C:</code> e uma tabulação antes de <code>emp</code></label>
+<label><input type="radio" name="q3"> <code>C:\temp</code></label>
+<label><input type="radio" name="q3"> Um erro: <code>invalid escape sequence</code></label>
+<label><input type="radio" name="q3"> <code>C:\\temp</code></label>
+</div>
+
+<div class="mc" data-answer="1">
+<p class="mc-q">4. Qual destes textos longos é igual a <code>"oi"</code>?</p>
+<label><input type="radio" name="q4"> <code>[[</code> + Enter + <code>oi]]</code></label>
+<label><input type="radio" name="q4"> <code>[[oi</code> + Enter + <code>]]</code></label>
+<label><input type="radio" name="q4"> <code>[[ oi ]]</code></label>
+<label><input type="radio" name="q4"> <code>[["oi"]]</code></label>
+</div>
+
+<div class="mc" data-answer="4">
+<p class="mc-q">5. O texto que você quer guardar tem <code>]]</code> e <code>]=]</code> dentro. Qual abertura serve?</p>
+<label><input type="radio" name="q5"> <code>[[</code></label>
+<label><input type="radio" name="q5"> <code>[=[</code></label>
+<label><input type="radio" name="q5"> <code>"</code></label>
+<label><input type="radio" name="q5"> <code>[==[</code></label>
+</div>
+
+<div class="mc" data-answer="3">
+<p class="mc-q">6. O erro diz <code>unfinished long string (starting at line 12)</code>. Onde você olha primeiro?</p>
+<label><input type="radio" name="q6"> Na última linha do arquivo</label>
+<label><input type="radio" name="q6"> Na linha 1</label>
+<label><input type="radio" name="q6"> Na linha 12, onde o texto longo abriu</label>
+<label><input type="radio" name="q6"> Em qualquer <code>print</code></label>
+</div>
+
+<h3>Missão final: o recado na geladeira</h3>
+
+<div class="trylua" data-goal="outre:^Bom dia, Ana!\nO pão chegou\.\n$;;src:\[\[">
+<p class="try-task"><strong>Missão:</strong> reescreva o recado com um texto longo <code>[[ … ]]</code>, em <strong>duas linhas</strong>: <code>Bom dia, Ana!</code> numa e <code>O pão chegou.</code> na outra. Cuidado com as quebras de linha do começo e do fim, e com espaços sobrando.</p>
+<pre class="script" data-file="main.lua">local recado = "Bom dia, Ana! O pão chegou."
+print(recado)
+</pre>
+<pre class="solucao" data-file="main.lua">local recado = [[
+Bom dia, Ana!
+O pão chegou.]]
+print(recado)
+</pre>
+</div>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li><code>[[ … ]]</code> escreve um texto com várias linhas, do jeito que está: quebras de linha, espaços, aspas e contrabarras entram como foram digitados.</li>
+  <li>A quebra de linha logo depois do <code>[[</code> é descartada; a de antes do <code>]]</code>, não.</li>
+  <li>Dentro de <code>[[ ]]</code> não há escapes: <code>\n</code> fica <code>\n</code>.</li>
+  <li>Para textos com <code>]]</code> dentro, use níveis: <code>[==[ … ]==]</code>, com a mesma quantidade de <code>=</code> nos dois lados.</li>
+  <li>O comentário <code>--[[ … ]]</code> segue as mesmas regras.</li>
+  <li>Erros: <code>unfinished long string (starting at line N)</code> (faltou fechar) e <code>unexpected symbol near ']'</code> (fechou antes da hora).</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
