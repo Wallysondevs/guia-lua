@@ -1,0 +1,397 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua Atribuição Múltipla — várias variáveis num = só | Guia Lua</title>
+<meta name="description" content="Atribuição múltipla no Lua para quem nunca programou: local a, b = 1, 2, o que acontece quando sobram nomes (nil) ou valores (descartados), a armadilha do local a, b = 0, trocar dois valores com a, b = b, a, a direita calculada antes, funções que devolvem vários valores, e os erros reais do Lua 5.5 explicados em português.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">Atribuição Múltipla</span></h1>
+
+<p class="intro">Até agora, cada <code>=</code> guardou um valor numa variável. O Lua deixa fazer mais de uma de uma vez: <code>local nome, idade = "Ana", 30</code> cria as duas variáveis numa linha só. Parece só um atalho, mas é com ele que se troca o valor de duas variáveis sem perder nenhum, e que se recebe as várias respostas de uma função, como o <code>io.read("n", "n")</code> da aula <a href="io-read.html">io.read</a>.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>A criar e trocar várias variáveis com um <code>=</code> só.</li>
+  <li>O que acontece quando sobram nomes (eles ficam <code>nil</code>) ou sobram valores (são jogados fora).</li>
+  <li>A armadilha do <code>local acertos, erros = 0</code>.</li>
+  <li>A trocar o conteúdo de duas variáveis com <code>a, b = b, a</code>, e por que o jeito "linha por linha" estraga tudo.</li>
+  <li>Que o Lua calcula <strong>toda</strong> a direita antes de guardar.</li>
+  <li>A receber vários valores de uma função, como o <code>string.find</code>.</li>
+  <li>Os erros reais: a vírgula a mais, a vírgula a menos, o nome faltando.</li>
+</ul>
+</div>
+
+<p>Todos os programas desta aula foram rodados com o <strong>Lua 5.5</strong> na máquina fictícia da Ana (usuária <code>ana</code>, computador <code>notebook</code>). As caixas "Experimente" rodam o mesmo Lua de verdade, no seu navegador.</p>
+
+<hr>
+
+<h2>A ideia: duas filas lado a lado</h2>
+<p>Imagine duas filas no balcão da padaria: de um lado as <strong>etiquetas</strong>, do outro os <strong>potes</strong>. A atendente cola a primeira etiqueta no primeiro pote, a segunda no segundo, e assim por diante, <strong>pela ordem</strong>. Se faltarem potes, as etiquetas que sobraram ficam coladas em potes vazios. Se sobrarem potes, eles voltam para a prateleira sem etiqueta.</p>
+
+<p>Na atribuição múltipla, as etiquetas são os nomes à esquerda do <code>=</code>, e os potes, os valores à direita, separados por vírgula.</p>
+
+<hr>
+
+<h2>1. Várias variáveis de uma vez</h2>
+
+<pre class="file" data-file="duas.lua">local nome, idade = "Ana", 30
+print(nome, idade)
+local x, y, z = 1, 2, 3
+print(x, y, z)
+</pre>
+
+<pre class="term">$ lua duas.lua
+Ana	30
+1	2	3
+</pre>
+
+<dl class="anatomy">
+  <dt>local</dt><dd>Um <code>local</code> só vale para todos os nomes da lista: <code>nome</code> e <code>idade</code> são as duas locais.</dd>
+  <dt>nome, idade</dt><dd>A lista de nomes, separados por vírgula.</dd>
+  <dt>=</dt><dd>Um <code>=</code> só.</dd>
+  <dt>"Ana", 30</dt><dd>A lista de valores, também separados por vírgula. O 1º valor vai para o 1º nome, o 2º para o 2º: <code>nome</code> fica com <code>"Ana"</code> e <code>idade</code> com <code>30</code>.</dd>
+</dl>
+
+<p>É o mesmo que escrever <code>local nome = "Ana"</code> e <code>local idade = 30</code> em duas linhas. Use quando os valores <strong>andam juntos</strong> (nome e idade de uma pessoa, a largura e a altura de uma caixa, as coordenadas <code>x, y</code>). Para coisas sem relação, uma por linha fica mais fácil de ler.</p>
+
+<p>Funciona também sem <code>local</code>, para trocar o valor de variáveis que já existem:</p>
+
+<pre class="file" data-file="globais.lua">local preco, quantidade = 5, 3
+preco, quantidade = 6, quantidade + 1
+print(preco, quantidade)
+</pre>
+
+<pre class="term">$ lua globais.lua
+6	4
+</pre>
+
+<hr>
+
+<h2>2. Quando as filas não têm o mesmo tamanho</h2>
+
+<pre class="file" data-file="sobra.lua">local a, b, c = 10, 20
+print(a, b, c)
+local d, e = 1, 2, 3
+print(d, e)
+</pre>
+
+<pre class="term">$ lua sobra.lua
+10	20	nil
+1	2
+</pre>
+
+<dl class="anatomy">
+  <dt>Sobrou nome</dt><dd>Três nomes, dois valores: o <code>c</code> não recebeu nada e ficou <code>nil</code>. Nenhum erro.</dd>
+  <dt>Sobrou valor</dt><dd>Dois nomes, três valores: o <code>3</code> foi jogado fora, sem aviso. Nenhum erro também.</dd>
+</dl>
+
+<p>O Lua nunca reclama do tamanho das filas: ele completa com <code>nil</code> ou descarta o que sobra. Isso é prático com funções (seção 5), mas esconde enganos, como o da próxima seção.</p>
+
+<h3>A armadilha do <code>= 0</code></h3>
+<p>A Ana quer começar dois contadores em zero e escreve:</p>
+
+<pre class="file" data-file="zero.lua">local acertos, erros = 0
+print("Acertos:", acertos)
+print("Erros:", erros)
+</pre>
+
+<pre class="term">$ lua zero.lua
+Acertos:	0
+Erros:	nil
+</pre>
+
+<p>O <code>0</code> é um valor só, e foi para o primeiro nome. O <code>erros</code> ficou <code>nil</code>, e na primeira conta o programa quebra:</p>
+
+<pre class="file" data-file="zero2.lua">local acertos, erros = 0
+erros = erros + 1
+</pre>
+
+<pre class="term">$ lua zero2.lua
+lua: zero2.lua:2: attempt to perform arithmetic on a nil value (local 'erros')
+stack traceback:
+	zero2.lua:2: in main chunk
+	[C]: in ?
+</pre>
+
+<p>"Tentativa de fazer conta com um valor nil (a local <code>erros</code>)". <strong>Como consertar:</strong> um valor para cada nome, <code>local acertos, erros = 0, 0</code>.</p>
+
+<div class="trylua" data-goal="outre:Erros:\s+1\n;;semerro">
+<p class="try-task"><strong>Missão:</strong> rode e leia o erro. Conserte a primeira linha para que os <strong>dois</strong> contadores comecem em zero, e o programa mostre <code>Erros:</code> e <code>1</code>.</p>
+<pre class="script" data-file="main.lua">local acertos, erros = 0
+erros = erros + 1
+print("Acertos:", acertos)
+print("Erros:", erros)
+</pre>
+<pre class="solucao" data-file="main.lua">local acertos, erros = 0, 0
+erros = erros + 1
+print("Acertos:", acertos)
+print("Erros:", erros)
+</pre>
+</div>
+
+<hr>
+
+<h2>3. Trocando dois valores: <code>a, b = b, a</code></h2>
+<p>A Ana etiquetou errado: a caixa 1 está com açúcar e a caixa 2 com farinha, e ela quer inverter. O jeito "óbvio", linha por linha, não funciona:</p>
+
+<pre class="file" data-file="troca-errada.lua">local caixa1, caixa2 = "farinha", "açúcar"
+caixa1 = caixa2
+caixa2 = caixa1
+print(caixa1, caixa2)
+</pre>
+
+<pre class="term">$ lua troca-errada.lua
+açúcar	açúcar
+</pre>
+
+<p>A farinha sumiu. Na linha 2, a <code>caixa1</code> recebeu o açúcar, e a farinha que estava nela foi jogada fora. Na linha 3, a <code>caixa2</code> recebeu o que estava na <code>caixa1</code>... que agora já era açúcar. Com a atribuição múltipla, a troca é uma linha só:</p>
+
+<pre class="file" data-file="troca.lua">local caixa1, caixa2 = "farinha", "açúcar"
+print(caixa1, caixa2)
+caixa1, caixa2 = caixa2, caixa1
+print(caixa1, caixa2)
+</pre>
+
+<pre class="term">$ lua troca.lua
+farinha	açúcar
+açúcar	farinha
+</pre>
+
+<p>Funciona porque o Lua <strong>primeiro lê</strong> todos os valores da direita (<code>"açúcar"</code> e <code>"farinha"</code>) e <strong>só depois</strong> guarda nas variáveis da esquerda. Ninguém é apagado antes de ser lido.</p>
+
+<div class="trylua" data-goal="outre:^Bia\s+Ana\n$;;src:^\s*manha\s*,\s*tarde\s*=">
+<p class="try-task"><strong>Missão:</strong> a Ana e a Bia trocaram de turno. Escreva, no lugar do comentário, <strong>uma linha</strong> que troque o conteúdo de <code>manha</code> e <code>tarde</code>, para que saia <code>Bia</code> e depois <code>Ana</code>.</p>
+<pre class="script" data-file="main.lua">local manha, tarde = "Ana", "Bia"
+-- troque aqui
+print(manha, tarde)
+</pre>
+<pre class="solucao" data-file="main.lua">local manha, tarde = "Ana", "Bia"
+manha, tarde = tarde, manha
+print(manha, tarde)
+</pre>
+</div>
+
+<hr>
+
+<h2>4. Primeiro a direita inteira, depois a esquerda</h2>
+<p>A regra da troca vale sempre: o Lua calcula <strong>todos</strong> os valores da direita, com o que as variáveis valem naquele momento, e só então guarda:</p>
+
+<pre class="file" data-file="antes.lua">local x = 1
+local a, b = x + 1, x * 10
+print(a, b)
+local n = 5
+local m
+n, m = n + 1, n
+print(n, m)
+</pre>
+
+<pre class="term">$ lua antes.lua
+2	10
+6	5
+</pre>
+
+<p>Olhe a linha 6: <code>n, m = n + 1, n</code>. Se o Lua guardasse da esquerda para a direita, o <code>m</code> receberia o <code>n</code> já atualizado, 6. Mas ele calculou os dois valores primeiro (<code>5 + 1</code> e <code>5</code>) e depois guardou: <code>n</code> ficou 6 e <code>m</code> ficou com o 5 de antes.</p>
+
+<hr>
+
+<h2>5. Funções que devolvem vários valores</h2>
+<p>Algumas funções do Lua respondem com <strong>mais de um valor</strong>. O <code>string.find</code> procura um pedaço dentro de um texto e devolve <strong>onde começa</strong> e <strong>onde termina</strong> (aula <a href="string-find.html">Procurando no Texto</a>). A atribuição múltipla recebe os dois:</p>
+
+<pre class="file" data-file="funcao.lua">local inicio, fim = string.find("padaria", "da")
+print(inicio, fim)
+local i, f, extra = string.find("padaria", "da"), 99
+print(i, f, extra)
+local primeiro, ini, fi = 99, string.find("padaria", "da")
+print(primeiro, ini, fi)
+local so_um = (string.find("padaria", "da"))
+print(so_um)
+</pre>
+
+<pre class="term">$ lua funcao.lua
+3	4
+3	99	nil
+99	3	4
+3
+</pre>
+
+<dl class="anatomy">
+  <dt>3 4</dt><dd>O <code>"da"</code> de <code>"padaria"</code> começa na 3ª letra e termina na 4ª. Cada valor foi para um nome.</dd>
+  <dt>3 99 nil</dt><dd>Quando a função <strong>não é a última</strong> da lista, o Lua aproveita só o 1º valor dela. O <code>4</code> foi descartado, o <code>99</code> foi para o <code>f</code>, e o <code>extra</code> ficou <code>nil</code>.</dd>
+  <dt>99 3 4</dt><dd>Quando a função é a <strong>última</strong> da lista, todos os valores dela entram.</dd>
+  <dt>3</dt><dd>Parênteses em volta da chamada cortam a resposta para um valor só.</dd>
+</dl>
+
+<p>Você já viu o mesmo com o <code>io.read("n", "n")</code>, que devolve um número para cada formato. E você vai criar funções assim na aula <a href="retornos-multiplos.html">Vários Retornos</a>.</p>
+
+<hr>
+
+<h2>Formas diferentes de fazer</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Forma</th><th>Quando usar</th></tr>
+<tr><td><code>local largura, altura = 30, 20</code></td><td>Valores que andam juntos</td></tr>
+<tr><td><code>local largura = 30</code><br><code>local altura = 20</code></td><td>Valores sem relação, ou quando cada um precisa de um comentário. Mais fácil de ler e de mudar</td></tr>
+<tr><td><code>a, b = b, a</code></td><td>Trocar dois valores: sempre assim</td></tr>
+<tr><td><code>local temporaria = a</code><br><code>a = b</code><br><code>b = temporaria</code></td><td>O jeito "com uma caixa vazia de apoio", obrigatório em linguagens sem atribuição múltipla. Funciona no Lua (mostra <code>açúcar</code> e <code>farinha</code>), mas é mais comprido</td></tr>
+<tr><td><code>local inicio, fim = string.find(...)</code></td><td>Receber os vários valores de uma função</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+
+<div class="cenario">
+<strong>Vírgula a mais no fim da linha: não dá erro, dá <code>nil</code></strong>
+<pre class="file" data-file="virgula-fim.lua">local a, b = 1, 2,
+print(a, b)
+</pre>
+<pre class="term">$ lua virgula-fim.lua
+nil	nil
+</pre>
+<p>Esperava <code>1</code> e <code>2</code>? A vírgula do fim avisa "ainda tem mais valor", e o Lua foi buscá-lo na linha de baixo. Ele leu as duas linhas como uma só: <code>local a, b = 1, 2, print(a, b)</code>. O <code>print</code> rodou ali dentro, antes de as locais existirem (mostrando duas globais <code>a</code> e <code>b</code> que ninguém criou, <code>nil</code> e <code>nil</code>), e o <code>print</code> não devolve valor nenhum, então não sobrou nada para a lista. <strong>Como consertar:</strong> tire a vírgula do fim.</p>
+</div>
+
+<div class="cenario">
+<strong>Vírgula a menos entre os nomes: não dá erro, cria uma global</strong>
+<pre class="file" data-file="sem-virgula.lua">local a b = 1, 2
+print(a, b)
+</pre>
+<pre class="term">$ lua sem-virgula.lua
+nil	1
+</pre>
+<p>Sem a vírgula, o Lua leu dois comandos: <code>local a</code> (uma local sem valor) e <code>b = 1, 2</code> (uma <strong>global</strong> <code>b</code> com o 1; o 2 foi descartado). É o mesmo problema do nome com espaço da aula <a href="nomes-variaveis.html">Nomes de Variáveis</a>. <strong>Como consertar:</strong> <code>local a, b = 1, 2</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Nome faltando depois da vírgula</strong>
+<pre class="file" data-file="nome-faltando.lua">local a, = 1, 2
+</pre>
+<pre class="term">$ lua nome-faltando.lua
+lua: nome-faltando.lua:1: &lt;name&gt; expected near '='
+</pre>
+<p>"Esperava um nome perto de <code>=</code>": depois da vírgula da esquerda, tem de vir mais um nome. <strong>Como consertar:</strong> escreva o nome (<code>local a, b = 1, 2</code>) ou tire a vírgula.</p>
+</div>
+
+<div class="cenario">
+<strong>Um valor para dois nomes</strong>
+<pre class="term">$ lua zero2.lua
+lua: zero2.lua:2: attempt to perform arithmetic on a nil value (local 'erros')
+stack traceback:
+	zero2.lua:2: in main chunk
+	[C]: in ?
+</pre>
+<p>Seção 2: <code>local acertos, erros = 0</code> só dá valor ao primeiro. Quando um erro fala de uma local <code>nil</code> que você "tinha certeza" que criou com valor, confira se a lista de valores tem o mesmo tamanho da lista de nomes.</p>
+</div>
+
+<hr>
+
+<h2>Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>Resultado</th></tr>
+<tr><td><code>local a, b = 1, 2</code></td><td><code>a = 1</code>, <code>b = 2</code></td></tr>
+<tr><td><code>local a, b, c = 1, 2</code></td><td><code>c</code> fica <code>nil</code></td></tr>
+<tr><td><code>local a, b = 1, 2, 3</code></td><td>O <code>3</code> é descartado</td></tr>
+<tr><td><code>local a, b = 0</code></td><td><code>a = 0</code>, <code>b = nil</code> (use <code>0, 0</code>)</td></tr>
+<tr><td><code>a, b = b, a</code></td><td>Troca os valores</td></tr>
+<tr><td><code>n, m = n + 1, n</code></td><td>A direita é calculada inteira antes: <code>m</code> recebe o <code>n</code> antigo</td></tr>
+<tr><td><code>local i, f = string.find(s, "x")</code></td><td>Recebe os dois valores da função</td></tr>
+<tr><td><code>local a, b, c = f(), 99</code></td><td>Função que não é a última: só o 1º valor dela</td></tr>
+<tr><td><code>local a = (f())</code></td><td>Parênteses: só o 1º valor</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. Complete a troca</h3>
+<p>Complete para trocar os valores de <code>x</code> e <code>y</code>:</p>
+<div class="ex-code">x, y = <input data-answer="y, x|y,x" aria-label="valores"></div>
+</div>
+
+<div class="exercise">
+<h3>2. Qual é a saída?</h3>
+<p><code>local p, q, r = 7, 8</code> e depois <code>print(r)</code>. O que aparece?</p>
+<div class="ex-code">Saída: <input data-answer="nil" aria-label="saída"></div>
+</div>
+
+<div class="exercise">
+<h3>3. A direita primeiro</h3>
+<p><code>local a, b = 1, 2</code>, depois <code>a, b = a + b, a</code>, depois <code>print(b)</code>. O que aparece?</p>
+<div class="ex-code">Saída: <input data-answer="1" aria-label="saída"></div>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">4. Como começar três contadores em zero numa linha só?</p>
+<label><input type="radio" name="q4"> <code>local a, b, c = 0</code></label>
+<label><input type="radio" name="q4"> <code>local a, b, c = 0, 0, 0</code></label>
+<label><input type="radio" name="q4"> <code>local a = b = c = 0</code></label>
+<label><input type="radio" name="q4"> <code>local (a, b, c) = 0</code></label>
+</div>
+
+<div class="mc" data-answer="3">
+<p class="mc-q">5. Com <code>local a, b = "x", "y"</code>, o que mostra <code>a = b</code> seguido de <code>b = a</code> e <code>print(a, b)</code>?</p>
+<label><input type="radio" name="q5"> <code>y</code> e <code>x</code></label>
+<label><input type="radio" name="q5"> <code>x</code> e <code>y</code></label>
+<label><input type="radio" name="q5"> <code>y</code> e <code>y</code></label>
+<label><input type="radio" name="q5"> Um erro</label>
+</div>
+
+<div class="mc" data-answer="1">
+<p class="mc-q">6. <code>string.find("bolo", "lo")</code> devolve <code>3</code> e <code>4</code>. O que fica em <code>c</code> depois de <code>local a, b, c = string.find("bolo", "lo"), 0</code>?</p>
+<label><input type="radio" name="q6"> <code>nil</code></label>
+<label><input type="radio" name="q6"> <code>4</code></label>
+<label><input type="radio" name="q6"> <code>0</code></label>
+<label><input type="radio" name="q6"> <code>3</code></label>
+</div>
+
+<h3>Missão final: o rodízio dos turnos</h3>
+
+<div class="trylua" data-goal="outre:^Bia\s+Caio\s+Ana\n$;;src:^\s*manha\s*,\s*tarde\s*,\s*noite\s*=">
+<p class="try-task"><strong>Missão:</strong> na padaria, os turnos giram: quem estava à tarde vai para a manhã, quem estava à noite vai para a tarde, e quem estava de manhã vai para a noite. Escreva <strong>uma linha</strong>, começando com <code>manha, tarde, noite =</code>, que faça o rodízio. Deve sair <code>Bia</code>, <code>Caio</code> e <code>Ana</code>.</p>
+<pre class="script" data-file="main.lua">local manha, tarde, noite = "Ana", "Bia", "Caio"
+-- faça o rodízio aqui
+print(manha, tarde, noite)
+</pre>
+<pre class="solucao" data-file="main.lua">local manha, tarde, noite = "Ana", "Bia", "Caio"
+manha, tarde, noite = tarde, noite, manha
+print(manha, tarde, noite)
+</pre>
+</div>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li><code>local a, b = 1, 2</code> cria várias variáveis num <code>=</code> só: o 1º valor vai para o 1º nome, e assim por diante.</li>
+  <li>Sobrou nome: fica <code>nil</code>. Sobrou valor: é descartado. Nenhum dos dois dá erro.</li>
+  <li><code>local a, b = 0</code> só dá valor ao <code>a</code>; para os dois, <code>0, 0</code>.</li>
+  <li>O Lua calcula a direita inteira antes de guardar; por isso <code>a, b = b, a</code> troca os valores, e o jeito linha por linha perde um deles.</li>
+  <li>Funções que devolvem vários valores (<code>string.find</code>, <code>io.read("n", "n")</code>) entregam todos quando são a última da lista; no meio da lista ou entre parênteses, só o primeiro.</li>
+  <li>Cuidado com a vírgula a mais no fim (o Lua emenda a linha de baixo) e a vírgula a menos entre os nomes (vira uma global).</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
