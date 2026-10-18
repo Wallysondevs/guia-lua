@@ -1,0 +1,1457 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua Projeto Jogo da Forca — strings, tabelas como conjunto, find, funções e arquivo passo a passo | Guia Lua</title>
+<meta name="description" content="Projeto passo a passo: o Jogo da Forca em Lua 5.5. A palavra escondida com sub, uma tabela de letras tentadas e table.concat; erros contados com string.find (e o porquê do quarto argumento true); chute validado com padrões; funções, o desenho do boneco e a palavra sorteada com math.random; e, no fim, as palavras lidas de um arquivo. Cinco versões com sessões reais e missões no editor.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Projeto <span class="hl">Jogo da Forca</span></h1>
+
+<p class="intro">O jogo de papel e lápis, agora no terminal: o computador esconde uma palavra, você chuta uma letra por vez, e cada letra errada desenha mais uma parte do boneco. Seis erros e o boneco está completo: você perdeu. O projeto mexe com texto letra por letra, com uma tabela que lembra as letras já tentadas e, no fim, com um arquivo de palavras.</p>
+
+<div class="note">
+<strong>Você vai praticar</strong>
+<ul>
+  <li>Pegar uma letra da palavra com <a href="string-sub.html">sub</a> e contar letras com <a href="operador-tamanho.html">#</a>.</li>
+  <li>Usar uma <a href="dicionarios.html">tabela como dicionário</a> para lembrar as letras tentadas, e uma <a href="listas.html">lista</a> para as erradas.</li>
+  <li>Juntar pedaços com <a href="table-concat.html">table.concat</a>.</li>
+  <li>Procurar uma letra com <a href="string-find.html">find</a> (e entender o argumento <code>true</code>) e validar o chute com um <a href="padroes.html">padrão</a>.</li>
+  <li>Separar o jogo em <a href="funcoes.html">funções</a> e escolher entre dois valores com <a href="and-or-ternario.html">o truque do and/or</a>.</li>
+  <li>Sortear a palavra com <a href="math-random.html">math.random</a> e lê-la de um arquivo com <a href="io-lines.html">lines</a>.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>O que vamos construir</h2>
+<p>O jogo pronto, no terminal da Ana. <strong>As letras depois de "Uma letra:" foram digitadas por ela.</strong> A partida inteira é comprida (o desenho aparece a cada chute); aqui está o começo de uma partida e o fim de outra, perdida:</p>
+
+<pre class="term" data-cwd="~/projetos/forca">$ lua forca.lua
+=== Jogo da Forca ===
+4 palavras carregadas.                          « lidas do arquivo palavras.txt
+  +---+
+  |   |
+      |
+      |
+      |
+      |
+=======
+Palavra: _ _ _ _ _ _ _ _ _ _
+Uma letra: a
+Tem!
+  +---+
+  |   |
+      |
+      |
+      |
+      |
+=======
+Palavra: _ a _ _ _ _ _ a _ a
+Uma letra: b
+Tem!
+…</pre>
+
+<pre class="term" data-cwd="~/projetos/forca">…
+Palavra: _ a _ _ _ _ _ a _ a
+Erradas: e o s l m
+Uma letra: n
+Não tem.
+  +---+
+  |   |
+  O   |
+ /|\  |
+ / \  |                                        « sexto erro: boneco completo
+      |
+=======
+Palavra: _ a _ _ _ _ _ a _ a
+Erradas: e o s l m n
+Você perdeu! A palavra era jabuticaba.</pre>
+
+<p>Cinco versões, uma novidade em cada:</p>
+
+<ol class="passo">
+  <li><a href="#versao1">A palavra escondida</a> (<code>sub</code>, tabela de letras, <code>table.concat</code>).</li>
+  <li><a href="#versao2">Erros contados: dá para perder</a> (<code>find</code> com <code>true</code>).</li>
+  <li><a href="#versao3">Chute validado</a> (o padrão <code>^%a$</code>, letra repetida).</li>
+  <li><a href="#versao4">Funções, desenho e palavra sorteada</a> (<code>local function</code>, <code>and</code>/<code>or</code>, <code>math.random</code>).</li>
+  <li><a href="#versao5">As palavras num arquivo</a> (<code>io.open</code>, <code>lines</code>).</li>
+</ol>
+
+<h3>Antes de começar</h3>
+<p>Este projeto usa o <code>io.read</code>, o <code>while true</code> e o <code>break</code> da <a href="projeto-calculadora.html">Calculadora</a> e do <a href="projeto-adivinhacao.html">Jogo de Adivinhação</a>. Crie a pasta; o arquivo vai se chamar <code>forca.lua</code>:</p>
+
+<pre class="term">$ mkdir -p projetos/forca
+$ cd projetos/forca</pre>
+
+<hr>
+
+<h2 id="versao1">Versão 1 · A palavra escondida</h2>
+<p>A primeira versão não tem erros nem boneco: a palavra é sempre <code>banana</code>, a Ana chuta letras até descobrir todas. O coração do jogo é a <strong>máscara</strong>: a palavra com <code>_</code> no lugar das letras que ela ainda não tentou.</p>
+
+<p>Para lembrar as letras tentadas, uma tabela usada como <strong>conjunto</strong>: a chave é a letra e o valor é <code>true</code>. Depois de chutar <code>a</code> e <code>n</code>, a tabela é <code>{ a = true, n = true }</code>, e perguntar "já tentou o <code>b</code>?" é só olhar <code>tentadas["b"]</code> (dá <code>nil</code>, que vale como falso).</p>
+
+<pre class="file" data-file="forca.lua">local palavra = "banana"
+local tentadas = {}   -- as letras que a Ana já tentou: tentadas["a"] = true
+
+print("=== Jogo da Forca ===")
+
+while true do
+  -- monta a máscara: a letra, se já foi tentada; "_", se não
+  local partes = {}
+  for i = 1, #palavra do
+    local letra = palavra:sub(i, i)
+    if tentadas[letra] then
+      partes[#partes + 1] = letra
+    else
+      partes[#partes + 1] = "_"
+    end
+  end
+  local mascara = table.concat(partes, " ")
+  print("Palavra: " .. mascara)
+
+  if not mascara:find("_") then
+    print("Você venceu!")
+    break
+  end
+
+  io.write("Uma letra: ")
+  local chute = io.read():lower()
+  tentadas[chute] = true
+end
+</pre>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Peça</th><th>O que faz</th></tr>
+<tr><td><code>local tentadas = {}</code></td><td>A tabela-conjunto, vazia no começo.</td></tr>
+<tr><td><code>for i = 1, #palavra do</code></td><td>Passa por cada posição da palavra: <code>#palavra</code> é o tamanho (6 para <code>banana</code>).</td></tr>
+<tr><td><code>palavra:sub(i, i)</code></td><td>O pedaço que começa e termina na posição <code>i</code>: uma letra só. <code>("banana"):sub(1, 1)</code> é <code>"b"</code> (veja <a href="string-sub.html">sub</a>).</td></tr>
+<tr><td><code>partes[#partes + 1] = …</code></td><td>Põe um item no fim da lista <code>partes</code> (o mesmo que <code>table.insert(partes, …)</code>; veja <a href="table-insert-remove.html">table.insert</a>).</td></tr>
+<tr><td><code>table.concat(partes, " ")</code></td><td>Junta os itens da lista num texto só, com um espaço entre eles: <code>"b _ _ _ _ _"</code>. O espaço deixa os <code>_</code> separados, para dar para contar.</td></tr>
+<tr><td><code>not mascara:find("_")</code></td><td>"A máscara não tem nenhum <code>_</code>": todas as letras foram descobertas. O <code>find</code> devolve a posição do que achou, ou <code>nil</code>.</td></tr>
+<tr><td><code>io.read():lower()</code></td><td>Lê o chute e passa para minúsculas: <code>B</code> vale como <code>b</code>.</td></tr>
+<tr><td><code>tentadas[chute] = true</code></td><td>Guarda a letra no conjunto. Na próxima volta, a máscara já mostra essa letra onde ela aparece.</td></tr>
+</table>
+</div>
+
+<pre class="term" data-cwd="~/projetos/forca">$ lua forca.lua
+=== Jogo da Forca ===
+Palavra: _ _ _ _ _ _
+Uma letra: b
+Palavra: b _ _ _ _ _
+Uma letra: a
+Palavra: b a _ a _ a
+Uma letra: n
+Palavra: b a n a n a
+Você venceu!</pre>
+
+<p>Um chute de <code>a</code> revela as três letras <code>a</code> de uma vez: a máscara é montada de novo a cada volta, olhando a palavra inteira.</p>
+
+<div class="cenario">
+<strong><kbd>Ctrl</kbd>+<kbd>D</kbd> no meio: <code>attempt to index a nil value</code></strong>
+<pre class="term" data-cwd="~/projetos/forca">$ lua forca.lua
+=== Jogo da Forca ===
+Palavra: _ _ _ _ _ _
+Uma letra: a
+Palavra: _ a _ a _ a
+Uma letra: lua: forca.lua:26: attempt to index a nil value
+stack traceback:
+        forca.lua:26: in main chunk
+        [C]: in ?</pre>
+<p>A Ana apertou <kbd>Ctrl</kbd>+<kbd>D</kbd> ("fim da entrada") em vez de chutar. O <code>io.read()</code> devolveu <code>nil</code>, e o <code>:lower()</code> tentou procurar a função <code>lower</code> dentro de <code>nil</code>: "tentativa de indexar um valor nil", na linha 26. Desta vez a mensagem não diz o nome de nenhuma variável (como o <code>(local 'resposta')</code> do <a href="projeto-adivinhacao.html">Jogo de Adivinhação</a>) porque o <code>nil</code> não estava guardado em variável nenhuma: veio direto do <code>io.read()</code>. A versão 3 confere o <code>nil</code> antes.</p>
+</div>
+
+<div class="trylua" data-stdin="b\na\nn" data-goal="out:Palavra: b a n a n a;;out:Você venceu!">
+<p class="try-task"><strong>Missão (versão 1):</strong> a máscara está sempre cheia de <code>_</code>, porque o laço que a monta põe <code>"_"</code> para toda letra. Troque a linha marcada por um <code>if</code>: se <code>tentadas[letra]</code>, ponha a <code>letra</code>; senão, <code>"_"</code>. A entrada da missão é <code>b</code>, <code>a</code>, <code>n</code>.</p>
+<pre class="script" data-file="forca.lua">local palavra = "banana"
+local tentadas = {}
+
+print("=== Jogo da Forca ===")
+
+while true do
+  local partes = {}
+  for i = 1, #palavra do
+    local letra = palavra:sub(i, i)
+    partes[#partes + 1] = "_"   -- mostre a letra se ela já foi tentada
+  end
+  local mascara = table.concat(partes, " ")
+  print("Palavra: " .. mascara)
+
+  if not mascara:find("_") then
+    print("Você venceu!")
+    break
+  end
+
+  io.write("Uma letra: ")
+  local chute = io.read():lower()
+  tentadas[chute] = true
+end
+</pre>
+<pre class="solucao" data-file="forca.lua">local palavra = "banana"
+local tentadas = {}
+
+print("=== Jogo da Forca ===")
+
+while true do
+  local partes = {}
+  for i = 1, #palavra do
+    local letra = palavra:sub(i, i)
+    if tentadas[letra] then
+      partes[#partes + 1] = letra
+    else
+      partes[#partes + 1] = "_"
+    end
+  end
+  local mascara = table.concat(partes, " ")
+  print("Palavra: " .. mascara)
+
+  if not mascara:find("_") then
+    print("Você venceu!")
+    break
+  end
+
+  io.write("Uma letra: ")
+  local chute = io.read():lower()
+  tentadas[chute] = true
+end
+</pre>
+</div>
+
+<hr>
+
+<h2 id="versao2">Versão 2 · Erros contados: dá para perder</h2>
+<p>Agora cada letra que <strong>não</strong> está na palavra conta um erro. Com 6 erros, a Ana perde. Para saber se a letra está na palavra, <code>palavra:find(chute, 1, true)</code>; para mostrar as erradas, uma lista <code>erradas</code>.</p>
+
+<pre class="file" data-file="forca.lua">local palavra = "banana"
+local MAX_ERROS = 6
+local tentadas = {}
+local erradas = {}    -- lista das letras erradas, na ordem
+local erros = 0
+
+print("=== Jogo da Forca ===")
+
+while true do
+  local partes = {}
+  for i = 1, #palavra do
+    local letra = palavra:sub(i, i)
+    if tentadas[letra] then
+      partes[#partes + 1] = letra
+    else
+      partes[#partes + 1] = "_"
+    end
+  end
+  local mascara = table.concat(partes, " ")
+  print("Palavra: " .. mascara)
+
+  if not mascara:find("_") then
+    print("Você venceu!")
+    break
+  end
+  if erros == MAX_ERROS then
+    print("Você perdeu! A palavra era " .. palavra .. ".")
+    break
+  end
+
+  io.write("Uma letra: ")
+  local chute = io.read():lower()
+  tentadas[chute] = true
+  if palavra:find(chute, 1, true) then
+    print("Tem!")
+  else
+    erros = erros + 1
+    erradas[#erradas + 1] = chute
+    print(string.format("Não tem. Erros: %d de %d (%s)", erros, MAX_ERROS, table.concat(erradas, " ")))
+  end
+end
+</pre>
+
+<dl class="anatomy">
+  <dt>if erros == MAX_ERROS then</dt><dd>Depois de mostrar a máscara, confere se os erros chegaram ao limite. Fica <strong>depois</strong> do teste de vitória e <strong>antes</strong> da pergunta: assim a Ana vê a máscara final antes do "Você perdeu!".</dd>
+  <dt>palavra:find(chute, 1, true)</dt><dd>Procura o chute dentro da palavra, a partir da posição <code>1</code>, como <strong>texto simples</strong> (o <code>true</code>; veja logo abaixo). Achou: devolve a posição (um número, que vale como verdadeiro). Não achou: <code>nil</code>.</dd>
+  <dt>erradas[#erradas + 1] = chute</dt><dd>A letra errada vai para o fim da lista, para a Ana não repetir.</dd>
+  <dt>string.format("… %d de %d (%s)", …)</dt><dd><code>%d</code> para os números e <code>%s</code> para o texto das erradas, juntadas com espaço.</dd>
+</dl>
+
+<pre class="term" data-cwd="~/projetos/forca">$ lua forca.lua
+=== Jogo da Forca ===
+Palavra: _ _ _ _ _ _
+Uma letra: a
+Tem!
+Palavra: _ a _ a _ a
+Uma letra: e
+Não tem. Erros: 1 de 6 (e)
+Palavra: _ a _ a _ a
+Uma letra: n
+Tem!
+Palavra: _ a n a n a
+Uma letra: o
+Não tem. Erros: 2 de 6 (e o)
+Palavra: _ a n a n a
+Uma letra: b
+Tem!
+Palavra: b a n a n a
+Você venceu!
+$ lua forca.lua
+=== Jogo da Forca ===
+Palavra: _ _ _ _ _ _
+Uma letra: x
+Não tem. Erros: 1 de 6 (x)
+Palavra: _ _ _ _ _ _
+Uma letra: z
+Não tem. Erros: 2 de 6 (x z)
+Palavra: _ _ _ _ _ _
+Uma letra: q
+Não tem. Erros: 3 de 6 (x z q)
+Palavra: _ _ _ _ _ _
+Uma letra: w
+Não tem. Erros: 4 de 6 (x z q w)
+Palavra: _ _ _ _ _ _
+Uma letra: k
+Não tem. Erros: 5 de 6 (x z q w k)
+Palavra: _ _ _ _ _ _
+Uma letra: y
+Não tem. Erros: 6 de 6 (x z q w k y)
+Palavra: _ _ _ _ _ _
+Você perdeu! A palavra era banana.</pre>
+
+<div class="cenario">
+<strong>Por que o <code>true</code> no <code>find</code>: o ponto que acha tudo</strong>
+<p>Sem os dois últimos argumentos, o <code>find</code> trata o texto procurado como um <a href="padroes.html">padrão</a>, e alguns caracteres têm significado especial. O ponto <code>.</code>, por exemplo, quer dizer "qualquer caractere":</p>
+<pre class="term">$ lua
+Lua 5.5.0  Copyright (C) 1994-2025 Lua.org, PUC-Rio
+&gt; ("banana"):find("n")
+3       3
+&gt; ("banana"):find(".")
+1       1
+&gt; ("banana"):find(".", 1, true)
+nil
+&gt; ("banana"):find("")
+1       0
+&gt; os.exit()</pre>
+<p>O <code>find("n")</code> achou o <code>n</code> na posição 3 (começa e termina na 3). Mas o <code>find(".")</code> "achou" um ponto na posição 1, onde está o <code>b</code>: como padrão, o ponto casa com qualquer letra. Se a Ana chutasse <code>.</code>, a versão 2 sem o <code>true</code> diria "Tem!". Com o terceiro argumento <code>1</code> (começar da posição 1) e o quarto <code>true</code> ("simples"), o <code>find</code> procura o ponto de verdade e devolve <code>nil</code>. E o texto vazio (<code>""</code>, a Ana só aperta <kbd>Enter</kbd>) é "achado" em qualquer palavra, com ou sem <code>true</code>: a versão 3 resolve recusando o chute vazio.</p>
+</div>
+
+<div class="trylua" data-stdin="x\nz\nq\nw\nk\ny" data-goal="out:Você perdeu! A palavra era banana.;;semerro">
+<p class="try-task"><strong>Missão (versão 2):</strong> o jogo conta os erros, mas nunca termina com derrota: depois do sexto erro ele continua pedindo letras, até a entrada acabar e o <code>io.read()</code> devolver <code>nil</code>. Onde está o comentário, acrescente o teste: se <code>erros == MAX_ERROS</code>, mostre <code>Você perdeu! A palavra era banana.</code> (com a variável <code>palavra</code>) e saia do laço. A entrada são 6 letras que não estão em "banana".</p>
+<pre class="script" data-file="forca.lua">local palavra = "banana"
+local MAX_ERROS = 6
+local tentadas = {}
+local erradas = {}
+local erros = 0
+
+print("=== Jogo da Forca ===")
+
+while true do
+  local partes = {}
+  for i = 1, #palavra do
+    local letra = palavra:sub(i, i)
+    if tentadas[letra] then
+      partes[#partes + 1] = letra
+    else
+      partes[#partes + 1] = "_"
+    end
+  end
+  local mascara = table.concat(partes, " ")
+  print("Palavra: " .. mascara)
+
+  if not mascara:find("_") then
+    print("Você venceu!")
+    break
+  end
+  -- e se os erros chegaram a MAX_ERROS?
+
+  io.write("Uma letra: ")
+  local chute = io.read():lower()
+  tentadas[chute] = true
+  if palavra:find(chute, 1, true) then
+    print("Tem!")
+  else
+    erros = erros + 1
+    erradas[#erradas + 1] = chute
+    print(string.format("Não tem. Erros: %d de %d (%s)", erros, MAX_ERROS, table.concat(erradas, " ")))
+  end
+end
+</pre>
+<pre class="solucao" data-file="forca.lua">local palavra = "banana"
+local MAX_ERROS = 6
+local tentadas = {}
+local erradas = {}
+local erros = 0
+
+print("=== Jogo da Forca ===")
+
+while true do
+  local partes = {}
+  for i = 1, #palavra do
+    local letra = palavra:sub(i, i)
+    if tentadas[letra] then
+      partes[#partes + 1] = letra
+    else
+      partes[#partes + 1] = "_"
+    end
+  end
+  local mascara = table.concat(partes, " ")
+  print("Palavra: " .. mascara)
+
+  if not mascara:find("_") then
+    print("Você venceu!")
+    break
+  end
+  if erros == MAX_ERROS then
+    print("Você perdeu! A palavra era " .. palavra .. ".")
+    break
+  end
+
+  io.write("Uma letra: ")
+  local chute = io.read():lower()
+  tentadas[chute] = true
+  if palavra:find(chute, 1, true) then
+    print("Tem!")
+  else
+    erros = erros + 1
+    erradas[#erradas + 1] = chute
+    print(string.format("Não tem. Erros: %d de %d (%s)", erros, MAX_ERROS, table.concat(erradas, " ")))
+  end
+end
+</pre>
+</div>
+
+<hr>
+
+<h2 id="versao3">Versão 3 · Chute validado</h2>
+<p>Três chutes ainda atrapalham: o vazio (só <kbd>Enter</kbd>), que o <code>find</code> "acha" em qualquer palavra; um chute com mais de uma letra (<code>ab</code>) ou que não é letra (<code>1</code>); e uma letra repetida, que conta como erro de novo. E o <kbd>Ctrl</kbd>+<kbd>D</kbd> ainda quebra o jogo. A versão 3 confere o chute antes de usá-lo; só a parte de baixo do laço muda:</p>
+
+<pre class="file" data-file="forca.lua">  io.write("Uma letra: ")
+  local chute = io.read()
+  if chute == nil then          -- a entrada acabou (Ctrl+D)
+    print()
+    break
+  end
+  chute = chute:lower()
+
+  if not chute:match("^%a$") then
+    print("Digite uma letra só, de a a z.")
+  elseif tentadas[chute] then
+    print("Você já tentou a letra " .. chute .. ".")
+  else
+    tentadas[chute] = true
+    if palavra:find(chute, 1, true) then
+      print("Tem!")
+    else
+      erros = erros + 1
+      erradas[#erradas + 1] = chute
+      print(string.format("Não tem. Erros: %d de %d (%s)", erros, MAX_ERROS, table.concat(erradas, " ")))
+    end
+  end
+end
+</pre>
+
+<dl class="anatomy">
+  <dt>if chute == nil then … break</dt><dd>Fim da entrada: pula uma linha e sai do laço, sem erro.</dd>
+  <dt>chute:match("^%a$")</dt><dd>Um <a href="padroes.html">padrão</a>: <code>^</code> é o começo do texto, <code>%a</code> é <strong>uma</strong> letra e <code>$</code> é o fim. Juntos: "o texto inteiro é exatamente uma letra". <code>"a"</code> casa; <code>""</code>, <code>"ab"</code> e <code>"1"</code> não (o <code>match</code> devolve <code>nil</code>).</dd>
+  <dt>elseif tentadas[chute] then</dt><dd>A letra já está no conjunto: avisa e não conta nada, nem acerto nem erro.</dd>
+  <dt>else … tentadas[chute] = true</dt><dd>Só um chute válido e novo chega aqui e entra no conjunto.</dd>
+</dl>
+
+<pre class="term" data-cwd="~/projetos/forca">$ lua forca.lua
+=== Jogo da Forca ===
+Palavra: _ _ _ _ _ _
+Uma letra: ab
+Digite uma letra só, de a a z.
+Palavra: _ _ _ _ _ _
+Uma letra: 1
+Digite uma letra só, de a a z.
+Palavra: _ _ _ _ _ _
+Uma letra:
+Digite uma letra só, de a a z.                  « só Enter
+Palavra: _ _ _ _ _ _
+Uma letra: a
+Tem!
+Palavra: _ a _ a _ a
+Uma letra: A
+Você já tentou a letra a.                       « o lower() transformou A em a
+Palavra: _ a _ a _ a
+Uma letra: n
+Tem!
+Palavra: _ a n a n a
+Uma letra: b
+Tem!
+Palavra: b a n a n a
+Você venceu!</pre>
+
+<div class="cenario">
+<strong>Palavras com acento: <code>maçã</code> não funciona</strong>
+<p>A Ana trocou <code>"banana"</code> por <code>"maçã"</code> na versão 2:</p>
+<pre class="term" data-cwd="~/projetos/forca">$ sed 's/"banana"/"maçã"/' forca.lua &gt; acento.lua
+$ lua acento.lua
+=== Jogo da Forca ===
+Palavra: _ _ _ _ _ _
+Uma letra: m
+Tem!
+Palavra: m _ _ _ _ _
+Uma letra: a
+Tem!
+Palavra: m a _ _ _ _
+Uma letra: ç
+Tem!
+Palavra: m a _ _ _ _</pre>
+<p><strong>Seis</strong> tracinhos para uma palavra de quatro letras, e o <code>ç</code> "tem" mas não aparece. O motivo: o Lua guarda o texto em <strong>bytes</strong>, e no UTF-8 (o jeito como o Ubuntu guarda o texto) o <code>ç</code> e o <code>ã</code> ocupam 2 bytes cada. O <code>#</code> conta bytes, e o <code>sub(i, i)</code> pega um byte, que sozinho não é letra nenhuma:</p>
+<pre class="term">$ lua
+Lua 5.5.0  Copyright (C) 1994-2025 Lua.org, PUC-Rio
+&gt; #"maçã", utf8.len("maçã")
+6       4
+&gt; os.exit()</pre>
+<p>O <code>find</code> acha os 2 bytes do <code>ç</code> (por isso "Tem!"), mas a máscara compara byte a byte e nunca encontra um <code>"ç"</code> inteiro. E o padrão <code>%a</code> da versão 3 também não reconhece o <code>ç</code> como letra. Por isso as palavras do jogo são sem acento. Dá para fazer uma forca com acentos usando a biblioteca <code>utf8</code> (<code>for _, codigo in utf8.codes(palavra)</code> percorre letra por letra); veja <a href="utf8.html">Acentos e a Biblioteca utf8</a>.</p>
+</div>
+
+<div class="trylua" data-stdin="a\na\nn\nb" data-goal="out:Você já tentou a letra a.;;out:Você venceu!">
+<p class="try-task"><strong>Missão (versão 3):</strong> o jogo já recusa o que não é letra, mas aceita uma letra repetida como se fosse nova. Entre o <code>if not chute:match("^%a$")</code> e o <code>else</code>, acrescente um <code>elseif tentadas[chute] then</code> que mostra <code>Você já tentou a letra a.</code> (com o <code>chute</code>). A entrada da missão é <code>a</code>, <code>a</code>, <code>n</code>, <code>b</code>.</p>
+<pre class="script" data-file="forca.lua">local palavra = "banana"
+local MAX_ERROS = 6
+local tentadas = {}
+local erradas = {}
+local erros = 0
+
+print("=== Jogo da Forca ===")
+
+while true do
+  local partes = {}
+  for i = 1, #palavra do
+    local letra = palavra:sub(i, i)
+    if tentadas[letra] then
+      partes[#partes + 1] = letra
+    else
+      partes[#partes + 1] = "_"
+    end
+  end
+  local mascara = table.concat(partes, " ")
+  print("Palavra: " .. mascara)
+
+  if not mascara:find("_") then
+    print("Você venceu!")
+    break
+  end
+  if erros == MAX_ERROS then
+    print("Você perdeu! A palavra era " .. palavra .. ".")
+    break
+  end
+
+  io.write("Uma letra: ")
+  local chute = io.read()
+  if chute == nil then
+    print()
+    break
+  end
+  chute = chute:lower()
+
+  if not chute:match("^%a$") then
+    print("Digite uma letra só, de a a z.")
+  else
+    tentadas[chute] = true
+    if palavra:find(chute, 1, true) then
+      print("Tem!")
+    else
+      erros = erros + 1
+      erradas[#erradas + 1] = chute
+      print(string.format("Não tem. Erros: %d de %d (%s)", erros, MAX_ERROS, table.concat(erradas, " ")))
+    end
+  end
+end
+</pre>
+<pre class="solucao" data-file="forca.lua">local palavra = "banana"
+local MAX_ERROS = 6
+local tentadas = {}
+local erradas = {}
+local erros = 0
+
+print("=== Jogo da Forca ===")
+
+while true do
+  local partes = {}
+  for i = 1, #palavra do
+    local letra = palavra:sub(i, i)
+    if tentadas[letra] then
+      partes[#partes + 1] = letra
+    else
+      partes[#partes + 1] = "_"
+    end
+  end
+  local mascara = table.concat(partes, " ")
+  print("Palavra: " .. mascara)
+
+  if not mascara:find("_") then
+    print("Você venceu!")
+    break
+  end
+  if erros == MAX_ERROS then
+    print("Você perdeu! A palavra era " .. palavra .. ".")
+    break
+  end
+
+  io.write("Uma letra: ")
+  local chute = io.read()
+  if chute == nil then
+    print()
+    break
+  end
+  chute = chute:lower()
+
+  if not chute:match("^%a$") then
+    print("Digite uma letra só, de a a z.")
+  elseif tentadas[chute] then
+    print("Você já tentou a letra " .. chute .. ".")
+  else
+    tentadas[chute] = true
+    if palavra:find(chute, 1, true) then
+      print("Tem!")
+    else
+      erros = erros + 1
+      erradas[#erradas + 1] = chute
+      print(string.format("Não tem. Erros: %d de %d (%s)", erros, MAX_ERROS, table.concat(erradas, " ")))
+    end
+  end
+end
+</pre>
+</div>
+
+<hr>
+
+<h2 id="versao4">Versão 4 · Funções, desenho e palavra sorteada</h2>
+<p>O laço principal está comprido e mistura tudo. A versão 4 separa as tarefas em funções, desenha a forca e sorteia a palavra de uma lista, para o jogo não ser sempre "banana".</p>
+
+<pre class="file" data-file="forca.lua">-- Jogo da Forca da Ana, versão 4: funções, desenho e palavra sorteada
+
+local PALAVRAS = { "banana", "abacaxi", "laranja", "morango", "goiaba", "melancia" }
+local MAX_ERROS = 6
+
+-- A palavra com "_" no lugar das letras que ainda não foram tentadas.
+local function mascarar(palavra, tentadas)
+  local partes = {}
+  for i = 1, #palavra do
+    local letra = palavra:sub(i, i)
+    partes[#partes + 1] = tentadas[letra] and letra or "_"
+  end
+  return table.concat(partes, " ")
+end
+
+-- Desenha a forca com as partes do boneco que já "caíram".
+local function desenhar(erros)
+  local cabeca = erros &gt;= 1 and "O" or " "
+  local tronco = erros &gt;= 2 and "|" or " "
+  local braco1 = erros &gt;= 3 and "/" or " "
+  local braco2 = erros &gt;= 4 and "\\" or " "
+  local perna1 = erros &gt;= 5 and "/" or " "
+  local perna2 = erros &gt;= 6 and "\\" or " "
+  print("  +---+")
+  print("  |   |")
+  print("  " .. cabeca .. "   |")
+  print(" " .. braco1 .. tronco .. braco2 .. "  |")
+  print(" " .. perna1 .. " " .. perna2 .. "  |")
+  print("      |")
+  print("=======")
+end
+
+-- Pergunta até vir uma letra nova. Devolve a letra, ou nil se a entrada acabou.
+local function ler_letra(tentadas)
+  while true do
+    io.write("Uma letra: ")
+    local chute = io.read()
+    if chute == nil then
+      print()
+      return nil
+    end
+    chute = chute:lower()
+    if not chute:match("^%a$") then
+      print("Digite uma letra só, de a a z.")
+    elseif tentadas[chute] then
+      print("Você já tentou a letra " .. chute .. ".")
+    else
+      return chute
+    end
+  end
+end
+
+-- Joga uma partida. Devolve true se a Ana venceu.
+local function jogar(palavra)
+  local tentadas, erradas, erros = {}, {}, 0
+  while true do
+    desenhar(erros)
+    local mascara = mascarar(palavra, tentadas)
+    print("Palavra: " .. mascara)
+    if #erradas &gt; 0 then
+      print("Erradas: " .. table.concat(erradas, " "))
+    end
+
+    if not mascara:find("_") then
+      print("Você venceu! A palavra era " .. palavra .. ".")
+      return true
+    end
+    if erros == MAX_ERROS then
+      print("Você perdeu! A palavra era " .. palavra .. ".")
+      return false
+    end
+
+    local chute = ler_letra(tentadas)
+    if chute == nil then
+      return false
+    end
+    tentadas[chute] = true
+    if palavra:find(chute, 1, true) then
+      print("Tem!")
+    else
+      erros = erros + 1
+      erradas[#erradas + 1] = chute
+      print("Não tem.")
+    end
+  end
+end
+
+print("=== Jogo da Forca ===")
+local palavra = PALAVRAS[math.random(#PALAVRAS)]
+jogar(palavra)
+</pre>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Peça</th><th>O que faz</th></tr>
+<tr><td><code>local PALAVRAS = { … }</code></td><td>A lista de palavras possíveis, em MAIÚSCULAS porque não muda durante o jogo.</td></tr>
+<tr><td><code>tentadas[letra] and letra or "_"</code></td><td>O <a href="and-or-ternario.html">truque do and/or</a>: "se <code>tentadas[letra]</code>, então <code>letra</code>, senão <code>"_"</code>", numa linha só, no lugar do <code>if</code>/<code>else</code> da versão 1. Funciona porque <code>letra</code> nunca é <code>false</code> nem <code>nil</code>.</td></tr>
+<tr><td><code>erros &gt;= 1 and "O" or " "</code></td><td>O mesmo truque no desenho: cada parte do boneco é o seu caractere ou um espaço, conforme o número de erros.</td></tr>
+<tr><td><code>"\\"</code></td><td>A barra invertida sozinha. Dentro de um texto, <code>\</code> começa um código especial (como <code>\n</code>); para escrever a própria barra, escreve-se duas (veja <a href="strings-escape.html">Caracteres de Escape</a>).</td></tr>
+<tr><td><code>local function ler_letra(tentadas)</code></td><td>A validação da versão 3 numa função que <strong>insiste</strong> até vir uma letra nova. Recebe a tabela <code>tentadas</code> para saber o que já foi chutado.</td></tr>
+<tr><td><code>local tentadas, erradas, erros = {}, {}, 0</code></td><td><a href="atribuicao-multipla.html">Atribuição múltipla</a>: três variáveis locais de uma vez. Ficam <strong>dentro</strong> de <code>jogar</code>: cada partida começa do zero.</td></tr>
+<tr><td><code>PALAVRAS[math.random(#PALAVRAS)]</code></td><td><code>#PALAVRAS</code> é 6; <code>math.random(6)</code> sorteia de 1 a 6; e <code>PALAVRAS[…]</code> pega a palavra daquela posição.</td></tr>
+</table>
+</div>
+
+<p>Uma partida com a semente 13 (a palavra sorteada é <code>morango</code>; sobre a semente e o <code>LUA_INIT</code>, veja o <a href="projeto-adivinhacao.html">Jogo de Adivinhação</a>). O começo e o fim:</p>
+
+<pre class="term" data-cwd="~/projetos/forca">$ export LUA_INIT="math.randomseed(13)"
+$ lua forca.lua
+=== Jogo da Forca ===
+  +---+
+  |   |
+      |
+      |
+      |
+      |
+=======
+Palavra: _ _ _ _ _ _ _
+Uma letra: a
+Tem!
+  +---+
+  |   |
+      |
+      |
+      |
+      |
+=======
+Palavra: _ _ _ a _ _ _
+Uma letra: e
+Não tem.
+  +---+
+  |   |
+  O   |                                        « primeiro erro: a cabeça
+      |
+      |
+      |
+=======
+Palavra: _ _ _ a _ _ _
+Erradas: e
+Uma letra: o
+Tem!
+…
+Palavra: m o r a n _ o
+Erradas: e i
+Uma letra: g
+Tem!
+  +---+
+  |   |
+  O   |
+  |   |
+      |
+      |
+=======
+Palavra: m o r a n g o
+Erradas: e i
+Você venceu! A palavra era morango.</pre>
+
+<div class="trylua" data-stdin="m\ne\nl\na\nn\nc\ni" data-goal="out:Você venceu! A palavra era melancia.;;src:math\.random\(">
+<p class="try-task"><strong>Missão (versão 4):</strong> a lista <code>PALAVRAS</code> existe, mas o jogo continua usando sempre <code>"banana"</code>. Troque a palavra fixa da penúltima linha por uma sorteada da lista, com <code>math.random</code>. Com a semente 42 da primeira linha, a palavra sorteada é <code>melancia</code>, e a entrada da missão tem as letras dela.</p>
+<pre class="script" data-file="forca.lua">math.randomseed(42)  -- semente fixa: a palavra sorteada é a 6ª
+local PALAVRAS = { "banana", "abacaxi", "laranja", "morango", "goiaba", "melancia" }
+local MAX_ERROS = 6
+
+local function mascarar(palavra, tentadas)
+  local partes = {}
+  for i = 1, #palavra do
+    local letra = palavra:sub(i, i)
+    partes[#partes + 1] = tentadas[letra] and letra or "_"
+  end
+  return table.concat(partes, " ")
+end
+
+local function desenhar(erros)
+  local cabeca = erros &gt;= 1 and "O" or " "
+  local tronco = erros &gt;= 2 and "|" or " "
+  local braco1 = erros &gt;= 3 and "/" or " "
+  local braco2 = erros &gt;= 4 and "\\" or " "
+  local perna1 = erros &gt;= 5 and "/" or " "
+  local perna2 = erros &gt;= 6 and "\\" or " "
+  print("  +---+")
+  print("  |   |")
+  print("  " .. cabeca .. "   |")
+  print(" " .. braco1 .. tronco .. braco2 .. "  |")
+  print(" " .. perna1 .. " " .. perna2 .. "  |")
+  print("      |")
+  print("=======")
+end
+
+local function ler_letra(tentadas)
+  while true do
+    io.write("Uma letra: ")
+    local chute = io.read()
+    if chute == nil then
+      print()
+      return nil
+    end
+    chute = chute:lower()
+    if not chute:match("^%a$") then
+      print("Digite uma letra só, de a a z.")
+    elseif tentadas[chute] then
+      print("Você já tentou a letra " .. chute .. ".")
+    else
+      return chute
+    end
+  end
+end
+
+local function jogar(palavra)
+  local tentadas, erradas, erros = {}, {}, 0
+  while true do
+    desenhar(erros)
+    local mascara = mascarar(palavra, tentadas)
+    print("Palavra: " .. mascara)
+    if #erradas &gt; 0 then
+      print("Erradas: " .. table.concat(erradas, " "))
+    end
+
+    if not mascara:find("_") then
+      print("Você venceu! A palavra era " .. palavra .. ".")
+      return true
+    end
+    if erros == MAX_ERROS then
+      print("Você perdeu! A palavra era " .. palavra .. ".")
+      return false
+    end
+
+    local chute = ler_letra(tentadas)
+    if chute == nil then
+      return false
+    end
+    tentadas[chute] = true
+    if palavra:find(chute, 1, true) then
+      print("Tem!")
+    else
+      erros = erros + 1
+      erradas[#erradas + 1] = chute
+      print("Não tem.")
+    end
+  end
+end
+
+print("=== Jogo da Forca ===")
+local palavra = "banana"
+jogar(palavra)
+</pre>
+<pre class="solucao" data-file="forca.lua">math.randomseed(42)  -- semente fixa: a palavra sorteada é a 6ª
+local PALAVRAS = { "banana", "abacaxi", "laranja", "morango", "goiaba", "melancia" }
+local MAX_ERROS = 6
+
+local function mascarar(palavra, tentadas)
+  local partes = {}
+  for i = 1, #palavra do
+    local letra = palavra:sub(i, i)
+    partes[#partes + 1] = tentadas[letra] and letra or "_"
+  end
+  return table.concat(partes, " ")
+end
+
+local function desenhar(erros)
+  local cabeca = erros &gt;= 1 and "O" or " "
+  local tronco = erros &gt;= 2 and "|" or " "
+  local braco1 = erros &gt;= 3 and "/" or " "
+  local braco2 = erros &gt;= 4 and "\\" or " "
+  local perna1 = erros &gt;= 5 and "/" or " "
+  local perna2 = erros &gt;= 6 and "\\" or " "
+  print("  +---+")
+  print("  |   |")
+  print("  " .. cabeca .. "   |")
+  print(" " .. braco1 .. tronco .. braco2 .. "  |")
+  print(" " .. perna1 .. " " .. perna2 .. "  |")
+  print("      |")
+  print("=======")
+end
+
+local function ler_letra(tentadas)
+  while true do
+    io.write("Uma letra: ")
+    local chute = io.read()
+    if chute == nil then
+      print()
+      return nil
+    end
+    chute = chute:lower()
+    if not chute:match("^%a$") then
+      print("Digite uma letra só, de a a z.")
+    elseif tentadas[chute] then
+      print("Você já tentou a letra " .. chute .. ".")
+    else
+      return chute
+    end
+  end
+end
+
+local function jogar(palavra)
+  local tentadas, erradas, erros = {}, {}, 0
+  while true do
+    desenhar(erros)
+    local mascara = mascarar(palavra, tentadas)
+    print("Palavra: " .. mascara)
+    if #erradas &gt; 0 then
+      print("Erradas: " .. table.concat(erradas, " "))
+    end
+
+    if not mascara:find("_") then
+      print("Você venceu! A palavra era " .. palavra .. ".")
+      return true
+    end
+    if erros == MAX_ERROS then
+      print("Você perdeu! A palavra era " .. palavra .. ".")
+      return false
+    end
+
+    local chute = ler_letra(tentadas)
+    if chute == nil then
+      return false
+    end
+    tentadas[chute] = true
+    if palavra:find(chute, 1, true) then
+      print("Tem!")
+    else
+      erros = erros + 1
+      erradas[#erradas + 1] = chute
+      print("Não tem.")
+    end
+  end
+end
+
+print("=== Jogo da Forca ===")
+local palavra = PALAVRAS[math.random(#PALAVRAS)]
+jogar(palavra)
+</pre>
+</div>
+
+<hr>
+
+<h2 id="versao5">Versão 5 · As palavras num arquivo</h2>
+<p>Para acrescentar palavras, hoje é preciso mexer no programa. Melhor guardá-las num arquivo de texto, uma por linha, que a Ana edita no editor que quiser:</p>
+
+<pre class="term" data-cwd="~/projetos/forca">$ cat palavras.txt
+abacate
+caju
+
+pitanga
+jabuticaba</pre>
+
+<p>(A linha vazia está ali de propósito: acontece quando alguém aperta <kbd>Enter</kbd> a mais. O programa precisa pular.) Só duas partes mudam: a lista fixa <code>PALAVRAS</code> dá lugar a uma função que lê o arquivo, e o programa principal confere se deu certo.</p>
+
+<pre class="file" data-file="forca.lua">local ARQUIVO = "palavras.txt"
+local MAX_ERROS = 6
+
+-- Lê as palavras do arquivo, uma por linha (pula as linhas vazias).
+local function carregar_palavras(nome)
+  local arquivo, erro = io.open(nome, "r")
+  if not arquivo then
+    return nil, erro
+  end
+  local lista = {}
+  for linha in arquivo:lines() do
+    local palavra = linha:match("^%s*(.-)%s*$"):lower()
+    if palavra ~= "" then
+      lista[#lista + 1] = palavra
+    end
+  end
+  arquivo:close()
+  return lista
+end
+
+-- (mascarar, desenhar, ler_letra e jogar: iguais aos da versão 4)
+
+print("=== Jogo da Forca ===")
+local palavras, erro = carregar_palavras(ARQUIVO)
+if not palavras then
+  print("Não consegui ler as palavras: " .. erro)
+  os.exit(1)
+end
+if #palavras == 0 then
+  print("O arquivo " .. ARQUIVO .. " não tem nenhuma palavra.")
+  os.exit(1)
+end
+print(#palavras .. " palavras carregadas.")
+
+jogar(palavras[math.random(#palavras)])
+</pre>
+
+<dl class="anatomy">
+  <dt>io.open(nome, "r")</dt><dd>Abre o arquivo para leitura (<code>"r"</code>, de <em>read</em>). Deu certo: devolve o arquivo aberto. Não deu: devolve <code>nil</code> e a mensagem do motivo (veja <a href="io-open.html">io.open</a>).</dd>
+  <dt>return nil, erro</dt><dd>A função passa o problema para quem a chamou, no mesmo formato do <code>io.open</code>.</dd>
+  <dt>for linha in arquivo:lines() do</dt><dd>Uma volta por linha do arquivo, já sem o <kbd>Enter</kbd> do fim (veja <a href="io-lines.html">Linha por Linha</a>).</dd>
+  <dt>linha:match("^%s*(.-)%s*$"):lower()</dt><dd>Tira os espaços das pontas (o mesmo padrão da <a href="projeto-calculadora.html">Calculadora</a>) e passa para minúsculas: <code>" Caju "</code> vira <code>"caju"</code>.</dd>
+  <dt>if palavra ~= "" then</dt><dd>Só guarda o que sobrou de não vazio: a linha em branco é pulada.</dd>
+  <dt>arquivo:close()</dt><dd>Fecha o arquivo. Sempre feche o que abriu.</dd>
+  <dt>os.exit(1)</dt><dd>Sem palavras não há jogo: encerra com o código 1, "deu errado".</dd>
+</dl>
+
+<pre class="term" data-cwd="~/projetos/forca">$ lua forca.lua
+=== Jogo da Forca ===
+4 palavras carregadas.
+  +---+
+  |   |
+      |
+      |
+      |
+      |
+=======
+Palavra: _ _ _ _ _ _ _ _ _ _
+Uma letra: a
+Tem!
+…
+Palavra: j a b u _ i c a b a
+Uma letra: t
+Tem!
+  +---+
+  |   |
+      |
+      |
+      |
+      |
+=======
+Palavra: j a b u t i c a b a
+Você venceu! A palavra era jabuticaba.</pre>
+
+<p>"4 palavras carregadas": a linha vazia foi pulada. (Com o <code>LUA_INIT</code> da semente 13 ainda valendo, saiu a 4ª palavra, <code>jabuticaba</code>, e a Ana acertou sem nenhum erro.)</p>
+
+<div class="cenario">
+<strong>O arquivo não existe</strong>
+<pre class="term" data-cwd="~/projetos/forca">$ mv palavras.txt guardado.txt
+$ lua forca.lua
+=== Jogo da Forca ===
+Não consegui ler as palavras: palavras.txt: No such file or directory
+$ echo $?
+1</pre>
+<p>"Nenhum arquivo ou diretório com esse nome": a mensagem veio do <code>io.open</code>, e o programa a mostrou numa frase em português e saiu com o código 1. Compare com o que acontece se o programa usar <code>io.lines</code> direto, sem <code>io.open</code>:</p>
+<pre class="term" data-cwd="~/projetos/forca">$ lua -e 'for linha in io.lines("palavras.txt") do print(linha) end'
+lua: (command line):1: cannot open file 'palavras.txt' (No such file or directory)
+stack traceback:
+        [C]: in field 'lines'
+        (command line):1: in main chunk
+        [C]: in ?</pre>
+<p>O <code>io.lines(nome)</code> é mais curto, mas, se o arquivo não abre, ele <strong>para o programa</strong> com um erro ("não consigo abrir o arquivo"), e o traceback mostra que o erro saiu de dentro do <code>lines</code>. O <code>io.open</code> devolve o problema para você decidir. Num jogo, a frase amigável é melhor. Mais em <a href="arquivos-ler.html">Lendo Arquivos</a>.</p>
+</div>
+
+<div class="trylua" data-stdin="c\na\nj\nu" data-goal="out:4 palavras carregadas.;;out:Você venceu! A palavra era caju.;;src:lines">
+<p class="try-task"><strong>Missão (versão 5):</strong> a caixa tem duas abas: o programa e o <code>palavras.txt</code>. A função <code>carregar_palavras</code> abre o arquivo, mas ainda não lê nada, e o jogo diz que o arquivo está vazio. Onde está o comentário, percorra as linhas com <code>for linha in arquivo:lines() do</code>, tire os espaços das pontas, passe para minúsculas e guarde na <code>lista</code> só as que não ficaram vazias. Com a semente 42, a palavra sorteada é a 2ª (<code>caju</code>).</p>
+<pre class="script" data-file="forca.lua">math.randomseed(42)  -- semente fixa: com 4 palavras, sai a 2ª
+local ARQUIVO = "palavras.txt"
+local MAX_ERROS = 6
+
+local function carregar_palavras(nome)
+  local arquivo, erro = io.open(nome, "r")
+  if not arquivo then
+    return nil, erro
+  end
+  local lista = {}
+  -- leia aqui as linhas do arquivo
+  arquivo:close()
+  return lista
+end
+
+local function mascarar(palavra, tentadas)
+  local partes = {}
+  for i = 1, #palavra do
+    local letra = palavra:sub(i, i)
+    partes[#partes + 1] = tentadas[letra] and letra or "_"
+  end
+  return table.concat(partes, " ")
+end
+
+local function desenhar(erros)
+  local cabeca = erros &gt;= 1 and "O" or " "
+  local tronco = erros &gt;= 2 and "|" or " "
+  local braco1 = erros &gt;= 3 and "/" or " "
+  local braco2 = erros &gt;= 4 and "\\" or " "
+  local perna1 = erros &gt;= 5 and "/" or " "
+  local perna2 = erros &gt;= 6 and "\\" or " "
+  print("  +---+")
+  print("  |   |")
+  print("  " .. cabeca .. "   |")
+  print(" " .. braco1 .. tronco .. braco2 .. "  |")
+  print(" " .. perna1 .. " " .. perna2 .. "  |")
+  print("      |")
+  print("=======")
+end
+
+local function ler_letra(tentadas)
+  while true do
+    io.write("Uma letra: ")
+    local chute = io.read()
+    if chute == nil then
+      print()
+      return nil
+    end
+    chute = chute:lower()
+    if not chute:match("^%a$") then
+      print("Digite uma letra só, de a a z.")
+    elseif tentadas[chute] then
+      print("Você já tentou a letra " .. chute .. ".")
+    else
+      return chute
+    end
+  end
+end
+
+local function jogar(palavra)
+  local tentadas, erradas, erros = {}, {}, 0
+  while true do
+    desenhar(erros)
+    local mascara = mascarar(palavra, tentadas)
+    print("Palavra: " .. mascara)
+    if #erradas &gt; 0 then
+      print("Erradas: " .. table.concat(erradas, " "))
+    end
+
+    if not mascara:find("_") then
+      print("Você venceu! A palavra era " .. palavra .. ".")
+      return true
+    end
+    if erros == MAX_ERROS then
+      print("Você perdeu! A palavra era " .. palavra .. ".")
+      return false
+    end
+
+    local chute = ler_letra(tentadas)
+    if chute == nil then
+      return false
+    end
+    tentadas[chute] = true
+    if palavra:find(chute, 1, true) then
+      print("Tem!")
+    else
+      erros = erros + 1
+      erradas[#erradas + 1] = chute
+      print("Não tem.")
+    end
+  end
+end
+
+print("=== Jogo da Forca ===")
+local palavras, erro = carregar_palavras(ARQUIVO)
+if not palavras then
+  print("Não consegui ler as palavras: " .. erro)
+  os.exit(1)
+end
+if #palavras == 0 then
+  print("O arquivo " .. ARQUIVO .. " não tem nenhuma palavra.")
+  os.exit(1)
+end
+print(#palavras .. " palavras carregadas.")
+
+jogar(palavras[math.random(#palavras)])
+</pre>
+<pre class="script" data-file="palavras.txt">abacate
+caju
+
+pitanga
+jabuticaba
+</pre>
+<pre class="solucao" data-file="forca.lua">math.randomseed(42)  -- semente fixa: com 4 palavras, sai a 2ª
+local ARQUIVO = "palavras.txt"
+local MAX_ERROS = 6
+
+local function carregar_palavras(nome)
+  local arquivo, erro = io.open(nome, "r")
+  if not arquivo then
+    return nil, erro
+  end
+  local lista = {}
+  for linha in arquivo:lines() do
+    local palavra = linha:match("^%s*(.-)%s*$"):lower()
+    if palavra ~= "" then
+      lista[#lista + 1] = palavra
+    end
+  end
+  arquivo:close()
+  return lista
+end
+
+local function mascarar(palavra, tentadas)
+  local partes = {}
+  for i = 1, #palavra do
+    local letra = palavra:sub(i, i)
+    partes[#partes + 1] = tentadas[letra] and letra or "_"
+  end
+  return table.concat(partes, " ")
+end
+
+local function desenhar(erros)
+  local cabeca = erros &gt;= 1 and "O" or " "
+  local tronco = erros &gt;= 2 and "|" or " "
+  local braco1 = erros &gt;= 3 and "/" or " "
+  local braco2 = erros &gt;= 4 and "\\" or " "
+  local perna1 = erros &gt;= 5 and "/" or " "
+  local perna2 = erros &gt;= 6 and "\\" or " "
+  print("  +---+")
+  print("  |   |")
+  print("  " .. cabeca .. "   |")
+  print(" " .. braco1 .. tronco .. braco2 .. "  |")
+  print(" " .. perna1 .. " " .. perna2 .. "  |")
+  print("      |")
+  print("=======")
+end
+
+local function ler_letra(tentadas)
+  while true do
+    io.write("Uma letra: ")
+    local chute = io.read()
+    if chute == nil then
+      print()
+      return nil
+    end
+    chute = chute:lower()
+    if not chute:match("^%a$") then
+      print("Digite uma letra só, de a a z.")
+    elseif tentadas[chute] then
+      print("Você já tentou a letra " .. chute .. ".")
+    else
+      return chute
+    end
+  end
+end
+
+local function jogar(palavra)
+  local tentadas, erradas, erros = {}, {}, 0
+  while true do
+    desenhar(erros)
+    local mascara = mascarar(palavra, tentadas)
+    print("Palavra: " .. mascara)
+    if #erradas &gt; 0 then
+      print("Erradas: " .. table.concat(erradas, " "))
+    end
+
+    if not mascara:find("_") then
+      print("Você venceu! A palavra era " .. palavra .. ".")
+      return true
+    end
+    if erros == MAX_ERROS then
+      print("Você perdeu! A palavra era " .. palavra .. ".")
+      return false
+    end
+
+    local chute = ler_letra(tentadas)
+    if chute == nil then
+      return false
+    end
+    tentadas[chute] = true
+    if palavra:find(chute, 1, true) then
+      print("Tem!")
+    else
+      erros = erros + 1
+      erradas[#erradas + 1] = chute
+      print("Não tem.")
+    end
+  end
+end
+
+print("=== Jogo da Forca ===")
+local palavras, erro = carregar_palavras(ARQUIVO)
+if not palavras then
+  print("Não consegui ler as palavras: " .. erro)
+  os.exit(1)
+end
+if #palavras == 0 then
+  print("O arquivo " .. ARQUIVO .. " não tem nenhuma palavra.")
+  os.exit(1)
+end
+print(#palavras .. " palavras carregadas.")
+
+jogar(palavras[math.random(#palavras)])
+</pre>
+</div>
+
+<hr>
+
+<h2>Formas diferentes de montar a máscara</h2>
+<p>Três jeitos de transformar <code>banana</code> (com <code>a</code> e <code>n</code> tentadas) na máscara:</p>
+
+<pre class="file" data-file="formas.lua">local palavra = "banana"
+local tentadas = { a = true, n = true }
+
+-- Forma 1: uma tabela de pedaços + table.concat
+local partes = {}
+for i = 1, #palavra do
+  local letra = palavra:sub(i, i)
+  partes[#partes + 1] = tentadas[letra] and letra or "_"
+end
+print("1: [" .. table.concat(partes, " ") .. "]")
+
+-- Forma 2: juntando com .. dentro do laço
+local mascara = ""
+for i = 1, #palavra do
+  local letra = palavra:sub(i, i)
+  mascara = mascara .. (tentadas[letra] and letra or "_") .. " "
+end
+print("2: [" .. mascara .. "]")
+
+-- Forma 3: gsub com uma função
+local m3 = palavra:gsub(".", function (letra)
+  return tentadas[letra] and letra or "_"
+end)
+print("3: [" .. m3 .. "]")
+</pre>
+
+<pre class="term" data-cwd="~/projetos/forca">$ lua formas.lua
+1: [_ a n a n a]
+2: [_ a n a n a ]
+3: [_anana]</pre>
+
+<p>Os colchetes no <code>print</code> mostram onde cada texto começa e termina. A forma 2 deixa um espaço sobrando no fim (o do último pedaço). A forma 3 usa o <a href="gsub.html">gsub</a> com uma função: para cada caractere (o padrão <code>.</code>), o <code>gsub</code> chama a função e troca o caractere pelo que ela devolver; fica curta, mas sem os espaços. (O <code>local m3 = …</code> guarda só o primeiro dos dois valores do <code>gsub</code>.)</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Forma</th><th>Quando usar</th></tr>
+<tr><td>Tabela + <code>table.concat</code></td><td>O jeito recomendado para montar um texto aos pedaços: o separador fica só <strong>entre</strong> os itens, e é rápido mesmo com milhares de pedaços.</td></tr>
+<tr><td><code>..</code> no laço</td><td>Para poucos pedaços, é o mais fácil de entender. Com muitos, fica lento: cada <code>..</code> cria um texto novo inteiro (veja <a href="table-concat.html">table.concat</a>).</td></tr>
+<tr><td><code>gsub</code> com função</td><td>Quando cada caractere vira outro, sem separador. Curto, mas exige conhecer padrões e funções como valores.</td></tr>
+</table>
+</div>
+
+<h2 id="ideias">Ideias para continuar</h2>
+<ul>
+  <li>Perguntar "Jogar de novo?" e contar vitórias e derrotas, como o recorde do <a href="projeto-adivinhacao.html">Jogo de Adivinhação</a> (o <code>jogar</code> já devolve <code>true</code>/<code>false</code>).</li>
+  <li>Aceitar o chute da palavra inteira: se o chute tiver mais de uma letra e for igual à palavra, vitória; se não, conta dois erros.</li>
+  <li>Guardar uma dica junto da palavra no arquivo (<code>caju;fruta do Nordeste</code>) e separar as duas partes com <code>linha:match("^(.-);(.*)$")</code>.</li>
+</ul>
+
+<hr>
+
+<h2>Referência rápida do projeto</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>Para que serviu</th></tr>
+<tr><td><code>palavra:sub(i, i)</code></td><td>A letra da posição <code>i</code></td></tr>
+<tr><td><code>tentadas[letra] = true</code> / <code>if tentadas[letra]</code></td><td>Tabela como conjunto: guardar e consultar as letras tentadas</td></tr>
+<tr><td><code>partes[#partes + 1] = x</code></td><td>Pôr no fim da lista</td></tr>
+<tr><td><code>table.concat(partes, " ")</code></td><td>Juntar a lista num texto, com espaço entre os itens</td></tr>
+<tr><td><code>palavra:find(chute, 1, true)</code></td><td>Procurar o chute como texto simples (sem padrões)</td></tr>
+<tr><td><code>chute:match("^%a$")</code></td><td>Aceitar só uma letra</td></tr>
+<tr><td><code>cond and a or b</code></td><td>Escolher entre dois valores numa linha</td></tr>
+<tr><td><code>LISTA[math.random(#LISTA)]</code></td><td>Sortear um item da lista</td></tr>
+<tr><td><code>io.open(nome, "r")</code> + <code>arquivo:lines()</code> + <code>arquivo:close()</code></td><td>Ler um arquivo linha por linha, tratando o arquivo que não existe</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Sintoma</th><th>Causa provável</th></tr>
+<tr><td><code>attempt to index a nil value</code> na linha do <code>io.read():lower()</code></td><td>A entrada acabou (<kbd>Ctrl</kbd>+<kbd>D</kbd>): teste o <code>nil</code> antes do <code>:lower()</code></td></tr>
+<tr><td>O chute <code>.</code> ou o vazio dizem "Tem!"</td><td><code>find</code> sem o <code>true</code> (padrão) e chute não validado</td></tr>
+<tr><td>A máscara tem mais <code>_</code> que letras</td><td>Palavra com acento: <code>#</code> e <code>sub</code> contam bytes</td></tr>
+<tr><td>O jogo nunca termina em derrota</td><td>Faltou o <code>if erros == MAX_ERROS</code></td></tr>
+<tr><td><code>cannot open file 'palavras.txt' (No such file or directory)</code></td><td><code>io.lines(nome)</code> com o arquivo faltando: use <code>io.open</code> e trate o <code>nil</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. Uma letra</h3>
+<p>Complete para pegar a letra da posição <code>i</code>:</p>
+<div class="ex-code">local letra = palavra:<input data-answer="sub" aria-label="função">(i, i)</div>
+</div>
+
+<div class="exercise">
+<h3>2. Juntar com espaço</h3>
+<p>Complete para juntar a lista <code>partes</code> com um espaço entre os itens:</p>
+<div class="ex-code">local mascara = table.<input data-answer="concat" aria-label="função">(partes, " ")</div>
+</div>
+
+<div class="exercise">
+<h3>3. Procurar como texto simples</h3>
+<p>Complete o quarto argumento do <code>find</code>:</p>
+<div class="ex-code">if palavra:find(chute, 1, <input data-answer="true" aria-label="valor">) then</div>
+</div>
+
+<div class="exercise">
+<h3>4. Bytes</h3>
+<p>Quanto dá <code>#"maçã"</code> no Lua?</p>
+<div class="ex-code"><input data-answer="6" aria-label="resposta"></div>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">5. Para que serve a tabela <code>tentadas</code>, com <code>tentadas["a"] = true</code>?</p>
+<label><input type="radio" name="q5"> Guardar as letras na ordem em que foram chutadas</label>
+<label><input type="radio" name="q5"> Funcionar como um conjunto: perguntar "essa letra já foi tentada?" com <code>tentadas[letra]</code></label>
+<label><input type="radio" name="q5"> Contar quantas vezes cada letra aparece na palavra</label>
+<label><input type="radio" name="q5"> Guardar a palavra secreta</label>
+</div>
+
+<div class="mc" data-answer="1">
+<p class="mc-q">6. Por que <code>chute:match("^%a$")</code> recusa <code>"ab"</code>?</p>
+<label><input type="radio" name="q6"> Porque <code>^</code> e <code>$</code> exigem que o texto inteiro seja exatamente uma letra</label>
+<label><input type="radio" name="q6"> Porque <code>%a</code> só aceita a letra <code>a</code></label>
+<label><input type="radio" name="q6"> Porque o <code>match</code> não funciona com duas letras</label>
+<label><input type="radio" name="q6"> Porque <code>"ab"</code> está em maiúsculas</label>
+</div>
+
+<div class="mc" data-answer="3">
+<p class="mc-q">7. Qual a diferença entre ler as palavras com <code>io.open</code> + <code>lines</code> e com <code>io.lines(nome)</code> direto?</p>
+<label><input type="radio" name="q7"> Nenhuma: os dois param o programa se o arquivo faltar</label>
+<label><input type="radio" name="q7"> <code>io.lines</code> não pula as linhas vazias</label>
+<label><input type="radio" name="q7"> Se o arquivo faltar, <code>io.open</code> devolve <code>nil</code> e a mensagem, e <code>io.lines</code> para o programa com um erro</label>
+<label><input type="radio" name="q7"> <code>io.open</code> só funciona com arquivos <code>.lua</code></label>
+</div>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li>A máscara é montada a cada volta: <code>sub(i, i)</code> pega cada letra, uma tabela-conjunto diz se ela já foi tentada, e <code>table.concat</code> junta os pedaços.</li>
+  <li><code>find(chute, 1, true)</code> procura como texto simples; sem o <code>true</code>, o <code>.</code> casa com qualquer letra.</li>
+  <li>Valide antes de usar: <code>nil</code> (fim da entrada), <code>match("^%a$")</code> (uma letra só) e a letra repetida.</li>
+  <li>No Lua o texto é feito de bytes: palavras com acento precisam da biblioteca <code>utf8</code>.</li>
+  <li>Funções com nomes claros (<code>mascarar</code>, <code>desenhar</code>, <code>ler_letra</code>, <code>jogar</code>) e o truque <code>cond and a or b</code> deixam o jogo curto de ler.</li>
+  <li><code>io.open</code> + <code>lines</code> + <code>close</code> lê um arquivo e deixa você tratar o arquivo que falta.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
