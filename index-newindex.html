@@ -1,0 +1,584 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua __index e __newindex — valores padrão e tabelas só de leitura | Guia Lua</title>
+<meta name="description" content="Os metamétodos __index e __newindex do Lua para quem nunca programou: valores padrão com __index tabela (configurações), contagem com __index função (estoque que começa em 0), a corrente de procura, __newindex para avisar, validar e guardar em outro lugar, a tabela só de leitura com error(…, 2) e os erros reais do Lua 5.5.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">__index e __newindex</span></h1>
+
+<p class="intro">Quando você lê uma chave que não existe numa tabela, o Lua responde <code>nil</code>. Quando você grava uma chave nova, ele simplesmente cria. Os metamétodos <code>__index</code> ("índice", em inglês) e <code>__newindex</code> ("índice novo") deixam você <strong>mudar</strong> essas duas respostas: dar um valor padrão para o que falta, avisar ou recusar quando alguém cria um campo. São os dois metamétodos mais usados do Lua: é com o <code>__index</code> que se fazem as <a href="classes.html">classes</a>.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>Quando o Lua consulta o <code>__index</code>: só quando a chave <strong>não existe</strong> na tabela.</li>
+  <li>O <code>__index</code> como <strong>tabela</strong>: as configurações padrão da Ana, e a corrente de procura (tabela → manual → outra tabela).</li>
+  <li>O <code>__index</code> como <strong>função</strong>: um estoque em que todo produto começa com 0.</li>
+  <li>O <code>__newindex</code> como função (para avisar ou validar) e como tabela (para guardar em outro lugar).</li>
+  <li>Como fazer uma tabela <strong>só de leitura</strong>, com uma mensagem de erro que aponta para a linha certa.</li>
+  <li>Os erros reais: o <code>nil</code> na conta, o <code>return</code> esquecido, o nome errado do metamétodo.</li>
+</ul>
+</div>
+
+<p>Todos os programas rodaram no <strong>Lua 5.5</strong> da máquina da Ana (usuária <code>ana</code>, computador <code>notebook</code>) com <code>lua arquivo.lua</code>. Antes, faça a aula <a href="metatabelas.html">Metatabelas</a>: aqui usamos <code>setmetatable</code> o tempo todo.</p>
+
+<hr>
+
+<h2>A ideia: "se não estiver aqui, pergunte ao gerente"</h2>
+<p>Na padaria do bairro, o caixa novo tem um caderninho com os preços que ele já decorou. Quando um cliente pergunta o preço de algo que <strong>não está</strong> no caderninho, ele não responde "não existe": ele pergunta ao gerente. E quando alguém quer <strong>anotar</strong> um produto novo no caderninho, a regra da loja pode ser "só com autorização do gerente".</p>
+<ul>
+  <li>O caderninho é a <strong>tabela</strong>.</li>
+  <li>"Se não estiver aqui, pergunte ao gerente" é o <strong><code>__index</code></strong>: o que fazer quando alguém <strong>lê</strong> uma chave que falta.</li>
+  <li>"Para anotar uma coisa nova, fale com o gerente" é o <strong><code>__newindex</code></strong>: o que fazer quando alguém <strong>grava</strong> uma chave que ainda não existe.</li>
+</ul>
+<p>O que já está no caderninho continua sendo lido e mudado direto, sem incomodar o gerente. Guarde essa regra: ela vale para os dois metamétodos.</p>
+
+<hr>
+
+<h2>1. O problema: a chave que falta</h2>
+
+<pre class="file" data-file="faltando.lua">local estoque = { pao = 40, leite = 12 }
+print(estoque.pao)
+print(estoque.cafe)
+estoque.cafe = estoque.cafe + 5
+</pre>
+
+<pre class="term">$ lua faltando.lua
+40
+nil
+lua: faltando.lua:4: attempt to perform arithmetic on a nil value (field 'cafe')
+stack traceback:
+	faltando.lua:4: in main chunk
+	[C]: in ?</pre>
+
+<p>O <code>estoque.cafe</code> não existe, então vale <code>nil</code>. Mostrar <code>nil</code> não é erro, mas fazer conta com ele é: "tentativa de fazer aritmética com um valor <code>nil</code> (o campo <code>cafe</code>)". O Lua até diz que era um <strong>campo</strong> (<em>field</em>) de tabela. Veja <a href="nil.html">O Valor nil</a>. Daqui a pouco, o <code>__index</code> vai fazer esse programa funcionar sem mudar a linha 4.</p>
+
+<hr>
+
+<h2>2. <code>__index</code> como tabela: valores padrão</h2>
+<p>A Ana está escrevendo um editor de textos. Cada pessoa pode escolher a cor, o tamanho da letra e se quer som. Quem não escolher fica com o <strong>padrão</strong>. Em vez de copiar o padrão para cada pessoa, ela guarda só o que a pessoa mudou e manda o resto "perguntar ao padrão":</p>
+
+<pre class="file" data-file="padrao.lua">local padrao = { cor = "azul", tamanho = 12, som = true }
+
+local config_ana = setmetatable({ cor = "verde" }, { __index = padrao })
+
+print(config_ana.cor)
+print(config_ana.tamanho)
+print(config_ana.som)
+print(config_ana.idioma)
+</pre>
+
+<pre class="term">$ lua padrao.lua
+verde
+12
+true
+nil</pre>
+
+<dl class="anatomy">
+  <dt>{ __index = padrao }</dt><dd>A metatabela, escrita direto dentro do <code>setmetatable</code>. O campo <code>__index</code> aponta para a tabela <code>padrao</code>: "o que faltar em <code>config_ana</code>, procure em <code>padrao</code>".</dd>
+  <dt>config_ana.cor → verde</dt><dd>A chave <code>cor</code> <strong>existe</strong> em <code>config_ana</code>: o Lua devolve na hora e nem olha a metatabela.</dd>
+  <dt>config_ana.tamanho → 12</dt><dd>A chave <code>tamanho</code> <strong>não existe</strong> em <code>config_ana</code>. O Lua olha a metatabela, acha o <code>__index</code>, e procura <code>tamanho</code> em <code>padrao</code>: <code>12</code>.</dd>
+  <dt>config_ana.idioma → nil</dt><dd>Não está em <code>config_ana</code> nem em <code>padrao</code>: aí, sim, a resposta é <code>nil</code>.</dd>
+</dl>
+
+<p>Passo a passo de <code>config_ana.tamanho</code>:</p>
+<ol class="passo">
+  <li>O Lua procura <code>tamanho</code> na própria <code>config_ana</code>. Não acha.</li>
+  <li>A <code>config_ana</code> tem metatabela? Tem. E a metatabela tem <code>__index</code>? Tem: é a tabela <code>padrao</code>.</li>
+  <li>O Lua procura <code>tamanho</code> em <code>padrao</code>, e acha <code>12</code>.</li>
+</ol>
+
+<h3>O padrão não é copiado</h3>
+<p>O <code>__index</code> não copia nada: a <code>config_ana</code> continua só com o que é dela. Por isso, mudar o padrão muda para todo mundo que ainda não escolheu, e gravar na <code>config_ana</code> não estraga o padrão:</p>
+
+<pre class="file" data-file="padrao2.lua">local padrao = { cor = "azul", tamanho = 12 }
+local config_ana = setmetatable({ cor = "verde" }, { __index = padrao })
+
+padrao.tamanho = 14
+print(config_ana.tamanho)
+
+config_ana.tamanho = 20
+print(config_ana.tamanho, padrao.tamanho)
+
+for chave, valor in pairs(config_ana) do
+  print("própria:", chave, valor)
+end
+</pre>
+
+<pre class="term">$ lua padrao2.lua
+14
+20	14
+própria:	cor	verde
+própria:	tamanho	20</pre>
+
+<p>O <code>config_ana.tamanho = 20</code> criou o campo <strong>na própria</strong> <code>config_ana</code> (o <code>__index</code> só cuida da leitura). A partir daí, ela tem o seu tamanho e não pergunta mais ao padrão. E o <code>pairs</code> só mostra o que é <strong>dela</strong>: <code>cor</code> e <code>tamanho</code>, nada do padrão. (A ordem das duas linhas do <code>pairs</code> pode mudar de uma execução para outra; no lab, numa de cinco vezes o <code>tamanho</code> veio primeiro. Veja <a href="pairs.html">pairs</a>.)</p>
+
+<div class="trylua" data-goal="out:Tamanho da letra: 12;;semerro">
+<p class="try-task"><strong>Missão:</strong> a Bia só escolheu a cor, e o programa mostra <code>Tamanho da letra: nil</code>. Use <code>setmetatable</code> com um <code>__index</code> apontando para <code>padrao</code>, para ela herdar o tamanho 12.</p>
+<pre class="script" data-file="main.lua">local padrao = { cor = "azul", tamanho = 12, som = true }
+
+local config_bia = { cor = "rosa" }
+
+print("Cor: " .. tostring(config_bia.cor))
+print("Tamanho da letra: " .. tostring(config_bia.tamanho))
+</pre>
+<pre class="solucao" data-file="main.lua">local padrao = { cor = "azul", tamanho = 12, som = true }
+
+local config_bia = setmetatable({ cor = "rosa" }, { __index = padrao })
+
+print("Cor: " .. tostring(config_bia.cor))
+print("Tamanho da letra: " .. tostring(config_bia.tamanho))
+</pre>
+</div>
+
+<hr>
+
+<h2>3. A corrente de procura</h2>
+<p>E se a tabela do <code>__index</code> também tiver metatabela com <code>__index</code>? O Lua continua procurando, elo por elo, até achar ou até a corrente acabar:</p>
+
+<pre class="file" data-file="corrente.lua">local fabrica = { garantia = "1 ano" }
+local modelo = setmetatable({ cor = "preta", voltagem = 127 }, { __index = fabrica })
+local cafeteira = setmetatable({ dono = "Ana" }, { __index = modelo })
+
+print(cafeteira.dono)
+print(cafeteira.cor)
+print(cafeteira.garantia)
+print(cafeteira.manual)
+</pre>
+
+<pre class="term">$ lua corrente.lua
+Ana
+preta
+1 ano
+nil</pre>
+
+<p>A cafeteira da Ana tem só o dono. A cor vem do <strong>modelo</strong>; a garantia, que nem o modelo tem, vem da <strong>fábrica</strong>. O <code>manual</code> não está em lugar nenhum: <code>nil</code>. Essa corrente é exatamente o que faz a <a href="heranca.html">herança</a> funcionar.</p>
+
+<hr>
+
+<h2>4. <code>__index</code> como função: o estoque que começa em zero</h2>
+<p>O <code>__index</code> também pode ser uma <strong>função</strong>. Aí, quando falta uma chave, o Lua chama a função com dois valores: a tabela e a chave procurada. O que a função devolver vira a resposta.</p>
+
+<pre class="file" data-file="funcao.lua">local estoque = setmetatable({ pao = 40 }, {
+  __index = function (tabela, chave)
+    print("  (procurou '" .. chave .. "', que não existe)")
+    return 0
+  end,
+})
+
+print("pão:", estoque.pao)
+print("café:", estoque.cafe)
+estoque.cafe = estoque.cafe + 5
+print("café:", estoque.cafe)
+</pre>
+
+<pre class="term">$ lua funcao.lua
+pão:	40
+  (procurou 'cafe', que não existe)
+café:	0
+  (procurou 'cafe', que não existe)
+café:	5</pre>
+
+<dl class="anatomy">
+  <dt>__index = function (tabela, chave)</dt><dd>A função recebe a tabela onde a chave faltou (aqui, o próprio <code>estoque</code>) e a chave (o texto <code>"cafe"</code>).</dd>
+  <dt>return 0</dt><dd>A resposta para qualquer chave que falte: zero. É o "valor padrão" do estoque.</dd>
+  <dt>estoque.pao → 40, sem aviso</dt><dd>O <code>pao</code> existe: a função nem foi chamada.</dd>
+  <dt>(procurou 'cafe'…) duas vezes</dt><dd>Uma para o <code>print</code>, outra para o <code>estoque.cafe + 5</code>. Depois do <code>estoque.cafe = 5</code>, o café passou a existir, e o último <code>print</code> leu direto, sem chamar a função.</dd>
+</dl>
+
+<p>O programa da seção 1, que dava erro na linha <code>estoque.cafe = estoque.cafe + 5</code>, agora funciona. A diferença em relação ao <code>__index</code> tabela: a função pode <strong>calcular</strong> a resposta (devolver 0, montar um texto, buscar em outro lugar), em vez de só procurar numa tabela fixa.</p>
+
+<div class="trylua" data-goal="out:pão: 3;;out:café: 2;;semerro">
+<p class="try-task"><strong>Missão:</strong> o programa conta quantas vezes cada produto foi vendido, mas a primeira venda de cada produto dá <code>attempt to perform arithmetic on a nil value</code>. Ligue à tabela <code>vendas</code> uma metatabela com um <code>__index</code> função que devolve <code>0</code>.</p>
+<pre class="script" data-file="main.lua">local vendas = {}
+
+local pedidos = { "pao", "cafe", "pao", "bolo", "cafe", "pao" }
+for _, produto in ipairs(pedidos) do
+  vendas[produto] = vendas[produto] + 1
+end
+
+print("pão: " .. vendas.pao)
+print("café: " .. vendas.cafe)
+print("bolo: " .. vendas.bolo)
+print("leite: " .. vendas.leite)
+</pre>
+<pre class="solucao" data-file="main.lua">local vendas = setmetatable({}, {
+  __index = function (tabela, chave)
+    return 0
+  end,
+})
+
+local pedidos = { "pao", "cafe", "pao", "bolo", "cafe", "pao" }
+for _, produto in ipairs(pedidos) do
+  vendas[produto] = vendas[produto] + 1
+end
+
+print("pão: " .. vendas.pao)
+print("café: " .. vendas.cafe)
+print("bolo: " .. vendas.bolo)
+print("leite: " .. vendas.leite)
+</pre>
+</div>
+
+<hr>
+
+<h2>5. <code>__newindex</code>: quando alguém cria uma chave</h2>
+<p>O <code>__newindex</code> é o par do <code>__index</code> para a <strong>gravação</strong>. Ele entra em ação quando alguém faz <code>t.chave = valor</code> e a chave <strong>ainda não existe</strong> em <code>t</code>. Como função, ele recebe três valores: a tabela, a chave e o valor.</p>
+
+<pre class="file" data-file="newindex.lua">local estoque = setmetatable({ pao = 40 }, {
+  __newindex = function (tabela, chave, valor)
+    print("  (tentou criar '" .. chave .. "' = " .. tostring(valor) .. ")")
+  end,
+})
+
+estoque.pao = 35
+print("pão:", estoque.pao)
+estoque.cafe = 10
+print("café:", estoque.cafe)
+</pre>
+
+<pre class="term">$ lua newindex.lua
+pão:	35
+  (tentou criar 'cafe' = 10)
+café:	nil</pre>
+
+<dl class="anatomy">
+  <dt>estoque.pao = 35</dt><dd>O <code>pao</code> já existia: a gravação foi direta, sem chamar o <code>__newindex</code>.</dd>
+  <dt>estoque.cafe = 10</dt><dd>O <code>cafe</code> não existia: em vez de criar, o Lua chamou o <code>__newindex</code> com <code>(estoque, "cafe", 10)</code>.</dd>
+  <dt>café: nil</dt><dd>Atenção: <strong>o valor não foi guardado!</strong> Quando existe <code>__newindex</code>, o Lua passa a gravação para ele e não grava nada sozinho. Se a função não guardar o valor em algum lugar, ele se perde.</dd>
+</dl>
+
+<p>Para o <code>__newindex</code> função guardar o valor na própria tabela, ele não pode escrever <code>tabela[chave] = valor</code> (isso chamaria o <code>__newindex</code> de novo, para sempre). Ele precisa do <code>rawset</code>, que grava "por baixo" do manual. Isso tem aula própria: <a href="rawget-rawset.html">rawget, rawset e rawequal</a>. Nesta aula, usamos outro truque: guardar numa <strong>outra</strong> tabela.</p>
+
+<h3><code>__newindex</code> como tabela</h3>
+<p>Se o <code>__newindex</code> for uma tabela, as chaves novas são gravadas <strong>nela</strong>, e não na tabela original:</p>
+
+<pre class="file" data-file="newindex_tab.lua">local novidades = {}
+local estoque = setmetatable({ pao = 40 }, { __newindex = novidades })
+
+estoque.pao = 35
+estoque.cafe = 10
+estoque.bolo = 3
+print(estoque.pao, estoque.cafe, estoque.bolo)
+print(novidades.cafe, novidades.bolo)
+</pre>
+
+<pre class="term">$ lua newindex_tab.lua
+35	nil	nil
+10	3</pre>
+
+<p>O <code>pao</code> (que já existia) foi mudado no próprio <code>estoque</code>. O café e o bolo foram parar em <code>novidades</code>, e por isso <code>estoque.cafe</code> continua <code>nil</code>. Juntando com um <code>__index</code> que aponta para a mesma tabela, dá para ler de volta o que foi guardado lá. É o que a seção seguinte faz.</p>
+
+<h3>Validar antes de guardar</h3>
+<p>A Ana quer que o estoque recuse quantidades negativas ou que não sejam números. A tabela que o programa usa (<code>estoque</code>) fica <strong>vazia</strong>, e os valores de verdade moram em <code>guardado</code>. Como o <code>estoque</code> nunca ganha chave nenhuma, <strong>toda</strong> gravação passa pelo <code>__newindex</code>, e toda leitura passa pelo <code>__index</code>:</p>
+
+<pre class="file" data-file="validar.lua">local guardado = {}
+local estoque = setmetatable({}, {
+  __index = guardado,
+  __newindex = function (tabela, chave, valor)
+    if type(valor) ~= "number" or valor &lt; 0 then
+      error("quantidade inválida para '" .. chave .. "': " .. tostring(valor), 2)
+    end
+    guardado[chave] = valor
+  end,
+})
+
+estoque.pao = 40
+estoque.leite = 12
+print(estoque.pao, estoque.leite)
+estoque.cafe = -3
+print("esta linha não aparece")
+</pre>
+
+<pre class="term">$ lua validar.lua
+40	12
+lua: validar.lua:15: quantidade inválida para 'cafe': -3
+stack traceback:
+	[C]: in global 'error'
+	validar.lua:6: in metamethod 'newindex'
+	validar.lua:15: in main chunk
+	[C]: in ?</pre>
+
+<dl class="anatomy">
+  <dt>guardado[chave] = valor</dt><dd>Quando o valor é bom, ele vai para a tabela <code>guardado</code> (que não tem metatabela, então é uma gravação comum).</dd>
+  <dt>error("…", 2)</dt><dd>Quando é ruim, o programa para com uma mensagem nossa (veja <a href="error.html">error</a>). O <code>2</code> é o <strong>nível</strong>: "culpe quem chamou". Por isso a mensagem diz <code>validar.lua:15:</code>, a linha do <code>estoque.cafe = -3</code>, onde está o engano de verdade, e não a linha 6, onde está o <code>error</code>.</dd>
+  <dt>validar.lua:6: in metamethod 'newindex'</dt><dd>O rastro mostra o caminho completo: a linha 15 disparou o metamétodo, e dentro dele a linha 6 chamou o <code>error</code>.</dd>
+</dl>
+
+<hr>
+
+<h2>6. A tabela só de leitura</h2>
+<p>Os dias da semana não mudam. A Ana quer uma tabela que <strong>ninguém</strong> consiga alterar sem querer. A receita é a mesma da validação: uma tabela vazia na frente (o "balcão"), com <code>__index</code> apontando para os dados de verdade e um <code>__newindex</code> que sempre recusa:</p>
+
+<pre class="file" data-file="leitura.lua">local function somente_leitura(original)
+  return setmetatable({}, {
+    __index = original,
+    __newindex = function (tabela, chave, valor)
+      error("tabela só de leitura: não dá para mudar '" .. tostring(chave) .. "'", 2)
+    end,
+  })
+end
+
+local dias = somente_leitura({ "dom", "seg", "ter", "qua", "qui", "sex", "sáb" })
+print(dias[1], dias[7])
+dias[1] = "domingo"
+</pre>
+
+<pre class="term">$ lua leitura.lua
+dom	sáb
+lua: leitura.lua:12: tabela só de leitura: não dá para mudar '1'
+stack traceback:
+	[C]: in global 'error'
+	leitura.lua:5: in metamethod 'newindex'
+	leitura.lua:12: in main chunk
+	[C]: in ?</pre>
+
+<p>Por que a tabela da frente precisa estar <strong>vazia</strong>? Porque o <code>__newindex</code> só é chamado para chaves que não existem nela. Se ela tivesse o <code>[1] = "dom"</code>, o <code>dias[1] = "domingo"</code> mudaria direto, sem passar pelo manual. Vazia, toda gravação é "nova" e cai no <code>error</code>.</p>
+
+<p>E o nível <code>2</code> faz diferença? Sem ele (só <code>error("…")</code>), a mensagem aponta para a linha do próprio <code>error</code>:</p>
+
+<pre class="term">$ lua leitura_nivel1.lua
+lua: leitura_nivel1.lua:5: tabela só de leitura: não dá para mudar '1'
+stack traceback:
+	[C]: in global 'error'
+	leitura_nivel1.lua:5: in metamethod 'newindex'
+	leitura_nivel1.lua:11: in main chunk
+	[C]: in ?</pre>
+
+<p>Quem lê <code>leitura_nivel1.lua:5</code> vai procurar o erro dentro da <code>somente_leitura</code>, que está certa. Com o nível 2, a primeira linha já aponta para quem tentou mudar.</p>
+
+<div class="warning">
+<strong>O balcão vazio engana o <code>#</code> e o <code>pairs</code></strong>
+<p>Como a tabela da frente está vazia, <code>#dias</code> deu <code>0</code> no lab, e um <code>pairs(dias)</code> não passou por nenhuma chave. O <code>ipairs</code> funcionou (mostrou <code>1 dom</code>, <code>2 seg</code>, <code>3 ter</code>), porque no Lua 5.5 ele lê <code>dias[1]</code>, <code>dias[2]</code>… e respeita o <code>__index</code>. (No <code>lua5.1</code> e no <code>luajit</code> do lab, o mesmo <code>ipairs</code> não mostrou nada.) O <code>#</code> se conserta com o metamétodo <code>__len</code>, na aula <a href="tostring-call-len.html">__tostring, __call e __len</a>.</p>
+</div>
+
+<hr>
+
+<h2 id="formas">Formas diferentes de fazer a mesma coisa</h2>
+<p>Valor padrão para o que falta, de três jeitos:</p>
+
+<pre class="file" data-file="formas.lua">-- 1) sem metatabela: o "or" na hora de ler
+local qtd = estoque.cafe or 0
+
+-- 2) __index tabela: os padrões ficam numa tabela
+local config = setmetatable({}, { __index = { tamanho = 12, cor = "azul" } })
+
+-- 3) __index função: o padrão é calculado
+local vendas = setmetatable({}, { __index = function () return 0 end })
+</pre>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Situação</th><th>Qual usar</th></tr>
+<tr><td>O padrão é usado em um ou dois lugares do programa</td><td><code>t.chave or padrao</code> (veja <a href="and-or-ternario.html">O Truque do and/or</a>): simples e sem surpresa</td></tr>
+<tr><td>Um conjunto de padrões compartilhado (configurações, modelo, "classe")</td><td><code>__index</code> tabela</td></tr>
+<tr><td>O padrão é igual para qualquer chave (contadores) ou precisa ser calculado</td><td><code>__index</code> função</td></tr>
+<tr><td>Avisar, validar ou recusar gravações</td><td>Tabela vazia na frente + <code>__index</code> + <code>__newindex</code> função</td></tr>
+<tr><td>Mandar as chaves novas para outra tabela</td><td><code>__newindex</code> tabela</td></tr>
+</table>
+</div>
+
+<div class="note">
+<strong>O <code>or</code> tem uma pegadinha</strong>
+<p><code>t.som or true</code> dá <code>true</code> mesmo quando a pessoa gravou <code>som = false</code>, porque <code>false or true</code> é <code>true</code>. O <code>__index</code> não tem esse problema: se <code>som = false</code> estiver na tabela, a chave <strong>existe</strong>, e o padrão nem é consultado.</p>
+</div>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+
+<div class="cenario">
+<strong>Esqueceu o <code>return</code> no <code>__index</code> função</strong>
+<pre class="file" data-file="esqueceu_return2.lua">local estoque = setmetatable({}, {
+  __index = function (tabela, chave)
+    local padrao = 0
+  end,
+})
+print(estoque.cafe)
+print(estoque.cafe + 5)
+</pre>
+<pre class="term">$ lua esqueceu_return2.lua
+nil
+lua: esqueceu_return2.lua:7: attempt to perform arithmetic on a nil value (field 'cafe')
+stack traceback:
+	esqueceu_return2.lua:7: in main chunk
+	[C]: in ?</pre>
+<p>A função foi chamada, mas não devolveu nada, e "nada" vira <code>nil</code>. É o mesmo erro da seção 1, como se o <code>__index</code> nem existisse. <strong>Como consertar:</strong> <code>return 0</code>. E só escrever <code>0</code> sozinho numa linha também não serve: o Lua dá erro de sintaxe, <code>unexpected symbol near '0'</code> ("símbolo inesperado perto de <code>0</code>"), porque um valor solto não é um comando.</p>
+</div>
+
+<div class="cenario">
+<strong>Escreveu o nome do metamétodo errado</strong>
+<pre class="file" data-file="indx.lua">local padrao = { tamanho = 12 }
+local config = setmetatable({}, { __indx = padrao })
+print(config.tamanho)
+</pre>
+<pre class="term">$ lua indx.lua
+nil</pre>
+<p>Sem erro nenhum, só um <code>nil</code> silencioso. O Lua procura exatamente <code>__index</code>; o <code>__indx</code> é um campo comum, que ele ignora. Erros de digitação no nome do metamétodo são traiçoeiros justamente por isso. <strong>Como consertar:</strong> <code>__index</code> (dois sublinhados, "index" completo).</p>
+</div>
+
+<div class="cenario">
+<strong>Usou a tabela do padrão antes de criá-la</strong>
+<pre class="file" data-file="ordem.lua">local config = setmetatable({}, { __index = padrao })
+local padrao = { tamanho = 12 }
+print(config.tamanho)
+</pre>
+<pre class="term">$ lua ordem.lua
+nil</pre>
+<p>Na linha 1, a variável <code>padrao</code> ainda não existe (vale <code>nil</code>), então o <code>__index</code> foi gravado como <code>nil</code>, que é o mesmo que não ter <code>__index</code>. A tabela criada na linha 2 chega tarde. <strong>Como consertar:</strong> crie o <code>padrao</code> antes do <code>setmetatable</code>. (O manual guarda a tabela que a variável tinha <strong>naquele momento</strong>.)</p>
+</div>
+
+<div class="cenario">
+<strong>Gravou pelo <code>__newindex</code> e o valor sumiu</strong>
+<p>Na seção 5, o <code>estoque.cafe = 10</code> seguido de <code>print(estoque.cafe)</code> mostrou <code>nil</code>. Não é defeito do Lua: com <code>__newindex</code>, gravar é tarefa <strong>sua</strong>. <strong>Como consertar:</strong> dentro da função, guarde o valor em outra tabela (<code>guardado[chave] = valor</code>, com <code>__index = guardado</code>) ou use <code>rawset(tabela, chave, valor)</code> (aula <a href="rawget-rawset.html">rawget e rawset</a>).</p>
+</div>
+
+<div class="cenario">
+<strong>Pôs um valor que não é tabela nem função no <code>__index</code></strong>
+<pre class="file" data-file="idx_num.lua">local config = setmetatable({}, { __index = 12 })
+print(config.tamanho)
+</pre>
+<pre class="term">$ lua idx_num.lua
+lua: idx_num.lua:2: attempt to index a number value
+stack traceback:
+	idx_num.lua:2: in main chunk
+	[C]: in ?</pre>
+<p>O Lua tentou procurar <code>tamanho</code> "dentro" do número 12: "tentativa de indexar um valor número". O <code>__index</code> tem de ser uma tabela ou uma função. <strong>Como consertar:</strong> se a ideia era "todo campo vale 12", use uma função: <code>__index = function () return 12 end</code>.</p>
+</div>
+
+<hr>
+
+<h2>Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>Quando o Lua usa</th><th>O que faz</th></tr>
+<tr><td><code>__index = outra_tabela</code></td><td>Leitura de chave que não existe</td><td>Procura a chave em <code>outra_tabela</code> (e segue a corrente, se ela também tiver <code>__index</code>)</td></tr>
+<tr><td><code>__index = function (t, k) … end</code></td><td>Leitura de chave que não existe</td><td>Chama a função; o que ela devolve é a resposta</td></tr>
+<tr><td><code>__newindex = outra_tabela</code></td><td>Gravação de chave que não existe</td><td>Grava em <code>outra_tabela</code>, não em <code>t</code></td></tr>
+<tr><td><code>__newindex = function (t, k, v) … end</code></td><td>Gravação de chave que não existe</td><td>Chama a função; nada é gravado a não ser que ela grave</td></tr>
+<tr><td><code>error(msg, 2)</code> dentro do metamétodo</td><td></td><td>A mensagem aponta para a linha de quem fez a leitura ou a gravação</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Sintoma</th><th>Causa provável</th></tr>
+<tr><td><code>attempt to perform arithmetic on a nil value (field '…')</code></td><td>A chave não existe e não há <code>__index</code> (ou ele não devolveu nada)</td></tr>
+<tr><td><code>nil</code> silencioso com metatabela ligada</td><td>Nome errado (<code>__indx</code>, <code>_index</code>) ou o <code>__index</code> foi gravado como <code>nil</code></td></tr>
+<tr><td>O valor gravado "some"</td><td>Existe <code>__newindex</code> função e ela não guardou o valor</td></tr>
+<tr><td><code>#t</code> dá 0 numa tabela "cheia"</td><td>A tabela da frente está vazia (os dados estão no <code>__index</code>)</td></tr>
+<tr><td><code>attempt to index a number value</code></td><td>O <code>__index</code> não é tabela nem função</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. O que aparece?</h3>
+<pre class="file" data-file="ex1.lua">local base = { tamanho = 12, cor = "azul" }
+local t = setmetatable({ cor = "verde" }, { __index = base })
+print(t.cor)
+print(t.tamanho)
+</pre>
+<div class="ex-code">1º print: <input data-answer="verde" aria-label="primeiro print"><br>2º print: <input data-answer="12" aria-label="segundo print"></div>
+</div>
+
+<div class="exercise">
+<h3>2. Complete o contador</h3>
+<p>Complete para todo produto começar com 0:</p>
+<div class="ex-code">local vendas = setmetatable({}, {<br>&nbsp;&nbsp;<input data-answer="__index" aria-label="metamétodo"> = function (t, k)<br>&nbsp;&nbsp;&nbsp;&nbsp;<input data-answer="return" aria-label="palavra-chave"> 0<br>&nbsp;&nbsp;end,<br>})</div>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">3. Quando o Lua chama o <code>__index</code> de uma tabela <code>t</code>?</p>
+<label><input type="radio" name="q3"> Em toda leitura de <code>t</code></label>
+<label><input type="radio" name="q3"> Só quando a chave lida não existe em <code>t</code></label>
+<label><input type="radio" name="q3"> Só quando alguém grava em <code>t</code></label>
+<label><input type="radio" name="q3"> Só no <code>pairs</code></label>
+</div>
+
+<div class="mc" data-answer="3">
+<p class="mc-q">4. Um <code>__newindex</code> função mostra uma mensagem e não faz mais nada. Depois de <code>t.x = 5</code> (com <code>x</code> novo), quanto vale <code>t.x</code>?</p>
+<label><input type="radio" name="q4"> <code>5</code></label>
+<label><input type="radio" name="q4"> Dá erro</label>
+<label><input type="radio" name="q4"> <code>nil</code></label>
+<label><input type="radio" name="q4"> <code>0</code></label>
+</div>
+
+<div class="mc" data-answer="1">
+<p class="mc-q">5. Por que a tabela só de leitura usa uma tabela <strong>vazia</strong> na frente?</p>
+<label><input type="radio" name="q5"> Porque o <code>__newindex</code> só é chamado para chaves que não existem nela</label>
+<label><input type="radio" name="q5"> Porque tabelas cheias não aceitam metatabela</label>
+<label><input type="radio" name="q5"> Para o <code>#</code> funcionar</label>
+<label><input type="radio" name="q5"> Para gastar menos memória</label>
+</div>
+
+<h3>Missão final: os preços que ninguém muda</h3>
+
+<div class="trylua" data-goal="erro:só de leitura">
+<p class="try-task"><strong>Missão:</strong> a tabela de preços da padaria é para consulta, mas o programa conseguiu mudar o preço do pão. Complete a <code>somente_leitura</code> com um <code>__newindex</code> que chame <code>error("tabela só de leitura", 2)</code>. Ao rodar, o programa deve mostrar os preços e parar com o erro na linha do <code>precos.pao = 1</code>.</p>
+<pre class="script" data-file="main.lua">local function somente_leitura(original)
+  return setmetatable({}, {
+    __index = original,
+  })
+end
+
+local precos = somente_leitura({ pao = 150, cafe = 800, bolo = 2500 })
+print("pão:", precos.pao)
+print("café:", precos.cafe)
+precos.pao = 1
+print("pão agora custa:", precos.pao)
+</pre>
+<pre class="solucao" data-file="main.lua">local function somente_leitura(original)
+  return setmetatable({}, {
+    __index = original,
+    __newindex = function (tabela, chave, valor)
+      error("tabela só de leitura", 2)
+    end,
+  })
+end
+
+local precos = somente_leitura({ pao = 150, cafe = 800, bolo = 2500 })
+print("pão:", precos.pao)
+print("café:", precos.cafe)
+precos.pao = 1
+print("pão agora custa:", precos.pao)
+</pre>
+</div>
+
+<p>Com o conserto, a mensagem começa por <code>lua: main.lua:13: tabela só de leitura</code>: a linha 13 é a do <code>precos.pao = 1</code>, graças ao nível <code>2</code>. Experimente tirar o <code>, 2</code> e veja a linha mudar.</p>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li><code>__index</code> responde à <strong>leitura</strong> de uma chave que não existe; <code>__newindex</code>, à <strong>gravação</strong> de uma chave que não existe. Chaves que já existem são lidas e gravadas direto.</li>
+  <li><code>__index</code> tabela: "procure lá" (valores padrão, e a corrente de procura das classes e da herança). <code>__index</code> função: <code>(tabela, chave)</code>, e o que ela devolve é a resposta.</li>
+  <li><code>__newindex</code> tabela: grava as chaves novas em outra tabela. <code>__newindex</code> função: <code>(tabela, chave, valor)</code>, e nada é gravado se ela não gravar.</li>
+  <li>Tabela vazia na frente + <code>__index</code> + <code>__newindex</code> = controle total: validar, avisar, ou recusar (tabela só de leitura). Use <code>error(msg, 2)</code> para culpar a linha certa.</li>
+  <li>Cuidado com o nome do metamétodo e com o <code>return</code>: os dois erros dão só um <code>nil</code> silencioso.</li>
+  <li>Próximo passo: <a href="tostring-call-len.html">__tostring, __call e __len</a>.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
