@@ -1,0 +1,506 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua elseif — escolhendo entre vários caminhos | Guia Lua</title>
+<meta name="description" content="O elseif do Lua para quem nunca programou: nota que vira conceito A, B, C ou D, por que a ordem das condições importa, elseif sem else, o semáforo e o dia da semana, e os erros reais do Lua 5.5 (else if separado e o end que falta, elif e elsif de outras linguagens, elseif depois do else).">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">elseif</span></h1>
+
+<p class="intro">Com <a href="if-else.html">if e else</a>, o programa escolhe entre <strong>dois</strong> caminhos. Mas a vida tem mais opções: a nota da prova vira conceito A, B, C <strong>ou</strong> D; o semáforo está verde, amarelo <strong>ou</strong> vermelho; o frete é grátis, barato, caro <strong>ou</strong> não tem entrega. Para escolher entre três ou mais caminhos, o Lua tem o <code>elseif</code>, uma palavra só, que quer dizer "<strong>senão, se</strong>".</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>Como escrever <code>if … elseif … elseif … else … end</code>.</li>
+  <li>Como o Lua testa as condições: <strong>de cima para baixo</strong>, e para na primeira verdadeira.</li>
+  <li>Por que a <strong>ordem</strong> das condições muda o resultado.</li>
+  <li>O <code>elseif</code> sem <code>else</code>: quando pode não rodar nenhum bloco.</li>
+  <li>O erro mais comum desta aula: escrever <code>else if</code>, separado, e o <code>end</code> que fica faltando.</li>
+  <li>Os nomes de outras linguagens que o Lua não conhece: <code>elif</code>, <code>elsif</code>.</li>
+</ul>
+</div>
+
+<p>Todos os programas desta aula rodaram no <strong>Lua 5.5</strong> da máquina da Ana (usuária <code>ana</code>, computador <code>notebook</code>), com <code>lua arquivo.lua</code>. Você pode rodar cada um no editor do guia.</p>
+
+<hr>
+
+<h2>A ideia: a fila de perguntas da professora</h2>
+<p>A professora da Ana transforma a nota da prova num conceito. Ela faz as perguntas <strong>nesta ordem</strong> e para na primeira resposta "sim":</p>
+<ol class="passo">
+  <li>A nota é 9 ou mais? Se sim: <strong>A</strong>. (E não pergunta mais nada.)</li>
+  <li>Senão: a nota é 7 ou mais? Se sim: <strong>B</strong>.</li>
+  <li>Senão: a nota é 5 ou mais? Se sim: <strong>C</strong>.</li>
+  <li>Senão (nenhuma das anteriores): <strong>D</strong>.</li>
+</ol>
+<p>Repare que a segunda pergunta não precisa dizer "7 ou mais <strong>e menos de 9</strong>": se a nota fosse 9 ou mais, a professora já teria parado na primeira. Cada pergunta só é feita para quem "sobrou" das anteriores. É exatamente assim que o <code>elseif</code> funciona.</p>
+
+<hr>
+
+<h2>1. O primeiro <code>elseif</code>: de nota para conceito</h2>
+
+<pre class="file" data-file="conceito.lua">local nota = 8.5
+if nota &gt;= 9 then
+  print("Conceito A")
+elseif nota &gt;= 7 then
+  print("Conceito B")
+elseif nota &gt;= 5 then
+  print("Conceito C")
+else
+  print("Conceito D")
+end
+</pre>
+
+<dl class="anatomy">
+  <dt>if nota &gt;= 9 then</dt><dd>A <strong>primeira</strong> pergunta, como em todo <code>if</code>.</dd>
+  <dt>elseif nota &gt;= 7 then</dt><dd>"<strong>Senão, se</strong> a nota for 7 ou mais, então…". Só é testada se a de cima deu falso. Ao contrário do <code>else</code>, o <code>elseif</code> <strong>tem</strong> condição e <strong>tem</strong> <code>then</code>. É uma palavra só, sem espaço: <code>elseif</code>.</dd>
+  <dt>elseif nota &gt;= 5 then</dt><dd>Mais uma pergunta, para quem sobrou das duas de cima. Pode haver quantos <code>elseif</code> você quiser.</dd>
+  <dt>else</dt><dd>Opcional. "Em todos os outros casos": roda se <strong>nenhuma</strong> condição acima deu verdadeiro. Se existir, vem <strong>por último</strong>.</dd>
+  <dt>end</dt><dd>Um <code>end</code> só, no fim, fecha a escada inteira. Os <code>elseif</code> e o <code>else</code> não levam <code>end</code> próprio.</dd>
+</dl>
+
+<pre class="term">$ lua conceito.lua
+Conceito B
+</pre>
+
+<h3>Passo a passo: o que o Lua fez com a nota 8.5</h3>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Pergunta</th><th>Com <code>nota = 8.5</code></th><th>O que acontece</th></tr>
+<tr><td><code>nota &gt;= 9</code></td><td><code>false</code></td><td>Pula o bloco do A e vai para a próxima pergunta</td></tr>
+<tr><td><code>nota &gt;= 7</code></td><td><code>true</code></td><td>Roda o bloco do B…</td></tr>
+<tr><td><code>nota &gt;= 5</code></td><td>(nem é testada)</td><td>…e pula todo o resto, direto para depois do <code>end</code></td></tr>
+<tr><td><code>else</code></td><td>(pulado)</td><td></td></tr>
+</table>
+</div>
+
+<p>A Ana rodou o mesmo programa trocando a nota. Estas são as respostas que o Lua deu:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th><code>nota</code></th><th>10</th><th>9</th><th>8.5</th><th>7</th><th>6.9</th><th>5</th><th>4.9</th><th>0</th></tr>
+<tr><td>Saída</td><td>Conceito A</td><td>Conceito A</td><td>Conceito B</td><td>Conceito B</td><td>Conceito C</td><td>Conceito C</td><td>Conceito D</td><td>Conceito D</td></tr>
+</table>
+</div>
+
+<p>Repare nas <strong>fronteiras</strong>: o 9 já é A, e o 7 já é B, porque as comparações usam <code>&gt;=</code> ("maior <strong>ou igual</strong>"). Com <code>&gt;</code>, a nota 9 cairia no B. Na hora de escrever faixas, decida sempre de que lado fica o número da fronteira.</p>
+
+<div class="trylua">
+<p class="try-task"><strong>Experimente:</strong> troque a nota por outros valores (<code>9.9</code>, <code>7</code>, <code>4.99</code>, <code>-1</code>, <code>11</code>) e veja o conceito. O que acontece com <code>11</code> e <code>-1</code>? O programa deveria aceitar essas notas?</p>
+<pre class="script" data-file="main.lua">local nota = 8.5
+if nota &gt;= 9 then
+  print("Conceito A")
+elseif nota &gt;= 7 then
+  print("Conceito B")
+elseif nota &gt;= 5 then
+  print("Conceito C")
+else
+  print("Conceito D")
+end
+</pre>
+</div>
+
+<hr>
+
+<h2>2. A ordem das perguntas importa</h2>
+<p>Como o Lua para na <strong>primeira</strong> condição verdadeira, trocar a ordem pode estragar tudo. Veja as mesmas perguntas, de baixo para cima:</p>
+
+<pre class="file" data-file="ordem.lua">local nota = 9.5
+if nota &gt;= 5 then
+  print("Conceito C")
+elseif nota &gt;= 7 then
+  print("Conceito B")
+elseif nota &gt;= 9 then
+  print("Conceito A")
+else
+  print("Conceito D")
+end
+</pre>
+
+<pre class="term">$ lua ordem.lua
+Conceito C
+</pre>
+
+<p>Uma nota 9.5 virou C! A primeira pergunta, <code>9.5 &gt;= 5</code>, é verdadeira, e o Lua parou ali. As perguntas do B e do A nunca vão ser feitas para ninguém que tirou 5 ou mais: esses blocos ficaram <strong>inalcançáveis</strong>. E o Lua não avisa nada, porque para ele o programa está certo.</p>
+
+<div class="tip">
+<strong>Regra prática para faixas</strong>
+<p>Com <code>&gt;=</code>, comece pela faixa <strong>mais alta</strong> e desça. Com <code>&lt;</code> (ou <code>&lt;=</code>), comece pela <strong>mais baixa</strong> e suba (<code>if nota &lt; 5 then … elseif nota &lt; 7 then …</code>). Em qualquer caso, a pergunta mais "exigente" vem antes.</p>
+</div>
+
+<hr>
+
+<h2>3. <code>elseif</code> sem <code>else</code>: o semáforo</h2>
+<p>O <code>else</code> do fim é opcional. Sem ele, se nenhuma condição for verdadeira, <strong>nenhum</strong> bloco roda:</p>
+
+<pre class="file" data-file="semaforo.lua">local cor = "amarelo"
+if cor == "verde" then
+  print("Pode passar.")
+elseif cor == "amarelo" then
+  print("Atenção: vai fechar.")
+elseif cor == "vermelho" then
+  print("Pare!")
+end
+print("(cor: " .. cor .. ")")
+</pre>
+
+<pre class="term">$ lua semaforo.lua
+Atenção: vai fechar.
+(cor: amarelo)
+</pre>
+
+<p>E com uma cor que não está na lista, como <code>"azul"</code>:</p>
+
+<pre class="term">$ lua semaforo.lua
+(cor: azul)
+</pre>
+
+<p>Nenhuma das três perguntas deu verdadeiro, e sem <code>else</code> o Lua simplesmente seguiu em frente. Às vezes é isso que você quer. Mas, quando um valor estranho é sinal de problema (um semáforo azul!), um <code>else</code> com um aviso (<code>print("Cor desconhecida: " .. cor)</code>) ajuda a descobrir o engano.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Forma</th><th>Quantos blocos rodam</th></tr>
+<tr><td><code>if … end</code></td><td>0 ou 1</td></tr>
+<tr><td><code>if … else … end</code></td><td>sempre 1</td></tr>
+<tr><td><code>if … elseif … elseif … end</code></td><td>0 ou 1</td></tr>
+<tr><td><code>if … elseif … elseif … else … end</code></td><td>sempre 1</td></tr>
+</table>
+</div>
+
+<div class="trylua" data-goal="out:Pare!;;src:elseif\s+cor\s*==\s*&quot;vermelho&quot;">
+<p class="try-task"><strong>Missão:</strong> este semáforo esqueceu o vermelho. Com <code>cor = "vermelho"</code>, ele não mostra nada além da cor. Acrescente um <code>elseif</code> para o vermelho, que mostre <code>Pare!</code>.</p>
+<pre class="script" data-file="main.lua">local cor = "vermelho"
+if cor == "verde" then
+  print("Pode passar.")
+elseif cor == "amarelo" then
+  print("Atenção: vai fechar.")
+end
+print("(cor: " .. cor .. ")")
+</pre>
+<pre class="solucao" data-file="main.lua">local cor = "vermelho"
+if cor == "verde" then
+  print("Pode passar.")
+elseif cor == "amarelo" then
+  print("Atenção: vai fechar.")
+elseif cor == "vermelho" then
+  print("Pare!")
+end
+print("(cor: " .. cor .. ")")
+</pre>
+</div>
+
+<hr>
+
+<h2>4. Uma escada comprida: o dia da semana</h2>
+<p>Pode haver muitos <code>elseif</code>. Este programa transforma o número do dia (1 a 7) no nome, guardando o resultado numa variável criada antes (como em <a href="if-else.html">if e else</a>):</p>
+
+<pre class="file" data-file="dia.lua">local dia = 3
+local nome
+if dia == 1 then
+  nome = "domingo"
+elseif dia == 2 then
+  nome = "segunda-feira"
+elseif dia == 3 then
+  nome = "terça-feira"
+elseif dia == 4 then
+  nome = "quarta-feira"
+elseif dia == 5 then
+  nome = "quinta-feira"
+elseif dia == 6 then
+  nome = "sexta-feira"
+elseif dia == 7 then
+  nome = "sábado"
+else
+  nome = "dia inválido"
+end
+print("O dia " .. dia .. " é " .. nome)
+</pre>
+
+<pre class="term">$ lua dia.lua
+O dia 3 é terça-feira
+</pre>
+
+<p>Funciona, mas é comprido. Muitas linguagens têm um comando próprio para isso (o <code>switch</code> ou <code>case</code>). <strong>O Lua não tem</strong>: a escada de <code>elseif</code> é o jeito normal. Quando os casos são só "este valor vira aquele", existe uma forma bem mais curta, com uma tabela: <code>local dias = {"domingo", "segunda-feira", …}</code> e depois <code>dias[dia]</code>. Você vai ver isso em <a href="listas.html">Tabelas como Listas</a>.</p>
+
+<hr>
+
+<h2 id="formas">Formas diferentes de fazer a mesma coisa</h2>
+<p>Antes do <code>elseif</code>, dá para fazer a mesma escolha pondo um <code>if/else</code> <strong>dentro</strong> do <code>else</code> de outro (veja <a href="condicoes-aninhadas.html">Condições Aninhadas</a>):</p>
+
+<pre class="file" data-file="aninhado.lua">local nota = 8.5
+if nota &gt;= 9 then
+  print("Conceito A")
+else
+  if nota &gt;= 7 then
+    print("Conceito B")
+  else
+    print("Conceito C")
+  end
+end
+</pre>
+
+<pre class="term">$ lua aninhado.lua
+Conceito B
+</pre>
+
+<p>O resultado é o mesmo do <code>elseif</code>. A diferença está na forma: aqui há <strong>dois <code>if</code>s</strong>, cada um com o seu <code>end</code>, e o de dentro fica mais para a direita. Com quatro ou cinco faixas, o código vira uma escada que entra cada vez mais para dentro, com uma pilha de <code>end</code>s no fim. O <code>elseif</code> deixa tudo no mesmo nível, com um <code>end</code> só.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Situação</th><th>Qual usar</th></tr>
+<tr><td>Escolher um entre três ou mais caminhos</td><td><code>if … elseif … else … end</code></td></tr>
+<tr><td>Faixas de valores (notas, idades, preços)</td><td><code>elseif</code> com <code>&gt;=</code>, da faixa mais alta para a mais baixa</td></tr>
+<tr><td>Garantir que <strong>sempre</strong> alguma coisa acontece</td><td>Termine com <code>else</code></td></tr>
+<tr><td>Uma pergunta que só faz sentido <strong>depois</strong> de outra (tem cadastro? então, a senha está certa?)</td><td><code>if</code> dentro de <code>if</code> (aula <a href="condicoes-aninhadas.html">Condições Aninhadas</a>)</td></tr>
+<tr><td>Muitos casos do tipo "valor → nome"</td><td>Uma tabela (aula <a href="listas.html">Tabelas como Listas</a>)</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+
+<div class="cenario">
+<strong>Escreveu <code>else if</code>, separado</strong>
+<p>É o erro mais comum desta aula. Muita gente escreve <code>else if</code> com espaço, como se fala:</p>
+<pre class="file" data-file="elseif_espaco.lua">local nota = 8.5
+if nota &gt;= 9 then
+  print("Conceito A")
+else if nota &gt;= 7 then
+  print("Conceito B")
+else
+  print("Conceito C")
+end
+</pre>
+<pre class="term">$ lua elseif_espaco.lua
+lua: elseif_espaco.lua:9: 'end' expected (to close 'if' at line 2) near &lt;eof&gt;
+</pre>
+<p>O arquivo tem 8 linhas, e o Lua reclama de um <code>end</code> que falta para fechar o <code>if</code> da <strong>linha 2</strong>. Por quê? Com o espaço, <code>else if</code> não é uma palavra: é um <code>else</code> seguido de um <strong><code>if</code> novo</strong>, que começa um segundo <code>if</code> dentro do <code>else</code> do primeiro. Para o Lua, o programa é este:</p>
+<pre class="file" data-file="como_o_lua_leu.lua">if nota &gt;= 9 then            -- if da linha 2 (o de fora)
+  print("Conceito A")
+else
+  if nota &gt;= 7 then          -- if da linha 4 (um if novo, dentro do else)
+    print("Conceito B")
+  else
+    print("Conceito C")
+  end                        -- este end fecha o if de dentro
+                             -- e o if de fora? ficou sem end!
+</pre>
+<p>O único <code>end</code> fechou o <code>if</code> de dentro; o de fora ficou aberto até o fim do arquivo. <strong>Como consertar:</strong> junte as duas palavras: <code>elseif nota &gt;= 7 then</code>. (Pôr um segundo <code>end</code> no fim também faz o programa funcionar, mas aí você escreveu, sem querer, o <code>if</code> aninhado da seção <a href="#formas">Formas diferentes</a>: com mais faixas, a pilha de <code>end</code>s cresce.)</p>
+</div>
+
+<div class="trylua" data-goal="out:Conceito B;;semerro;;src:\belseif\b">
+<p class="try-task"><strong>Missão:</strong> este programa dá o erro do <code>else if</code>. Conserte usando <code>elseif</code> (uma palavra só), sem acrescentar <code>end</code>, até aparecer <code>Conceito B</code>.</p>
+<pre class="script" data-file="main.lua">local nota = 8.5
+if nota &gt;= 9 then
+  print("Conceito A")
+else if nota &gt;= 7 then
+  print("Conceito B")
+else
+  print("Conceito C")
+end
+</pre>
+<pre class="solucao" data-file="main.lua">local nota = 8.5
+if nota &gt;= 9 then
+  print("Conceito A")
+elseif nota &gt;= 7 then
+  print("Conceito B")
+else
+  print("Conceito C")
+end
+</pre>
+</div>
+
+<div class="cenario">
+<strong>Esqueceu o <code>then</code> do <code>elseif</code></strong>
+<pre class="file" data-file="semthen2.lua">local nota = 8.5
+if nota &gt;= 9 then
+  print("Conceito A")
+elseif nota &gt;= 7
+  print("Conceito B")
+end
+</pre>
+<pre class="term">$ lua semthen2.lua
+lua: semthen2.lua:5: 'then' expected near 'print'
+</pre>
+<p>A mesma mensagem do <code>if</code> sem <code>then</code>, e de novo apontando a linha <strong>seguinte</strong> (5) à que tem o problema (4). <strong>Lembre:</strong> o <code>else</code> não leva <code>then</code>, mas o <code>elseif</code> leva, porque tem condição.</p>
+</div>
+
+<div class="cenario">
+<strong>Usou <code>elif</code> ou <code>elsif</code> (de outras linguagens)</strong>
+<pre class="file" data-file="elif.lua">local nota = 8.5
+if nota &gt;= 9 then
+  print("Conceito A")
+elif nota &gt;= 7 then
+  print("Conceito B")
+end
+</pre>
+<pre class="term">$ lua elif.lua
+lua: elif.lua:4: syntax error near 'nota'
+</pre>
+<p>O Python escreve <code>elif</code>; o Ruby e o Perl, <code>elsif</code>. O Lua não conhece nenhum dos dois: para ele, <code>elif</code> é um nome qualquer, e um nome seguido de outro nome (<code>elif nota</code>) não forma um comando. Com <code>elsif</code> sai a mesma mensagem (<code>elsif.lua:4: syntax error near 'nota'</code>). <strong>Como consertar:</strong> no Lua é <code>elseif</code>, com o <code>e</code> do meio.</p>
+</div>
+
+<div class="cenario">
+<strong>Pôs um <code>elseif</code> depois do <code>else</code></strong>
+<pre class="file" data-file="depoiselse.lua">local nota = 8.5
+if nota &gt;= 9 then
+  print("Conceito A")
+else
+  print("Conceito D")
+elseif nota &gt;= 7 then
+  print("Conceito B")
+end
+</pre>
+<pre class="term">$ lua depoiselse.lua
+lua: depoiselse.lua:6: 'end' expected (to close 'if' at line 2) near 'elseif'
+</pre>
+<p>Depois do <code>else</code> ("todos os outros casos"), não sobra caso nenhum para perguntar; por isso a única coisa que o Lua aceita ali é o <code>end</code>. <strong>Como consertar:</strong> o <code>else</code> é sempre o <strong>último</strong>; mova o <code>elseif</code> para cima dele.</p>
+</div>
+
+<div class="cenario">
+<strong>Pôs um <code>end</code> antes do <code>elseif</code></strong>
+<pre class="file" data-file="endmeio.lua">local nota = 8.5
+if nota &gt;= 9 then
+  print("Conceito A")
+end
+elseif nota &gt;= 7 then
+  print("Conceito B")
+end
+</pre>
+<pre class="term">$ lua endmeio.lua
+lua: endmeio.lua:5: &lt;eof&gt; expected near 'elseif'
+</pre>
+<p>O <code>end</code> da linha 4 fechou o <code>if</code>, e o <code>elseif</code> da linha 5 ficou sem dono. <strong>Como consertar:</strong> apague o <code>end</code> do meio. Na escada inteira há um <code>end</code> só, no fim.</p>
+</div>
+
+<hr>
+
+<h2>Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>O que faz</th></tr>
+<tr><td><code>if c1 then A elseif c2 then B else C end</code></td><td>Testa <code>c1</code>, depois <code>c2</code>…; roda o bloco da <strong>primeira</strong> condição verdadeira; se nenhuma for, roda o <code>else</code></td></tr>
+<tr><td><code>elseif cond then</code></td><td>Uma palavra só; tem condição e <code>then</code>; não tem <code>end</code> próprio</td></tr>
+<tr><td><code>else</code></td><td>Opcional, sempre o último; sem condição</td></tr>
+<tr><td>Sem <code>else</code></td><td>Pode não rodar nenhum bloco</td></tr>
+<tr><td>Faixas com <code>&gt;=</code></td><td>Da mais alta para a mais baixa</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Mensagem</th><th>Causa provável</th></tr>
+<tr><td><code>'end' expected (to close 'if' at line N) near &lt;eof&gt;</code></td><td>Escreveu <code>else if</code> separado (ou esqueceu o <code>end</code>)</td></tr>
+<tr><td><code>'then' expected near …</code> (na linha seguinte ao <code>elseif</code>)</td><td>Faltou o <code>then</code> do <code>elseif</code></td></tr>
+<tr><td><code>syntax error near 'nota'</code> (na linha do <code>elif</code>)</td><td>Usou <code>elif</code> ou <code>elsif</code></td></tr>
+<tr><td><code>'end' expected (to close 'if' at line N) near 'elseif'</code></td><td><code>elseif</code> depois do <code>else</code></td></tr>
+<tr><td><code>&lt;eof&gt; expected near 'elseif'</code></td><td>Um <code>end</code> antes do <code>elseif</code></td></tr>
+<tr><td>Todo mundo cai no mesmo caso</td><td>As condições estão na ordem errada (a mais fácil veio primeiro)</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. Complete a escada</h3>
+<p>Complete com as palavras-chave que faltam:</p>
+<div class="ex-code">if idade &lt; 12 then<br>&nbsp;&nbsp;print("criança")<br><input data-answer="elseif" aria-label="palavra-chave da segunda condição"> idade &lt; 18 then<br>&nbsp;&nbsp;print("adolescente")<br><input data-answer="else" aria-label="palavra-chave dos outros casos"><br>&nbsp;&nbsp;print("adulto")<br><input data-answer="end" aria-label="palavra-chave do fim"></div>
+</div>
+
+<div class="exercise">
+<h3>2. Qual conceito?</h3>
+<p>No programa <code>conceito.lua</code> da seção 1, qual conceito sai para a nota <code>7</code>? Responda só com a letra.</p>
+<div class="ex-code">Conceito <input data-answer="B|b" aria-label="letra do conceito"></div>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">3. Num <code>if … elseif … elseif … end</code> (sem <code>else</code>), duas condições são verdadeiras. Quantos blocos rodam?</p>
+<label><input type="radio" name="q3"> Dois</label>
+<label><input type="radio" name="q3"> Um: o da primeira condição verdadeira</label>
+<label><input type="radio" name="q3"> Um: o da última condição verdadeira</label>
+<label><input type="radio" name="q3"> Nenhum: dá erro</label>
+</div>
+
+<div class="mc" data-answer="4">
+<p class="mc-q">4. Qual destas linhas é um <code>elseif</code> correto no Lua?</p>
+<label><input type="radio" name="q4"> <code>else if x &gt; 0 then</code></label>
+<label><input type="radio" name="q4"> <code>elif x &gt; 0 then</code></label>
+<label><input type="radio" name="q4"> <code>elseif x &gt; 0</code></label>
+<label><input type="radio" name="q4"> <code>elseif x &gt; 0 then</code></label>
+</div>
+
+<div class="mc" data-answer="3">
+<p class="mc-q">5. <code>if n &gt; 0 then print("A") elseif n &gt; 10 then print("B") end</code>. Para que valores de <code>n</code> aparece <code>B</code>?</p>
+<label><input type="radio" name="q5"> Para os maiores que 10</label>
+<label><input type="radio" name="q5"> Para os de 1 a 10</label>
+<label><input type="radio" name="q5"> Para nenhum: quem é maior que 10 já é maior que 0 e para no <code>A</code></label>
+<label><input type="radio" name="q5"> Para os negativos</label>
+</div>
+
+<div class="mc" data-answer="1">
+<p class="mc-q">6. Quantos <code>end</code> tem uma escada com um <code>if</code>, três <code>elseif</code> e um <code>else</code>?</p>
+<label><input type="radio" name="q6"> 1</label>
+<label><input type="radio" name="q6"> 4</label>
+<label><input type="radio" name="q6"> 5</label>
+<label><input type="radio" name="q6"> 2</label>
+</div>
+
+<h3>Missão final: o frete da padaria</h3>
+
+<div class="trylua" data-goal="out:Frete: R$ 10;;src:\belseif\b">
+<p class="try-task"><strong>Missão:</strong> a padaria do bairro agora entrega em casa. A regra do frete: até 5 km, <strong>grátis</strong>; até 20 km, <strong>R$ 10</strong>; até 50 km, <strong>R$ 25</strong>; mais longe, <strong>não entrega</strong>. No lugar do comentário, escreva a escada com <code>elseif</code>. Para <code>distancia = 12</code>, tem de aparecer <code>Frete: R$ 10</code>. Depois teste 3, 20, 49 e 80.</p>
+<pre class="script" data-file="main.lua">local distancia = 12
+print("Distância: " .. distancia .. " km")
+-- escreva o if/elseif aqui
+
+</pre>
+<pre class="solucao" data-file="main.lua">local distancia = 12
+print("Distância: " .. distancia .. " km")
+if distancia &lt;= 5 then
+  print("Frete: grátis")
+elseif distancia &lt;= 20 then
+  print("Frete: R$ 10")
+elseif distancia &lt;= 50 then
+  print("Frete: R$ 25")
+else
+  print("Desculpe, não entregamos tão longe.")
+end
+</pre>
+</div>
+
+<p>Aqui as condições usam <code>&lt;=</code>, então a escada começa pela faixa <strong>mais baixa</strong> (até 5 km) e sobe. Se você começasse pelo <code>distancia &lt;= 50</code>, todo mundo até 50 km pagaria R$ 25.</p>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li><code>elseif</code> ("senão, se") acrescenta mais perguntas a um <code>if</code>: <code>if … then … elseif … then … else … end</code>.</li>
+  <li>O Lua testa de cima para baixo e roda só o bloco da <strong>primeira</strong> condição verdadeira. Por isso a ordem importa: com <code>&gt;=</code>, da faixa mais alta para a mais baixa.</li>
+  <li>O <code>else</code> do fim é opcional (sem ele, pode não rodar nada) e é sempre o último.</li>
+  <li>É <code>elseif</code>, uma palavra só. <code>else if</code> separado abre um <code>if</code> novo e pede mais um <code>end</code> (o erro <code>'end' expected … near &lt;eof&gt;</code>). <code>elif</code> e <code>elsif</code> não existem no Lua.</li>
+  <li>A escada inteira tem <strong>um</strong> <code>end</code> só, no fim.</li>
+  <li>Próxima aula: <code>if</code> dentro de <code>if</code>, em <a href="condicoes-aninhadas.html">Condições Aninhadas</a>.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
