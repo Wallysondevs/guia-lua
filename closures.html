@@ -1,0 +1,617 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua Closures — funções que lembram | Guia Lua</title>
+<meta name="description" content="Closures em Lua para quem está começando: a função que enxerga as variáveis de fora, o contador com novo_contador(), contadores independentes, a fábrica de funções (criar_multiplicador), duas funções dividindo a mesma variável (o cofrinho), closures dentro de laços for e while, e os erros reais: o local no lugar errado, a variável global que mistura os contadores e attempt to perform arithmetic on a function value.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">Closures</span></h1>
+
+<p class="intro">Na aula <a href="funcoes-valores.html">Funções São Valores</a>, uma função criou e devolveu outra função. Agora vem o detalhe que torna isso poderoso: a função criada <strong>lembra</strong> das variáveis locais de quem a criou, e continua podendo usá-las e mudá-las, mesmo depois que a função de fora já terminou. Uma função assim, junto com as variáveis que ela lembra, se chama <strong>closure</strong> (em português, às vezes, "fechamento"). Com ela dá para fazer um contador que guarda a conta sozinho, sem nenhuma variável global.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>Que uma função enxerga as variáveis locais de fora dela.</li>
+  <li>A fazer um <strong>contador</strong> com <code>novo_contador()</code>, e por que cada contador tem a sua própria conta.</li>
+  <li>A fazer "fábricas de funções", como <code>criar_multiplicador(2)</code>.</li>
+  <li>A fazer duas funções que <strong>dividem</strong> a mesma variável escondida (o cofrinho).</li>
+  <li>O que acontece com closures dentro de um <code>for</code> e de um <code>while</code>.</li>
+  <li>Os erros reais: o <code>local</code> no lugar errado (o contador que sempre dá 1), a variável global que mistura os contadores e <code>attempt to perform arithmetic on a function value</code>.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>A ideia: a máquina de senhas</h2>
+<p>Na entrada da padaria há uma maquininha de senhas. Cada vez que alguém aperta o botão, sai a próxima: 1, 2, 3… Quem aperta não sabe qual foi a última senha, nem precisa: <strong>a máquina guarda o número lá dentro</strong>, e ninguém de fora consegue mexer nele. E se a padaria comprar uma segunda máquina para o caixa, ela começa do 1 e conta sozinha, sem se misturar com a primeira.</p>
+
+<p>Uma closure é essa máquina: uma função (o botão) com uma variável guardada só para ela (o número lá dentro).</p>
+
+<hr>
+
+<h2>1. Uma função enxerga as variáveis de fora</h2>
+<p>Primeiro, uma coisa que você já usou sem perceber: dentro de uma função dá para usar uma variável local criada <strong>antes</strong> dela, fora dela:</p>
+
+<pre class="file" data-file="enxerga.lua">local loja = "Padaria Pão Quente"
+
+local function assinatura()
+  print("-- " .. loja)
+end
+
+assinatura()
+loja = "Padaria Pão Quentinho"
+assinatura()
+</pre>
+
+<pre class="term">$ lua enxerga.lua
+-- Padaria Pão Quente
+-- Padaria Pão Quentinho
+</pre>
+
+<p>A função <code>assinatura</code> não tem parâmetro, mas usa a variável <code>loja</code>, que é de fora. E repare na segunda chamada: ela mostrou o nome <strong>novo</strong>. A função não guardou uma cópia do texto; ela guardou o acesso à <strong>variável</strong> <code>loja</code>, e lê o valor que estiver lá na hora da chamada.</p>
+
+<p>Uma variável local de fora que uma função usa tem um nome técnico no Lua: <strong>upvalue</strong> ("valor de cima", porque ela vem do bloco de cima). O nome aparece nas mensagens de erro, como <code>(upvalue 'n')</code> (veja em <a href="#errado">Quando dá errado</a>), e em funções da biblioteca <code>debug</code> (aula <a href="debug.html">A Biblioteca debug</a>).</p>
+
+<hr>
+
+<h2>2. O contador: a função que lembra</h2>
+<p>Agora junte isso com uma função que devolve outra função:</p>
+
+<pre class="file" data-file="contador.lua">local function novo_contador()
+  local n = 0
+  return function()
+    n = n + 1
+    return n
+  end
+end
+
+local contar = novo_contador()
+print(contar())
+print(contar())
+print(contar())
+</pre>
+
+<pre class="term">$ lua contador.lua
+1
+2
+3
+</pre>
+
+<dl class="anatomy">
+  <dt>local function novo_contador()</dt><dd>A "fábrica": cada vez que é chamada, monta uma máquina de senhas nova.</dd>
+  <dt>local n = 0</dt><dd>Uma variável local <strong>da fábrica</strong>: o número lá dentro da máquina.</dd>
+  <dt>return function() … end</dt><dd>A fábrica devolve uma função anônima (o botão). Essa função usa o <code>n</code> de fora: é uma closure.</dd>
+  <dt>n = n + 1</dt><dd>A closure não só lê o <code>n</code>, ela <strong>muda</strong> o <code>n</code>. E a mudança fica guardada para a próxima chamada.</dd>
+  <dt>local contar = novo_contador()</dt><dd>Chama a fábrica uma vez e guarda a máquina (a closure) em <code>contar</code>.</dd>
+</dl>
+
+<p>A parte surpreendente: quando <code>novo_contador()</code> terminou (no <code>return</code>), a variável <code>n</code> deveria ter acabado, como acaba toda variável local no fim da sua função. Mas ela <strong>continua viva</strong>, porque a closure ainda precisa dela. O Lua só joga fora o <code>n</code> quando ninguém mais pode usá-lo (aula <a href="coleta-lixo.html">Coleta de Lixo</a>).</p>
+
+<ol class="passo">
+  <li><code>novo_contador()</code> cria <code>n = 0</code>, cria a função anônima, devolve a função e termina. O <code>n</code> fica guardado junto com a função.</li>
+  <li><code>contar()</code>: <code>n</code> vira 1; devolve 1.</li>
+  <li><code>contar()</code> de novo: o <code>n</code> ainda é 1 (ele foi lembrado); vira 2; devolve 2.</li>
+  <li>E assim por diante.</li>
+</ol>
+
+<h3>Cada máquina tem a sua conta</h3>
+<p>Cada chamada de <code>novo_contador()</code> executa de novo o <code>local n = 0</code>, criando um <code>n</code> <strong>novo</strong>. Então cada contador tem o seu:</p>
+
+<pre class="file" data-file="dois_contadores.lua">local function novo_contador()
+  local n = 0
+  return function()
+    n = n + 1
+    return n
+  end
+end
+
+local paes = novo_contador()
+local bolos = novo_contador()
+paes()
+paes()
+paes()
+bolos()
+print("pães vendidos:", paes())
+print("bolos vendidos:", bolos())
+</pre>
+
+<pre class="term">$ lua dois_contadores.lua
+pães vendidos:	4
+bolos vendidos:	2
+</pre>
+
+<p>O contador de pães foi chamado quatro vezes; o de bolos, duas. Um não atrapalha o outro. E nenhum pedaço do programa consegue mexer no <code>n</code> de fora das closures: ele está escondido, como o número dentro da máquina.</p>
+
+<hr>
+
+<h2>3. Fábricas de funções</h2>
+<p>A variável lembrada pode ser um <strong>parâmetro</strong> da fábrica. Assim, a fábrica monta funções diferentes conforme o que recebe:</p>
+
+<pre class="file" data-file="multiplicador.lua">local function criar_multiplicador(fator)
+  return function(n)
+    return n * fator
+  end
+end
+
+local dobro = criar_multiplicador(2)
+local triplo = criar_multiplicador(3)
+print(dobro(5), triplo(5), dobro(triplo(1)))
+</pre>
+
+<pre class="term">$ lua multiplicador.lua
+10	15	6
+</pre>
+
+<p><code>dobro</code> lembra de <code>fator = 2</code>; <code>triplo</code> lembra de <code>fator = 3</code>. As duas foram feitas pelo mesmo código, mas cada uma guardou o seu <code>fator</code>.</p>
+
+<div class="trylua" data-goal="src:fator;;outre:^10\t15\t1\n$;;semerro">
+<p class="try-task"><strong>Missão:</strong> complete a função de dentro para ela multiplicar <code>n</code> pelo <code>fator</code> que a fábrica recebeu. A saída deve ser <code>10</code>, <code>15</code> e <code>1</code> (o <code>neutro</code> multiplica por 1).</p>
+<pre class="script" data-file="main.lua">local function criar_multiplicador(fator)
+  return function(n)
+    return n  -- complete aqui
+  end
+end
+
+local dobro = criar_multiplicador(2)
+local triplo = criar_multiplicador(3)
+local neutro = criar_multiplicador(1)
+print(dobro(5), triplo(5), neutro(1))
+</pre>
+<pre class="solucao" data-file="main.lua">local function criar_multiplicador(fator)
+  return function(n)
+    return n * fator
+  end
+end
+
+local dobro = criar_multiplicador(2)
+local triplo = criar_multiplicador(3)
+local neutro = criar_multiplicador(1)
+print(dobro(5), triplo(5), neutro(1))
+</pre>
+</div>
+
+<h3>Uma fábrica útil: a ordem do <code>table.sort</code></h3>
+<p>Na aula anterior, cada ordem do <code>table.sort</code> precisava de uma função de comparação escrita à mão. Com uma fábrica, uma função monta a comparação para qualquer campo:</p>
+
+<pre class="file" data-file="ordenar_por.lua">local function ordenar_por(campo)
+  return function(a, b)
+    return a[campo] &lt; b[campo]
+  end
+end
+
+local produtos = {
+  {nome = "sonho", preco = 4.5},
+  {nome = "café", preco = 4},
+  {nome = "bolo", preco = 18},
+}
+
+table.sort(produtos, ordenar_por("preco"))
+print(produtos[1].nome, produtos[2].nome, produtos[3].nome)
+table.sort(produtos, ordenar_por("nome"))
+print(produtos[1].nome, produtos[2].nome, produtos[3].nome)
+</pre>
+
+<pre class="term">$ lua ordenar_por.lua
+café	sonho	bolo
+bolo	café	sonho
+</pre>
+
+<p>Aqui, sim, vão os parênteses: <code>ordenar_por("preco")</code> é chamada, e o que vai para o <code>table.sort</code> é a função que ela <strong>devolveu</strong>, que lembra de <code>campo = "preco"</code>.</p>
+
+<hr>
+
+<h2>4. Duas funções dividindo a mesma variável: o cofrinho</h2>
+<p>Se a fábrica cria <strong>duas</strong> funções que usam a mesma variável, as duas enxergam a mesma variável. Uma muda, a outra vê a mudança:</p>
+
+<pre class="file" data-file="conta.lua">local function criar_cofrinho()
+  local saldo = 0
+  local function depositar(valor)
+    saldo = saldo + valor
+  end
+  local function ver_saldo()
+    return saldo
+  end
+  return depositar, ver_saldo
+end
+
+local depositar, ver_saldo = criar_cofrinho()
+depositar(10)
+depositar(5.5)
+print("No cofrinho: " .. ver_saldo())
+print(saldo)
+</pre>
+
+<pre class="term">$ lua conta.lua
+No cofrinho: 15.5
+nil
+</pre>
+
+<dl class="anatomy">
+  <dt>local saldo = 0</dt><dd>A variável escondida, compartilhada pelas duas funções de dentro.</dd>
+  <dt>return depositar, ver_saldo</dt><dd>A fábrica devolve as duas funções (aula <a href="retornos-multiplos.html">Vários Retornos</a>).</dd>
+  <dt>print(saldo)</dt><dd><code>nil</code>: fora do cofrinho, não existe variável <code>saldo</code>. O único jeito de mexer no dinheiro é pelas funções que o cofrinho oferece: só dá para depositar e olhar, nunca para tirar escondido.</dd>
+</dl>
+
+<p>Esse jeito de esconder dados atrás de funções é a base da aula <a href="encapsulamento.html">Privacidade com Closures</a>.</p>
+
+<hr>
+
+<h2>5. Closures dentro de laços</h2>
+<p>E se as closures forem criadas num laço? No <code>for</code>, cada volta tem a <strong>sua</strong> variável de controle, e cada closure lembra a da sua volta:</p>
+
+<pre class="file" data-file="laco_for.lua">local avisos = {}
+for i = 1, 3 do
+  avisos[i] = function()
+    print("Mesa " .. i .. ": pedido pronto")
+  end
+end
+
+avisos[1]()
+avisos[2]()
+avisos[3]()
+</pre>
+
+<pre class="term">$ lua laco_for.lua
+Mesa 1: pedido pronto
+Mesa 2: pedido pronto
+Mesa 3: pedido pronto
+</pre>
+
+<p>Com o <code>while</code> e uma variável criada <strong>fora</strong> do laço, a história é outra: existe uma variável <code>i</code> só, e as três closures lembram dela, a mesma:</p>
+
+<pre class="file" data-file="laco_while.lua">local avisos = {}
+local i = 1
+while i &lt;= 3 do
+  avisos[i] = function()
+    print("Mesa " .. i .. ": pedido pronto")
+  end
+  i = i + 1
+end
+
+avisos[1]()
+avisos[2]()
+avisos[3]()
+</pre>
+
+<pre class="term">$ lua laco_while.lua
+Mesa 4: pedido pronto
+Mesa 4: pedido pronto
+Mesa 4: pedido pronto
+</pre>
+
+<p>Quando as closures foram chamadas, o laço já tinha terminado, e o único <code>i</code> valia 4. Elas mostram o valor <strong>atual</strong> da variável, não o valor da hora em que foram criadas (como a <code>assinatura</code> da seção 1). <strong>O conserto:</strong> criar uma variável local <strong>dentro</strong> do laço, que é nova a cada volta:</p>
+
+<pre class="file" data-file="laco_while_ok.lua">local avisos = {}
+local i = 1
+while i &lt;= 3 do
+  local mesa = i
+  avisos[i] = function()
+    print("Mesa " .. mesa .. ": pedido pronto")
+  end
+  i = i + 1
+end
+
+avisos[1]()
+avisos[2]()
+avisos[3]()
+</pre>
+
+<pre class="term">$ lua laco_while_ok.lua
+Mesa 1: pedido pronto
+Mesa 2: pedido pronto
+Mesa 3: pedido pronto
+</pre>
+
+<div class="note">
+<strong>E nas outras versões?</strong>
+<p>Closures funcionam do mesmo jeito no Lua 5.1, no LuaJIT, no 5.4 e no 5.5: o <code>laco_for.lua</code> deu a mesma saída no <code>lua5.1</code>, e o <code>contador.lua</code>, no <code>luajit</code>. Uma diferença do 5.5: a variável do <code>for</code> não pode ser alterada dentro do laço (aula <a href="for-numerico.html">for Numérico</a>), então nem uma closure consegue mudar o <code>i</code> do <code>for</code>: <code>local f = function() i = i + 1 end</code> dentro do laço dá <code>attempt to assign to const variable 'i'</code>. <span class="versao">5.5</span> Quem vem do JavaScript antigo (com <code>var</code>) conhece o problema do <code>while</code> acima acontecendo também no <code>for</code>; no Lua, o <code>for</code> não tem esse problema.</p>
+</div>
+
+<div class="trylua">
+<p class="try-task"><strong>Experimente:</strong> crie um terceiro contador, <code>sonhos</code>, e chame-o algumas vezes. Depois, mude a fábrica para ela receber o número inicial: <code>novo_contador(inicio)</code>, com <code>local n = inicio or 0</code>.</p>
+<pre class="script" data-file="main.lua">local function novo_contador()
+  local n = 0
+  return function()
+    n = n + 1
+    return n
+  end
+end
+
+local paes = novo_contador()
+local bolos = novo_contador()
+paes()
+paes()
+bolos()
+print("pães:", paes())
+print("bolos:", bolos())
+</pre>
+</div>
+
+<hr>
+
+<h2>Formas diferentes de guardar um estado</h2>
+<p>O contador precisa lembrar de um número entre uma chamada e outra. Há três jeitos de fazer isso:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Forma</th><th>Exemplo</th><th>Vantagem</th><th>Problema</th></tr>
+<tr><td>Variável global</td><td><code>n = 0</code> e <code>function contar() n = n + 1 end</code></td><td>Simples</td><td>Um contador só; qualquer parte do programa pode mudar o <code>n</code> sem querer</td></tr>
+<tr><td>Uma tabela</td><td><code>local c = {n = 0}</code> e <code>c.n = c.n + 1</code></td><td>Vários contadores, cada um numa tabela</td><td>O <code>n</code> fica à mostra: qualquer um faz <code>c.n = 100</code></td></tr>
+<tr><td>Closure</td><td><code>local contar = novo_contador()</code></td><td>Vários contadores, e o <code>n</code> fica escondido</td><td>Para olhar o valor sem somar, é preciso criar outra função (como o <code>ver_saldo</code>)</td></tr>
+</table>
+</div>
+
+<p>Para um contador, uma fábrica de funções ou uma comparação do <code>table.sort</code>, a closure é o jeito do Lua. Quando o "objeto" tem muitos dados e muitas ações, a aula <a href="classes.html">Classes com Metatabelas</a> mostra o caminho das tabelas.</p>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+
+<div class="cenario">
+<strong>O <code>local</code> dentro da função de dentro: sempre 1</strong>
+<pre class="file" data-file="erro_local_dentro.lua">local function novo_contador()
+  return function()
+    local n = 0
+    n = n + 1
+    return n
+  end
+end
+
+local contar = novo_contador()
+print(contar(), contar(), contar())
+</pre>
+<pre class="term">$ lua erro_local_dentro.lua
+1	1	1
+</pre>
+<p>Sem erro, mas o contador não conta. O <code>local n = 0</code> está <strong>dentro</strong> da closure: a cada chamada, ela cria um <code>n</code> novo, valendo 0, soma 1 e devolve 1. Não sobra nada para lembrar. <strong>Como consertar:</strong> o <code>local n = 0</code> vai na fábrica, <strong>antes</strong> do <code>return function</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Esquecer o valor inicial: <code>(upvalue 'n')</code></strong>
+<pre class="file" data-file="upv.lua">local function novo_contador()
+  local n
+  return function()
+    n = n + 1
+    return n
+  end
+end
+
+local contar = novo_contador()
+print(contar())
+</pre>
+<pre class="term">$ lua upv.lua
+lua: upv.lua:4: attempt to perform arithmetic on a nil value (upvalue 'n')
+stack traceback:
+	upv.lua:4: in local 'contar'
+	upv.lua:10: in main chunk
+	[C]: in ?
+</pre>
+<p><code>local n</code> sem <code>= 0</code> cria a variável valendo <code>nil</code>, e <code>nil + 1</code> não existe. A novidade está no fim da primeira linha: <code>(upvalue 'n')</code>. Até agora o Lua dizia <code>local</code> ou <code>global</code>; aqui ele avisa que o <code>n</code> é uma variável <strong>de fora</strong> da função que deu o erro, lembrada pela closure. E o rastro diz <code>in local 'contar'</code>: a closure não tem nome próprio, então o Lua usa o nome da variável por onde ela foi chamada. <strong>Como consertar:</strong> <code>local n = 0</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Chamar a fábrica toda vez</strong>
+<pre class="file" data-file="erro_fabrica_cada_vez.lua">local function novo_contador()
+  local n = 0
+  return function()
+    n = n + 1
+    return n
+  end
+end
+
+print(novo_contador()())
+print(novo_contador()())
+print(novo_contador()())
+</pre>
+<pre class="term">$ lua erro_fabrica_cada_vez.lua
+1
+1
+1
+</pre>
+<p>A fábrica está certa, mas cada linha monta uma máquina <strong>nova</strong>, aperta o botão uma vez e joga a máquina fora. <strong>Como consertar:</strong> chame a fábrica uma vez, guarde a closure (<code>local contar = novo_contador()</code>) e chame só a closure depois.</p>
+</div>
+
+<div class="cenario">
+<strong>Esquecer o <code>local</code> na fábrica: os contadores se misturam</strong>
+<pre class="file" data-file="erro_global.lua">local function novo_contador()
+  n = 0
+  return function()
+    n = n + 1
+    return n
+  end
+end
+
+local paes = novo_contador()
+paes()
+paes()
+local bolos = novo_contador()
+print("pães:", paes())
+print("bolos:", bolos())
+</pre>
+<pre class="term">$ lua erro_global.lua
+pães:	1
+bolos:	2
+</pre>
+<p>Sem o <code>local</code>, o <code>n</code> é uma variável <strong>global</strong>, uma só para o programa inteiro (aula <a href="local.html">local × Global</a>). Os pães já iam em 2, mas criar o contador de bolos fez <code>n = 0</code> de novo, zerando os pães; depois, pães e bolos somaram no mesmo <code>n</code>. O resultado parece aleatório e não dá erro nenhum. <strong>Como consertar:</strong> <code>local n = 0</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Esquecer de chamar a fábrica</strong>
+<pre class="file" data-file="erro_sem_chamar.lua">local function novo_contador()
+  local n = 0
+  return function()
+    n = n + 1
+    return n
+  end
+end
+
+local contar = novo_contador
+print(contar())
+print(contar() + 1)
+</pre>
+<pre class="term">$ lua erro_sem_chamar.lua
+function: 0x5649832c3690
+lua: erro_sem_chamar.lua:11: attempt to perform arithmetic on a function value
+stack traceback:
+	erro_sem_chamar.lua:11: in main chunk
+	[C]: in ?
+</pre>
+<p>Sem parênteses, <code>contar</code> recebeu a <strong>fábrica</strong>, não o contador. Então <code>contar()</code> monta um contador e devolve a closure: o <code>print</code> mostrou <code>function: 0x…</code> (o endereço muda a cada execução). E <code>contar() + 1</code> tentou somar 1 a uma função: <code>attempt to perform arithmetic on a function value</code>, "tentativa de fazer conta com um valor do tipo função". <strong>Como consertar:</strong> <code>local contar = novo_contador()</code>, com parênteses.</p>
+</div>
+
+<div class="cenario">
+<strong>A closure mostra o valor de agora, não o de antes</strong>
+<p>Sem erro: as três mesas do <code>while</code> mostraram <code>Mesa 4</code> (seção 5). A closure lembra a <strong>variável</strong>, e mostra o valor que ela tem na hora da chamada. <strong>Como consertar:</strong> uma variável <code>local</code> nova dentro do laço (<code>local mesa = i</code>).</p>
+</div>
+
+<hr>
+
+<h2>Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>O que faz</th></tr>
+<tr><td><code>local function fabrica() local x = 0; return function() … x … end end</code></td><td>Uma fábrica que devolve uma closure com a sua própria <code>x</code></td></tr>
+<tr><td><code>local f = fabrica()</code></td><td>Cria uma closure nova (com uma <code>x</code> nova)</td></tr>
+<tr><td><code>f()</code></td><td>Chama a closure; ela lê e muda a <code>x</code> lembrada</td></tr>
+<tr><td><code>local function criar(p) return function(n) … p … end end</code></td><td>A closure lembra do parâmetro <code>p</code></td></tr>
+<tr><td><code>return f1, f2</code></td><td>Duas closures que dividem as mesmas variáveis</td></tr>
+<tr><td>upvalue</td><td>O nome técnico de uma variável local de fora usada por uma função</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Sintoma</th><th>Causa provável</th></tr>
+<tr><td><code>attempt to perform arithmetic on a nil value (upvalue '…')</code></td><td>A variável lembrada não recebeu valor inicial (<code>local n</code> sem <code>= 0</code>)</td></tr>
+<tr><td>O contador sempre devolve 1</td><td>O <code>local</code> está dentro da closure, ou a fábrica é chamada a cada vez</td></tr>
+<tr><td>Contadores que deviam ser separados se misturam</td><td>Faltou o <code>local</code> na variável da fábrica (virou global)</td></tr>
+<tr><td><code>function: 0x…</code> onde devia sair um número</td><td>Faltaram os parênteses ao chamar a fábrica: <code>f = fabrica</code></td></tr>
+<tr><td><code>attempt to perform arithmetic on a function value</code></td><td>Conta com uma função: o mesmo problema de cima</td></tr>
+<tr><td>Todas as closures de um laço mostram o último valor</td><td>Variável criada fora do laço (<code>while</code>); crie uma <code>local</code> dentro</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. O que a máquina lembra</h3>
+<p>Complete a palavra que faz cada contador ter a sua própria conta:</p>
+<div class="ex-code">local function novo_contador()<br>&nbsp;&nbsp;<input data-answer="local" aria-label="palavra-chave"> n = 0<br>&nbsp;&nbsp;return function() n = n + 1; return n end<br>end</div>
+</div>
+
+<div class="exercise">
+<h3>2. Criando o contador</h3>
+<p>Complete para guardar em <code>contar</code> um contador novo (e não a fábrica):</p>
+<div class="ex-code">local contar = novo_contador<input data-answer="()" aria-label="o que falta"></div>
+</div>
+
+<div class="mc" data-answer="3">
+<p class="mc-q">3. Com o <code>novo_contador</code> da seção 2, o que este trecho mostra?</p>
+<pre class="file" data-file="exercicio.lua">local a = novo_contador()
+local b = novo_contador()
+a()
+a()
+print(a(), b())
+</pre>
+<label><input type="radio" name="q3"> <code>3 4</code></label>
+<label><input type="radio" name="q3"> <code>1 1</code></label>
+<label><input type="radio" name="q3"> <code>3 1</code></label>
+<label><input type="radio" name="q3"> <code>2 1</code></label>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">4. <code>local somar5 = criar_somador(5)</code>, em que <code>criar_somador(x)</code> devolve <code>function(n) return n + x end</code>. Quanto dá <code>somar5(10)</code>?</p>
+<label><input type="radio" name="q4"> <code>5</code></label>
+<label><input type="radio" name="q4"> <code>15</code></label>
+<label><input type="radio" name="q4"> <code>10</code></label>
+<label><input type="radio" name="q4"> Erro: <code>x</code> já não existe</label>
+</div>
+
+<div class="mc" data-answer="4">
+<p class="mc-q">5. Três closures criadas num <code>while</code>, com a variável <code>i</code> declarada <strong>antes</strong> do laço, mostram todas o mesmo número. Por quê?</p>
+<label><input type="radio" name="q5"> Porque o <code>while</code> não aceita funções dentro</label>
+<label><input type="radio" name="q5"> Porque closures copiam o valor na hora em que são criadas</label>
+<label><input type="radio" name="q5"> Porque faltou um <code>return</code></label>
+<label><input type="radio" name="q5"> Porque há uma variável <code>i</code> só, e todas lembram dela, com o valor final</label>
+</div>
+
+<div class="mc" data-answer="1">
+<p class="mc-q">6. No cofrinho da seção 4, por que <code>print(saldo)</code>, fora dele, mostra <code>nil</code>?</p>
+<label><input type="radio" name="q6"> Porque <code>saldo</code> é local da fábrica: só as closures de dentro a enxergam</label>
+<label><input type="radio" name="q6"> Porque o saldo foi apagado no fim da fábrica</label>
+<label><input type="radio" name="q6"> Porque o <code>print</code> não mostra números com vírgula</label>
+<label><input type="radio" name="q6"> Porque faltou chamar <code>ver_saldo</code> antes</label>
+</div>
+
+<h3>Missão final: a máquina de senhas</h3>
+
+<div class="trylua" data-goal="outre:Senha 1\nSenha 2\nSenha 3\nCaixa: senha 1\n;;semerro">
+<p class="try-task"><strong>Missão:</strong> a máquina de senhas da padaria está entregando sempre a senha 1. Conserte a fábrica <code>nova_maquina</code> para cada máquina contar 1, 2, 3… sozinha. A máquina do caixa é outra, e deve começar do 1.</p>
+<pre class="script" data-file="main.lua">local function nova_maquina()
+  return function()
+    local senha = 0
+    senha = senha + 1
+    return senha
+  end
+end
+
+local entrada = nova_maquina()
+local caixa = nova_maquina()
+print("Senha " .. entrada())
+print("Senha " .. entrada())
+print("Senha " .. entrada())
+print("Caixa: senha " .. caixa())
+</pre>
+<pre class="solucao" data-file="main.lua">local function nova_maquina()
+  local senha = 0
+  return function()
+    senha = senha + 1
+    return senha
+  end
+end
+
+local entrada = nova_maquina()
+local caixa = nova_maquina()
+print("Senha " .. entrada())
+print("Senha " .. entrada())
+print("Senha " .. entrada())
+print("Caixa: senha " .. caixa())
+</pre>
+</div>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li>Uma função enxerga as variáveis locais de fora dela (os <strong>upvalues</strong>) e lê o valor que elas têm na hora da chamada.</li>
+  <li>Uma <strong>closure</strong> é uma função que lembra dessas variáveis mesmo depois que a função que as criou terminou.</li>
+  <li>O contador: a fábrica cria <code>local n = 0</code> e devolve uma função que faz <code>n = n + 1</code>. Cada chamada da fábrica cria um <code>n</code> novo, então cada contador é independente.</li>
+  <li>A variável lembrada pode ser um parâmetro: <code>criar_multiplicador(2)</code>, <code>ordenar_por("preco")</code>.</li>
+  <li>Duas closures da mesma fábrica dividem a mesma variável, que fica escondida do resto do programa (o cofrinho).</li>
+  <li>No <code>for</code>, cada volta tem a sua variável; no <code>while</code>, crie uma <code>local</code> dentro do laço.</li>
+  <li>Erros comuns: o <code>local</code> dentro da closure (sempre 1), o <code>local</code> esquecido na fábrica (contadores misturados) e a fábrica sem parênteses (<code>attempt to perform arithmetic on a function value</code>).</li>
+  <li>Próxima aula: até onde uma variável vale, bloco por bloco, em <a href="escopo.html">Escopo e Blocos</a>.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
