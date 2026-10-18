@@ -1,0 +1,521 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua upper, lower, rep e reverse — funções de texto | Guia Lua</title>
+<meta name="description" content="As funções de texto do Lua para quem nunca programou: string.upper, string.lower, string.len, string.rep e string.reverse, o dois-pontos de nome:upper(), por que o texto original não muda, por que o ç e o ã não viram maiúsculos, e os erros reais do Lua 5.5.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">Funções de Texto</span></h1>
+
+<p class="intro">Você já sabe criar textos (<a href="strings.html">Strings</a>), juntá-los com <code>..</code> (<a href="concatenacao.html">Juntando Textos</a>) e formatá-los (<a href="string-format.html">string.format</a>). Agora vem a caixa de ferramentas para <strong>mexer</strong> neles: pôr tudo em maiúsculas, tudo em minúsculas, repetir um pedaço várias vezes, virar de trás para frente. No Lua, essas ferramentas moram numa biblioteca chamada <code>string</code> (em inglês, "cadeia de caracteres", o nome técnico de texto), que já vem pronta: não precisa instalar nada.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O que é a biblioteca <code>string</code> e como chamar uma função dela: <code>string.upper(nome)</code>.</li>
+  <li>O atalho com <strong>dois-pontos</strong>: <code>nome:upper()</code>, e por que <code>("ana"):upper()</code> precisa de parênteses.</li>
+  <li><code>upper</code> (maiúsculas), <code>lower</code> (minúsculas), <code>len</code> (tamanho), <code>rep</code> (repetir) e <code>reverse</code> (inverter).</li>
+  <li>Por que o texto original <strong>não muda</strong>, e como guardar o resultado.</li>
+  <li>Como encadear várias funções numa linha só: <code>nome:lower():reverse()</code>.</li>
+  <li>Por que <code>string.upper("ação")</code> dá <code>AçãO</code>.</li>
+  <li>Os erros reais mais comuns: o ponto no lugar do dois-pontos, o nome com letra maiúscula, a variável vazia e o número.</li>
+</ul>
+</div>
+
+<p>Todos os programas desta aula rodaram no <strong>Lua 5.5</strong> da máquina da Ana (usuária <code>ana</code>, computador <code>notebook</code>), salvos na pasta pessoal dela e executados com <code>lua arquivo.lua</code> (veja <a href="executar.html">Rodando um Programa</a>). Você pode rodar cada um no editor do guia.</p>
+
+<hr>
+
+<h2>A ideia: a copiadora da papelaria</h2>
+<p>Na papelaria do bairro tem uma copiadora com vários botões: "ampliar", "reduzir", "tirar 10 cópias", "inverter a imagem". Você coloca a sua folha, aperta um botão e sai uma folha <strong>nova</strong>, do jeito que você pediu. Repare em duas coisas:</p>
+<ul>
+  <li>Cada botão faz <strong>uma</strong> coisa. Para ampliar e depois inverter, você pega a cópia ampliada e põe na máquina de novo.</li>
+  <li>A sua folha original <strong>volta igualzinha</strong>. A máquina não escreve nela; ela entrega uma cópia.</li>
+</ul>
+<p>As funções da biblioteca <code>string</code> são esses botões. Você entrega um texto, a função devolve um texto <strong>novo</strong>, e o texto que você entregou continua como estava. Isso vai ser importante na seção 3.</p>
+
+<hr>
+
+<h2>1. Maiúsculas e minúsculas: <code>string.upper</code> e <code>string.lower</code></h2>
+
+<pre class="file" data-file="caixa.lua">local nome = "Ana Lima"
+print(string.upper(nome))
+print(string.lower(nome))
+print(nome)
+</pre>
+
+<dl class="anatomy">
+  <dt>string</dt><dd>A <strong>biblioteca</strong> de texto: uma tabela (uma "gaveta", veja <a href="tabelas.html">Tabelas</a>) que guarda várias funções prontas. O Lua a carrega sozinho quando o programa começa.</dd>
+  <dt>.</dt><dd>O ponto quer dizer "a função que está dentro de". <code>string.upper</code> se lê "a função <code>upper</code> da biblioteca <code>string</code>".</dd>
+  <dt>upper</dt><dd>Em inglês, "de cima": as letras maiúsculas (na tipografia antiga, elas ficavam na caixa de cima). Devolve o texto com todas as letras em maiúsculas.</dd>
+  <dt>lower</dt><dd>"De baixo": as minúsculas. Devolve o texto com todas as letras em minúsculas.</dd>
+  <dt>(nome)</dt><dd>O texto que você entrega à função, o <strong>argumento</strong> (veja <a href="funcoes.html">Funções</a>).</dd>
+  <dt>print(nome)</dt><dd>A última linha mostra a variável de novo, para você ver que ela não mudou.</dd>
+</dl>
+
+<pre class="term">$ lua caixa.lua
+ANA LIMA
+ana lima
+Ana Lima</pre>
+
+<p>Espaços, números e sinais (<code>!</code>, <code>-</code>, <code>,</code>) passam sem mudança: só as letras de A a Z trocam de caixa. Para que serve? Para comparar respostas sem se preocupar com o jeito que a pessoa digitou: <code>"SIM"</code>, <code>"Sim"</code> e <code>"sim"</code> viram todos <code>"sim"</code> com <code>lower</code>.</p>
+
+<hr>
+
+<h2>2. O atalho do dois-pontos: <code>nome:upper()</code></h2>
+<p>Escrever <code>string.</code> toda vez cansa. O Lua tem um atalho: você escreve a variável, <strong>dois-pontos</strong> e o nome da função, sem repetir o texto dentro dos parênteses:</p>
+
+<pre class="file" data-file="atalho.lua">local nome = "Ana Lima"
+print(string.upper(nome))   -- o jeito longo
+print(nome:upper())         -- o atalho: faz exatamente a mesma coisa
+print(nome:lower())
+</pre>
+
+<pre class="term">$ lua atalho.lua
+ANA LIMA
+ANA LIMA
+ana lima</pre>
+
+<dl class="anatomy">
+  <dt>nome:upper()</dt><dd>Lê-se "pegue o <code>nome</code> e aplique o <code>upper</code> nele". O Lua traduz para <code>string.upper(nome)</code>: o texto que está <strong>antes</strong> do <code>:</code> vira o primeiro argumento, sozinho.</dd>
+  <dt>()</dt><dd>Os parênteses continuam obrigatórios, mesmo vazios: são eles que mandam a função <strong>rodar</strong>.</dd>
+</dl>
+
+<p>Quem faz essa ligação é um mecanismo do Lua chamado <strong>metatabela</strong>: todo texto "sabe" que as suas ferramentas estão na biblioteca <code>string</code>. Você não precisa entender isso agora; a aula <a href="metodos.html">Métodos e o Dois-Pontos (:)</a> conta a história inteira. Por enquanto, guarde a regra: <strong><code>texto:funcao(…)</code> é o mesmo que <code>string.funcao(texto, …)</code></strong>.</p>
+
+<h3>Com um texto escrito direto, use parênteses</h3>
+<p>O atalho funciona com uma variável. Com um texto entre aspas escrito direto no código, ele precisa de um par de <strong>parênteses em volta</strong>: <code>("ana"):upper()</code>. Sem eles, o Lua não entende (você vê o erro em <a href="#errado">Quando dá errado</a>). No modo interativo (veja <a href="repl.html">O Modo Interativo</a>) dá para testar rapidinho:</p>
+
+<pre class="term">$ lua
+Lua 5.5.0  Copyright (C) 1994-2025 Lua.org, PUC-Rio
+&gt; nome = "Ana Lima"
+&gt; nome:upper()
+ANA LIMA
+&gt; string.upper(nome)
+ANA LIMA
+&gt; nome
+Ana Lima
+&gt; ("=-"):rep(10)
+=-=-=-=-=-=-=-=-=-=-
+&gt; nome:len()
+8
+&gt; os.exit()</pre>
+
+<div class="trylua" data-goal="out:Cliente: BIA SOUZA;;src:upper">
+<p class="try-task"><strong>Missão:</strong> a etiqueta da encomenda tem de sair com o nome em maiúsculas. Use <code>cliente:upper()</code> (ou <code>string.upper(cliente)</code>) para o programa mostrar <code>Cliente: BIA SOUZA</code>.</p>
+<pre class="script" data-file="main.lua">local cliente = "bia souza"
+print("Cliente: " .. cliente)
+</pre>
+<pre class="solucao" data-file="main.lua">local cliente = "bia souza"
+print("Cliente: " .. cliente:upper())
+</pre>
+</div>
+
+<hr>
+
+<h2>3. O texto original não muda</h2>
+<p>Lembra da copiadora? A função devolve um texto novo; a variável continua com o texto antigo. Olhe este programa: ele chama o <code>upper</code>, mas não faz nada com o resultado.</p>
+
+<pre class="file" data-file="esqueci.lua">local nome = "Ana"
+nome:upper()
+print(nome)
+</pre>
+
+<pre class="term">$ lua esqueci.lua
+Ana</pre>
+
+<p>O Lua calculou <code>"ANA"</code> na linha 2 e jogou fora, porque ninguém guardou. Não aparece erro nenhum, e é por isso que esse engano é traiçoeiro. No Lua, um texto <strong>nunca</strong> é alterado depois de criado (os programadores dizem que as strings são <strong>imutáveis</strong>). Para "mudar" a variável, guarde o texto novo nela:</p>
+
+<pre class="file" data-file="guardei.lua">local nome = "Ana"
+nome = nome:upper()      -- o texto novo vai para a mesma variável
+print(nome)
+
+local original = "Bia"
+local gritando = original:upper()   -- ou numa variável nova
+print(original, gritando)
+</pre>
+
+<pre class="term">$ lua guardei.lua
+ANA
+Bia	BIA</pre>
+
+<p>(O <code>print</code> com dois valores separa os dois com uma tabulação, o espaço largo entre <code>Bia</code> e <code>BIA</code>; veja <a href="print.html">print()</a>.)</p>
+
+<hr>
+
+<h2>4. O tamanho: <code>string.len</code>, <code>nome:len()</code> e <code>#</code></h2>
+<p><code>len</code> vem de <em>length</em>, "comprimento". Ela conta quantos caracteres o texto tem. O operador <code>#</code> (veja <a href="operador-tamanho.html">O Operador de Tamanho</a>) faz a mesma conta:</p>
+
+<pre class="file" data-file="tamanho.lua">local nome = "Ana Lima"
+print(nome:len(), #nome, string.len(nome))
+print(#"", ("ação"):len())
+</pre>
+
+<pre class="term">$ lua tamanho.lua
+8	8	8
+0	6</pre>
+
+<p>Os três jeitos dão 8 (o espaço também conta). O texto vazio <code>""</code> tem tamanho 0. Mas repare: <code>"ação"</code> tem 4 letras e o Lua disse <strong>6</strong>. É que o <code>len</code> e o <code>#</code> contam <strong>bytes</strong>, os pedacinhos de memória, e no padrão de acentos usado hoje (o UTF-8) o "ç" e o "ã" ocupam 2 bytes cada. Para contar letras de verdade existe o <code>utf8.len</code>, na aula <a href="utf8.html">Acentos e a Biblioteca utf8</a>.</p>
+
+<div class="tip">
+<strong>Qual usar: <code>#nome</code> ou <code>nome:len()</code>?</strong>
+<p>Dão o mesmo resultado. A comunidade Lua usa quase sempre o <code>#</code>, que é mais curto. O <code>len</code> existe para quem prefere tudo como função.</p>
+</div>
+
+<hr>
+
+<h2>5. Repetir: <code>string.rep</code></h2>
+<p><code>rep</code> vem de <em>repeat</em>, "repetir". Você diz o texto e quantas vezes ele deve aparecer:</p>
+
+<pre class="file" data-file="repetir.lua">print(("ab"):rep(3))
+print(string.rep("-", 20))
+print(("Ana"):rep(3, ", "))
+print(("x"):rep(0), ("x"):rep(-1))
+</pre>
+
+<pre class="term">$ lua repetir.lua
+ababab
+--------------------
+Ana, Ana, Ana
+	</pre>
+
+<dl class="anatomy">
+  <dt>("ab"):rep(3)</dt><dd>Repete <code>"ab"</code> 3 vezes, colado: <code>ababab</code>.</dd>
+  <dt>string.rep("-", 20)</dt><dd>Uma linha de 20 traços: ótima para separar partes de um relatório.</dd>
+  <dt>("Ana"):rep(3, ", ")</dt><dd>O terceiro argumento, opcional, é o <strong>separador</strong>: o que vai <strong>entre</strong> as cópias (não depois da última).</dd>
+  <dt>rep(0) e rep(-1)</dt><dd>Zero vezes, ou um número negativo, dá o texto vazio <code>""</code>. Por isso a última linha da saída parece vazia: são dois textos vazios separados por uma tabulação.</dd>
+</dl>
+
+<p>Um uso comum: uma moldura do tamanho certo para um título. O <code>#titulo + 4</code> conta as letras do título mais os 4 caracteres de <code>"| "</code> e <code>" |"</code>:</p>
+
+<pre class="file" data-file="moldura.lua">local titulo = "padaria do bairro"
+local linha = ("="):rep(#titulo + 4)
+print(linha)
+print("| " .. titulo:upper() .. " |")
+print(linha)
+</pre>
+
+<pre class="term">$ lua moldura.lua
+=====================
+| PADARIA DO BAIRRO |
+=====================</pre>
+
+<div class="trylua" data-goal="out:==============================;;src:rep">
+<p class="try-task"><strong>Missão:</strong> o cupom da padaria precisa de uma linha com <strong>30</strong> sinais de igual. Em vez de digitar os 30, use <code>("="):rep(30)</code> nas duas linhas de borda.</p>
+<pre class="script" data-file="main.lua">print("=====")
+print("Pão francês ...... R$ 0,80")
+print("=====")
+</pre>
+<pre class="solucao" data-file="main.lua">print(("="):rep(30))
+print("Pão francês ...... R$ 0,80")
+print(("="):rep(30))
+</pre>
+</div>
+
+<hr>
+
+<h2>6. De trás para frente: <code>string.reverse</code></h2>
+<p><code>reverse</code> quer dizer "inverter". A primeira letra vira a última:</p>
+
+<pre class="file" data-file="inverter.lua">print(("roma"):reverse())
+print(("Ana Lima"):reverse())
+</pre>
+
+<pre class="term">$ lua inverter.lua
+amor
+amiL anA</pre>
+
+<p>Uma brincadeira clássica com o <code>reverse</code> é descobrir <strong>palíndromos</strong>, palavras que se leem igual nos dois sentidos, como "ovo" e "radar". A palavra é palíndromo se ela for igual a ela mesma invertida (a comparação <code>==</code> está em <a href="operadores-comparacao.html">Comparações</a>):</p>
+
+<pre class="file" data-file="ovo.lua">local palavra = "Ovo"
+local limpa = palavra:lower()
+print(limpa, limpa:reverse())
+print(limpa == limpa:reverse())
+</pre>
+
+<pre class="term">$ lua ovo.lua
+ovo	ovo
+true</pre>
+
+<p>O <code>lower</code> veio antes por um motivo: <code>"Ovo"</code> invertido é <code>"ovO"</code>, e para o Lua <code>O</code> e <code>o</code> são letras diferentes. Passando tudo para minúsculas antes, a diferença some. Você vai usar isso na missão final.</p>
+
+<hr>
+
+<h2>7. Encadeando: uma função depois da outra</h2>
+<p>Como cada função devolve um texto, dá para pôr outro <code>:</code> logo depois, como levar a cópia ampliada de volta à copiadora. O Lua faz da esquerda para a direita:</p>
+
+<pre class="file" data-file="corrente.lua">local nome = "Ana Lima"
+print(nome:upper():reverse())
+print(("Ana"):lower() == ("Ana"):lower():reverse())
+</pre>
+
+<pre class="term">$ lua corrente.lua
+AMIL ANA
+true</pre>
+
+<p>Na linha 2: primeiro <code>nome:upper()</code> deu <code>"ANA LIMA"</code>; depois o <code>:reverse()</code> foi aplicado nesse texto novo. Encadear é prático, mas não exagere: duas ou três funções numa linha ainda se leem bem; seis já viram um quebra-cabeça. Nesse caso, guarde os passos em variáveis com nomes claros, como fizemos com <code>limpa</code> na seção 6.</p>
+
+<hr>
+
+<h2>8. Acentos: por que o "ç" não vira "Ç"</h2>
+
+<pre class="file" data-file="acento.lua">print(string.upper("ação"), string.lower("AÇÃO"))
+print(("ação"):reverse())
+</pre>
+
+<pre class="term">$ lua acento.lua
+AçãO	aÇÃo
+o�ç�a                     « os � são pedaços de letra que sobraram</pre>
+
+<p>O <code>upper</code> trocou só o <code>a</code> e o <code>o</code>. Ele trabalha <strong>byte a byte</strong> e só conhece as letras de A a Z sem acento; os 2 bytes do "ç" e os 2 do "ã" passam sem mudança. O <code>reverse</code> também inverte byte a byte, e por isso desmontou o "ã" e o "ç" ao contrário: os <code>�</code> são bytes soltos que não formam letra nenhuma. Nem chamar <code>os.setlocale("")</code> (que põe o Lua no idioma do computador, português) resolve: no lab, a saída foi a mesma. Os detalhes, e o que fazer, estão em <a href="utf8.html">Acentos e a Biblioteca utf8</a>.</p>
+
+<div class="note">
+<strong>E com número?</strong>
+<p><code>string.upper(123)</code> funciona e devolve o <strong>texto</strong> <code>"123"</code>: as funções da biblioteca <code>string</code> aceitam um número no lugar do texto e o convertem sozinhas. Já o atalho <code>preco:rep(2)</code>, com <code>preco</code> sendo um número, <strong>não</strong> funciona: só os textos têm o dois-pontos ligado à biblioteca <code>string</code>. Converta antes: <code>tostring(preco):rep(2)</code> (veja <a href="conversao.html">Conversão</a>).</p>
+</div>
+
+<hr>
+
+<h2 id="formas">Formas diferentes de fazer a mesma coisa</h2>
+<p>Mostrar um nome em maiúsculas, de três jeitos que dão o mesmo resultado:</p>
+
+<pre class="file" data-file="tres.lua">local nome = "Ana"
+print(string.upper(nome))   -- 1. o nome completo da função
+print(nome:upper())         -- 2. o atalho do dois-pontos
+print(("Ana"):upper())      -- 3. o atalho com o texto escrito direto
+</pre>
+
+<pre class="term">$ lua tres.lua
+ANA
+ANA
+ANA</pre>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Situação</th><th>Qual usar</th></tr>
+<tr><td>Uso normal, com uma variável de texto</td><td><code>nome:upper()</code>: é o que você vai ver na maioria dos programas Lua</td></tr>
+<tr><td>Com um texto escrito direto no código</td><td><code>("=-"):rep(10)</code>, com os parênteses em volta</td></tr>
+<tr><td>Quando o valor pode ser um número (ou você quer deixar claro de onde vem a função)</td><td><code>string.upper(valor)</code></td></tr>
+<tr><td>Saber o tamanho</td><td><code>#nome</code> (ou <code>nome:len()</code>); para letras com acento, <code>utf8.len(nome)</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+
+<div class="cenario">
+<strong>Usou ponto no lugar do dois-pontos</strong>
+<pre class="file" data-file="ponto.lua">local nome = "Ana"
+print(nome.upper())
+</pre>
+<pre class="term">$ lua ponto.lua
+lua: ponto.lua:2: bad argument #1 to 'upper' (string expected, got no value)
+stack traceback:
+	[C]: in field 'upper'
+	ponto.lua:2: in main chunk
+	[C]: in ?</pre>
+<p>Linha por linha:</p>
+<dl class="anatomy">
+  <dt>lua: ponto.lua:2:</dt><dd>Quem reclamou foi o <code>lua</code>, no arquivo <code>ponto.lua</code>, na <strong>linha 2</strong>.</dd>
+  <dt>bad argument #1 to 'upper'</dt><dd>"Argumento ruim, o nº 1, para o <code>upper</code>": o problema está no primeiro valor que a função recebeu.</dd>
+  <dt>(string expected, got no value)</dt><dd>"Esperava um texto, recebeu <strong>nenhum valor</strong>". Com o ponto, <code>nome.upper()</code> chama a função <strong>sem</strong> entregar o <code>nome</code>: os parênteses estão vazios. Só o dois-pontos entrega o texto sozinho.</dd>
+  <dt>stack traceback:</dt><dd>"Rastro da pilha": o caminho que o programa fez até o erro, do mais recente para o mais antigo.</dd>
+  <dt>[C]: in field 'upper'</dt><dd>O erro aconteceu dentro do <code>upper</code>, uma função escrita na linguagem C (a biblioteca <code>string</code> é feita em C), chamada como um campo de tabela.</dd>
+  <dt>ponto.lua:2: in main chunk</dt><dd>Quem chamou o <code>upper</code> foi a linha 2 do programa principal (<em>main chunk</em>, o "pedaço principal").</dd>
+  <dt>[C]: in ?</dt><dd>O começo de tudo: o próprio <code>lua</code>, que rodou o seu arquivo. Aparece no fim de todo traceback.</dd>
+</dl>
+<p><strong>Como consertar:</strong> <code>nome:upper()</code> ou <code>string.upper(nome)</code>. A mesma mensagem aparece se você escrever <code>string.upper()</code> sem nada dentro.</p>
+</div>
+
+<div class="cenario">
+<strong>Escreveu o nome da função com maiúscula</strong>
+<pre class="file" data-file="maiuscula.lua">local nome = "Ana"
+print(nome:Upper())
+</pre>
+<pre class="term">$ lua maiuscula.lua
+lua: maiuscula.lua:2: attempt to call a nil value (method 'Upper')
+stack traceback:
+	maiuscula.lua:2: in main chunk
+	[C]: in ?</pre>
+<p>"Tentativa de chamar um valor <code>nil</code> (o método <code>Upper</code>)". O Lua diferencia maiúsculas de minúsculas: na biblioteca existe <code>upper</code>, não <code>Upper</code>. Procurou, não achou nada (<code>nil</code>, o "vazio"; veja <a href="nil.html">O Valor nil</a>) e não dá para chamar o nada. <strong>Como consertar:</strong> os nomes das funções do Lua são todos em minúsculas: <code>nome:upper()</code>. O mesmo acontece com um erro de digitação, como <code>nome:uper()</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Usou o dois-pontos direto num texto entre aspas</strong>
+<pre class="file" data-file="aspas.lua">print("ana":upper())
+</pre>
+<pre class="term">$ lua aspas.lua
+lua: aspas.lua:1: ')' expected near ':'</pre>
+<p>"Era esperado um <code>)</code> perto do <code>:</code>". É um erro de <strong>sintaxe</strong> (de escrita): o Lua nem começou a rodar o programa, por isso não há traceback. A regra da linguagem não deixa pôr o <code>:</code> logo depois de um texto entre aspas. <strong>Como consertar:</strong> ponha o texto entre parênteses, <code>("ana"):upper()</code>, ou use <code>string.upper("ana")</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>A variável estava vazia (<code>nil</code>)</strong>
+<pre class="file" data-file="vazia.lua">local cidade
+print(cidade:upper())
+</pre>
+<pre class="term">$ lua vazia.lua
+lua: vazia.lua:2: attempt to index a nil value (local 'cidade')
+stack traceback:
+	vazia.lua:2: in main chunk
+	[C]: in ?</pre>
+<p>"Tentativa de indexar um valor <code>nil</code> (a variável local <code>cidade</code>)". <strong>Indexar</strong> é procurar alguma coisa dentro de um valor; para achar o <code>upper</code>, o Lua precisa olhar dentro da <code>cidade</code>, e ela não tem nada: foi criada sem valor. Na prática, isso acontece quando o texto deveria vir de outro lugar (o teclado, um arquivo) e não veio. <strong>Como consertar:</strong> dê um valor à variável antes de usar, ou confira com <code>if cidade then … end</code> (aula <a href="if.html">if</a>). Com <code>string.upper(cidade)</code> a mensagem seria outra: <code>bad argument #1 to 'upper' (string expected, got nil)</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Usou o dois-pontos num número</strong>
+<pre class="file" data-file="numero.lua">local preco = 10
+print(preco:rep(2))
+</pre>
+<pre class="term">$ lua numero.lua
+lua: numero.lua:2: attempt to index a number value (local 'preco')
+stack traceback:
+	numero.lua:2: in main chunk
+	[C]: in ?</pre>
+<p>"Tentativa de indexar um valor numérico". Os números não têm o atalho do dois-pontos; só os textos. <strong>Como consertar:</strong> <code>tostring(preco):rep(2)</code>, que dá <code>1010</code>, ou <code>string.rep(preco, 2)</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Pediu um número de vezes quebrado</strong>
+<pre class="term">$ lua -e 'print(("oi"):rep(2.5))'
+lua: (command line):1: bad argument #1 to 'rep' (number has no integer representation)
+stack traceback:
+	[C]: in method 'rep'
+	(command line):1: in main chunk
+	[C]: in ?</pre>
+<p>"O número não tem representação inteira": não dá para repetir duas vezes e meia. Repare que a mensagem diz argumento <strong>#1</strong>, mas o 2.5 é o segundo valor de <code>string.rep("oi", 2.5)</code>. Com o dois-pontos, o Lua não conta o texto da frente (ele é o "dono" do método, <code>in method 'rep'</code>), então o primeiro argumento <strong>entre os parênteses</strong> é o nº 1. (O <code>lua -e</code> roda um pedacinho de código direto do terminal; por isso o nome do pedaço é <code>(command line)</code>, "linha de comando".) <strong>Como consertar:</strong> use um inteiro, como <code>rep(2)</code>, ou arredonde antes (<code>math.floor</code>, veja <a href="math.html">A Biblioteca math</a>).</p>
+</div>
+
+<div class="cenario">
+<strong>Esqueceu de guardar o resultado</strong>
+<p>Este não dá mensagem nenhuma, e é o mais comum de todos: <code>nome:upper()</code> sozinho numa linha, e depois o <code>print(nome)</code> mostra o nome igual. Você viu na seção 3. <strong>Como consertar:</strong> <code>nome = nome:upper()</code>.</p>
+</div>
+
+<hr>
+
+<h2>Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>O que faz</th><th>Exemplo → resultado</th></tr>
+<tr><td><code>string.upper(s)</code> · <code>s:upper()</code></td><td>Devolve o texto em maiúsculas (só A–Z)</td><td><code>("Ana"):upper()</code> → <code>ANA</code></td></tr>
+<tr><td><code>string.lower(s)</code> · <code>s:lower()</code></td><td>Devolve o texto em minúsculas (só A–Z)</td><td><code>("Ana"):lower()</code> → <code>ana</code></td></tr>
+<tr><td><code>string.len(s)</code> · <code>s:len()</code> · <code>#s</code></td><td>Quantos <strong>bytes</strong> o texto tem</td><td><code>#"Ana"</code> → <code>3</code>; <code>#"ação"</code> → <code>6</code></td></tr>
+<tr><td><code>string.rep(s, n)</code> · <code>s:rep(n)</code></td><td>Repete o texto <code>n</code> vezes (0 ou negativo → <code>""</code>)</td><td><code>("ab"):rep(3)</code> → <code>ababab</code></td></tr>
+<tr><td><code>s:rep(n, sep)</code></td><td>Repete com um separador entre as cópias</td><td><code>("Ana"):rep(3, ", ")</code> → <code>Ana, Ana, Ana</code></td></tr>
+<tr><td><code>string.reverse(s)</code> · <code>s:reverse()</code></td><td>Devolve o texto de trás para frente (byte a byte)</td><td><code>("roma"):reverse()</code> → <code>amor</code></td></tr>
+<tr><td><code>s = s:upper()</code></td><td>Guarda o resultado (o texto original nunca muda)</td><td></td></tr>
+</table>
+</div>
+
+<p>A biblioteca <code>string</code> tem mais funções, cada uma com a sua aula: <a href="string-sub.html">sub, byte e char</a> (pedaços), <a href="string-find.html">find e match</a> (procurar), <a href="gsub.html">gsub</a> (substituir), <a href="gmatch.html">gmatch</a> (percorrer achados) e <a href="string-format.html">format</a> (formatar). A lista completa está em <a href="ref-string.html">A Biblioteca string</a>.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Sintoma</th><th>Causa provável</th></tr>
+<tr><td><code>bad argument #1 to 'upper' (string expected, got no value)</code></td><td>Ponto no lugar do dois-pontos (<code>nome.upper()</code>) ou parênteses vazios</td></tr>
+<tr><td><code>attempt to call a nil value (method 'Upper')</code></td><td>Nome da função com maiúscula ou com erro de digitação</td></tr>
+<tr><td><code>')' expected near ':'</code></td><td><code>"texto":funcao()</code> sem os parênteses em volta do texto</td></tr>
+<tr><td><code>attempt to index a nil value (local '…')</code></td><td>A variável está vazia (<code>nil</code>)</td></tr>
+<tr><td><code>attempt to index a number value</code></td><td>Dois-pontos num número: converta com <code>tostring</code></td></tr>
+<tr><td>A variável "não mudou"</td><td>O resultado não foi guardado: <code>nome = nome:upper()</code></td></tr>
+<tr><td><code>AçãO</code>, ou <code>�</code> no meio do texto</td><td><code>upper</code>/<code>lower</code>/<code>reverse</code> trabalham byte a byte: veja <a href="utf8.html">utf8</a></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. Complete com o atalho</h3>
+<p>Complete para mostrar <code>BOM DIA</code>:</p>
+<div class="ex-code">local saudacao = "bom dia"<br>print(saudacao<input data-answer=":" aria-label="pontuação"><input data-answer="upper" aria-label="nome da função">())</div>
+</div>
+
+<div class="exercise">
+<h3>2. Qual é a saída?</h3>
+<p>O que este programa mostra?</p>
+<pre class="file" data-file="ex2.lua">print(("ha"):rep(3, "-"))
+</pre>
+<div class="ex-code">Mostra <input data-answer="ha-ha-ha" aria-label="saída"></div>
+</div>
+
+<div class="exercise">
+<h3>3. Quantos bytes?</h3>
+<p>Quanto vale <code>#("Lua"):rep(4)</code>? Responda com um número.</p>
+<div class="ex-code">Vale <input data-answer="12" aria-label="número"></div>
+</div>
+
+<div class="mc" data-answer="3">
+<p class="mc-q">4. Depois de <code>local nome = "bia"</code> e <code>nome:upper()</code>, quanto vale <code>nome</code>?</p>
+<label><input type="radio" name="q4"> <code>"BIA"</code></label>
+<label><input type="radio" name="q4"> <code>"Bia"</code></label>
+<label><input type="radio" name="q4"> <code>"bia"</code>: o resultado não foi guardado</label>
+<label><input type="radio" name="q4"> <code>nil</code></label>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">5. <code>nome:lower()</code> é o mesmo que:</p>
+<label><input type="radio" name="q5"> <code>nome.lower()</code></label>
+<label><input type="radio" name="q5"> <code>string.lower(nome)</code></label>
+<label><input type="radio" name="q5"> <code>lower(nome)</code></label>
+<label><input type="radio" name="q5"> <code>string:lower(nome)</code></label>
+</div>
+
+<div class="mc" data-answer="4">
+<p class="mc-q">6. Qual destas linhas dá erro de sintaxe?</p>
+<label><input type="radio" name="q6"> <code>print(string.upper("oi"))</code></label>
+<label><input type="radio" name="q6"> <code>print(("oi"):upper())</code></label>
+<label><input type="radio" name="q6"> <code>local s = "oi" print(s:upper())</code></label>
+<label><input type="radio" name="q6"> <code>print("oi":upper())</code></label>
+</div>
+
+<h3>Missão final: o detector de palíndromos</h3>
+
+<div class="trylua" data-goal="out:Radar é palíndromo? true;;src:lower;;src:reverse">
+<p class="try-task"><strong>Missão:</strong> este programa diz que "Radar" <strong>não</strong> é palíndromo, porque compara <code>Radar</code> com <code>radaR</code>. Rode uma vez para ver o <code>false</code>. Depois, crie uma variável com a palavra em minúsculas (<code>palavra:lower()</code>) e compare essa versão com ela mesma invertida, para o programa mostrar <code>Radar é palíndromo? true</code>.</p>
+<pre class="script" data-file="main.lua">local palavra = "Radar"
+local invertida = palavra:reverse()
+print(palavra .. " é palíndromo? " .. tostring(palavra == invertida))
+</pre>
+<pre class="solucao" data-file="main.lua">local palavra = "Radar"
+local limpa = palavra:lower()
+local invertida = limpa:reverse()
+print(palavra .. " é palíndromo? " .. tostring(limpa == invertida))
+</pre>
+</div>
+
+<p>O <code>tostring</code> transforma o <code>true</code>/<code>false</code> em texto, porque o <code>..</code> só junta textos e números (veja <a href="booleanos.html">Booleanos</a>). Depois de acertar, troque "Radar" por "Socorram me subi no onibus em Marrocos": com os espaços, ainda dá <code>false</code>. Tirar os espaços pede outra ferramenta, o <a href="gsub.html">gsub</a>.</p>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li>A biblioteca <code>string</code> já vem pronta e guarda as funções de texto: <code>string.upper</code>, <code>string.lower</code>, <code>string.len</code>, <code>string.rep</code>, <code>string.reverse</code> e outras.</li>
+  <li><code>texto:funcao(…)</code> é atalho para <code>string.funcao(texto, …)</code>. Com texto escrito direto, use parênteses: <code>("ab"):rep(3)</code>. Os detalhes do <code>:</code> estão em <a href="metodos.html">Métodos e o Dois-Pontos</a>.</li>
+  <li>As funções devolvem um texto <strong>novo</strong>; o original nunca muda. Guarde o resultado: <code>nome = nome:upper()</code>.</li>
+  <li><code>#s</code> e <code>s:len()</code> contam <strong>bytes</strong>; <code>s:rep(n, sep)</code> repete com separador; <code>s:reverse()</code> inverte.</li>
+  <li>Dá para encadear: <code>nome:lower():reverse()</code>, da esquerda para a direita.</li>
+  <li><code>upper</code>, <code>lower</code> e <code>reverse</code> trabalham byte a byte: letras com acento não mudam de caixa, e o <code>reverse</code> desmonta os acentos (veja <a href="utf8.html">utf8</a>).</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
