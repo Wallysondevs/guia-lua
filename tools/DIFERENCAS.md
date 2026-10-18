@@ -80,116 +80,6 @@ Liberou mais da metade?	true
 ```
 <!-- /pagina:coleta-lixo.html -->
 
-<!-- pagina:math-random.html -->
-### math-random.html (2026-10-18 20:01 UTC)
-
-**caixa 1, código inicial (linha 95)** — saída diferente: + Dado: 6 | - Dado: 3 (esperado: números sorteados sem math.randomseed(N))
-
-```lua
-local d1 = math.random(6)
-print("Dado: " .. d1)
-```
-
-- editor (código de saída 0):
-
-```
-Dado: 3
-```
-- lab, lua (código de saída 0):
-
-```
-Dado: 6
-```
-
-**caixa 1, solução (linha 100)** — saída diferente: + Dados: 5 e 6 | + Soma: 11 | - Dados: 3 e 1 | - Soma: 4 (esperado: números sorteados sem math.randomseed(N))
-
-```lua
-local d1 = math.random(6)
-local d2 = math.random(6)
-print("Dados: " .. d1 .. " e " .. d2)
-print("Soma: " .. d1 + d2)
-```
-
-- editor (código de saída 0):
-
-```
-Dados: 3 e 1
-Soma: 4
-```
-- lab, lua (código de saída 0):
-
-```
-Dados: 5 e 6
-Soma: 11
-```
-
-**caixa 2, código inicial (linha 150)** — saída diferente: + 76 454 344 | + 214 14 925 | - 840 559 355 | - 112 825 889 (esperado: números sorteados sem math.randomseed(N))
-
-```lua
-local function tres()
-  return math.random(1000) .. " " .. math.random(1000) .. " " .. math.random(1000)
-end
-
-local a = tres()
-local b = tres()
-print(a)
-print(b)
-print("iguais: " .. tostring(a == b))
-```
-
-- editor (código de saída 0):
-
-```
-840 559 355
-112 825 889
-iguais: false
-```
-- lab, lua (código de saída 0):
-
-```
-76 454 344
-214 14 925
-iguais: false
-```
-
-**caixa 3, solução (linha 352)** — saída diferente: + Número da sorte: 3 | - Número da sorte: 8 (esperado: números sorteados sem math.randomseed(N))
-
-```lua
-local sorte = math.random(1, 10)
-print("Número da sorte: " .. sorte)
-```
-
-- editor (código de saída 0):
-
-```
-Número da sorte: 8
-```
-- lab, lua (código de saída 0):
-
-```
-Número da sorte: 3
-```
-
-**caixa 4, solução (linha 432)** — saída diferente: + Vencedor: Bia | - Vencedor: Caio (esperado: números sorteados sem math.randomseed(N))
-
-```lua
-local nomes = {"Ana", "Bia", "Caio", "Duda", "Edu"}
-local i = math.random(#nomes)
-print("Vencedor: " .. nomes[i])
-```
-
-- editor (código de saída 0):
-
-```
-Vencedor: Caio
-```
-- lab, lua (código de saída 0):
-
-```
-Vencedor: Bia
-```
-<!-- /pagina:math-random.html -->
-
 <!-- pagina:os-funcoes.html -->
 ### os-funcoes.html (2026-10-18 20:01 UTC)
 
@@ -245,66 +135,6 @@ Soma: 500000500000
 Levou 0.0055 segundos.
 ```
 <!-- /pagina:os-funcoes.html -->
-
-<!-- pagina:pairs.html -->
-### pairs.html (2026-10-18 20:01 UTC)
-
-**caixa 1, código inicial (linha 86)** — saída diferente: + cafe: 2 | - pao: 40 | + pao: 40 | - cafe: 2 (esperado: ordem do pairs/next (chaves de texto: muda a cada execução))
-
-```lua
-local estoque = {arroz = 5, feijao = 3, leite = 12, cafe = 2, pao = 40}
-for produto, quantidade in pairs(estoque) do
-  print(produto .. ": " .. quantidade)
-end
-```
-
-- editor (código de saída 0):
-
-```
-pao: 40
-feijao: 3
-leite: 12
-arroz: 5
-cafe: 2
-```
-- lab, lua (código de saída 0):
-
-```
-cafe: 2
-feijao: 3
-leite: 12
-arroz: 5
-pao: 40
-```
-
-**caixa 3, código inicial (linha 493)** — saída diferente: + leite: 12 | + cafe: 2 | + arroz: 5 | - leite: 12 (esperado: ordem do pairs/next (chaves de texto: muda a cada execução))
-
-```lua
-local estoque = {arroz = 5, feijao = 3, leite = 12, cafe = 2, pao = 40}
-for produto, quantidade in pairs(estoque) do
-  print(produto .. ": " .. quantidade)
-end
-```
-
-- editor (código de saída 0):
-
-```
-pao: 40
-feijao: 3
-leite: 12
-arroz: 5
-cafe: 2
-```
-- lab, lua (código de saída 0):
-
-```
-leite: 12
-cafe: 2
-arroz: 5
-pao: 40
-feijao: 3
-```
-<!-- /pagina:pairs.html -->
 
 <!-- pagina:simulador-teste-interno.html -->
 ### simulador-teste-interno.html (2026-10-18 20:01 UTC)
@@ -490,41 +320,108 @@ Número: tchau
 ```
 <!-- /pagina:simulador-teste-interno.html -->
 
-<!-- pagina:tabelas.html -->
-### tabelas.html (2026-10-18 20:01 UTC)
+<!-- pagina:os-execute.html -->
+### os-execute.html (2026-10-18 20:08 UTC)
 
-**caixa 2, código inicial (linha 330)** — saída diferente: + table: 0x55c50b5dd6f0 | - table: 0x80e560 (esperado: endereços de memória (table: 0x…, function: 0x…))
+**caixa 1, código inicial (linha 216)** — saída diferente: + main.lua | + true	exit	0 | - sh: 1: ls: not found | - nil	exit	127 (esperado: comandos do sistema (os.execute/io.popen: no navegador não há outros programas); informações do sistema (os.execute, io.popen, os.getenv))
 
 ```lua
-local compras = {"pão", "leite", "café"}
-print(compras)
-for i = 1, #compras do
-  print(i, compras[i])
+print(os.execute())
+print(os.execute("ls"))
+print(os.execute("exit 3"))
+local p = io.popen("date +%Y")
+print("[" .. p:read("a") .. "]")
+print(p:close())
+```
+
+- editor (código de saída 0):
+
+```
+true
+sh: 1: ls: not found
+nil	exit	127
+nil	exit	3
+sh: 1: date: not found
+[]
+nil	exit	127
+```
+- lab, lua (código de saída 0):
+
+```
+true
+main.lua
+true	exit	0
+nil	exit	3
+[2026
+]
+true	exit	0
+```
+<!-- /pagina:os-execute.html -->
+
+<!-- pagina:pairs.html -->
+### pairs.html (2026-10-18 20:21 UTC)
+
+**caixa 1, código inicial (linha 86)** — saída diferente: + cafe: 2 | + pao: 40 | - pao: 40 | - cafe: 2 (esperado: ordem do pairs/next (chaves de texto: muda a cada execução))
+
+```lua
+local estoque = {arroz = 5, feijao = 3, leite = 12, cafe = 2, pao = 40}
+for produto, quantidade in pairs(estoque) do
+  print(produto .. ": " .. quantidade)
 end
 ```
 
 - editor (código de saída 0):
 
 ```
-table: 0x80e560
-1	pão
-2	leite
-3	café
+arroz: 5
+leite: 12
+pao: 40
+feijao: 3
+cafe: 2
 ```
 - lab, lua (código de saída 0):
 
 ```
-table: 0x55c50b5dd6f0
-1	pão
-2	leite
-3	café
+cafe: 2
+arroz: 5
+pao: 40
+leite: 12
+feijao: 3
 ```
-<!-- /pagina:tabelas.html -->
+
+**caixa 3, código inicial (linha 493)** — saída diferente: + pao: 40 | + leite: 12 | - pao: 40 | - leite: 12 (esperado: ordem do pairs/next (chaves de texto: muda a cada execução))
+
+```lua
+local estoque = {arroz = 5, feijao = 3, leite = 12, cafe = 2, pao = 40}
+for produto, quantidade in pairs(estoque) do
+  print(produto .. ": " .. quantidade)
+end
+```
+
+- editor (código de saída 0):
+
+```
+arroz: 5
+pao: 40
+cafe: 2
+feijao: 3
+leite: 12
+```
+- lab, lua (código de saída 0):
+
+```
+pao: 40
+arroz: 5
+leite: 12
+cafe: 2
+feijao: 3
+```
+<!-- /pagina:pairs.html -->
 
 <!-- pagina:tostring-call-len.html -->
-### tostring-call-len.html (2026-10-18 20:01 UTC)
+### tostring-call-len.html (2026-10-18 20:23 UTC)
 
-**caixa 1, código inicial (linha 136)** — saída diferente: + table: 0x55d1c64a1570 | - table: 0x80e9a0 (esperado: endereços de memória (table: 0x…, function: 0x…))
+**caixa 1, código inicial (linha 136)** — saída diferente: + table: 0x5613962b2570 | - table: 0x80e9a0 (esperado: endereços de memória (table: 0x…, function: 0x…))
 
 ```lua
 local Retangulo = {}
@@ -545,6 +442,407 @@ table: 0x80e9a0
 - lab, lua (código de saída 0):
 
 ```
-table: 0x55d1c64a1570
+table: 0x5613962b2570
 ```
 <!-- /pagina:tostring-call-len.html -->
+
+<!-- pagina:tabelas.html -->
+### tabelas.html (2026-10-18 20:27 UTC)
+
+**caixa 2, código inicial (linha 330)** — saída diferente: + table: 0x55d9643e16f0 | - table: 0x80e560 (esperado: endereços de memória (table: 0x…, function: 0x…))
+
+```lua
+local compras = {"pão", "leite", "café"}
+print(compras)
+for i = 1, #compras do
+  print(i, compras[i])
+end
+```
+
+- editor (código de saída 0):
+
+```
+table: 0x80e560
+1	pão
+2	leite
+3	café
+```
+- lab, lua (código de saída 0):
+
+```
+table: 0x55d9643e16f0
+1	pão
+2	leite
+3	café
+```
+<!-- /pagina:tabelas.html -->
+
+<!-- pagina:projeto-agenda.html -->
+### projeto-agenda.html (2026-10-18 20:32 UTC)
+
+**caixa 1, código inicial (linha 186)** — saída diferente: - Davi Rocha   41 95555-4321  davi@exemplo.com | + Davi Rocha   41 95555-4321  davi@exemplo.com (esperado: ordem do pairs/next (chaves de texto: muda a cada execução))
+
+```lua
+local agenda = {
+  ["Bia Souza"] = { telefone = "11 98888-1234", email = "bia@exemplo.com" },
+  ["Carlos Lima"] = { telefone = "21 97777-5678", email = "carlos@exemplo.com" },
+  ["Ana Paula"] = { telefone = "31 96666-0000", email = "anapaula@exemplo.com" },
+}
+
+-- Um contato, pelo nome:
+local bia = agenda["Bia Souza"]
+print("Telefone da Bia: " .. bia.telefone)
+
+-- Um contato novo:
+agenda["Davi Rocha"] = { telefone = "41 95555-4321", email = "davi@exemplo.com" }
+
+-- Todos, em ordem alfabética:
+local nomes = {}
+for nome in pairs(agenda) do
+  nomes[#nomes + 1] = nome
+end
+-- ponha os nomes em ordem aqui
+
+print()
+for _, nome in ipairs(nomes) do
+  local contato = agenda[nome]
+  print(string.format("%-12s %-14s %s", nome, contato.telefone, contato.email))
+end
+```
+
+- editor (código de saída 0):
+
+```
+Telefone da Bia: 11 98888-1234
+
+Davi Rocha   41 95555-4321  davi@exemplo.com
+Bia Souza    11 98888-1234  bia@exemplo.com
+Ana Paula    31 96666-0000  anapaula@exemplo.com
+Carlos Lima  21 97777-5678  carlos@exemplo.com
+```
+- lab, lua (código de saída 0):
+
+```
+Telefone da Bia: 11 98888-1234
+
+Bia Souza    11 98888-1234  bia@exemplo.com
+Ana Paula    31 96666-0000  anapaula@exemplo.com
+Davi Rocha   41 95555-4321  davi@exemplo.com
+Carlos Lima  21 97777-5678  carlos@exemplo.com
+```
+<!-- /pagina:projeto-agenda.html -->
+
+<!-- pagina:projeto-banco.html -->
+### projeto-banco.html (2026-10-18 20:32 UTC)
+
+**caixa 5, código inicial (linha 902)** — saída diferente: + table: 0x56154ee3a620 | - table: 0x80f310 | + table: 0x56154ee3a620 | - table: 0x80f310 (esperado: endereços de memória (table: 0x…, function: 0x…))
+
+```lua
+-- Banco da Ana, versão 4: herança (a poupança) e erros como tabelas
+
+local Conta = {}
+Conta.__index = Conta
+
+function Conta.nova(titular)
+  local conta = { titular = titular, saldo = 0, extrato = {} }
+  return setmetatable(conta, Conta)
+end
+
+-- Um erro que o programa consegue reconhecer: uma tabela com código e mensagem.
+local function falhar(codigo, mensagem)
+  error({ codigo = codigo, mensagem = mensagem }, 2)
+end
+
+function Conta:depositar(valor)
+  if type(valor) ~= "number" or valor <= 0 then
+    falhar("VALOR", "valor inválido: " .. tostring(valor))
+  end
+  self.saldo = self.saldo + valor
+  table.insert(self.extrato, string.format("depósito  +%8.2f", valor))
+end
+
+function Conta:sacar(valor)
+  if type(valor) ~= "number" or valor <= 0 then
+    falhar("VALOR", "valor inválido: " .. tostring(valor))
+  end
+  if valor > self.saldo then
+    falhar("SALDO", string.format("saldo insuficiente (saldo R$ %.2f)", self.saldo))
+  end
+  self.saldo = self.saldo - valor
+  table.insert(self.extrato, string.format("saque     -%8.2f", valor))
+end
+
+function Conta:descricao()
+  return string.format("Conta de %s: R$ %.2f", self.titular, self.saldo)
+end
+
+function Conta.__tostring(conta)
+  return conta:descricao()
+end
+
+-- A poupança é uma Conta com rendimento: o que ela não tiver, procura em Conta.
+local Poupanca = setmetatable({}, { __index = Conta })
+Poupanca.__index = Poupanca
+
+function Poupanca.nova(titular, taxa)
+  local conta = Conta.nova(titular)       -- monta a parte de Conta
+  conta.taxa = taxa
+  return setmetatable(conta, Poupanca)    -- e passa a ser uma Poupanca
+end
+
+function Poupanca:render()
+  local juros = self.saldo * self.taxa
+  self:depositar(juros)
+  return juros
+end
+
+-- Sobrescreve a descrição: mostra também a taxa.
+function Poupanca:descricao()
+  return Conta.descricao(self) .. string.format(" (poupança, %.1f%% ao mês)", self.taxa * 100)
+end
+
+local ana = Conta.nova("Ana")
+local cofrinho = Poupanca.nova("Ana", 0.01)
+ana:depositar(300)
+cofrinho:depositar(1000)
+print(ana)
+print(cofrinho)
+print(string.format("Rendeu R$ %.2f", cofrinho:render()))
+print(cofrinho)
+
+-- Tentar sacar demais, e reconhecer o tipo do erro pelo código.
+for _, valor in ipairs({ 50, 5000, -1 }) do
+  local ok, erro = pcall(cofrinho.sacar, cofrinho, valor)
+  if ok then
+    print(string.format("Saque de %.2f: ok", valor))
+  elseif erro.codigo == "SALDO" then
+    print("Recusado por falta de saldo: " .. erro.mensagem)
+  else
+    print("Recusado (" .. erro.codigo .. "): " .. erro.mensagem)
+  end
+end
+print(cofrinho)
+```
+
+- editor (código de saída 0):
+
+```
+Conta de Ana: R$ 300.00
+table: 0x80f310
+Rendeu R$ 10.00
+table: 0x80f310
+Saque de 50.00: ok
+Recusado por falta de saldo: saldo insuficiente (saldo R$ 960.00)
+Recusado (VALOR): valor inválido: -1
+table: 0x80f310
+```
+- lab, lua (código de saída 0):
+
+```
+Conta de Ana: R$ 300.00
+table: 0x56154ee3a620
+Rendeu R$ 10.00
+table: 0x56154ee3a620
+Saque de 50.00: ok
+Recusado por falta de saldo: saldo insuficiente (saldo R$ 960.00)
+Recusado (VALOR): valor inválido: -1
+table: 0x56154ee3a620
+```
+<!-- /pagina:projeto-banco.html -->
+
+<!-- pagina:projeto-palavras.html -->
+### projeto-palavras.html (2026-10-18 20:32 UTC)
+
+**caixa 3, código inicial (linha 410)** — saída diferente: +  1. do       2 | +  2. sai      2 | +  3. mais     2 | +  4. fila     3 (esperado: ordem do pairs/next (chaves de texto: muda a cada execução))
+
+```lua
+-- Contador de Palavras, versão 3: contar e ordenar
+
+-- Uma "letra": as letras sem acento (%a) ou um byte de 128 a 255,
+-- que são os pedaços das letras acentuadas no UTF-8.
+local LETRAS = "[%a\128-\255]+"
+
+-- O lower() só conhece A-Z; as maiúsculas acentuadas vão por esta tabela.
+local ACENTUADAS = {
+  ["À"] = "à", ["Á"] = "á", ["Â"] = "â", ["Ã"] = "ã", ["Ç"] = "ç",
+  ["É"] = "é", ["Ê"] = "ê", ["Í"] = "í", ["Ó"] = "ó", ["Ô"] = "ô",
+  ["Õ"] = "õ", ["Ú"] = "ú",
+}
+
+local function minusculas(texto)
+  return (texto:lower():gsub("\195[\128-\159]", ACENTUADAS))
+end
+
+local arquivo = assert(io.open("texto.txt", "r"))
+local texto = minusculas(arquivo:read("a"))
+arquivo:close()
+
+local palavras = {}
+for palavra in texto:gmatch(LETRAS) do
+  palavras[#palavras + 1] = palavra
+end
+
+-- Conta: contagem["pão"] = 5
+local contagem = {}
+for _, palavra in ipairs(palavras) do
+  contagem[palavra] = (contagem[palavra] or 0) + 1
+end
+
+-- Passa para uma lista, para poder ordenar (a ordem do pairs não serve).
+local lista = {}
+for palavra, n in pairs(contagem) do
+  lista[#lista + 1] = { palavra = palavra, n = n }
+end
+-- ordene a lista: mais vezes primeiro; empate, ordem alfabética
+
+print(string.format("%d palavras, %d diferentes.", #palavras, #lista))
+for i = 1, math.min(10, #lista) do
+  print(string.format("%2d. %-8s %d", i, lista[i].palavra, lista[i].n))
+end
+```
+
+- editor (código de saída 0):
+
+```
+72 palavras, 40 diferentes.
+ 1. de       2
+ 2. quente   2
+ 3. queijo   1
+ 4. seis     1
+ 5. no       1
+ 6. que      1
+ 7. fila     3
+ 8. não     2
+ 9. pão     5
+10. mais     2
+```
+- lab, lua (código de saída 0):
+
+```
+72 palavras, 40 diferentes.
+ 1. do       2
+ 2. sai      2
+ 3. mais     2
+ 4. fila     3
+ 5. abre     2
+ 6. o        5
+ 7. há      2
+ 8. padaria  2
+ 9. já      1
+10. no       1
+```
+<!-- /pagina:projeto-palavras.html -->
+
+<!-- pagina:simulador.html -->
+### simulador.html (2026-10-18 20:33 UTC)
+
+**caixa 10, código inicial (linha 345)** — saída diferente: + main.lua | + true	exit	0 | - sh: 1: ls: not found | - nil	exit	127 (esperado: comandos do sistema (os.execute/io.popen: no navegador não há outros programas); informações do sistema (os.execute, io.popen, os.getenv))
+
+```lua
+print(os.execute("ls"))
+```
+
+- editor (código de saída 0):
+
+```
+sh: 1: ls: not found
+nil	exit	127
+```
+- lab, lua (código de saída 0):
+
+```
+main.lua
+true	exit	0
+```
+<!-- /pagina:simulador.html -->
+
+<!-- pagina:math-random.html -->
+### math-random.html (2026-10-18 20:35 UTC)
+
+**caixa 1, código inicial (linha 95)** — saída diferente: + Dado: 2 | - Dado: 6 (esperado: números sorteados sem math.randomseed(N))
+
+```lua
+local d1 = math.random(6)
+print("Dado: " .. d1)
+```
+
+- editor (código de saída 0):
+
+```
+Dado: 6
+```
+- lab, lua (código de saída 0):
+
+```
+Dado: 2
+```
+
+**caixa 1, solução (linha 100)** — saída diferente: + Dados: 3 e 4 | + Soma: 7 | - Dados: 6 e 3 | - Soma: 9 (esperado: números sorteados sem math.randomseed(N))
+
+```lua
+local d1 = math.random(6)
+local d2 = math.random(6)
+print("Dados: " .. d1 .. " e " .. d2)
+print("Soma: " .. d1 + d2)
+```
+
+- editor (código de saída 0):
+
+```
+Dados: 6 e 3
+Soma: 9
+```
+- lab, lua (código de saída 0):
+
+```
+Dados: 3 e 4
+Soma: 7
+```
+
+**caixa 2, código inicial (linha 150)** — saída diferente: + 435 641 957 | + 601 384 444 | - 611 998 262 | - 363 141 407 (esperado: números sorteados sem math.randomseed(N))
+
+```lua
+local function tres()
+  return math.random(1000) .. " " .. math.random(1000) .. " " .. math.random(1000)
+end
+
+local a = tres()
+local b = tres()
+print(a)
+print(b)
+print("iguais: " .. tostring(a == b))
+```
+
+- editor (código de saída 0):
+
+```
+611 998 262
+363 141 407
+iguais: false
+```
+- lab, lua (código de saída 0):
+
+```
+435 641 957
+601 384 444
+iguais: false
+```
+
+**caixa 3, solução (linha 352)** — saída diferente: + Número da sorte: 8 | - Número da sorte: 3 (esperado: números sorteados sem math.randomseed(N))
+
+```lua
+local sorte = math.random(1, 10)
+print("Número da sorte: " .. sorte)
+```
+
+- editor (código de saída 0):
+
+```
+Número da sorte: 3
+```
+- lab, lua (código de saída 0):
+
+```
+Número da sorte: 8
+```
+<!-- /pagina:math-random.html -->

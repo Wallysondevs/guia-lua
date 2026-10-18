@@ -103,7 +103,7 @@ No `.exercise`, `data-answer="a|b"` aceita respostas alternativas (a comparaçã
 > **Esta seção é mantida pelo agente do simulador.** Antes de escrever uma frase do tipo "no editor…" que não esteja aqui, confira com as ferramentas dele (`tools/sim.js`).
 
 ### 4.1 O que é
-- **Editor = Lua 5.5.0**: o interpretador oficial (o `lua.c` e a biblioteca de lua.org, `lua-5.5.0.tar.gz`) compilado para WebAssembly (`assets/lua/lua.wasm`, **340 KB**, baixado no 1º Rodar e guardado pelo navegador). **Lab = `lua5.5` 5.5.0-3ubuntu0.1** do Ubuntu 26.04: o mesmo código-fonte. O `luaconf.h` recebeu o mesmo remendo do pacote do Ubuntu, então `package.path`/`package.cpath` e a lista do `module 'x' not found:` saem **iguais** às do lab. Detalhes em `assets/lua/VERSAO.txt` e em `tools/construir-lua.sh`.
+- **Editor = Lua 5.5.0**: o interpretador oficial (o `lua.c` e a biblioteca de lua.org, `lua-5.5.0.tar.gz`) compilado para WebAssembly (`assets/lua/lua.wasm`, **345 KB** (127 KB com gzip), baixado no 1º Rodar e guardado pelo navegador). **Lab = `lua5.5` 5.5.0-3ubuntu0.1** do Ubuntu 26.04: o mesmo código-fonte. O `luaconf.h` recebeu o mesmo remendo do pacote do Ubuntu, então `package.path`/`package.cpath` e a lista do `module 'x' not found:` saem **iguais** às do lab. Detalhes em `assets/lua/VERSAO.txt` e em `tools/construir-lua.sh`.
 - As mensagens de erro, o `stack traceback:`, `_VERSION` (`Lua 5.5`), o jeito de escrever números (`3.5`, `1e+100`, `0.30000000000000004`, `9007199254740992.0`, `-nan`), `string.format`, `%q`, `utf8`, `goto`, `global`, `<const>`, `<close>` e as corrotinas saem **iguais** às do lab (conferido com o `tools/testar-missoes.js --nativo` e com dezenas de programas de teste).
 - Roda num Web Worker: a página não trava. Cada **Rodar** é um `lua main.lua` novo: memória nova, variáveis zeradas, `/home/ana` só com os arquivos das abas. O que o programa cria (`io.open("x.txt", "w")`) existe até o fim daquele Rodar (a meta `arquivo:` enxerga).
 - O terminal da caixa mostra `ana@notebook:~$ lua main.lua` (+ `data-args`), a saída (stderr e a mensagem de erro em **vermelho**; cores ANSI como `"\27[31m"` desenhadas) e, no fim, `[código de saída: N]`.
@@ -116,9 +116,9 @@ No `.exercise`, `data-answer="a|b"` aceita respostas alternativas (a comparaçã
 | Botão **■ Parar** (o Rodar vira Parar) e **Ctrl+C** no campo de entrada | encerram na hora: mostra `^C` e `[programa interrompido]`. **Não** aparece `lua: interrupted!` (no lab, Ctrl+C mostra `lua: interrupted!` + `stack traceback:` e o código de saída é 1) |
 | Saída máxima | **2 milhões de caracteres** (passou: `(o programa escreveu demais…)` e `[programa interrompido]`); o terminal desenha as primeiras **3000 linhas** e as últimas 40 (as metas veem tudo) |
 | Memória | no máximo **256 MB**: passou disso, `not enough memory` (no lab o limite é a memória da máquina) |
-| Pilha | igual ao lab: recursão infinita em Lua dá `stack overflow` (depois de ~1 milhão de chamadas, nos dois); funções C aninhadas (`pcall` dentro de `pcall`…) param em ~200 com `C stack overflow` |
+| Pilha | igual ao lab: recursão infinita em Lua dá `stack overflow` depois do **mesmo número de chamadas nos dois** (o limite é o espaço da pilha do Lua, 1 milhão de posições; quantas chamadas cabem depende da função: 499991 para `local function g(n) g(n + 1) end`, 999986 para `local function f() return 1 + f() end`); funções C aninhadas (`pcall` dentro de `pcall`…) param em ~200 com `C stack overflow` |
 | Velocidade | ~1,6× mais lento que o lab (`fib(30)` + 200 mil `tostring` + 100 mil chaves: 0,33 s × 0,20 s) |
-| Primeiro Rodar | baixa (340 KB) e prepara o Lua; no teste local, ~0,1 s. Depois, cada Rodar leva ~30 ms |
+| Primeiro Rodar | baixa (345 KB) e prepara o Lua; no teste local, ~0,1 s. Depois, cada Rodar leva ~30 ms |
 
 ### 4.3 Entrada (`io.read`)
 - **Com `data-stdin`**: `io.read()`, `io.read("n")`, `io.read("l")`, `io.read("L")`, `io.read("a")`, `io.read(5)`, `io.lines()` e `io.stdin:read` leem dali (uma linha por `\n`); a caixa ganha um campo **Entrada** editável. A linha lida aparece no terminal em branco, como se fosse digitada, mas **não entra no `out:`** (a saída do programa é a mesma de `lua main.lua < entrada.txt` no lab). Acabou o texto → `io.read()` devolve `nil`.
@@ -160,6 +160,11 @@ No `.exercise`, `data-answer="a|b"` aceita respostas alternativas (a comparaçã
 | Memória cheia (laço que guarda sem parar) | `not enough memory` ao passar de 256 MB | continua até a memória da máquina acabar |
 | `0/0` | `-nan` no PC; pode sair `nan` em aparelhos com outro processador | `-nan` |
 | Texto escrito **antes de um `io.read`** sem `\n` (`io.write("Idade: ")`) com a entrada vinda de pipe/arquivo (o `data-stdin` equivale a `printf 'abc\n' \| lua main.lua`) e o programa termina com erro | o editor mostra como no terminal: `Idade: ` aparece **antes** (e a linha lida em branco), depois a mensagem de erro | com pipe/arquivo, `Idade: ` só sai no fim, **depois** da mensagem de erro (`lua: …` … `Idade: pendente`). No terminal digitando (lab `-t`) é igual ao editor. Já o `io.write` sem `\n` pendente no momento do erro (sem `io.read` depois dele) sai **depois** da mensagem nos dois. Colha a saída no lab com `-t` |
+| `\r`, `\b`, `\a` na saída (`io.write("Carregando... 50%\rPronto!\n")`) | o terminal da caixa **não** interpreta: o texto sai lado a lado (`Carregando... 50%Pronto!`), sem voltar ao começo da linha nem apagar; o `\a` não apita. A saída do programa (e o `out:`) tem os bytes iguais aos do lab | o terminal volta ao começo da linha e escreve por cima: `Pronto!... 50%` |
+| `f:write("x")` num arquivo aberto só para leitura (`io.open(n, "r")`) | `nil  (no extra info)  0  0` | `nil  Bad file descriptor  9  0` |
+| Escrever, apagar ou renomear fora da pasta da Ana: `io.open("/etc/passwd", "w")`, `os.remove("/etc/hostname")` | funciona (o disco do editor não tem permissões) | `nil  /etc/passwd: Read-only file system  30` no lab (num Ubuntu de verdade, `Permission denied  13`) |
+| `os.remove("/")` | `nil  /: Directory not empty  39` | `nil  /: Device or resource busy  16` |
+| `os.rename("x.txt", "/tmp/x.txt")` (para outro disco) | `true` (no editor é um disco só) | `nil  Invalid cross-device link  18` |
 | Ctrl+C | Parar: `^C`, sem mensagem | `lua: interrupted!` + `stack traceback:`, código 1 |
 | Desempenho | ~1,6× mais lento | — |
 
