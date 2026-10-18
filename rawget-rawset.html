@@ -1,0 +1,486 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua rawget, rawset e rawequal — por baixo da metatabela | Guia Lua</title>
+<meta name="description" content="rawget, rawset, rawequal e rawlen do Lua para quem nunca programou: o C stack overflow de um __newindex que grava na própria tabela, o rawset que resolve, o rawget para saber se um valor é da tabela ou do padrão, uma tabela que lembra as contas já feitas, o rawequal que ignora o __eq, e os erros reais do Lua 5.5.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">rawget, rawset e rawequal</span></h1>
+
+<p class="intro">Depois que uma tabela ganha metatabela, ler, gravar, comparar e medir podem chamar as suas funções do manual (<code>__index</code>, <code>__newindex</code>, <code>__eq</code>, <code>__len</code>). Às vezes você precisa do contrário: mexer na tabela <strong>"crua"</strong>, sem o manual. Para isso existem quatro funções que começam com <code>raw</code> ("cru", em inglês): <code>rawget</code>, <code>rawset</code>, <code>rawequal</code> e <code>rawlen</code>. O uso mais importante delas é <strong>dentro</strong> dos próprios metamétodos, onde sem elas o programa entra num laço sem fim.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>Por que um <code>__newindex</code> que grava na própria tabela termina em <code>C stack overflow</code>.</li>
+  <li>O <code>rawset(t, chave, valor)</code>: gravar sem chamar o <code>__newindex</code>.</li>
+  <li>O <code>rawget(t, chave)</code>: ler sem chamar o <code>__index</code>, para saber se o valor é <strong>da tabela</strong> ou veio do padrão.</li>
+  <li>Uma tabela que "lembra" as contas que já fez, com <code>__index</code> + <code>rawset</code>.</li>
+  <li>O <code>rawequal(a, b)</code> ("é a mesma tabela?", ignorando o <code>__eq</code>) e o <code>rawlen</code>.</li>
+  <li>Os erros reais de cada uma.</li>
+</ul>
+</div>
+
+<p>Todos os programas rodaram no <strong>Lua 5.5</strong> da máquina da Ana (usuária <code>ana</code>, computador <code>notebook</code>) com <code>lua arquivo.lua</code>. Antes, faça <a href="index-newindex.html">__index e __newindex</a> e <a href="metametodos-aritmeticos.html">Metamétodos de Operadores</a>.</p>
+
+<hr>
+
+<h2>A ideia: a porta dos fundos</h2>
+<p>A loja da Ana tem um porteiro na frente (a metatabela): todo cliente que entra para deixar ou pegar algo passa por ele, e ele confere, anota, recusa. O próprio porteiro, porém, também precisa guardar coisas no depósito. Se ele usar a porta da frente, vai ter de passar por… ele mesmo, que vai mandá-lo de novo para a porta da frente, e assim para sempre.</p>
+<p>A solução é uma <strong>porta dos fundos</strong>, que vai direto ao depósito, sem porteiro. As funções <code>raw</code> são essa porta: elas leem e gravam na tabela de verdade, sem consultar a metatabela.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Pela porta da frente (com o manual)</th><th>Pela porta dos fundos (cru)</th></tr>
+<tr><td><code>t[k]</code> (pode chamar <code>__index</code>)</td><td><code>rawget(t, k)</code></td></tr>
+<tr><td><code>t[k] = v</code> (pode chamar <code>__newindex</code>)</td><td><code>rawset(t, k, v)</code></td></tr>
+<tr><td><code>a == b</code> (pode chamar <code>__eq</code>)</td><td><code>rawequal(a, b)</code></td></tr>
+<tr><td><code>#t</code> (pode chamar <code>__len</code>)</td><td><code>rawlen(t)</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>1. O problema: o porteiro que chama a si mesmo</h2>
+<p>A Ana quer um estoque que avise toda vez que um produto novo é cadastrado e depois o guarde. A primeira tentativa grava com <code>tabela[chave] = valor</code>, dentro do <code>__newindex</code>:</p>
+
+<pre class="file" data-file="laco_quieto.lua">local estoque = setmetatable({}, {
+  __newindex = function (tabela, chave, valor)
+    tabela[chave] = valor
+  end,
+})
+estoque.cafe = 10
+</pre>
+
+<pre class="term">$ lua laco_quieto.lua
+lua: laco_quieto.lua:3: C stack overflow
+stack traceback:
+	laco_quieto.lua:3: in metamethod 'newindex'
+	laco_quieto.lua:3: in metamethod 'newindex'
+	laco_quieto.lua:3: in metamethod 'newindex'
+	laco_quieto.lua:3: in metamethod 'newindex'
+	laco_quieto.lua:3: in metamethod 'newindex'
+	laco_quieto.lua:3: in metamethod 'newindex'
+	laco_quieto.lua:3: in metamethod 'newindex'
+	laco_quieto.lua:3: in metamethod 'newindex'
+	laco_quieto.lua:3: in metamethod 'newindex'
+	laco_quieto.lua:3: in metamethod 'newindex'
+	...	(skipping 177 levels)
+	laco_quieto.lua:3: in metamethod 'newindex'
+	laco_quieto.lua:3: in metamethod 'newindex'
+	laco_quieto.lua:3: in metamethod 'newindex'
+	laco_quieto.lua:3: in metamethod 'newindex'
+	laco_quieto.lua:3: in metamethod 'newindex'
+	laco_quieto.lua:3: in metamethod 'newindex'
+	laco_quieto.lua:3: in metamethod 'newindex'
+	laco_quieto.lua:3: in metamethod 'newindex'
+	laco_quieto.lua:3: in metamethod 'newindex'
+	laco_quieto.lua:6: in main chunk
+	[C]: in ?</pre>
+
+<dl class="anatomy">
+  <dt>laco_quieto.lua:6</dt><dd>Tudo começa na última linha do rastro: <code>estoque.cafe = 10</code>. O <code>cafe</code> não existe, então o Lua chama o <code>__newindex</code>.</dd>
+  <dt>laco_quieto.lua:3: in metamethod 'newindex'</dt><dd>Dentro dele, a linha 3 faz <code>tabela[chave] = valor</code>, ou seja, <code>estoque.cafe = 10</code> <strong>de novo</strong>. O <code>cafe</code> continua não existindo (ninguém o gravou ainda), então o Lua chama o <code>__newindex</code> de novo, que chama de novo…</dd>
+  <dt>... (skipping 177 levels)</dt><dd>"Pulando 177 níveis": o rastro ficaria enorme, então o Lua mostra só o começo e o fim. Foram cerca de duzentas chamadas, uma dentro da outra.</dd>
+  <dt>C stack overflow</dt><dd>"Estouro da pilha do C": cada chamada ocupa um pouco de memória numa "pilha", e o Lua tem um limite de chamadas de metamétodos uma dentro da outra. Ao passar do limite, ele desiste com esse erro, em vez de travar o computador. Veja também <a href="recursao.html">Recursão</a>.</dd>
+</dl>
+
+<p>Com um <code>print("gravando " .. chave)</code> antes da gravação, o lab mostrou a linha <code>gravando cafe</code> <strong>197 vezes</strong> antes do erro: o porteiro mandando a si mesmo para a porta da frente, de novo e de novo.</p>
+
+<hr>
+
+<h2>2. <code>rawset</code>: gravar sem o manual</h2>
+<p><code>rawset(tabela, chave, valor)</code> faz o mesmo que <code>tabela[chave] = valor</code>, mas <strong>sem</strong> chamar o <code>__newindex</code>:</p>
+
+<pre class="file" data-file="rawset.lua">local estoque = setmetatable({ pao = 40 }, {
+  __newindex = function (tabela, chave, valor)
+    print("  (produto novo: " .. chave .. ")")
+    rawset(tabela, chave, valor)
+  end,
+})
+
+estoque.cafe = 10
+estoque.cafe = 8
+estoque.bolo = 3
+print("café:", estoque.cafe, "bolo:", estoque.bolo)
+</pre>
+
+<pre class="term">$ lua rawset.lua
+  (produto novo: cafe)
+  (produto novo: bolo)
+café:	8	bolo:	3</pre>
+
+<dl class="anatomy">
+  <dt>rawset(tabela, chave, valor)</dt><dd>Grava <code>valor</code> na chave <code>chave</code> da <code>tabela</code>, pela porta dos fundos. Os três argumentos vêm na mesma ordem que o <code>__newindex</code> recebeu, então a linha fica fácil de lembrar.</dd>
+  <dt>(produto novo: cafe) uma vez só</dt><dd>O primeiro <code>estoque.cafe = 10</code> passou pelo <code>__newindex</code>, que avisou e gravou. No <code>estoque.cafe = 8</code>, o café <strong>já existia</strong>, então a gravação foi direta, sem aviso. É a regra da aula anterior: o <code>__newindex</code> só cuida de chaves novas.</dd>
+</dl>
+
+<p>O <code>rawset</code> também devolve a própria tabela (no lab, <code>rawset(t, "x", 1) == t</code> deu <code>true</code>), mas quase ninguém usa esse retorno.</p>
+
+<div class="trylua" data-goal="out:café: 10;;semerro">
+<p class="try-task"><strong>Missão:</strong> este estoque anota os produtos novos numa lista, mas dá <code>C stack overflow</code>. Troque a linha <code>tabela[chave] = valor</code> por um <code>rawset</code>.</p>
+<pre class="script" data-file="main.lua">local novos = {}
+local estoque = setmetatable({}, {
+  __newindex = function (tabela, chave, valor)
+    novos[#novos + 1] = chave
+    tabela[chave] = valor
+  end,
+})
+
+estoque.cafe = 10
+estoque.leite = 12
+print("café: " .. estoque.cafe)
+print("produtos novos: " .. table.concat(novos, ", "))
+</pre>
+<pre class="solucao" data-file="main.lua">local novos = {}
+local estoque = setmetatable({}, {
+  __newindex = function (tabela, chave, valor)
+    novos[#novos + 1] = chave
+    rawset(tabela, chave, valor)
+  end,
+})
+
+estoque.cafe = 10
+estoque.leite = 12
+print("café: " .. estoque.cafe)
+print("produtos novos: " .. table.concat(novos, ", "))
+</pre>
+</div>
+
+<hr>
+
+<h2>3. <code>rawget</code>: ler sem o manual</h2>
+<p><code>rawget(tabela, chave)</code> lê a chave <strong>só na própria tabela</strong>, sem chamar o <code>__index</code>. Com as configurações da aula anterior, ele responde a pergunta "isto foi a Ana que escolheu, ou é o padrão?":</p>
+
+<pre class="file" data-file="rawget.lua">local padrao = { cor = "azul", tamanho = 12 }
+local config_ana = setmetatable({ cor = "verde" }, { __index = padrao })
+
+print(config_ana.cor, rawget(config_ana, "cor"))
+print(config_ana.tamanho, rawget(config_ana, "tamanho"))
+
+for _, chave in ipairs({ "cor", "tamanho" }) do
+  if rawget(config_ana, chave) ~= nil then
+    print(chave .. ": " .. config_ana[chave] .. " (escolha da Ana)")
+  else
+    print(chave .. ": " .. config_ana[chave] .. " (padrão)")
+  end
+end
+</pre>
+
+<pre class="term">$ lua rawget.lua
+verde	verde
+12	nil
+cor: verde (escolha da Ana)
+tamanho: 12 (padrão)</pre>
+
+<dl class="anatomy">
+  <dt>verde verde</dt><dd>A <code>cor</code> está na própria <code>config_ana</code>: a leitura normal e o <code>rawget</code> dão o mesmo resultado.</dd>
+  <dt>12 nil</dt><dd>O <code>tamanho</code> não está nela. A leitura normal passou pelo <code>__index</code> e trouxe o 12 do padrão; o <code>rawget</code> olhou só a tabela e respondeu <code>nil</code>.</dd>
+  <dt>rawget(config_ana, chave) ~= nil</dt><dd>"Existe de verdade nesta tabela?" É o teste que separa as escolhas da Ana dos valores padrão. A lista <code>{ "cor", "tamanho" }</code> com <code>ipairs</code> garante a ordem das linhas (com <code>pairs</code>, ela poderia mudar).</dd>
+</dl>
+
+<h3>O mesmo laço, agora na leitura</h3>
+<p>Dentro de um <code>__index</code> função, ler a própria tabela com <code>tabela[n]</code> também entra em laço: a chave falta, o Lua chama o <code>__index</code>, que lê a chave que falta… O lab mostrou, para um <code>__index</code> com <code>local valor = tabela[n]</code> na linha 3, a mesma mensagem: <code>memo_laco.lua:3: C stack overflow</code>, com <code>in metamethod 'index'</code> repetido no rastro. Dentro do <code>__index</code>, leia com <code>rawget</code>.</p>
+
+<h3>Uma tabela que lembra as contas</h3>
+<p>Um uso bonito do <code>__index</code> com <code>rawset</code>: a tabela calcula o valor <strong>na primeira vez</strong> que alguém pede, guarda, e nas próximas vezes já tem a resposta (programadores chamam isso de <em>memoização</em>, de "memorando", e de <em>cache</em>):</p>
+
+<pre class="file" data-file="memo.lua">local contas = 0
+local quadrados = setmetatable({}, {
+  __index = function (tabela, n)
+    contas = contas + 1
+    local valor = n * n
+    rawset(tabela, n, valor)
+    return valor
+  end,
+})
+
+print(quadrados[4], quadrados[4], quadrados[9], quadrados[4])
+print("contas feitas:", contas)
+print(rawget(quadrados, 4), rawget(quadrados, 5))
+</pre>
+
+<pre class="term">$ lua memo.lua
+16	16	81	16
+contas feitas:	2
+16	nil</pre>
+
+<p>Foram 4 leituras, mas só <strong>2 contas</strong>: a primeira leitura do 4 calculou e guardou (com <code>rawset</code>); as outras duas já acharam o 16 na tabela e nem chamaram o <code>__index</code>. O <code>rawget</code> da última linha confirma: o 4 está guardado, o 5 ainda não (ninguém pediu). Aqui a conta é rápida, mas a mesma ideia vale para coisas demoradas: ler um arquivo, calcular um frete.</p>
+
+<div class="note">
+<strong>Por que <code>rawset</code> aqui, se não há <code>__newindex</code>?</strong>
+<p>Nesta tabela, <code>tabela[n] = valor</code> também funcionaria, porque ela não tem <code>__newindex</code>. O <code>rawset</code> é um hábito de segurança: se um dia alguém puser um <code>__newindex</code> nessa metatabela, o código continua certo. <strong>Dentro de metamétodos, prefira as funções <code>raw</code></strong>.</p>
+</div>
+
+<hr>
+
+<h2>4. <code>rawequal</code>: é a mesma tabela?</h2>
+<p>Com o <code>__eq</code> do Dinheiro, duas notas de R$ 10 são "iguais". Mas às vezes a pergunta é outra: "é <strong>a mesma</strong> nota, a mesma tabela?". O <code>rawequal(a, b)</code> responde isso, sem chamar o <code>__eq</code>:</p>
+
+<pre class="file" data-file="rawequal.lua">local Dinheiro = {}
+Dinheiro.__eq = function (a, b)
+  return a.centavos == b.centavos
+end
+local function reais(c) return setmetatable({ centavos = c }, Dinheiro) end
+
+local nota_ana = reais(1000)
+local nota_bia = reais(1000)
+local mesma = nota_ana
+
+print(nota_ana == nota_bia, rawequal(nota_ana, nota_bia))
+print(nota_ana == mesma, rawequal(nota_ana, mesma))
+print(rawequal(1, 1.0), rawequal("a", "a"), rawequal(1, "1"))
+</pre>
+
+<pre class="term">$ lua rawequal.lua
+true	false
+true	true
+true	true	false</pre>
+
+<dl class="anatomy">
+  <dt>true false</dt><dd>As notas da Ana e da Bia têm o mesmo valor (o <code>__eq</code> diz <code>true</code>), mas são duas tabelas diferentes (o <code>rawequal</code> diz <code>false</code>).</dd>
+  <dt>true true</dt><dd><code>mesma</code> é outro nome para a <strong>mesma</strong> tabela da Ana (veja <a href="tabelas-referencia.html">Tabelas São Referências</a>): igual de todo jeito.</dd>
+  <dt>rawequal(1, 1.0) → true</dt><dd>Para números e textos, o <code>rawequal</code> funciona como o <code>==</code> de sempre: <code>1</code> e <code>1.0</code> são iguais, e o número <code>1</code> é diferente do texto <code>"1"</code>.</dd>
+</dl>
+
+<div class="trylua">
+<p class="try-task"><strong>Experimente:</strong> rode e compare as colunas. Depois apague o <code>__eq</code> (as linhas 2 a 4) e rode de novo: o que muda na primeira coluna da primeira linha?</p>
+<pre class="script" data-file="main.lua">local Dinheiro = {}
+Dinheiro.__eq = function (a, b)
+  return a.centavos == b.centavos
+end
+local function reais(c) return setmetatable({ centavos = c }, Dinheiro) end
+
+local nota_ana = reais(1000)
+local nota_bia = reais(1000)
+print(nota_ana == nota_bia, rawequal(nota_ana, nota_bia))
+print(nota_ana == nota_ana, rawequal(nota_ana, nota_ana))
+</pre>
+</div>
+
+<hr>
+
+<h2>5. <code>rawlen</code>: o tamanho cru</h2>
+<p>Você já viu o <code>rawlen</code> em <a href="tostring-call-len.html">__tostring, __call e __len</a>: ele mede sem chamar o <code>__len</code>. Para uma lista, é o tamanho de lista de sempre; para um texto, o número de bytes:</p>
+
+<pre class="file" data-file="rawlen.lua">local lista = setmetatable({ "a", "b", "c" }, {
+  __len = function () return 100 end,
+})
+print(#lista, rawlen(lista), rawlen("ação"))
+</pre>
+
+<pre class="term">$ lua rawlen.lua
+100	3	6</pre>
+
+<p>O <code>#</code> perguntou ao <code>__len</code> (100); o <code>rawlen</code> contou os 3 itens de verdade. E <code>"ação"</code> tem 6 bytes, porque o "ç" e o "ã" ocupam 2 cada (veja <a href="utf8.html">Acentos e a Biblioteca utf8</a>).</p>
+
+<hr>
+
+<h2 id="formas">Formas diferentes de fazer a mesma coisa</h2>
+<p>Dentro de um <code>__newindex</code>, há duas formas de guardar o valor sem cair no laço:</p>
+
+<pre class="file" data-file="formas.lua">-- 1) rawset: guarda na própria tabela
+__newindex = function (tabela, chave, valor)
+  rawset(tabela, chave, valor)
+end
+
+-- 2) outra tabela: a da frente fica vazia, os dados moram em "guardado"
+__index = guardado,
+__newindex = function (tabela, chave, valor)
+  guardado[chave] = valor
+end
+</pre>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Situação</th><th>Qual usar</th></tr>
+<tr><td>Avisar ou registrar só a <strong>primeira</strong> gravação de cada chave</td><td><code>rawset</code> (forma 1): depois de criada, a chave é gravada direto</td></tr>
+<tr><td>Conferir <strong>toda</strong> gravação (validar, só leitura)</td><td>Outra tabela (forma 2): a da frente nunca ganha chaves, então tudo passa pelo manual</td></tr>
+<tr><td>Ler a própria tabela dentro do <code>__index</code></td><td><code>rawget</code></td></tr>
+<tr><td>Saber se o valor é da tabela ou do padrão</td><td><code>rawget(t, k) ~= nil</code></td></tr>
+<tr><td>Saber se duas variáveis são a mesma tabela, mesmo com <code>__eq</code></td><td><code>rawequal(a, b)</code></td></tr>
+<tr><td>Fora de metamétodos, no dia a dia</td><td><code>t[k]</code>, <code>t[k] = v</code>, <code>==</code>, <code>#</code>: o manual existe para ser usado</td></tr>
+</table>
+</div>
+
+<div class="warning">
+<strong>A porta dos fundos passa por cima das regras</strong>
+<p>O <code>rawset</code> ignora <strong>qualquer</strong> <code>__newindex</code>, inclusive o de uma tabela só de leitura. No lab, <code>rawset(precos, "pao", 1)</code> numa tabela só de leitura gravou o 1 na tabela da frente, sem erro, e depois <code>precos.pao</code> passou a dar <code>1</code> (a tabela original continuou com 150). A "proteção" da aula anterior serve para evitar enganos, não para impedir quem quer burlar de propósito.</p>
+</div>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+
+<div class="cenario">
+<strong>Gravou na própria tabela dentro do <code>__newindex</code></strong>
+<p>O laço da seção 1: <code>C stack overflow</code>, com <code>in metamethod 'newindex'</code> repetido no rastro e <code>(skipping … levels)</code> no meio. Quando um rastro mostra a <strong>mesma linha</strong> muitas vezes, desconfie de uma função que chama a si mesma sem parar. <strong>Como consertar:</strong> <code>rawset(tabela, chave, valor)</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Leu a própria tabela dentro do <code>__index</code></strong>
+<pre class="file" data-file="memo_laco.lua">local quadrados = setmetatable({}, {
+  __index = function (tabela, n)
+    local valor = tabela[n]
+    return valor
+  end,
+})
+print(quadrados[4])
+</pre>
+<pre class="term">$ lua memo_laco.lua
+lua: memo_laco.lua:3: C stack overflow
+stack traceback:
+	memo_laco.lua:3: in metamethod 'index'
+	memo_laco.lua:3: in metamethod 'index'
+	…                                      « o rastro continua, como na seção 1
+	memo_laco.lua:3: in metamethod 'index'
+	memo_laco.lua:7: in main chunk
+	[C]: in ?</pre>
+<p>A mesma história, agora na leitura (<code>in metamethod 'index'</code>). <strong>Como consertar:</strong> <code>rawget(tabela, n)</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Passou algo que não é tabela</strong>
+<pre class="file" data-file="raw_erros.lua">print(pcall(rawset, "texto", 1, 2))
+print(pcall(rawget, 42, "x"))
+print(pcall(rawset, {}, nil, 1))
+print(pcall(rawlen, 10))
+print(pcall(rawequal, 1))
+</pre>
+<pre class="term">$ lua raw_erros.lua
+false	bad argument #1 to 'rawset' (table expected, got string)
+false	bad argument #1 to 'rawget' (table expected, got number)
+false	table index is nil
+false	bad argument #1 to 'rawlen' (table or string expected, got number)
+false	bad argument #2 to 'rawequal' (value expected)</pre>
+<p>(O <a href="pcall.html">pcall</a> só serve para mostrar todas as mensagens de uma vez.) Linha por linha: <code>rawset</code> e <code>rawget</code> exigem uma <strong>tabela</strong> no primeiro argumento ("era esperada uma tabela, veio uma string/um número"); a chave <code>nil</code> não pode ser gravada em tabela nenhuma (<code>table index is nil</code>, "o índice da tabela é nil", o mesmo erro de <code>t[nil] = 1</code>); o <code>rawlen</code> aceita tabela ou texto; e o <code>rawequal</code> precisa de <strong>dois</strong> valores (<code>value expected</code>, "era esperado um valor", no argumento nº 2).</p>
+</div>
+
+<hr>
+
+<h2>Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Função</th><th>O que faz</th><th>Ignora</th></tr>
+<tr><td><code>rawget(t, k)</code></td><td>Lê <code>t[k]</code> só na própria tabela</td><td><code>__index</code></td></tr>
+<tr><td><code>rawset(t, k, v)</code></td><td>Grava <code>t[k] = v</code> na própria tabela; devolve <code>t</code></td><td><code>__newindex</code></td></tr>
+<tr><td><code>rawequal(a, b)</code></td><td><code>true</code> se <code>a</code> e <code>b</code> são o mesmo valor (a mesma tabela)</td><td><code>__eq</code></td></tr>
+<tr><td><code>rawlen(t)</code></td><td>Tamanho de lista de <code>t</code> (ou bytes de um texto)</td><td><code>__len</code></td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Mensagem</th><th>Causa provável</th></tr>
+<tr><td><code>C stack overflow</code> com <code>in metamethod 'newindex'</code> repetido</td><td><code>t[k] = v</code> dentro do <code>__newindex</code> de <code>t</code>: use <code>rawset</code></td></tr>
+<tr><td><code>C stack overflow</code> com <code>in metamethod 'index'</code> repetido</td><td><code>t[k]</code> dentro do <code>__index</code> de <code>t</code>: use <code>rawget</code></td></tr>
+<tr><td><code>bad argument #1 to 'rawset' (table expected, got …)</code></td><td>O primeiro argumento não é tabela</td></tr>
+<tr><td><code>table index is nil</code></td><td>Tentou gravar com a chave <code>nil</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. Complete o <code>__newindex</code></h3>
+<p>Complete para o valor ser gravado sem cair em laço:</p>
+<div class="ex-code">__newindex = function (tabela, chave, valor)<br>&nbsp;&nbsp;<input data-answer="rawset" aria-label="função">(tabela, chave, <input data-answer="valor" aria-label="terceiro argumento">)<br>end</div>
+</div>
+
+<div class="exercise">
+<h3>2. O que aparece?</h3>
+<pre class="file" data-file="ex2.lua">local base = { cor = "azul" }
+local t = setmetatable({}, { __index = base })
+print(t.cor)
+print(rawget(t, "cor"))
+</pre>
+<div class="ex-code">1º print: <input data-answer="azul" aria-label="primeiro print"><br>2º print: <input data-answer="nil" aria-label="segundo print"></div>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">3. Um <code>__newindex</code> faz <code>tabela[chave] = valor</code>. O que acontece ao gravar uma chave nova?</p>
+<label><input type="radio" name="q3"> Grava normalmente</label>
+<label><input type="radio" name="q3"> O <code>__newindex</code> chama a si mesmo até dar <code>C stack overflow</code></label>
+<label><input type="radio" name="q3"> O valor é ignorado em silêncio</label>
+<label><input type="radio" name="q3"> Erro de sintaxe</label>
+</div>
+
+<div class="mc" data-answer="4">
+<p class="mc-q">4. <code>a</code> e <code>b</code> são dois Dinheiros diferentes de R$ 5, com <code>__eq</code> comparando os centavos. Quanto dá <code>rawequal(a, b)</code>?</p>
+<label><input type="radio" name="q4"> <code>true</code></label>
+<label><input type="radio" name="q4"> Dá erro</label>
+<label><input type="radio" name="q4"> <code>nil</code></label>
+<label><input type="radio" name="q4"> <code>false</code></label>
+</div>
+
+<div class="mc" data-answer="1">
+<p class="mc-q">5. Onde as funções <code>raw</code> são mais usadas?</p>
+<label><input type="radio" name="q5"> Dentro dos próprios metamétodos</label>
+<label><input type="radio" name="q5"> Em toda leitura de tabela, por ser mais rápido</label>
+<label><input type="radio" name="q5"> Só com textos</label>
+<label><input type="radio" name="q5"> Para criar metatabelas</label>
+</div>
+
+<h3>Missão final: escolha ou padrão?</h3>
+
+<div class="trylua" data-goal="out:tamanho: 12 (padrão);;out:cor: verde (escolha da Ana);;semerro">
+<p class="try-task"><strong>Missão:</strong> o relatório diz que <strong>tudo</strong> foi escolha da Ana, até o tamanho e o som, que vêm do padrão. O teste <code>config_ana[chave] ~= nil</code> passa pelo <code>__index</code> e sempre acha algo. Troque esse teste por um <code>rawget</code>.</p>
+<pre class="script" data-file="main.lua">local padrao = { cor = "azul", tamanho = 12, som = "ligado" }
+local config_ana = setmetatable({ cor = "verde" }, { __index = padrao })
+
+for _, chave in ipairs({ "cor", "tamanho", "som" }) do
+  local valor = config_ana[chave]
+  if config_ana[chave] ~= nil then
+    print(chave .. ": " .. valor .. " (escolha da Ana)")
+  else
+    print(chave .. ": " .. valor .. " (padrão)")
+  end
+end
+</pre>
+<pre class="solucao" data-file="main.lua">local padrao = { cor = "azul", tamanho = 12, som = "ligado" }
+local config_ana = setmetatable({ cor = "verde" }, { __index = padrao })
+
+for _, chave in ipairs({ "cor", "tamanho", "som" }) do
+  local valor = config_ana[chave]
+  if rawget(config_ana, chave) ~= nil then
+    print(chave .. ": " .. valor .. " (escolha da Ana)")
+  else
+    print(chave .. ": " .. valor .. " (padrão)")
+  end
+end
+</pre>
+</div>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li>As funções <code>raw</code> são a "porta dos fundos": mexem na tabela de verdade, sem consultar a metatabela.</li>
+  <li><code>rawset(t, k, v)</code> grava sem <code>__newindex</code>; <code>rawget(t, k)</code> lê sem <code>__index</code>; <code>rawequal(a, b)</code> compara sem <code>__eq</code>; <code>rawlen(t)</code> mede sem <code>__len</code>.</li>
+  <li>Dentro de um metamétodo, ler ou gravar a própria tabela pela porta da frente faz o metamétodo chamar a si mesmo até o <code>C stack overflow</code>. Use as funções <code>raw</code>.</li>
+  <li><code>rawget(t, k) ~= nil</code> diz se a chave existe <strong>na própria</strong> tabela, e não no padrão.</li>
+  <li><code>__index</code> + <code>rawset</code> = uma tabela que calcula uma vez e lembra (cache).</li>
+  <li>Próximo passo: funções guardadas em tabelas, o <code>self</code> e o dois-pontos, em <a href="metodos.html">Métodos</a>.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
