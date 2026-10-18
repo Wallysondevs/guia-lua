@@ -1,0 +1,454 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua io.write() — escrevendo sem pular linha | Guia Lua</title>
+<meta name="description" content="A função io.write() do Lua para quem nunca programou: escrever sem pular linha, o \n que pula a linha, vários valores sem separador, montar uma linha aos poucos, perguntar antes do io.read, combinar com string.format, a comparação com o print e os erros reais do Lua 5.5 (bad argument, field 'Write', /n no lugar de \n).">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">io.write()</span></h1>
+
+<p class="intro">O <a href="print.html"><code>print</code></a> é prático, mas tem manias: põe um TAB entre os valores e sempre pula a linha no fim. Quando a Ana quer montar uma linha aos poucos, escrever uma pergunta e deixar o cursor esperando a resposta na mesma linha, ou controlar cada espaço da nota da padaria, ela usa o <code>io.write()</code>: ele escreve <strong>exatamente</strong> o que você mandar, nem uma letra a mais.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O que é cada parte de <code>io.write("...")</code>: o <code>io</code>, o ponto e o <code>write</code>.</li>
+  <li>Que o <code>io.write</code> <strong>não pula linha</strong>, e como pular com <code>\n</code>.</li>
+  <li>A escrever vários valores de uma vez, sem nenhum separador entre eles.</li>
+  <li>A montar uma linha aos poucos, com vários <code>io.write</code> seguidos.</li>
+  <li>A escrever uma pergunta antes de ler a resposta do teclado.</li>
+  <li>A combinar o <code>io.write</code> com o <code>string.format</code> para alinhar colunas.</li>
+  <li>Quando usar <code>print</code> e quando usar <code>io.write</code>.</li>
+  <li>Os erros reais: <code>nil</code> e <code>true</code> que ele recusa, <code>io.Write</code>, <code>io:write</code> e o <code>/n</code> no lugar de <code>\n</code>.</li>
+</ul>
+</div>
+
+<p>Todos os programas desta aula foram rodados com o <strong>Lua 5.5</strong> na máquina fictícia da Ana (usuária <code>ana</code>, computador <code>notebook</code>), com o comando <code>lua arquivo.lua</code>. As caixas "Experimente" rodam o mesmo Lua de verdade, no seu navegador.</p>
+
+<hr>
+
+<h2>A ideia: o alto-falante e a máquina de escrever</h2>
+<p>Na aula do <code>print</code>, ele era o alto-falante da padaria: anuncia o recado inteiro e pronto, próximo recado. O <code>io.write</code> é uma <strong>máquina de escrever</strong>: cada vez que você bate nas teclas, as letras vão para o papel, uma depois da outra, na mesma linha. Ela só desce para a linha de baixo quando você puxa a alavanca. No Lua, "puxar a alavanca" é escrever <code>\n</code>.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th></th><th><code>print</code> (alto-falante)</th><th><code>io.write</code> (máquina de escrever)</th></tr>
+<tr><td>Entre dois valores</td><td>Põe um TAB</td><td>Não põe nada</td></tr>
+<tr><td>No fim</td><td>Pula a linha sozinho</td><td>Não pula: só com <code>\n</code></td></tr>
+<tr><td>Aceita</td><td>Qualquer valor (<code>nil</code>, <code>true</code>, tabelas...)</td><td>Só textos e números</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>1. O primeiro <code>io.write</code></h2>
+
+<pre class="file" data-file="escrever.lua">io.write("Olá, ")
+io.write("mundo!")
+io.write("\n")
+io.write("Tchau!\n")
+</pre>
+
+<dl class="anatomy">
+  <dt>io</dt><dd>A <strong>biblioteca</strong> de entrada e saída (em inglês, <em>input/output</em>, "entrada/saída"). Uma biblioteca é uma caixa de ferramentas com várias funções prontas; o <code>io</code> guarda as que leem e escrevem: no teclado, na tela e em arquivos.</dd>
+  <dt>.</dt><dd>O ponto quer dizer "de dentro de": <code>io.write</code> é "a função <code>write</code> que está dentro do <code>io</code>". (Por trás, o <code>io</code> é uma <a href="tabelas.html">tabela</a>, e o ponto pega um campo dela.)</dd>
+  <dt>write</dt><dd>"Escrever". Escreve na tela o que estiver dentro dos parênteses, exatamente como está.</dd>
+  <dt>"Olá, "</dt><dd>Um texto. Repare no espaço depois da vírgula, dentro das aspas: se você não escrever o espaço, ele não existe.</dd>
+  <dt>"\n"</dt><dd>A <strong>quebra de linha</strong>. A barra invertida com o <code>n</code> (de <em>new line</em>, "linha nova") vale um caractere só, invisível, que manda o cursor para o começo da linha de baixo. Ela pode vir sozinha (<code>io.write("\n")</code>) ou no fim de um texto (<code>"Tchau!\n"</code>). Outros caracteres desse tipo estão em <a href="strings-escape.html">Caracteres de Escape</a>.</dd>
+</dl>
+
+<pre class="term">$ lua escrever.lua
+Olá, mundo!
+Tchau!
+</pre>
+
+<p>Quatro <code>io.write</code>, duas linhas. Os dois primeiros escreveram na <strong>mesma</strong> linha ("Olá, " e depois "mundo!"), o terceiro pulou a linha, e o quarto escreveu "Tchau!" já com o pulo no fim.</p>
+
+<hr>
+
+<h2>2. Sem <code>\n</code>, nada pula</h2>
+<p>O que acontece se o programa termina sem a quebra de linha? O <code>io.write</code> obedece: nada de pular. Quem fica na mesma linha é o próximo que escrever na tela, e no terminal esse "próximo" é o próprio prompt:</p>
+
+<pre class="file" data-file="sem-fim.lua">io.write("Olá, mundo!")
+</pre>
+
+<pre class="term">$ lua sem-fim.lua
+Olá, mundo!ana@notebook:~$ echo "fim"
+fim
+</pre>
+
+<p>O <code>ana@notebook:~$</code> grudou no fim do recado, porque o cursor ficou parado logo depois do <code>!</code>. Não é erro, e o terminal continua funcionando (o <code>echo "fim"</code> rodou normalmente), mas fica feio. <strong>Regra prática:</strong> a última coisa que o programa escreve deve terminar com <code>\n</code>.</p>
+
+<hr>
+
+<h2>3. Vários valores de uma vez</h2>
+<p>Como o <code>print</code>, o <code>io.write</code> aceita vários valores separados por vírgula. A diferença: ele escreve um <strong>colado</strong> no outro, sem TAB nem espaço. Os espaços ficam por sua conta, dentro das aspas:</p>
+
+<pre class="file" data-file="varios.lua">io.write("Pão francês: ", 12, " unidades\n")
+io.write("Preço do quilo: ", 18.9, "\n")
+io.write("Total: ", 2 + 3, " itens", "\n")
+io.write(10 / 2, "\n")
+</pre>
+
+<pre class="term">$ lua varios.lua
+Pão francês: 12 unidades
+Preço do quilo: 18.9
+Total: 5 itens
+5.0
+</pre>
+
+<dl class="anatomy">
+  <dt>"Pão francês: "</dt><dd>Termina com espaço, de propósito: é ele que separa o dois-pontos do número.</dd>
+  <dt>12</dt><dd>Um número. O <code>io.write</code> aceita números e os escreve como o <code>print</code> escreveria (por isso <code>10 / 2</code> saiu <code>5.0</code>, como na aula do <a href="print.html"><code>print</code></a>).</dd>
+  <dt>" unidades\n"</dt><dd>Começa com espaço (para não grudar no 12) e termina com <code>\n</code> (para pular a linha).</dd>
+  <dt>2 + 3, " itens", "\n"</dt><dd>A conta é feita antes de escrever. E o <code>\n</code> pode ir sozinho, como último valor.</dd>
+</dl>
+
+<p>Lado a lado com o <code>print</code>, a diferença fica clara:</p>
+
+<pre class="file" data-file="comparar.lua">print("A", "B", 1)
+io.write("A", "B", 1, "\n")
+print()
+io.write("\n")
+io.write()
+print("fim")
+</pre>
+
+<pre class="term">$ lua comparar.lua
+A	B	1
+AB1
+
+
+fim
+</pre>
+
+<p>O <code>print</code> separou com TAB; o <code>io.write</code> colou tudo. Depois vieram duas linhas em branco: uma do <code>print()</code> vazio e outra do <code>io.write("\n")</code>. Já o <code>io.write()</code> vazio <strong>não fez nada</strong>: sem <code>\n</code>, não há o que escrever.</p>
+
+<hr>
+
+<h2>4. Montando uma linha aos poucos</h2>
+<p>A grande utilidade do <code>io.write</code> é escrever uma linha <strong>em pedaços</strong>. Cada <code>io.write</code> continua de onde o anterior parou:</p>
+
+<pre class="file" data-file="lado.lua">io.write("Contando: ")
+io.write(1, " ")
+io.write(2, " ")
+io.write(3, "\n")
+print("Pronto!")
+</pre>
+
+<pre class="term">$ lua lado.lua
+Contando: 1 2 3
+Pronto!
+</pre>
+
+<p>Aqui os pedaços estão escritos um embaixo do outro, mas logo você vai gerá-los com uma repetição (aula <a href="for-numerico.html">for Numérico</a>): "escreva o número, depois um espaço", dez vezes, cem vezes, tudo na mesma linha. Com <code>print</code>, cada número sairia numa linha diferente. E repare que <code>print</code> e <code>io.write</code> podem conviver no mesmo programa: os dois escrevem no mesmo lugar, na ordem em que rodam.</p>
+
+<div class="trylua" data-goal="outre:^Contando: 1 2 3\nPronto!\n$;;src:io\.write">
+<p class="try-task"><strong>Missão:</strong> este programa mostra cada número numa linha. Troque os <code>print</code> de cima por <code>io.write</code> para que saia <code>Contando: 1 2 3</code> numa linha só (com um espaço entre os números), e o <code>Pronto!</code> na linha de baixo.</p>
+<pre class="script" data-file="main.lua">print("Contando:")
+print(1)
+print(2)
+print(3)
+print("Pronto!")
+</pre>
+<pre class="solucao" data-file="main.lua">io.write("Contando: ")
+io.write(1, " ")
+io.write(2, " ")
+io.write(3, "\n")
+print("Pronto!")
+</pre>
+</div>
+
+<hr>
+
+<h2>5. A pergunta e a resposta na mesma linha</h2>
+<p>Quando um programa pergunta alguma coisa, fica bonito o cursor esperar <strong>logo depois</strong> da pergunta. É o trabalho perfeito para o <code>io.write</code>, junto com o <code>io.read</code>, que lê o que a pessoa digita (é a próxima aula: <a href="io-read.html">io.read()</a>):</p>
+
+<pre class="file" data-file="pergunta.lua">io.write("Qual é o seu nome? ")
+local nome = io.read()
+print("Olá, " .. nome .. "!")
+</pre>
+
+<pre class="term">$ lua pergunta.lua
+Qual é o seu nome? Ana               « a Ana digitou "Ana" e apertou Enter
+Olá, Ana!
+</pre>
+
+<p>Com <code>print("Qual é o seu nome?")</code>, a resposta iria para a linha de baixo. Com <code>io.write</code>, ela fica ao lado da pergunta, como num formulário. O <code>local nome =</code> guarda a resposta numa variável (aulas <a href="variaveis.html">Variáveis</a> e <a href="local.html">local × Global</a>).</p>
+
+<hr>
+
+<h2>6. <code>io.write</code> + <code>string.format</code>: colunas alinhadas</h2>
+<p>O <code>io.write</code> não formata nada: escreve o que recebe. Para alinhar colunas e fixar casas decimais, ele trabalha em dupla com o <a href="string-format.html"><code>string.format</code></a>, que monta o texto pronto:</p>
+
+<pre class="file" data-file="formato.lua">io.write(string.format("%-14s R$ %6.2f\n", "Leite", 5.5))
+io.write(string.format("%-14s R$ %6.2f\n", "Bolo de milho", 25))
+io.write(string.format("%-14s R$ %6.2f\n", "Sonho", 4.75))
+</pre>
+
+<pre class="term">$ lua formato.lua
+Leite          R$   5.50
+Bolo de milho  R$  25.00
+Sonho          R$   4.75
+</pre>
+
+<p>Não se preocupe ainda com o <code>%-14s</code> e o <code>%6.2f</code>: em resumo, "um texto ocupando 14 posições" e "um número com 2 casas decimais ocupando 6 posições". A aula <a href="string-format.html">string.format</a> explica cada pedaço. O que importa aqui: o <code>\n</code> está <strong>dentro</strong> do modelo, porque o <code>io.write</code> não pula linha sozinho. Essa dupla é tão comum que muita gente a chama de "o <code>printf</code> do Lua".</p>
+
+<hr>
+
+<h2>Formas diferentes de escrever na tela</h2>
+
+<pre class="file" data-file="encadear.lua">io.write("Bom "):write("dia"):write("!\n")
+io.stdout:write("Também funciona\n")
+</pre>
+
+<pre class="term">$ lua encadear.lua
+Bom dia!
+Também funciona
+</pre>
+
+<p>Você vai encontrar essas duas formas em código dos outros. O <code>io.stdout</code> é a "saída padrão" (a tela, para o programa), e <code>io.stdout:write(...)</code> é o que o <code>io.write(...)</code> faz por trás. A primeira linha funciona porque o <code>io.write</code> devolve a própria saída, e dá para emendar outro <code>:write</code> nela. O dois-pontos (<code>:</code>) tem aula própria: <a href="metodos.html">Métodos e o Dois-Pontos</a>. Por enquanto, fique com o <code>io.write</code> simples.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Forma</th><th>Quando usar</th></tr>
+<tr><td><code>print(a, b)</code></td><td>Mostrar valores rápido, principalmente para testar e procurar erros. Aceita qualquer valor, separa com TAB e pula a linha</td></tr>
+<tr><td><code>print("Total: " .. n)</code></td><td>Uma linha inteira, montada com <code>..</code>, quando já se sabe tudo o que vai nela</td></tr>
+<tr><td><code>io.write("Nome? ")</code></td><td>Perguntas antes do <code>io.read</code>, e linhas montadas em pedaços (dentro de repetições)</td></tr>
+<tr><td><code>io.write(string.format(...))</code></td><td>Saídas caprichadas: colunas alinhadas, casas decimais, notas e relatórios</td></tr>
+<tr><td><code>io.stdout:write(...)</code></td><td>O mesmo que <code>io.write</code>; aparece quando o programa também escreve em arquivos (aula <a href="arquivos-escrever.html">Escrevendo Arquivos</a>)</td></tr>
+</table>
+</div>
+
+<div class="note">
+<strong>No modo interativo, aparece um <code>file (0x...)</code></strong>
+<p>No prompt <code>&gt;</code>, o Lua mostra o valor que cada linha devolve. Como o <code>io.write</code> devolve a própria saída (a "tela", que para o Lua é um arquivo), aparece um <code>file (...)</code> depois do texto:</p>
+<pre class="term">$ lua
+Lua 5.5.0  Copyright (C) 1994-2025 Lua.org, PUC-Rio
+&gt; io.write("Olá\n")
+Olá
+file (0x7fe99ba13580)
+&gt; io.write("oi")
+oifile (0x7fe99ba13580)
+&gt; os.exit()
+</pre>
+<p>O número entre parênteses é um endereço de memória e muda a cada vez que você abre o <code>lua</code>. No segundo caso, sem <code>\n</code>, o <code>file</code> até grudou no <code>oi</code>. Num programa em arquivo, isso não aparece.</p>
+</div>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+
+<div class="cenario">
+<strong>Mandar <code>nil</code> para o <code>io.write</code></strong>
+<pre class="file" data-file="nil.lua">io.write("Cliente: ", nil, "\n")
+</pre>
+<pre class="term">$ lua nil.lua
+lua: nil.lua:1: bad argument #2 to 'write' (string expected, got nil)
+stack traceback:
+	[C]: in field 'write'
+	nil.lua:1: in main chunk
+	[C]: in ?
+Cliente: ana@notebook:~$
+</pre>
+<dl class="anatomy">
+  <dt>nil.lua:1:</dt><dd>O arquivo e a linha do problema.</dd>
+  <dt>bad argument #2 to 'write'</dt><dd>"Argumento ruim, o número 2, para o <code>write</code>". Os argumentos são contados da esquerda para a direita: o 1º é <code>"Cliente: "</code>, o 2º é o <code>nil</code>.</dd>
+  <dt>(string expected, got nil)</dt><dd>"Esperava uma string, recebeu nil". O <code>io.write</code> só aceita textos e números; o <code>print</code> aceitaria o <code>nil</code>.</dd>
+  <dt>[C]: in field 'write'</dt><dd>O erro aconteceu dentro do <code>write</code>, que é um <strong>campo</strong> do <code>io</code> e foi escrito em linguagem C (por isso o <code>[C]</code>).</dd>
+  <dt>Cliente: ana@notebook:~$</dt><dd>Olhe o fim: o <code>"Cliente: "</code> <strong>foi</strong> escrito, mas apareceu <strong>depois</strong> da mensagem de erro, grudado no prompt. O <code>io.write</code> escreveu o 1º argumento antes de tropeçar no 2º; só que a saída normal espera numa "fila" até completar uma linha (o <code>\n</code> nunca chegou), enquanto a mensagem de erro sai na hora. A fila só foi descarregada quando o programa terminou.</dd>
+</dl>
+<p>Na vida real, ninguém escreve <code>nil</code> de propósito: ele chega dentro de uma variável que ficou sem valor (um nome escrito errado, uma resposta que não veio). A aula <a href="local.html">local × Global</a> mostra como isso acontece. <strong>Como consertar:</strong> descubra por que o valor é <code>nil</code>. Se você quer mesmo escrever a palavra "nil", converta com <code>tostring</code> (aula <a href="conversao.html">Conversão</a>).</p>
+</div>
+
+<div class="cenario">
+<strong>Mandar <code>true</code> ou <code>false</code></strong>
+<pre class="file" data-file="bool.lua">io.write("Pago: ", true, "\n")
+</pre>
+<pre class="term">$ lua bool.lua
+lua: bool.lua:1: bad argument #2 to 'write' (string expected, got boolean)
+stack traceback:
+	[C]: in field 'write'
+	bool.lua:1: in main chunk
+	[C]: in ?
+Pago: ana@notebook:~$
+</pre>
+<p>Mesmo erro, outro tipo: "esperava uma string, recebeu um <strong>boolean</strong>" (um <code>true</code> ou <code>false</code>, aula <a href="booleanos.html">Booleanos</a>). <strong>Como consertar:</strong> transforme em texto com <code>tostring</code>, que funciona para qualquer valor:</p>
+<pre class="file" data-file="bool2.lua">io.write("Pago: ", tostring(true), "\n")
+io.write("Cliente: ", tostring(nil), "\n")
+</pre>
+<pre class="term">$ lua bool2.lua
+Pago: true
+Cliente: nil
+</pre>
+</div>
+
+<div class="cenario">
+<strong><code>io.Write</code> com W maiúsculo</strong>
+<pre class="file" data-file="maiuscula.lua">io.Write("Olá\n")
+</pre>
+<pre class="term">$ lua maiuscula.lua
+lua: maiuscula.lua:1: attempt to call a nil value (field 'Write')
+stack traceback:
+	maiuscula.lua:1: in main chunk
+	[C]: in ?
+</pre>
+<p>"Tentativa de chamar um valor nil (o <strong>campo</strong> <code>'Write'</code>)". Compare com o erro do <code>Print</code> na aula anterior, que dizia <code>global 'Print'</code>: agora o Lua diz <code>field</code> ("campo"), porque o nome errado está <strong>depois do ponto</strong>, dentro do <code>io</code>. O <code>io</code> existe; o que não existe dentro dele é um <code>Write</code> com maiúscula. Se você esquecer o ponto (<code>io_write</code>), a mensagem volta a ser <code>(global 'io_write')</code>. <strong>Como consertar:</strong> tudo minúsculo, com ponto: <code>io.write</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Dois-pontos no lugar do ponto</strong>
+<pre class="file" data-file="ponto.lua">io:write("Olá\n")
+</pre>
+<pre class="term">$ lua ponto.lua
+lua: ponto.lua:1: calling 'write' on bad self (string expected, got table)
+stack traceback:
+	[C]: in method 'write'
+	ponto.lua:1: in main chunk
+	[C]: in ?
+</pre>
+<p>Você viu o <code>io.stdout:write</code> com dois-pontos e misturou as formas. O <code>:</code> manda o próprio <code>io</code> como argumento escondido, e a mensagem reclama disso: "chamando o <code>write</code> com um <strong>self</strong> (o argumento escondido) ruim: esperava uma string, recebeu uma tabela". É uma mensagem difícil de ler no começo; guarde só a regra: <strong><code>io.write</code> é com ponto</strong>; o dois-pontos é para <code>io.stdout:write</code>.</p>
+</div>
+
+<div class="cenario">
+<strong><code>/n</code> no lugar de <code>\n</code>: não dá erro, não pula</strong>
+<pre class="file" data-file="barra.lua">io.write("Olá/n")
+io.write("Tchau/n")
+</pre>
+<pre class="term">$ lua barra.lua
+Olá/nTchau/nana@notebook:~$
+</pre>
+<p>A barra está virada. A quebra de linha é com a barra <strong>invertida</strong>, <code>\</code> (a que desce da esquerda para a direita). Com a barra comum, <code>/n</code> é só um texto de duas letras, e o Lua o escreve como está: nenhum erro, nenhuma linha nova, e o prompt grudado no fim. <strong>Como consertar:</strong> <code>"Olá\n"</code>.</p>
+</div>
+
+<div class="trylua" data-goal="outre:^Bom dia!\nBoa tarde!\n$">
+<p class="try-task"><strong>Missão:</strong> a Ana errou a barra. Conserte o programa para que <code>Bom dia!</code> e <code>Boa tarde!</code> saiam em duas linhas.</p>
+<pre class="script" data-file="main.lua">io.write("Bom dia!/n")
+io.write("Boa tarde!/n")
+</pre>
+<pre class="solucao" data-file="main.lua">io.write("Bom dia!\n")
+io.write("Boa tarde!\n")
+</pre>
+</div>
+
+<hr>
+
+<h2>Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>O que escreve</th></tr>
+<tr><td><code>io.write("Olá")</code></td><td><code>Olá</code>, sem pular linha</td></tr>
+<tr><td><code>io.write("Olá\n")</code></td><td><code>Olá</code> e pula a linha</td></tr>
+<tr><td><code>io.write("\n")</code></td><td>Só pula a linha (linha em branco, se o cursor já estava no começo)</td></tr>
+<tr><td><code>io.write("A", "B", 1)</code></td><td><code>AB1</code> (sem separador)</td></tr>
+<tr><td><code>io.write("Total: ", 5, "\n")</code></td><td><code>Total: 5</code> (o espaço vem de dentro das aspas)</td></tr>
+<tr><td><code>io.write(10 / 2)</code></td><td><code>5.0</code> (números como o <code>print</code> mostraria)</td></tr>
+<tr><td><code>io.write()</code></td><td>Nada</td></tr>
+<tr><td><code>io.write(tostring(true))</code></td><td><code>true</code> (booleano e <code>nil</code>, só convertidos)</td></tr>
+<tr><td><code>io.write(string.format("%.2f\n", 5))</code></td><td><code>5.00</code> e pula a linha</td></tr>
+<tr><td><code>io.stdout:write("...")</code></td><td>O mesmo que <code>io.write</code></td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Mensagem</th><th>Causa provável</th></tr>
+<tr><td><code>bad argument #2 to 'write' (string expected, got nil)</code></td><td>Uma variável sem valor no 2º argumento</td></tr>
+<tr><td><code>bad argument #2 to 'write' (string expected, got boolean)</code></td><td><code>true</code>/<code>false</code>: converta com <code>tostring</code></td></tr>
+<tr><td><code>attempt to call a nil value (field 'Write')</code></td><td>Nome errado depois do ponto (maiúscula)</td></tr>
+<tr><td><code>attempt to call a nil value (global 'io_write')</code></td><td>Faltou o ponto</td></tr>
+<tr><td><code>calling 'write' on bad self</code></td><td><code>io:write</code> com dois-pontos: use <code>io.write</code></td></tr>
+<tr><td>Prompt grudado no fim da saída</td><td>Faltou o <code>\n</code> no fim (ou escreveu <code>/n</code>)</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. Qual é a saída?</h3>
+<p>O que aparece na tela com <code>io.write("Lua", 5, "!")</code>? (Escreva sem espaços a mais.)</p>
+<div class="ex-code">Saída: <input data-answer="Lua5!" aria-label="saída"></div>
+</div>
+
+<div class="exercise">
+<h3>2. Complete para pular a linha</h3>
+<p>Complete o texto para que o programa escreva <code>Fim</code> e pule a linha:</p>
+<div class="ex-code">io.write("Fim<input data-answer="\n" aria-label="quebra de linha" size="4">")</div>
+</div>
+
+<div class="exercise">
+<h3>3. Quantas linhas?</h3>
+<p>O programa <code>io.write("a") io.write("b\n") io.write("c\n")</code> mostra quantas linhas de texto?</p>
+<div class="ex-code">Linhas: <input data-answer="2|duas" aria-label="número de linhas"></div>
+</div>
+
+<div class="mc" data-answer="3">
+<p class="mc-q">4. Qual a diferença entre <code>print("A", "B")</code> e <code>io.write("A", "B")</code>?</p>
+<label><input type="radio" name="q4"> Nenhuma</label>
+<label><input type="radio" name="q4"> O <code>io.write</code> põe um espaço entre os valores</label>
+<label><input type="radio" name="q4"> O <code>print</code> põe TAB entre os valores e pula a linha; o <code>io.write</code> escreve <code>AB</code> e não pula</label>
+<label><input type="radio" name="q4"> O <code>io.write</code> só aceita um valor</label>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">5. Qual linha dá <strong>erro</strong>?</p>
+<label><input type="radio" name="q5"> <code>io.write("Total: ", 10, "\n")</code></label>
+<label><input type="radio" name="q5"> <code>io.write("Ativo: ", true, "\n")</code></label>
+<label><input type="radio" name="q5"> <code>io.write(2 + 3, "\n")</code></label>
+<label><input type="radio" name="q5"> <code>io.write()</code></label>
+</div>
+
+<div class="mc" data-answer="1">
+<p class="mc-q">6. Por que se usa <code>io.write</code> (e não <code>print</code>) para a pergunta antes de um <code>io.read</code>?</p>
+<label><input type="radio" name="q6"> Para a resposta ficar na mesma linha da pergunta</label>
+<label><input type="radio" name="q6"> Porque o <code>print</code> não funciona junto com o <code>io.read</code></label>
+<label><input type="radio" name="q6"> Porque o <code>io.write</code> lê o teclado</label>
+<label><input type="radio" name="q6"> Para a pergunta sair em negrito</label>
+</div>
+
+<h3>Missão final: o total da compra</h3>
+
+<div class="trylua" data-goal="outre:^Total da compra: 3 itens\nObrigada!\n$;;src:io\.write">
+<p class="try-task"><strong>Missão:</strong> o caixa da padaria escreveu o total com <code>print</code> e saíram TABs. Reescreva a primeira linha com <code>io.write</code>, passando o <code>3</code> como número, para sair <code>Total da compra: 3 itens</code> (com espaços comuns) e, na linha de baixo, <code>Obrigada!</code>.</p>
+<pre class="script" data-file="main.lua">print("Total da compra:", 3, "itens")
+print("Obrigada!")
+</pre>
+<pre class="solucao" data-file="main.lua">io.write("Total da compra: ", 3, " itens\n")
+print("Obrigada!")
+</pre>
+</div>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li><code>io.write(...)</code> escreve na tela exatamente o que recebe: sem separador entre os valores e <strong>sem pular linha</strong> no fim.</li>
+  <li>Para pular a linha, escreva <code>\n</code> (barra invertida), sozinho ou no fim do texto. Sem ele, o próximo texto (ou o prompt) gruda.</li>
+  <li>Aceita textos e números (contas são feitas antes). <code>nil</code> e booleanos dão <code>bad argument</code>: converta com <code>tostring</code>.</li>
+  <li>Vários <code>io.write</code> seguidos montam uma linha em pedaços; é o jeito de escrever uma pergunta e esperar a resposta na mesma linha.</li>
+  <li>Para colunas e casas decimais: <code>io.write(string.format("...\n", ...))</code>.</li>
+  <li><code>print</code> para mostrar rápido; <code>io.write</code> para controlar cada caractere.</li>
+  <li><code>io.Write</code> → <code>attempt to call a nil value (field 'Write')</code>; <code>io:write</code> → <code>bad self</code>; <code>/n</code> não pula linha.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
