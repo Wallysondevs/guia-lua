@@ -1,0 +1,604 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua string.format — formatando textos | Guia Lua</title>
+<meta name="description" content="string.format do Lua para quem nunca programou: um molde com lacunas (%s, %d, %f), dinheiro com duas casas (%.2f), largura e alinhamento (%5.2f, %-10s, %05d), hexadecimal (%x), %q e %%, por que os acentos desalinham colunas, e os erros reais do Lua 5.5 (bad argument #2 to 'format': number has no integer representation, no value, number expected, invalid conversion).">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">string.format</span></h1>
+
+<p class="intro">Juntar textos com <code>..</code> funciona (veja <a href="concatenacao.html">Juntando Textos</a>), mas o preço sai <code>R$ 13.5</code> em vez de <code>R$ 13.50</code>, e as colunas de um recibo ficam tortas. O <code>string.format</code> ("formatar texto") resolve isso: você escreve um <strong>molde</strong> com lacunas marcadas por <code>%</code>, e ele preenche cada lacuna com um valor, do jeito que você pedir: com duas casas decimais, com largura fixa, com zeros à esquerda.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>Como funciona o molde: o texto, as lacunas (<code>%s</code>, <code>%d</code>, <code>%f</code>) e os valores que as preenchem.</li>
+  <li>Como mostrar dinheiro com <strong>duas casas decimais</strong>: <code>%.2f</code>.</li>
+  <li>Como fixar a <strong>largura</strong> e alinhar colunas: <code>%5d</code>, <code>%-10s</code>, <code>%8.2f</code>, <code>%05d</code>.</li>
+  <li>Outras lacunas úteis: <code>%x</code> (hexadecimal), <code>%q</code> (texto "entre aspas" para o Lua) e <code>%%</code> (o próprio símbolo de por cento).</li>
+  <li>Por que os <strong>acentos</strong> desalinham as colunas, e como contornar.</li>
+  <li>Os erros reais, a começar pelo mais comum: <code>%d</code> com um número quebrado.</li>
+</ul>
+</div>
+
+<p>Todos os programas desta aula rodaram no <strong>Lua 5.5</strong> da máquina da Ana (usuária <code>ana</code>, computador <code>notebook</code>), salvos na pasta pessoal dela e executados com <code>lua arquivo.lua</code> (veja <a href="executar.html">Rodando um Programa</a>). Você pode rodar cada um no editor do guia.</p>
+
+<hr>
+
+<h2>A ideia: um formulário com lacunas</h2>
+<p>Pense num formulário de papel: "Eu, <u>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</u>, de <u>&nbsp;&nbsp;&nbsp;&nbsp;</u> anos, declaro…". O texto já está impresso; você só preenche as lacunas, na ordem. E cada lacuna tem um tipo: numa vai um nome, na outra um número.</p>
+<p>O <code>string.format</code> é esse formulário. O primeiro valor que você passa é o <strong>molde</strong> (o texto com as lacunas); os outros são o que vai em cada lacuna, <strong>na ordem</strong>. Cada lacuna começa com <code>%</code> e termina com uma letra que diz o tipo: <code>%s</code> para texto (de <em>string</em>), <code>%d</code> para número inteiro (de <em>decimal</em>), <code>%f</code> para número com casas decimais (de <em>float</em>).</p>
+
+<hr>
+
+<h2>1. O primeiro molde</h2>
+
+<pre class="file" data-file="primeiro.lua">local nome = "Ana"
+local idade = 30
+local texto = string.format("%s tem %d anos.", nome, idade)
+print(texto)
+print(string.format("Total: R$ %.2f", 13.5))
+</pre>
+
+<pre class="term">$ lua primeiro.lua
+Ana tem 30 anos.
+Total: R$ 13.50</pre>
+
+<dl class="anatomy">
+  <dt>string.format(…)</dt><dd>A função <code>format</code> da biblioteca <code>string</code>, que já vem com o Lua. Ela <strong>devolve</strong> o texto pronto; quem mostra é o <code>print</code>. Por isso dá para guardar o resultado numa variável (<code>local texto = …</code>).</dd>
+  <dt>"%s tem %d anos."</dt><dd>O molde: o texto fixo, com duas lacunas.</dd>
+  <dt>%s</dt><dd>A 1ª lacuna, do tipo texto. É preenchida pelo 1º valor depois do molde: <code>nome</code>.</dd>
+  <dt>%d</dt><dd>A 2ª lacuna, do tipo número inteiro. Preenchida pelo 2º valor: <code>idade</code>.</dd>
+  <dt>%.2f</dt><dd>Número com casas decimais, com <strong>exatamente 2</strong> casas (o <code>.2</code>). O 13.5 virou <code>13.50</code>: é o jeito de mostrar dinheiro.</dd>
+</dl>
+
+<p>O molde e os valores são separados por <strong>vírgulas</strong>. Se o molde tem 3 lacunas, vêm 3 valores depois dele.</p>
+
+<hr>
+
+<h2>2. <code>%s</code>: qualquer valor como texto</h2>
+
+<pre class="file" data-file="s.lua">print(string.format("[%s]", "pão"))
+print(string.format("[%s] [%s] [%s]", 42, 4.5, true))
+print(string.format("[%s] [%s]", nil, {1} ~= nil))
+</pre>
+
+<pre class="term">$ lua s.lua
+[pão]
+[42] [4.5] [true]
+[nil] [true]</pre>
+
+<p>O <code>%s</code> aceita <strong>qualquer</strong> valor: ele o transforma em texto do mesmo jeito que o <code>tostring</code> (veja <a href="conversao.html">Conversão</a>). Até <code>true</code> e <code>nil</code>, que o <code>..</code> recusa (veja <a href="concatenacao.html">Juntando Textos</a>). Os colchetes do molde são só texto fixo, para enxergar onde cada valor começa e termina.</p>
+
+<hr>
+
+<h2>3. <code>%d</code>: números inteiros</h2>
+
+<pre class="file" data-file="d.lua">print(string.format("%d pães", 6))
+print(string.format("%d", 3.0))
+print(string.format("%d", "12"))
+print(string.format("%d", -7))
+</pre>
+
+<pre class="term">$ lua d.lua
+6 pães
+3
+12
+-7</pre>
+
+<ul>
+  <li><code>%d</code> mostra um número <strong>inteiro</strong>, sem casas decimais.</li>
+  <li><code>3.0</code> é um float (veja <a href="numeros.html">Números</a>), mas tem valor inteiro: o <code>%d</code> aceita e mostra <code>3</code>.</li>
+  <li>Um texto que parece número, como <code>"12"</code>, é convertido sozinho.</li>
+  <li>E se o número tiver casas decimais de verdade, como 7.5? Aí o <code>%d</code> <strong>não arredonda</strong>: o programa para com um erro. É o erro mais comum desta aula, e ele aparece na seção <a href="#errado">Quando dá errado</a>.</li>
+</ul>
+
+<hr>
+
+<h2>4. <code>%f</code> e as casas decimais</h2>
+
+<pre class="file" data-file="f.lua">local preco = 4.5
+print(string.format("%f", preco))
+print(string.format("%.2f", preco))
+print(string.format("%.1f", 7.25))
+print(string.format("%.0f", 7.6))
+print(string.format("%.2f", 10))
+print(string.format("%.2f", 1/3))
+</pre>
+
+<pre class="term">$ lua f.lua
+4.500000
+4.50
+7.2
+8
+10.00
+0.33</pre>
+
+<dl class="anatomy">
+  <dt>%f → 4.500000</dt><dd>Sem dizer quantas casas, o <code>%f</code> mostra <strong>seis</strong>. Quase nunca é o que se quer.</dd>
+  <dt>%.2f → 4.50</dt><dd>O ponto e o número entre o <code>%</code> e o <code>f</code> são a <strong>precisão</strong>: quantas casas depois da vírgula. Duas casas para dinheiro.</dd>
+  <dt>%.1f de 7.25 → 7.2</dt><dd>O número é <strong>arredondado</strong> para caber nas casas pedidas. (Por que 7.2 e não 7.3? O 7.25 está exatamente no meio do caminho, e nesse caso a regra é arredondar para o algarismo <strong>par</strong>; a caixa "Arredondamento" abaixo explica.)</dd>
+  <dt>%.0f de 7.6 → 8</dt><dd>Zero casas: arredonda para o inteiro mais próximo. Diferente do <code>%d</code>, o <code>%.0f</code> aceita qualquer número.</dd>
+  <dt>%.2f de 10 → 10.00</dt><dd>Um inteiro também serve: ganha as casas.</dd>
+  <dt>%.2f de 1/3 → 0.33</dt><dd>O 0.333333… ficou com 2 casas.</dd>
+</dl>
+
+<div class="warning">
+<strong>Arredondamento: o computador não é a calculadora da escola</strong>
+<p>Os floats são guardados em binário, e muitos números com casas decimais (como 2.675 ou 0.1) não têm representação exata; o que fica guardado é um número muito próximo, um pouquinho acima ou abaixo. E, quando o número está exatamente no meio, a regra é arredondar para o algarismo <strong>par</strong>. No lab:</p>
+<pre class="file" data-file="arred.lua">print(string.format("%.2f", 2.675))
+print(string.format("%.0f", 0.5), string.format("%.0f", 1.5), string.format("%.0f", 2.5))
+print(math.floor(7.5), string.format("%d", math.floor(7.5)))
+</pre>
+<pre class="term">$ lua arred.lua
+2.67
+0	2	2
+7	7</pre>
+<p>O 2.675 "de verdade" é um pouquinho menor que 2.675, por isso virou 2.67. E 0.5, 1.5 e 2.5 viraram 0, 2 e 2 (o par mais próximo). Para valores de dinheiro, isso quase nunca incomoda; para contas em que cada centavo importa, guarde os valores em <strong>centavos</strong>, como inteiros. O <code>math.floor</code> (veja <a href="math.html">A Biblioteca math</a>) corta as casas e dá um inteiro, que o <code>%d</code> aceita.</p>
+</div>
+
+<div class="trylua" data-goal="out:Total: R$ 13.50;;src:format">
+<p class="try-task"><strong>Missão:</strong> o programa mostra <code>Total: R$ 13.5</code>. Troque a concatenação por um <code>string.format</code> com <code>%.2f</code> para ele mostrar <code>Total: R$ 13.50</code>.</p>
+<pre class="script" data-file="main.lua">local total = 3 * 4.5
+print("Total: R$ " .. total)
+</pre>
+<pre class="solucao" data-file="main.lua">local total = 3 * 4.5
+print(string.format("Total: R$ %.2f", total))
+</pre>
+</div>
+
+<hr>
+
+<h2>5. Largura e alinhamento</h2>
+<p>Um número entre o <code>%</code> e a letra é a <strong>largura</strong>: o espaço mínimo, em caracteres, que o valor vai ocupar. O que faltar é completado com espaços. É isso que permite alinhar colunas.</p>
+
+<pre class="file" data-file="largura.lua">print(string.format("[%5d]", 42))
+print(string.format("[%-5d]", 42))
+print(string.format("[%05d]", 42))
+print(string.format("[%8.2f]", 4.5))
+print(string.format("[%5.2f]", 4.5))
+print(string.format("[%10s]", "pão"))
+print(string.format("[%-10s]", "pao"))
+print(string.format("[%5.2f]", 1234.567))
+</pre>
+
+<pre class="term">$ lua largura.lua
+[   42]
+[42   ]
+[00042]
+[    4.50]
+[ 4.50]
+[      pão]
+[pao       ]
+[1234.57]</pre>
+
+<dl class="anatomy">
+  <dt>%5d → [   42]</dt><dd>Largura 5: três espaços e o 42, encostado à <strong>direita</strong>. Números alinhados à direita ficam com as unidades uma embaixo da outra.</dd>
+  <dt>%-5d → [42   ]</dt><dd>O <strong>sinal de menos</strong> alinha à <strong>esquerda</strong>: o valor primeiro, os espaços depois.</dd>
+  <dt>%05d → [00042]</dt><dd>Um <strong>zero</strong> antes da largura completa com zeros em vez de espaços. Bom para códigos de pedido, notas fiscais, horas (<code>%02d:%02d</code>).</dd>
+  <dt>%8.2f → [    4.50]</dt><dd>Largura e precisão juntas: 8 caracteres no total, contando o ponto e as 2 casas.</dd>
+  <dt>%5.2f → [ 4.50]</dt><dd>5 no total: um espaço e <code>4.50</code> (4 caracteres).</dd>
+  <dt>%10s → [      pão]</dt><dd>Para textos, a mesma ideia. Mas conte: o <code>pão</code> ganhou só 6 espaços, e não 7. A largura conta <strong>bytes</strong>, e o <code>ã</code> ocupa 2 (veja a seção 6).</dd>
+  <dt>%-10s → [pao       ]</dt><dd>Texto alinhado à esquerda, o normal para a coluna de nomes.</dd>
+  <dt>%5.2f de 1234.567 → [1234.57]</dt><dd>A largura é um <strong>mínimo</strong>: se o valor não couber, ele não é cortado; a coluna é que fica mais larga.</dd>
+</dl>
+
+<h3>Um recibo alinhado</h3>
+
+<pre class="file" data-file="recibo.lua">print(string.format("%-12s %3s %8s", "Item", "Qtd", "Total"))
+print(string.format("%-12s %3d %8.2f", "Pao frances", 6, 6 * 0.75))
+print(string.format("%-12s %3d %8.2f", "Leite", 2, 2 * 5.9))
+print(string.format("%-12s %3d %8.2f", "Cafe", 1, 1 * 18.5))
+</pre>
+
+<pre class="term">$ lua recibo.lua
+Item         Qtd    Total
+Pao frances    6     4.50
+Leite          2    11.80
+Cafe           1    18.50</pre>
+
+<p>O mesmo molde nas três linhas de itens: nome com 12 caracteres à esquerda, quantidade com 3 à direita, total com 8 e 2 casas. O cabeçalho usa as mesmas larguras, com <code>%s</code>. O resultado é uma tabela alinhada, coisa que o <code>\t</code> (veja <a href="strings-escape.html">Caracteres de Escape</a>) não garante. Quando você aprender a repetir com <code>for</code> (<a href="for-numerico.html">for Numérico</a> e <a href="ipairs.html">ipairs</a>), uma linha só dentro do laço fará o recibo inteiro.</p>
+
+<hr>
+
+<h2>6. Acentos desalinham as colunas</h2>
+<p>O recibo acima foi escrito sem acentos de propósito. Com acentos:</p>
+
+<pre class="file" data-file="recibo_acento.lua">print(string.format("%-12s %3d %8.2f", "Pão francês", 6, 4.5))
+print(string.format("%-12s %3d %8.2f", "Leite", 2, 11.8))
+print(string.format("%-12s %3d %8.2f", "Café", 1, 18.5))
+print(#"Pão francês", utf8.len("Pão francês"))
+</pre>
+
+<pre class="term">$ lua recibo_acento.lua
+Pão francês   6     4.50
+Leite          2    11.80
+Café          1    18.50
+13	11</pre>
+
+<p>As linhas com acento ficaram uma coluna para a esquerda (a de "Pão francês" até duas, mas ela já passava das 12 de largura). O motivo é o mesmo do <code>#</code> (veja <a href="operador-tamanho.html">O Operador de Tamanho</a>): o <code>string.format</code> conta <strong>bytes</strong>, e cada letra com acento ocupa 2. "Pão francês" tem 11 letras, mas 13 bytes. Para alinhar textos com acento, complete os espaços você mesmo, contando as letras com <code>utf8.len</code>:</p>
+
+<pre class="file" data-file="recibo_utf8.lua">local function coluna(texto, largura)
+  return texto .. string.rep(" ", largura - utf8.len(texto))
+end
+print(coluna("Pão francês", 12) .. string.format(" %3d %8.2f", 6, 4.5))
+print(coluna("Leite", 12) .. string.format(" %3d %8.2f", 2, 11.8))
+print(coluna("Café", 12) .. string.format(" %3d %8.2f", 1, 18.5))
+</pre>
+
+<pre class="term">$ lua recibo_utf8.lua
+Pão francês    6     4.50
+Leite          2    11.80
+Café           1    18.50</pre>
+
+<p>A função <code>coluna</code> (funções têm aula própria: <a href="funcoes.html">Funções</a>) acrescenta ao texto quantos espaços faltam para chegar à largura, contando <strong>letras</strong>. O <code>string.rep(" ", n)</code> repete o espaço <code>n</code> vezes (veja <a href="string-metodos.html">Funções de Texto</a>). Os números continuam com o <code>string.format</code>, que para eles funciona bem.</p>
+
+<hr>
+
+<h2>7. Outras lacunas: <code>%x</code>, <code>%q</code>, <code>%%</code>…</h2>
+
+<h3><code>%x</code>: hexadecimal</h3>
+<pre class="file" data-file="hex.lua">print(string.format("%x", 255))
+print(string.format("%X", 255))
+print(string.format("%#x", 255))
+print(string.format("#%02X%02X%02X", 255, 136, 0))
+print(string.format("%o", 8))
+</pre>
+<pre class="term">$ lua hex.lua
+ff
+FF
+0xff
+#FF8800
+10</pre>
+<p><code>%x</code> mostra um inteiro em hexadecimal (base 16; veja <a href="operadores-bits.html">Operadores de Bits</a>), com letras minúsculas; <code>%X</code>, com maiúsculas; <code>%#x</code> põe o <code>0x</code> na frente. A quarta linha monta o código de uma cor para páginas da internet: cada parte com 2 algarismos (<code>%02X</code>). O <code>%o</code> é a base 8 (octal), rara hoje.</p>
+
+<h3><code>%q</code>: o texto "como o Lua escreveria"</h3>
+<pre class="file" data-file="q.lua">print(string.format("%q", "Ana"))
+print(string.format("%q", 'Ela disse "oi"'))
+print(string.format("%q", "linha 1\nlinha 2"))
+print(string.format("%q", 42))
+print(string.format("%q", 0.5))
+print(string.format("%q", "tab\taqui"))
+</pre>
+<pre class="term">$ lua q.lua
+"Ana"
+"Ela disse \"oi\""
+"linha 1\
+linha 2"
+42
+0x1p-1
+"tab\9aqui"</pre>
+<p>O <code>%q</code> (de <em>quoted</em>, "entre aspas") escreve o valor do jeito que ele teria de ser escrito <strong>num programa Lua</strong>: com as aspas, com <code>\"</code> nas aspas de dentro, com a quebra de linha como <code>\</code> no fim da linha (veja <a href="strings-escape.html">Caracteres de Escape</a>) e a tabulação como <code>\9</code>. Os floats saem em hexadecimal (<code>0x1p-1</code> é 0.5), para não perder nenhuma casa. Serve para gravar dados num arquivo que depois vai ser lido de volta pelo Lua (veja <a href="load.html">load, loadfile e dofile</a>), e para enxergar caracteres invisíveis num texto. Não é para mostrar ao usuário.</p>
+
+<h3><code>%%</code>: o símbolo de por cento</h3>
+<pre class="file" data-file="porcento.lua">print(string.format("Desconto de %d%%", 10))
+</pre>
+<pre class="term">$ lua porcento.lua
+Desconto de 10%</pre>
+<p>Como o <code>%</code> começa uma lacuna, para mostrar o símbolo de verdade escreva <strong>dois</strong>: <code>%%</code>. Um <code>%</code> sozinho dá erro (veja <a href="#errado">Quando dá errado</a>).</p>
+
+<h3>As raras</h3>
+<pre class="file" data-file="outros.lua">print(string.format("%e", 1234.5))
+print(string.format("%g", 1234.5), string.format("%g", 0.0001), string.format("%g", 1e20))
+print(string.format("%c%c%c", 65, 110, 97))
+print(string.format("%i", 42))
+</pre>
+<pre class="term">$ lua outros.lua
+1.234500e+03
+1234.5	0.0001	1e+20
+Ana
+42</pre>
+<p><code>%e</code> é a notação científica (1.2345 × 10³); <code>%g</code> escolhe sozinho entre a normal e a científica, sem zeros sobrando; <code>%c</code> transforma um número de byte no caractere (65 = A); <code>%i</code> é um sinônimo de <code>%d</code>.</p>
+
+<hr>
+
+<h2 id="formas">Formas diferentes de fazer a mesma coisa</h2>
+
+<pre class="file" data-file="metodo.lua">local molde = "%s comprou %d itens"
+print(molde:format("Ana", 3))
+print(("%.2f"):format(4.5))
+print(string.format("Sem lacunas"))
+print(string.format("%s", "Ana", "extra"))
+</pre>
+
+<pre class="term">$ lua metodo.lua
+Ana comprou 3 itens
+4.50
+Sem lacunas
+Ana</pre>
+
+<dl class="anatomy">
+  <dt>molde:format("Ana", 3)</dt><dd>O mesmo <code>string.format</code>, escrito com dois-pontos: o molde vem antes do <code>:</code> (como em <code>nome:upper()</code>; veja <a href="strings.html">Strings</a>). Bom quando o molde está numa variável.</dd>
+  <dt>("%.2f"):format(4.5)</dt><dd>Com o molde escrito direto, os <strong>parênteses</strong> em volta dele são obrigatórios.</dd>
+  <dt>string.format("Sem lacunas")</dt><dd>Molde sem lacunas: devolve o próprio texto.</dd>
+  <dt>"%s", "Ana", "extra"</dt><dd>Valores <strong>a mais</strong> são ignorados, sem aviso. Valores <strong>a menos</strong> são erro.</dd>
+</dl>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Situação</th><th>Qual usar</th></tr>
+<tr><td>Juntar poucos textos: <code>"Olá, " .. nome</code></td><td><code>..</code></td></tr>
+<tr><td>Números com casas decimais fixas, largura, zeros à esquerda, alinhamento</td><td><code>string.format</code></td></tr>
+<tr><td>Uma frase com muitos valores no meio</td><td><code>string.format</code>: o molde mostra a frase inteira de uma vez</td></tr>
+<tr><td>O molde está numa variável</td><td><code>molde:format(…)</code></td></tr>
+<tr><td>Colunas com textos acentuados</td><td>Espaços contados com <code>utf8.len</code> (seção 6)</td></tr>
+<tr><td>Vírgula decimal (13,50)</td><td><code>string.format("%.2f", v):gsub("%.", ",")</code> (abaixo)</td></tr>
+</table>
+</div>
+
+<div class="note">
+<strong>E a vírgula decimal do Brasil?</strong>
+<p>O <code>string.format</code> usa ponto. O jeito simples e seguro é trocar o ponto pela vírgula depois, com o <code>gsub</code> (aula <a href="gsub.html">Substituindo</a>; o <code>%.</code> quer dizer "um ponto de verdade"):</p>
+<pre class="file" data-file="virgula.lua">local total = 13.5
+local texto = string.format("%.2f", total)
+print(texto)
+print((texto:gsub("%.", ",")))
+</pre>
+<pre class="term">$ lua virgula.lua
+13.50
+13,50</pre>
+<p>Existe outro caminho, o <code>os.setlocale("")</code>, que põe o programa no idioma do sistema (o pt_BR, na máquina da Ana). Mas ele muda <strong>todas</strong> as conversões de número, inclusive o <code>print</code> e o <code>tonumber</code>:</p>
+<pre class="file" data-file="locale.lua">print(string.format("%.2f", 13.5))
+print(os.setlocale(""))
+print(string.format("%.2f", 13.5))
+print(tonumber("13.5"), tonumber("13,5"))
+</pre>
+<pre class="term">$ lua locale.lua
+13.50
+pt_BR.UTF-8
+13,50
+13,5	13,5</pre>
+<p>Depois do <code>setlocale</code>, até o <code>print</code> de um número saiu com vírgula, e o <code>tonumber("13,5")</code> passou a funcionar. Isso pode quebrar um programa que lê arquivos com ponto, e o resultado depende do computador de quem roda. Prefira o <code>gsub</code>. (Datas em português, com <code>os.setlocale</code>, aparecem em <a href="os-date-time.html">Datas e Horas</a>.)</p>
+</div>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+<p>Os erros do <code>string.format</code> têm sempre o mesmo formato: <code>bad argument #N to 'format' (…)</code>, "argumento ruim número N para a <code>format</code>". O <strong>N</strong> conta o molde como argumento #1: o argumento #2 é o primeiro valor, o #3 é o segundo, e assim por diante.</p>
+
+<div class="cenario">
+<strong><code>%d</code> com um número quebrado</strong>
+<pre class="file" data-file="erro_d.lua">local media = 7.5
+print(string.format("Média: %d", media))
+</pre>
+<pre class="term">$ lua erro_d.lua
+lua: erro_d.lua:2: bad argument #2 to 'format' (number has no integer representation)
+stack traceback:
+	[C]: in field 'format'
+	erro_d.lua:2: in main chunk
+	[C]: in ?
+$ echo $?
+1</pre>
+<p>Linha por linha:</p>
+<dl class="anatomy">
+  <dt>lua: erro_d.lua:2:</dt><dd>O erro aconteceu na linha 2.</dd>
+  <dt>bad argument #2 to 'format'</dt><dd>"Argumento ruim, o número 2, para a <code>format</code>". O #1 é o molde; o #2 é o <code>media</code>.</dd>
+  <dt>(number has no integer representation)</dt><dd>"O número não tem representação inteira": o <code>%d</code> pede um inteiro, e 7.5 não é. O Lua não arredonda nem corta: ele para.</dd>
+  <dt>[C]: in field 'format'</dt><dd>A primeira linha do rastro diz que o erro foi dentro da função <code>format</code>, que é escrita em C (por isso o <code>[C]</code>), chamada pela linha 2 do programa principal. Mais em <a href="erros.html">Lendo uma Mensagem de Erro</a>.</dd>
+  <dt>echo $? → 1</dt><dd>O programa terminou com erro.</dd>
+</dl>
+<p>Esse erro costuma aparecer com o resultado de uma divisão com <code>/</code>, que é sempre float (<code>15 / 2</code> = 7.5; veja <a href="divisao.html">Divisão</a>), ou com uma média. <strong>Como consertar</strong>, dependendo do que você quer:</p>
+<ul>
+  <li>mostrar as casas: <code>%.1f</code> ou <code>%.2f</code>;</li>
+  <li>arredondar: <code>%.0f</code>;</li>
+  <li>cortar as casas: <code>string.format("%d", math.floor(media))</code>;</li>
+  <li>mostrar do jeito que o Lua mostraria: <code>%s</code>.</li>
+</ul>
+<div class="note">
+<strong>Em outras versões</strong>
+<p>O Lua 5.4 dá o mesmo erro (com o rastro dizendo <code>[C]: in function 'string.format'</code>). O Lua 5.1 e o LuaJIT <strong>cortam</strong> as casas sem avisar:</p>
+<pre class="term">$ lua5.1 -e 'print(string.format("%d", 7.5))'
+7
+$ luajit -e 'print(string.format("%d", 7.5))'
+7
+$ lua5.4 -e 'print(string.format("%d", 7.5))'
+lua5.4: (command line):1: bad argument #2 to 'format' (number has no integer representation)
+stack traceback:
+	[C]: in function 'string.format'
+	(command line):1: in main chunk
+	[C]: in ?</pre>
+<p>Um programa escrito para o LuaJIT (um plugin do Neovim, um jogo no LÖVE) pode quebrar no 5.5 por causa disso. Veja <a href="versoes.html">Lua 5.1, LuaJIT, 5.4 e 5.5</a>.</p>
+</div>
+</div>
+
+<div class="trylua" data-goal="out:Média: 7.5;;semerro">
+<p class="try-task"><strong>Missão:</strong> este programa para com <code>number has no integer representation</code>. Troque a lacuna <code>%d</code> por uma que aceite casas decimais, para ele mostrar <code>Média: 7.5</code>.</p>
+<pre class="script" data-file="main.lua">local nota1, nota2 = 8, 7
+local media = (nota1 + nota2) / 2
+print(string.format("Média: %d", media))
+</pre>
+<pre class="solucao" data-file="main.lua">local nota1, nota2 = 8, 7
+local media = (nota1 + nota2) / 2
+print(string.format("Média: %.1f", media))
+</pre>
+</div>
+
+<div class="cenario">
+<strong>Faltou um valor</strong>
+<pre class="file" data-file="erro_falta.lua">print(string.format("%s tem %d anos", "Ana"))
+</pre>
+<pre class="term">$ lua erro_falta.lua
+lua: erro_falta.lua:1: bad argument #3 to 'format' (no value)
+stack traceback:
+	[C]: in field 'format'
+	erro_falta.lua:1: in main chunk
+	[C]: in ?</pre>
+<p>"Argumento #3: sem valor". O molde tem 2 lacunas, mas só 1 valor veio depois dele. O #3 seria a idade. <strong>Como consertar:</strong> conte as lacunas e os valores; precisam ser iguais.</p>
+</div>
+
+<div class="cenario">
+<strong>Texto (ou <code>nil</code>) numa lacuna de número</strong>
+<pre class="file" data-file="erro_texto.lua">print(string.format("%d itens", "três"))
+</pre>
+<pre class="term">$ lua erro_texto.lua
+lua: erro_texto.lua:1: bad argument #2 to 'format' (number expected, got string)
+stack traceback:
+	[C]: in field 'format'
+	erro_texto.lua:1: in main chunk
+	[C]: in ?</pre>
+<p>"Era esperado um número, veio uma string". O <code>%d</code> e o <code>%f</code> convertem textos como <code>"12"</code>, mas <code>"três"</code> não é número. Com <code>%.2f</code> e <code>"abc"</code>, a mensagem é a mesma. Com uma variável sem valor:</p>
+<pre class="file" data-file="erro_nil.lua">local quantidade
+print(string.format("%d itens", quantidade))
+</pre>
+<pre class="term">$ lua erro_nil.lua
+lua: erro_nil.lua:2: bad argument #2 to 'format' (number expected, got nil)
+stack traceback:
+	[C]: in field 'format'
+	erro_nil.lua:2: in main chunk
+	[C]: in ?</pre>
+<p>(Com uma tabela, sai <code>got table</code>.) <strong>Como consertar:</strong> confira se a variável tem valor e se é número; para mostrar qualquer coisa, use <code>%s</code>, que aceita tudo.</p>
+</div>
+
+<div class="cenario">
+<strong>Um <code>%</code> sozinho, ou uma letra que não existe</strong>
+<pre class="file" data-file="erro_conv.lua">print(string.format("Desconto de 10%"))
+</pre>
+<pre class="term">$ lua erro_conv.lua
+lua: erro_conv.lua:1: bad argument #2 to 'format' (no value)
+stack traceback:
+	[C]: in field 'format'
+	erro_conv.lua:1: in main chunk
+	[C]: in ?</pre>
+<p>O <code>%</code> do fim foi entendido como o começo de uma lacuna, e o Lua foi procurar o valor dela. A mensagem fala em valor que falta, mas a causa é o <code>%</code>. <strong>Como consertar:</strong> <code>%%</code>. E com uma letra que não é tipo de lacuna:</p>
+<pre class="file" data-file="erro_conv2.lua">print(string.format("%y", 1))
+</pre>
+<pre class="term">$ lua erro_conv2.lua
+lua: erro_conv2.lua:1: invalid conversion '%y' to 'format'
+stack traceback:
+	[C]: in field 'format'
+	erro_conv2.lua:1: in main chunk
+	[C]: in ?</pre>
+<p>"Conversão inválida <code>%y</code>": não existe lacuna <code>%y</code>. Confira a letra na <a href="#referencia">referência</a> abaixo.</p>
+</div>
+
+<hr>
+
+<h2 id="referencia">Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Lacuna</th><th>Para</th><th>Exemplo</th><th>Resultado</th></tr>
+<tr><td><code>%s</code></td><td>qualquer valor, como texto</td><td><code>("%s"):format(true)</code></td><td><code>true</code></td></tr>
+<tr><td><code>%d</code> (ou <code>%i</code>)</td><td>inteiro</td><td><code>("%d"):format(6)</code></td><td><code>6</code></td></tr>
+<tr><td><code>%f</code></td><td>float, 6 casas</td><td><code>("%f"):format(4.5)</code></td><td><code>4.500000</code></td></tr>
+<tr><td><code>%.2f</code></td><td>float, 2 casas (arredonda)</td><td><code>("%.2f"):format(4.5)</code></td><td><code>4.50</code></td></tr>
+<tr><td><code>%5d</code></td><td>largura 5, à direita</td><td><code>("[%5d]"):format(42)</code></td><td><code>[   42]</code></td></tr>
+<tr><td><code>%-5d</code>, <code>%-10s</code></td><td>largura, à esquerda</td><td><code>("[%-5d]"):format(42)</code></td><td><code>[42   ]</code></td></tr>
+<tr><td><code>%05d</code></td><td>zeros à esquerda</td><td><code>("%05d"):format(42)</code></td><td><code>00042</code></td></tr>
+<tr><td><code>%8.2f</code></td><td>largura 8, 2 casas</td><td><code>("[%8.2f]"):format(4.5)</code></td><td><code>[    4.50]</code></td></tr>
+<tr><td><code>%x</code>, <code>%X</code>, <code>%#x</code></td><td>hexadecimal</td><td><code>("%x"):format(255)</code></td><td><code>ff</code></td></tr>
+<tr><td><code>%q</code></td><td>valor escrito como no código Lua</td><td><code>("%q"):format('a"b')</code></td><td><code>"a\"b"</code></td></tr>
+<tr><td><code>%e</code>, <code>%g</code></td><td>notação científica / automática</td><td><code>("%e"):format(1234.5)</code></td><td><code>1.234500e+03</code></td></tr>
+<tr><td><code>%c</code></td><td>caractere pelo número do byte</td><td><code>("%c"):format(65)</code></td><td><code>A</code></td></tr>
+<tr><td><code>%%</code></td><td>o símbolo <code>%</code></td><td><code>("10%%"):format()</code></td><td><code>10%</code></td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Mensagem</th><th>Causa provável</th></tr>
+<tr><td><code>bad argument #N to 'format' (number has no integer representation)</code></td><td><code>%d</code> com número quebrado: use <code>%.1f</code>, <code>%.0f</code> ou <code>math.floor</code></td></tr>
+<tr><td><code>bad argument #N to 'format' (no value)</code></td><td>Faltou valor para uma lacuna, ou um <code>%</code> sozinho (use <code>%%</code>)</td></tr>
+<tr><td><code>bad argument #N to 'format' (number expected, got string)</code></td><td>Texto que não é número numa lacuna <code>%d</code>/<code>%f</code></td></tr>
+<tr><td><code>bad argument #N to 'format' (number expected, got nil)</code></td><td>Variável sem valor numa lacuna de número</td></tr>
+<tr><td><code>invalid conversion '%y' to 'format'</code></td><td>Letra de lacuna que não existe</td></tr>
+<tr><td>Colunas tortas com acentos</td><td>A largura conta bytes: complete com espaços usando <code>utf8.len</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. Complete as lacunas</h3>
+<p>Complete o molde para mostrar <code>Ana comprou 3 pães por R$ 2.25</code>:</p>
+<div class="ex-code">string.format("%s comprou <input data-answer="%d|%i" aria-label="lacuna da quantidade"> pães por R$ <input data-answer="%.2f" aria-label="lacuna do preço">", "Ana", 3, 2.25)</div>
+</div>
+
+<div class="exercise">
+<h3>2. O que aparece?</h3>
+<p>Escreva exatamente o que cada linha mostra (sem os colchetes, mas com os espaços e zeros).</p>
+<div class="ex-code"><code>("%03d"):format(7)</code> → <input data-answer="007" aria-label="03d de 7"><br><code>("%.1f"):format(2.5)</code> → <input data-answer="2.5" aria-label="ponto 1 f de 2.5"><br><code>("%.2f"):format(3)</code> → <input data-answer="3.00" aria-label="ponto 2 f de 3"></div>
+</div>
+
+<div class="mc" data-answer="3">
+<p class="mc-q">3. O que acontece com <code>string.format("%d", 9.9)</code> no Lua 5.5?</p>
+<label><input type="radio" name="q3"> Mostra <code>9</code></label>
+<label><input type="radio" name="q3"> Mostra <code>10</code></label>
+<label><input type="radio" name="q3"> Para com <code>number has no integer representation</code></label>
+<label><input type="radio" name="q3"> Mostra <code>9.9</code></label>
+</div>
+
+<div class="mc" data-answer="1">
+<p class="mc-q">4. Qual molde mostra <code>50%</code> a partir do número 50?</p>
+<label><input type="radio" name="q4"> <code>"%d%%"</code></label>
+<label><input type="radio" name="q4"> <code>"%d%"</code></label>
+<label><input type="radio" name="q4"> <code>"%%d"</code></label>
+<label><input type="radio" name="q4"> <code>"%d\%"</code></label>
+</div>
+
+<div class="mc" data-answer="4">
+<p class="mc-q">5. A mensagem é <code>bad argument #3 to 'format' (no value)</code> para <code>string.format("%s: %d", "Ana")</code>. O que falta?</p>
+<label><input type="radio" name="q5"> O molde</label>
+<label><input type="radio" name="q5"> O nome</label>
+<label><input type="radio" name="q5"> Um <code>%%</code></label>
+<label><input type="radio" name="q5"> O valor da lacuna <code>%d</code></label>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">6. Qual lacuna alinha um nome à <strong>esquerda</strong>, numa coluna de 10?</p>
+<label><input type="radio" name="q6"> <code>%10s</code></label>
+<label><input type="radio" name="q6"> <code>%-10s</code></label>
+<label><input type="radio" name="q6"> <code>%010s</code></label>
+<label><input type="radio" name="q6"> <code>%s10</code></label>
+</div>
+
+<h3>Missão final: a etiqueta do pedido</h3>
+
+<div class="trylua" data-goal="out:Pedido 00042: 3 x pão = R$ 13.50;;src:%05d">
+<p class="try-task"><strong>Missão:</strong> a padaria imprime uma etiqueta para cada pedido. Hoje sai <code>Pedido 42: 3 x pão = R$ 13.5</code>. Reescreva com <code>string.format</code> para sair <code>Pedido 00042: 3 x pão = R$ 13.50</code>: o número do pedido com 5 algarismos (<code>%05d</code>) e o total com 2 casas.</p>
+<pre class="script" data-file="main.lua">local pedido = 42
+local quantidade = 3
+local item = "pão"
+local preco = 4.5
+print("Pedido " .. pedido .. ": " .. quantidade .. " x " .. item .. " = R$ " .. quantidade * preco)
+</pre>
+<pre class="solucao" data-file="main.lua">local pedido = 42
+local quantidade = 3
+local item = "pão"
+local preco = 4.5
+print(string.format("Pedido %05d: %d x %s = R$ %.2f", pedido, quantidade, item, quantidade * preco))
+</pre>
+</div>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li><code>string.format(molde, v1, v2, …)</code> devolve o molde com cada lacuna <code>%…</code> preenchida pelos valores, na ordem.</li>
+  <li><code>%s</code>: qualquer valor como texto. <code>%d</code>: inteiro. <code>%f</code>: float; <code>%.2f</code>: com 2 casas, arredondando.</li>
+  <li>Largura: <code>%5d</code> (à direita), <code>%-10s</code> (à esquerda), <code>%05d</code> (zeros), <code>%8.2f</code> (largura e casas). A largura conta <strong>bytes</strong>: acentos desalinham.</li>
+  <li><code>%x</code> hexadecimal, <code>%q</code> valor escrito como no código Lua, <code>%%</code> o símbolo de por cento.</li>
+  <li><code>%d</code> com número quebrado (7.5) para o programa com <code>bad argument #2 to 'format' (number has no integer representation)</code>; o #2 é o primeiro valor depois do molde.</li>
+  <li>Para a vírgula decimal, troque depois: <code>("%.2f"):format(v):gsub("%.", ",")</code>.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
