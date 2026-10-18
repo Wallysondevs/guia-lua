@@ -1,0 +1,499 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua Sequências e Buracos — o nil no meio da lista | Guia Lua</title>
+<meta name="description" content="Sequências e buracos no Lua 5.5 para quem está começando: o que é uma sequência, por que um nil no meio da lista vira um buraco, a borda e o operador # que pode responder números diferentes (o mesmo código deu 2 no Lua 5.5 e 4 no 5.4), o ipairs que para no buraco, como remover sem furar a lista (table.remove), como guardar o nada (false ou um contador n, table.pack), e os erros reais, com missões no editor.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">Sequências e Buracos</span></h1>
+
+<p class="intro">Até aqui, toda lista que você fez estava "cheia": item 1, item 2, item 3, sem falhas. O Lua chama uma lista assim de <strong>sequência</strong>, e é com ela que o <code>#</code>, o <code>ipairs</code>, o <code>table.insert</code> e o <code>table.concat</code> funcionam direito. Esta aula mostra o que acontece quando aparece um <code>nil</code> no meio, um <strong>buraco</strong>: o <code>#</code> passa a poder responder números diferentes, o <code>ipairs</code> para antes da hora, e erros estranhos aparecem. E, claro, como evitar tudo isso.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O que é uma <strong>sequência</strong> e o que é um <strong>buraco</strong>.</li>
+  <li>O que é a <strong>borda</strong> de uma tabela, e por que o <code>#</code> de uma lista com buracos não tem resposta certa.</li>
+  <li>Que o <code>ipairs</code> para no primeiro buraco.</li>
+  <li>A remover um item sem furar a lista: <code>table.remove</code>.</li>
+  <li>A guardar "nada" numa lista: com <code>false</code> ou com um contador <code>n</code> (como o do <code>table.pack</code>).</li>
+  <li>Os erros reais que um buraco provoca.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>A ideia: as cadeiras numeradas</h2>
+<p>Pense numa fileira de cadeiras numeradas no cinema: 1, 2, 3, 4. Se todas estão ocupadas, contar quantas pessoas há na fileira é fácil: vá até a primeira cadeira vazia e pare. Agora imagine que a pessoa da cadeira 2 saiu, e as outras ficaram no lugar. Quantas pessoas há "na fileira"? Se você para na primeira cadeira vazia, conta 1. Se olha até a última ocupada, conta até 4. As duas respostas fazem algum sentido, e nenhuma é a "certa".</p>
+
+<p>No Lua, a lista é a fileira, e <code>nil</code> é a cadeira vazia. Guardar <code>nil</code> numa posição é o mesmo que <strong>não guardar nada</strong> lá: a cadeira fica vazia.</p>
+
+<hr>
+
+<h2>1. A sequência: a lista sem buracos</h2>
+<p>Uma <strong>sequência</strong> é uma tabela em que as posições 1, 2, 3… até um número <code>n</code> têm valor, e daí em diante não há mais nada. Nela o <code>#</code> responde <code>n</code>, sem dúvida nenhuma:</p>
+
+<pre class="file" data-file="sequencia.lua">local fila = {"Ana", "Bia", "Caio", "Davi"}
+print(#fila)
+for i = 1, #fila do
+  print(i, fila[i])
+end
+print(fila[5])
+</pre>
+
+<pre class="term">$ lua sequencia.lua
+4
+1	Ana
+2	Bia
+3	Caio
+4	Davi
+nil
+</pre>
+
+<p>As posições 1 a 4 estão ocupadas, a 5 não (<code>fila[5]</code> é <code>nil</code>). É uma sequência: <code>#fila</code> é 4. Todas as listas das aulas anteriores eram sequências.</p>
+
+<hr>
+
+<h2>2. O buraco e a borda</h2>
+<p>Agora uma lista com um <code>nil</code> no meio:</p>
+
+<pre class="file" data-file="borda.lua">local t = {10, 20, 30, nil, 50}
+print(t[1], t[2], t[3], t[4], t[5], t[6])
+print(#t)
+</pre>
+
+<p>A posição 4 é um buraco. Para entender o que o <code>#</code> faz aqui, o manual do Lua usa a palavra <strong>borda</strong> (<em>border</em>):</p>
+
+<div class="note">
+<strong>Borda</strong>
+<p>Uma <strong>borda</strong> é uma posição <strong>com valor</strong> que é seguida de uma posição <strong>sem valor</strong> (ou o 0, se a posição 1 estiver vazia). Na tabela acima, a posição 3 tem valor e a 4 não: 3 é uma borda. A 5 tem valor e a 6 não: 5 também é uma borda. Uma <strong>sequência</strong> é uma tabela com <strong>uma borda só</strong>. E a regra do manual é esta: <em>quando a tabela não é uma sequência, <code>#t</code> pode devolver <strong>qualquer uma</strong> das bordas.</em></p>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Posição</th><th>1</th><th>2</th><th>3</th><th>4</th><th>5</th><th>6</th></tr>
+<tr><td>Valor</td><td><code>10</code></td><td><code>20</code></td><td><code>30</code></td><td><code>nil</code></td><td><code>50</code></td><td><code>nil</code></td></tr>
+<tr><td>É borda?</td><td></td><td></td><td><strong>sim</strong> (3 tem, 4 não)</td><td></td><td><strong>sim</strong> (5 tem, 6 não)</td><td></td></tr>
+</table>
+</div>
+
+<p>Então o <code>#t</code> pode dar 3 ou 5. Qual dos dois sai depende de como o Lua guardou a tabela por dentro, e isso muda de uma versão para outra. No laboratório, o mesmo arquivo rodado no Lua 5.5 e no 5.4:</p>
+
+<pre class="term">$ lua borda.lua
+10	20	30	nil	50	nil
+3
+$ lua5.4 borda.lua
+10	20	30	nil	50	nil
+5
+</pre>
+
+<p>Os valores guardados são os mesmos (primeira linha), mas o 5.5 respondeu 3 e o 5.4 respondeu 5. <strong>Os dois estão certos</strong>: os dois devolveram uma borda. Mais alguns casos, cada um criado de um jeito:</p>
+
+<pre class="file" data-file="buracos.lua">local a = {10, 20, nil, 40}
+print("a:", #a)
+local c = {10, 20, 30, 40, 50}
+c[3] = nil
+print("c:", #c)
+local d = {}
+d[1] = 10
+d[2] = 20
+d[4] = 40
+print("d:", #d)
+</pre>
+
+<pre class="term">$ lua buracos.lua
+a:	2
+c:	2
+d:	2
+$ lua5.4 buracos.lua
+a:	4
+c:	5
+d:	4
+</pre>
+
+<p>De novo, respostas diferentes, e todas são bordas. Por isso esta aula <strong>não</strong> vai dizer "o <code>#</code> de uma lista com buraco dá tal número". No seu computador, com outra versão ou com a tabela montada de outro jeito, pode sair outra borda. A única coisa garantida é esta:</p>
+
+<div class="warning">
+<strong>Lista com buraco: não confie no <code>#</code></strong>
+<p>Com um <code>nil</code> no meio, o <code>#</code> devolve uma borda qualquer. Um programa que depende do <code>#</code> numa lista com buracos pode funcionar hoje e falhar amanhã, numa versão nova do Lua ou depois de uma mudança pequena no código. A solução não é adivinhar a borda: é <strong>não fazer buracos</strong> (seção 4) ou <strong>guardar o tamanho você mesmo</strong> (seção 5).</p>
+</div>
+
+<div class="tip">
+<strong><code>nil</code> no fim não é buraco</strong>
+<p>Na tabela <code>{1, 2, 3, nil}</code>, o <code>nil</code> está no fim: depois do 3 não há mais nada, só uma borda (3). É uma sequência de 3 itens, e o <code>#</code> dá 3 em qualquer versão. Buraco é só o <code>nil</code> que tem algum valor <strong>depois</strong> dele.</p>
+</div>
+
+<hr>
+
+<h2>3. O <code>ipairs</code> para no buraco</h2>
+<p>O <a href="ipairs.html"><code>ipairs</code></a> percorre a lista a partir da posição 1 e para na <strong>primeira</strong> posição vazia. Ele não usa o <code>#</code>, então o resultado dele é sempre o mesmo, mas talvez não seja o que você queria:</p>
+
+<pre class="file" data-file="ipairs_buraco.lua">local compras = {"arroz", "feijão", "café", "leite"}
+compras[2] = nil
+for i, item in ipairs(compras) do
+  print("ipairs:", i, item)
+end
+for i = 1, 4 do
+  print("1 a 4:", i, compras[i])
+end
+</pre>
+
+<pre class="term">$ lua ipairs_buraco.lua
+ipairs:	1	arroz
+1 a 4:	1	arroz
+1 a 4:	2	nil
+1 a 4:	3	café
+1 a 4:	4	leite
+</pre>
+
+<dl class="anatomy">
+  <dt>compras[2] = nil</dt><dd>A Ana apagou o feijão guardando <code>nil</code> no lugar dele: fez um buraco na posição 2.</dd>
+  <dt>ipairs(compras)</dt><dd>Mostrou o arroz e parou: a posição 2 está vazia. O café e o leite continuam na tabela, mas o <code>ipairs</code> nunca chega neles.</dd>
+  <dt>for i = 1, 4</dt><dd>Com o fim escrito à mão, o laço passa por todas as posições, e a 2 aparece como <code>nil</code>.</dd>
+</dl>
+
+<p>O mesmo vale ao contrário: um item guardado "longe", depois de um buraco, fica invisível para o <code>ipairs</code> (e, aqui, também para o <code>#</code>):</p>
+
+<pre class="file" data-file="pular.lua">local fila = {"Ana", "Bia"}
+fila[5] = "Caio"
+print(#fila)
+for i, nome in ipairs(fila) do print(i, nome) end
+print(fila[5])
+</pre>
+
+<pre class="term">$ lua pular.lua
+2
+1	Ana
+2	Bia
+Caio
+</pre>
+
+<p>O Caio está lá (<code>fila[5]</code>), mas as posições 3 e 4 estão vazias: para o <code>ipairs</code>, a lista acaba na Bia. O <a href="pairs.html"><code>pairs</code></a> passaria por todos, mas sem ordem garantida.</p>
+
+<hr>
+
+<h2>4. Removendo sem furar: <code>table.remove</code></h2>
+<p>Guardar <code>nil</code> no meio é o jeito mais comum de criar um buraco sem querer. Para tirar um item do meio de uma lista, use <code>table.remove</code> (aula <a href="table-insert-remove.html">table.insert e table.remove</a>): ele tira o item e <strong>puxa os de trás uma posição para a frente</strong>, como as pessoas que andam uma cadeira para ocupar a vaga.</p>
+
+<pre class="file" data-file="remover.lua">local compras = {"arroz", "feijão", "café", "leite"}
+table.remove(compras, 2)
+print(#compras, table.concat(compras, ", "))
+compras[#compras] = nil
+print(#compras, table.concat(compras, ", "))
+</pre>
+
+<pre class="term">$ lua remover.lua
+3	arroz, café, leite
+2	arroz, café
+</pre>
+
+<dl class="anatomy">
+  <dt>table.remove(compras, 2)</dt><dd>Tirou o feijão; o café foi para a posição 2 e o leite para a 3. A lista continua uma sequência, de 3 itens.</dd>
+  <dt>compras[#compras] = nil</dt><dd>Apagar o <strong>último</strong> com <code>nil</code> não faz buraco: não há nada depois dele. A lista encolhe para 2. (É o que <code>table.remove(compras)</code>, sem posição, também faz.)</dd>
+</dl>
+
+<div class="trylua" data-goal="out:3 na fila: Ana, Caio, Davi;;src:table\.remove">
+<p class="try-task"><strong>Missão:</strong> a Bia saiu da fila, e o programa apagou ela com <code>fila[2] = nil</code>, que faz um buraco. Rode e veja o que sai. Depois troque essa linha por <code>table.remove(fila, 2)</code> para o programa mostrar <code>3 na fila: Ana, Caio, Davi</code>.</p>
+<pre class="script" data-file="main.lua">local fila = {"Ana", "Bia", "Caio", "Davi"}
+fila[2] = nil
+print(#fila .. " na fila: " .. table.concat(fila, ", "))
+</pre>
+<pre class="solucao" data-file="main.lua">local fila = {"Ana", "Bia", "Caio", "Davi"}
+table.remove(fila, 2)
+print(#fila .. " na fila: " .. table.concat(fila, ", "))
+</pre>
+</div>
+
+<hr>
+
+<h2>5. E quando eu preciso guardar "nada"?</h2>
+<p>Às vezes o "nada" faz parte dos dados: o aluno que faltou, a pergunta sem resposta. Há três jeitos de guardar isso sem estragar a lista.</p>
+
+<h3>Jeito 1: <code>false</code> no lugar de <code>nil</code></h3>
+<p><code>false</code> é um valor de verdade (aula <a href="booleanos.html">Booleanos</a>): a posição fica <strong>ocupada</strong>, e a lista continua uma sequência. E no <code>if</code>, o <code>false</code> se comporta como o <code>nil</code>: conta como "não".</p>
+
+<pre class="file" data-file="presenca.lua">local presenca = {true, false, true, false, true}
+print(#presenca)
+local presentes = 0
+for i = 1, #presenca do
+  if presenca[i] then
+    presentes = presentes + 1
+  end
+end
+print(presentes .. " de " .. #presenca)
+</pre>
+
+<pre class="term">$ lua presenca.lua
+5
+3 de 5
+</pre>
+
+<h3>Jeito 2: guardar o tamanho num campo <code>n</code></h3>
+<p>Se o valor que falta tem de ser <code>nil</code> mesmo, deixe de perguntar o tamanho para o <code>#</code>: anote você mesmo, num campo <code>n</code>, a cada item que entra. O laço vai até <code>n</code>, e o buraco não atrapalha:</p>
+
+<pre class="file" data-file="contador.lua">local respostas = {n = 0}
+local function anotar(valor)
+  respostas.n = respostas.n + 1
+  respostas[respostas.n] = valor
+end
+anotar("sim")
+anotar(nil)
+anotar("não")
+print(respostas.n)
+for i = 1, respostas.n do
+  print(i, respostas[i])
+end
+local p = table.pack("sim", nil, "não")
+print(p.n)
+</pre>
+
+<pre class="term">$ lua contador.lua
+3
+1	sim
+2	nil
+3	não
+3
+</pre>
+
+<dl class="anatomy">
+  <dt>{n = 0}</dt><dd>Uma tabela que já nasce com um campo <code>n</code> valendo 0 (campos com nome são a aula <a href="dicionarios.html">Tabelas como Dicionários</a>).</dd>
+  <dt>respostas.n = respostas.n + 1</dt><dd>Cada item novo aumenta o contador, mesmo que o item seja <code>nil</code>.</dd>
+  <dt>for i = 1, respostas.n do</dt><dd>O fim do laço é o contador, nunca o <code>#</code>.</dd>
+</dl>
+
+<h3>Jeito 3: <code>table.pack</code>, que já vem com o <code>n</code></h3>
+<p>É exatamente a ideia do <a href="table-unpack.html"><code>table.pack</code></a>: a última linha do programa acima mostra que <code>table.pack("sim", nil, "não").n</code> é 3. O manual avisa que a tabela do <code>table.pack</code> pode não ser uma sequência, quando algum valor é <code>nil</code>; por isso ela traz o <code>n</code>.</p>
+
+<div class="trylua" data-goal="out:3: pão;;src:\.n\b">
+<p class="try-task"><strong>Missão:</strong> o <code>ipairs</code> para no buraco e só mostra o leite. Troque o laço por <code>for i = 1, t.n do</code> (e escreva <code>t[i]</code> no lugar de <code>item</code>) para aparecerem as três posições, até <code>3: pão</code>.</p>
+<pre class="script" data-file="main.lua">local t = table.pack("leite", nil, "pão")
+for i, item in ipairs(t) do
+  print(i .. ": " .. tostring(item))
+end
+</pre>
+<pre class="solucao" data-file="main.lua">local t = table.pack("leite", nil, "pão")
+for i = 1, t.n do
+  print(i .. ": " .. tostring(t[i]))
+end
+</pre>
+</div>
+
+<hr>
+
+<h2>Qual usar</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Situação</th><th>Faça</th></tr>
+<tr><td>Tirar um item do meio da lista</td><td><code>table.remove(t, pos)</code>, nunca <code>t[pos] = nil</code></td></tr>
+<tr><td>Tirar o último</td><td><code>table.remove(t)</code> ou <code>t[#t] = nil</code> (os dois servem)</td></tr>
+<tr><td>Marcar "não" / "faltou" / "desligado"</td><td><code>false</code></td></tr>
+<tr><td>Precisa mesmo guardar <code>nil</code></td><td>Um campo <code>n</code> com o tamanho, e laços até <code>n</code></td></tr>
+<tr><td>Guardar os argumentos <code>...</code> de uma função</td><td><code>table.pack(...)</code> e o <code>.n</code> dele</td></tr>
+<tr><td>Uma tabela com "furos" de propósito (só alguns números)</td><td>Ela não é uma lista: trate como dicionário e percorra com <code>pairs</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+
+<div class="cenario">
+<strong>Somar uma lista que tem buraco</strong>
+<pre class="file" data-file="erro_soma.lua">local notas = {8, 7, 9, 10}
+notas[3] = nil
+local soma = 0
+for i = 1, 4 do
+  soma = soma + notas[i]
+end
+print(soma)
+</pre>
+<pre class="term">$ lua erro_soma.lua
+lua: erro_soma.lua:5: attempt to perform arithmetic on a nil value (field '?')
+stack traceback:
+	erro_soma.lua:5: in main chunk
+	[C]: in ?
+</pre>
+<dl class="anatomy">
+  <dt>lua: erro_soma.lua:5:</dt><dd>O erro foi na linha 5, a da soma.</dd>
+  <dt>attempt to perform arithmetic on a nil value</dt><dd>"Tentativa de fazer conta com um valor <code>nil</code>": na volta <code>i = 3</code>, <code>notas[3]</code> é <code>nil</code>, e <code>soma + nil</code> não existe.</dd>
+  <dt>(field '?')</dt><dd>O <code>nil</code> veio de um <strong>campo</strong> de tabela (<code>notas[i]</code>). O <code>'?'</code> quer dizer que a posição era uma variável (<code>i</code>), e o Lua não sabe dizer o nome; se fosse <code>notas.media</code>, ele diria <code>(field 'media')</code>.</dd>
+  <dt>stack traceback:</dt><dd>O caminho até o erro: a linha 5 do corpo do arquivo (<code>main chunk</code>), chamado pelo programa <code>lua</code> (<code>[C]: in ?</code>).</dd>
+</dl>
+<p><strong>Como consertar:</strong> não faça o buraco (<code>table.remove</code>). Se o buraco é de propósito, pule as posições vazias: <code>if notas[i] then soma = soma + notas[i] end</code>.</p>
+</div>
+
+<div class="cenario">
+<strong><code>table.concat</code> encontrou o buraco</strong>
+<pre class="file" data-file="erro_concat.lua">local compras = {"arroz", "feijão", "café"}
+compras[2] = nil
+print(table.concat(compras, ", ", 1, 3))
+</pre>
+<pre class="term">$ lua erro_concat.lua
+lua: erro_concat.lua:3: invalid value (nil) at index 2 in table for 'concat'
+stack traceback:
+	[C]: in field 'concat'
+	erro_concat.lua:3: in main chunk
+	[C]: in ?
+</pre>
+<p>"Valor inválido (<code>nil</code>) na posição 2 da tabela, para o <code>concat</code>": o <code>table.concat</code> só junta textos e números, e a posição 2 está vazia. Aqui o fim (3) foi dado à mão; sem ele, o <code>concat</code> usaria o <code>#</code>, e aí o resultado dependeria de qual borda saísse: um texto mais curto, sem aviso, ou este mesmo erro. <strong>Como consertar:</strong> remova com <code>table.remove</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Inserir longe demais</strong>
+<pre class="file" data-file="erro_insert.lua">local fila = {"Ana", "Bia"}
+table.insert(fila, 5, "Caio")
+</pre>
+<pre class="term">$ lua erro_insert.lua
+lua: erro_insert.lua:2: bad argument #2 to 'insert' (position out of bounds)
+stack traceback:
+	[C]: in field 'insert'
+	erro_insert.lua:2: in main chunk
+	[C]: in ?
+</pre>
+<p>"Argumento ruim nº 2 para <code>insert</code> (posição fora dos limites)". O <code>table.insert</code> protege a sequência: ele só aceita posições de 1 até <code>#fila + 1</code> (aqui, até 3), porque inserir na 5 deixaria as posições 3 e 4 vazias. <strong>Como consertar:</strong> para pôr no fim, <code>table.insert(fila, "Caio")</code>. (Já <code>fila[5] = "Caio"</code> não dá erro nenhum, e cria os buracos: seção 3.)</p>
+</div>
+
+<div class="cenario">
+<strong>O laço parou no meio, sem erro</strong>
+<pre class="file" data-file="ipairs_buraco.lua">local compras = {"arroz", "feijão", "café", "leite"}
+compras[2] = nil
+for i, item in ipairs(compras) do
+  print("ipairs:", i, item)
+end
+</pre>
+<pre class="term">$ lua ipairs_buraco.lua
+ipairs:	1	arroz
+</pre>
+<p>Nenhuma mensagem: o <code>ipairs</code> chegou à posição 2, achou <code>nil</code> e entendeu que a lista tinha acabado. É o erro mais difícil de achar, porque o programa termina "normalmente". <strong>Como consertar:</strong> sem buracos, ou um laço até o <code>n</code> que você guardou.</p>
+</div>
+
+<hr>
+
+<h2>Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Termo / escrita</th><th>O que é</th></tr>
+<tr><td>Sequência</td><td>Tabela com as posições 1 a <code>n</code> ocupadas e nada depois: uma borda só, o <code>#</code> é <code>n</code></td></tr>
+<tr><td>Buraco</td><td>Uma posição <code>nil</code> com algum valor depois dela</td></tr>
+<tr><td>Borda</td><td>Posição com valor seguida de posição vazia (ou 0, se a 1 está vazia)</td></tr>
+<tr><td><code>#t</code> com buracos</td><td>Qualquer uma das bordas: pode mudar com a versão ou com o jeito de montar a tabela</td></tr>
+<tr><td><code>ipairs(t)</code></td><td>Para na primeira posição vazia</td></tr>
+<tr><td><code>t[#t] = nil</code></td><td>Apaga o último: não faz buraco</td></tr>
+<tr><td><code>table.remove(t, i)</code></td><td>Tira o item <code>i</code> e puxa os de trás: não faz buraco</td></tr>
+<tr><td><code>t[i] = nil</code> (no meio)</td><td>Faz um buraco</td></tr>
+<tr><td><code>false</code></td><td>Ocupa a posição e conta como "não" no <code>if</code></td></tr>
+<tr><td><code>table.pack(...).n</code></td><td>Quantos valores, contando os <code>nil</code></td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Mensagem</th><th>Causa provável</th></tr>
+<tr><td><code>attempt to perform arithmetic on a nil value (field '?')</code></td><td>Conta com uma posição vazia da lista</td></tr>
+<tr><td><code>invalid value (nil) at index N in table for 'concat'</code></td><td><code>table.concat</code> achou um buraco</td></tr>
+<tr><td><code>bad argument #2 to 'insert' (position out of bounds)</code></td><td><code>table.insert</code> numa posição depois de <code>#t + 1</code></td></tr>
+<tr><td>O laço parou antes, sem mensagem</td><td><code>ipairs</code> achou um buraco</td></tr>
+<tr><td>O <code>#</code> deu um número diferente em outro computador</td><td>A lista tem buracos: o <code>#</code> escolheu outra borda</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. Sem buraco</h3>
+<p>Complete para tirar o item da posição 3 sem deixar buraco:</p>
+<div class="ex-code">table.<input data-answer="remove" aria-label="função">(lista, 3)</div>
+</div>
+
+<div class="exercise">
+<h3>2. Quanto vale?</h3>
+<p>A tabela <code>{"a", "b", "c", nil}</code> é uma sequência. Quanto vale o <code>#</code> dela?</p>
+<div class="ex-code"><input data-answer="3" aria-label="resposta"></div>
+</div>
+
+<div class="exercise">
+<h3>3. As bordas</h3>
+<p>A tabela <code>{1, nil, 3}</code> tem duas bordas. Uma é a 3. Qual é a outra?</p>
+<div class="ex-code"><input data-answer="1" aria-label="resposta"></div>
+</div>
+
+<div class="mc" data-answer="3">
+<p class="mc-q">4. Com <code>t = {10, 20, nil, 40}</code>, o que se pode dizer de <code>#t</code>?</p>
+<label><input type="radio" name="q4"> É sempre 4</label>
+<label><input type="radio" name="q4"> É sempre 2</label>
+<label><input type="radio" name="q4"> Pode ser 2 ou 4: as duas são bordas</label>
+<label><input type="radio" name="q4"> Dá erro, porque há um <code>nil</code></label>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">5. Com <code>t = {"a", "b", "c"}</code> e depois <code>t[2] = nil</code>, o que o <code>for i, v in ipairs(t)</code> mostra?</p>
+<label><input type="radio" name="q5"> <code>a</code>, <code>c</code></label>
+<label><input type="radio" name="q5"> Só <code>a</code></label>
+<label><input type="radio" name="q5"> <code>a</code>, <code>nil</code>, <code>c</code></label>
+<label><input type="radio" name="q5"> Nada</label>
+</div>
+
+<div class="mc" data-answer="4">
+<p class="mc-q">6. Qual destas linhas <strong>não</strong> deixa buraco numa lista de 5 itens?</p>
+<label><input type="radio" name="q6"> <code>t[1] = nil</code></label>
+<label><input type="radio" name="q6"> <code>t[3] = nil</code></label>
+<label><input type="radio" name="q6"> <code>t[8] = "x"</code></label>
+<label><input type="radio" name="q6"> <code>t[5] = nil</code></label>
+</div>
+
+<h3>Missão final: a chamada da turma</h3>
+
+<div class="trylua" data-goal="out:5 alunos, 3 presentes;;src:\bfalse\b">
+<p class="try-task"><strong>Missão:</strong> a professora marcou com <code>nil</code> quem faltou, e a lista ficou com buracos: o <code>#</code> não é confiável. Troque os <code>nil</code> por <code>false</code>, para a lista virar uma sequência e o programa mostrar <code>5 alunos, 3 presentes</code>.</p>
+<pre class="script" data-file="main.lua">local presenca = {true, nil, true, nil, true}
+local presentes = 0
+for i = 1, #presenca do
+  if presenca[i] then
+    presentes = presentes + 1
+  end
+end
+print(#presenca .. " alunos, " .. presentes .. " presentes")
+</pre>
+<pre class="solucao" data-file="main.lua">local presenca = {true, false, true, false, true}
+local presentes = 0
+for i = 1, #presenca do
+  if presenca[i] then
+    presentes = presentes + 1
+  end
+end
+print(#presenca .. " alunos, " .. presentes .. " presentes")
+</pre>
+</div>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li>Uma <strong>sequência</strong> tem as posições 1 a <code>n</code> ocupadas e nada depois; nela o <code>#</code>, o <code>ipairs</code>, o <code>insert</code> e o <code>concat</code> funcionam direito.</li>
+  <li>Um <code>nil</code> no meio é um <strong>buraco</strong>. Com buracos, a tabela tem várias <strong>bordas</strong>, e o <code>#</code> devolve <strong>qualquer uma</strong> delas: o mesmo código deu 3 no Lua 5.5 e 5 no 5.4.</li>
+  <li>O <code>ipairs</code> para no primeiro buraco, sem erro.</li>
+  <li>Para tirar do meio, <code>table.remove</code>; nunca <code>t[i] = nil</code>. Apagar o último com <code>nil</code> não faz buraco.</li>
+  <li>Para guardar "nada": <code>false</code>, ou um campo <code>n</code> com o tamanho (o <code>table.pack</code> já traz o seu).</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
