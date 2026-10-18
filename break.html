@@ -1,0 +1,540 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua break — saindo do laço antes do fim | Guia Lua</title>
+<meta name="description" content="O break do Lua para quem nunca programou: sair de um for, while ou repeat no meio, procurar o primeiro que serve, o while true com break, o break em laços aninhados, guardar o valor antes de sair, e os erros reais do Lua 5.5 (break fora do laço, o continue que o Lua não tem).">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">break</span></h1>
+
+<p class="intro">Os laços que você aprendeu (<a href="while.html">while</a>, <a href="repeat.html">repeat</a> e <a href="for-numerico.html">for</a>) só param quando chega a hora deles: a condição muda, ou a contagem termina. Às vezes, porém, você descobre <strong>no meio do caminho</strong> que já pode parar: achou o que procurava, o estoque acabou, a pessoa digitou "sair". Para isso existe o <code>break</code>, que em inglês quer dizer "<strong>quebrar</strong>": ele interrompe o laço na hora e pula para a primeira linha depois dele.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>Como o <code>break</code> funciona num <code>for</code>, num <code>while</code> e num <code>repeat</code>.</li>
+  <li>O uso mais comum: <strong>procurar</strong> e parar no primeiro que serve.</li>
+  <li>O <code>while true do</code> com <code>break</code>: o laço "infinito" com a saída no meio.</li>
+  <li>Como guardar o resultado antes de sair (a variável do <code>for</code> some depois do laço).</li>
+  <li>Que, com um laço dentro de outro, o <code>break</code> sai só do de <strong>dentro</strong>.</li>
+  <li>Os erros reais: o <code>break</code> fora de um laço e o <code>continue</code>, que o Lua não tem.</li>
+</ul>
+</div>
+
+<p>Todos os programas desta aula rodaram no <strong>Lua 5.5</strong> da máquina da Ana (usuária <code>ana</code>, computador <code>notebook</code>), com <code>lua arquivo.lua</code>. Você pode rodar cada um no editor do guia.</p>
+
+<hr>
+
+<h2>A ideia: procurar a chave na gaveta</h2>
+<p>A Ana perdeu a chave de casa e vai olhar as 10 gavetas da cômoda, uma por uma. Na gaveta 4, ela acha a chave. O que ela faz?</p>
+<ol class="passo">
+  <li>Abre a gaveta 1: não está. Abre a 2: não está. Abre a 3: não está.</li>
+  <li>Abre a 4: <strong>achou!</strong></li>
+  <li>Ela <strong>não</strong> abre as gavetas 5 a 10 "porque o plano era olhar as 10". Ela para ali e vai abrir a porta.</li>
+</ol>
+<p>O plano tinha 10 voltas, mas um acontecimento no meio mudou tudo. O <code>break</code> é esse "achei, pode parar".</p>
+
+<hr>
+
+<h2>1. O primeiro <code>break</code>: parar no meio do <code>for</code></h2>
+
+<pre class="file" data-file="procura.lua">for i = 1, 10 do
+  print("olhando o " .. i)
+  if i == 4 then
+    print("achei o 4!")
+    break
+  end
+end
+print("depois do laço")
+</pre>
+
+<dl class="anatomy">
+  <dt>for i = 1, 10 do</dt><dd>Um laço planejado para 10 voltas.</dd>
+  <dt>if i == 4 then</dt><dd>A pergunta "é agora que eu paro?". O <code>break</code> quase sempre fica dentro de um <code>if</code>; sem ele, o laço pararia logo na primeira volta.</dd>
+  <dt>break</dt><dd>Sai do laço <strong>na hora</strong>: o resto desta volta e todas as voltas seguintes são abandonados. O <code>break</code> fica sozinho, sem parênteses nem valor.</dd>
+  <dt>end (do if) / end (do for)</dt><dd>O <code>break</code> sai do <strong>laço</strong>, e não do <code>if</code>: o programa pula para depois do <code>end</code> do <code>for</code>.</dd>
+  <dt>print("depois do laço")</dt><dd>A primeira linha depois do laço: é aqui que o programa continua.</dd>
+</dl>
+
+<pre class="term">$ lua procura.lua
+olhando o 1
+olhando o 2
+olhando o 3
+olhando o 4
+achei o 4!
+depois do laço
+</pre>
+
+<p>O laço iria até 10, mas parou no 4. Os números 5 a 10 nunca foram "olhados".</p>
+
+<hr>
+
+<h2>2. Procurar o primeiro que serve</h2>
+<p>O uso mais comum do <code>break</code> é a <strong>busca</strong>: percorrer uma sequência e parar no primeiro item que cumpre uma regra. Qual é o primeiro múltiplo de 7 a partir de 50?</p>
+
+<pre class="file" data-file="multiplo.lua">local achado = nil
+for n = 50, 100 do
+  if n % 7 == 0 then
+    achado = n
+    break
+  end
+end
+print("O primeiro múltiplo de 7 a partir de 50 é " .. achado)
+</pre>
+
+<pre class="term">$ lua multiplo.lua
+O primeiro múltiplo de 7 a partir de 50 é 56
+</pre>
+
+<dl class="anatomy">
+  <dt>local achado = nil</dt><dd>Uma variável criada <strong>antes</strong> do laço, para guardar a resposta. Ela é necessária porque a variável <code>n</code> do <code>for</code> some depois do <code>end</code> (veja <a href="for-numerico.html">for Numérico</a>).</dd>
+  <dt>n % 7 == 0</dt><dd>"O resto de <code>n</code> dividido por 7 é zero?", ou seja, <code>n</code> é múltiplo de 7.</dd>
+  <dt>achado = n e depois break</dt><dd>Primeiro <strong>guarda</strong>, depois sai. Na ordem contrária, o <code>achado = n</code> nunca rodaria: nada do bloco roda depois do <code>break</code>.</dd>
+</dl>
+
+<p>Sem o <code>break</code>, o laço continuaria até o 100, e o <code>achado</code> terminaria valendo o <strong>último</strong> múltiplo (98), e não o primeiro.</p>
+
+<h3>E se não achar?</h3>
+<p>Se nenhum número servir, o <code>break</code> nunca acontece e o <code>achado</code> continua <code>nil</code>. Procurando só de 50 a 55, o programa acima quebra:</p>
+
+<pre class="term">$ lua multiplo2.lua
+lua: multiplo2.lua:8: attempt to concatenate a nil value (local 'achado')
+stack traceback:
+        multiplo2.lua:8: in main chunk
+        [C]: in ?
+</pre>
+
+<p>Por isso, depois de uma busca, sempre confira se achou:</p>
+
+<pre class="file" data-file="semachar.lua">local achado = nil
+for n = 50, 55 do
+  if n % 7 == 0 then
+    achado = n
+    break
+  end
+end
+if achado then
+  print("Achei: " .. achado)
+else
+  print("Nenhum múltiplo de 7 entre 50 e 55.")
+end
+</pre>
+
+<pre class="term">$ lua semachar.lua
+Nenhum múltiplo de 7 entre 50 e 55.
+</pre>
+
+<div class="trylua" data-goal="out:104;;src:\bbreak\b">
+<p class="try-task"><strong>Missão:</strong> mude a busca para achar o primeiro múltiplo de <strong>13</strong> a partir de <strong>100</strong> (procure até 200). Ajuste também o texto da mensagem.</p>
+<pre class="script" data-file="main.lua">local achado = nil
+for n = 50, 100 do
+  if n % 7 == 0 then
+    achado = n
+    break
+  end
+end
+print("O primeiro múltiplo de 7 a partir de 50 é " .. achado)
+</pre>
+<pre class="solucao" data-file="main.lua">local achado = nil
+for n = 100, 200 do
+  if n % 13 == 0 then
+    achado = n
+    break
+  end
+end
+print("O primeiro múltiplo de 13 a partir de 100 é " .. achado)
+</pre>
+</div>
+
+<hr>
+
+<h2>3. <code>while true do</code> com <code>break</code></h2>
+<p>Na aula <a href="while.html">while</a>, você viu que <code>while true do</code> é um laço que nunca para sozinho, porque a condição é sempre verdadeira. Com um <code>break</code> lá dentro, ele vira um laço com a <strong>saída no meio</strong>. Na padaria, a Ana atende até o pão acabar:</p>
+
+<pre class="file" data-file="estoque.lua">local estoque = 3
+local clientes = 0
+while true do
+  clientes = clientes + 1
+  print("Atendendo o cliente " .. clientes)
+  estoque = estoque - 1
+  if estoque == 0 then
+    print("Acabou o pão!")
+    break
+  end
+end
+print("Clientes atendidos: " .. clientes)
+</pre>
+
+<pre class="term">$ lua estoque.lua
+Atendendo o cliente 1
+Atendendo o cliente 2
+Atendendo o cliente 3
+Acabou o pão!
+Clientes atendidos: 3
+</pre>
+
+<h3>A pergunta escrita uma vez só</h3>
+<p>O caixa da padaria (aula <a href="while.html">while</a>) lia o primeiro preço antes do laço e os outros no fim do bloco: a pergunta aparecia duas vezes. Com <code>while true</code> e <code>break</code>, ela aparece uma vez, no começo de cada volta:</p>
+
+<pre class="file" data-file="caixa.lua">local total = 0
+while true do
+  io.write("Preço do item (0 para terminar): ")
+  local preco = tonumber(io.read())
+  if preco == 0 then
+    break
+  end
+  total = total + preco
+end
+print(string.format("Total da compra: R$ %.2f", total))
+</pre>
+
+<pre class="term">$ lua caixa.lua
+Preço do item (0 para terminar): 4.50
+Preço do item (0 para terminar): 12.90
+Preço do item (0 para terminar): 3.25
+Preço do item (0 para terminar): 0
+Total da compra: R$ 20.65
+</pre>
+
+<p>A ordem dentro do bloco é: <strong>ler</strong>, <strong>testar se é hora de sair</strong>, <strong>usar</strong>. Quando o preço é 0, o <code>break</code> sai antes do <code>total = total + preco</code>. E a <code>local preco</code> pode ficar dentro do laço, porque ninguém precisa dela depois.</p>
+
+<div class="trylua" data-stdin="4.50\n12.90\n0" data-goal="out:Total da compra: R$ 17.40;;semerro;;src:\bbreak\b">
+<p class="try-task"><strong>Missão:</strong> este caixa esqueceu a saída. A caixa vai "digitar" <code>4.50</code>, <code>12.90</code> e <code>0</code>; depois disso a entrada acaba, o <code>io.read()</code> devolve <code>nil</code> e o programa quebra. Acrescente o <code>if preco == 0 then break end</code> no lugar certo (antes de somar), para aparecer <code>Total da compra: R$ 17.40</code>.</p>
+<pre class="script" data-file="main.lua">local total = 0
+while true do
+  io.write("Preço do item (0 para terminar): ")
+  local preco = tonumber(io.read())
+  total = total + preco
+end
+print(string.format("Total da compra: R$ %.2f", total))
+</pre>
+<pre class="solucao" data-file="main.lua">local total = 0
+while true do
+  io.write("Preço do item (0 para terminar): ")
+  local preco = tonumber(io.read())
+  if preco == 0 then
+    break
+  end
+  total = total + preco
+end
+print(string.format("Total da compra: R$ %.2f", total))
+</pre>
+</div>
+
+<h3><code>break</code> no <code>repeat</code></h3>
+<p>O <code>break</code> também funciona no <code>repeat … until</code>: é uma segunda saída, além da condição do <code>until</code>. Aqui ele protege contra a entrada que acaba sem a senha certa:</p>
+
+<pre class="file" data-file="repeatbreak.lua">local tentativas = 0
+repeat
+  tentativas = tentativas + 1
+  io.write("Senha: ")
+  local resposta = io.read()
+  if resposta == nil then
+    print("(a entrada acabou)")
+    break
+  end
+until resposta == "pao123"
+print("Tentativas: " .. tentativas)
+</pre>
+
+<pre class="term">$ printf 'abc\n123\n' | lua repeatbreak.lua
+Senha: Senha: Senha: (a entrada acabou)
+Tentativas: 3
+</pre>
+
+<p>O <code>printf</code> mandou só <code>abc</code> e <code>123</code> para o programa (pelo "cano" <code>|</code>, que não aparece na tela; veja <a href="io-read.html">io.read()</a>). Na terceira volta não havia mais nada para ler, o <code>io.read()</code> devolveu <code>nil</code>, e o <code>break</code> saiu. Sem ele, o laço pediria a senha para sempre.</p>
+
+<hr>
+
+<h2>4. Laço dentro de laço: o <code>break</code> sai só de um</h2>
+<p>Quando há um laço dentro de outro (aula <a href="lacos-aninhados.html">Laços Aninhados</a>), o <code>break</code> sai apenas do laço <strong>mais de dentro</strong>, aquele em que ele está:</p>
+
+<pre class="file" data-file="aninhado.lua">for linha = 1, 3 do
+  for coluna = 1, 3 do
+    if coluna == 2 then
+      break
+    end
+    print("linha " .. linha .. ", coluna " .. coluna)
+  end
+end
+</pre>
+
+<pre class="term">$ lua aninhado.lua
+linha 1, coluna 1
+linha 2, coluna 1
+linha 3, coluna 1
+</pre>
+
+<p>Em cada linha, o laço das colunas parou na coluna 2. Mas o laço das linhas continuou: 1, 2 e 3. Para sair dos dois de uma vez, use uma variável de aviso (<code>local terminou = false</code>, e um segundo <code>if terminou then break end</code> no laço de fora) ou o <code>goto</code> (aula <a href="goto.html">goto e Rótulos</a>).</p>
+
+<hr>
+
+<h2>5. Depois do <code>break</code>, nada daquela volta roda</h2>
+<p>As linhas que vêm depois do <code>break</code>, no mesmo bloco, nunca rodam:</p>
+
+<pre class="file" data-file="depoisbreak.lua">for i = 1, 3 do
+  print("antes", i)
+  break
+  print("depois", i)
+end
+</pre>
+
+<pre class="term">$ lua depoisbreak.lua
+antes	1
+</pre>
+
+<p>Esse programa não serve para nada (o <code>break</code> sem <code>if</code> sai já na primeira volta), mas mostra a regra. No Lua 5.5, o 5.4 e o LuaJIT ele roda assim.</p>
+
+<div class="note">
+<strong>No Lua 5.1, o <code>break</code> tinha de ser a última linha do bloco</strong>
+<p>O mesmo arquivo no <code>lua5.1</code> do lab:</p>
+<pre class="term">$ lua5.1 depoisbreak.lua
+lua5.1: depoisbreak.lua:4: 'end' expected (to close 'for' at line 1) near 'print'
+</pre>
+<p>No 5.1, nada podia vir depois do <code>break</code> no mesmo bloco. Na prática isso nunca atrapalha, porque o <code>break</code> fica dentro de um <code>if</code>, e logo depois dele vem o <code>end</code>. (Mais diferenças entre as versões em <a href="versoes.html">Lua 5.1, LuaJIT, 5.4 e 5.5</a>.)</p>
+</div>
+
+<hr>
+
+<h2 id="formas">Formas diferentes de fazer a mesma coisa</h2>
+<p>Quase todo <code>break</code> pode ser trocado por uma condição no próprio laço. A busca do múltiplo de 7, sem <code>break</code>:</p>
+
+<pre class="file" data-file="sembreak.lua">local n = 50
+while n % 7 ~= 0 do
+  n = n + 1
+end
+print("O primeiro múltiplo de 7 a partir de 50 é " .. n)
+</pre>
+
+<p>Funciona (e mostra 56), mas repare que agora você cuida do contador à mão, e não há limite: se nunca achasse, o laço nunca pararia. Com o <code>for</code> e o <code>break</code>, o limite (100) já está garantido.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Situação</th><th>Qual usar</th></tr>
+<tr><td>Procurar o primeiro que serve, dentro de um limite</td><td><code>for</code> + <code>if … then guarda; break end</code></td></tr>
+<tr><td>Ler, testar se é hora de sair, e só então usar o valor</td><td><code>while true do</code> com <code>break</code> no meio</td></tr>
+<tr><td>A condição de parada é simples e fica bem no começo</td><td><code>while condição do</code> (sem <code>break</code>)</td></tr>
+<tr><td>A condição de parada fica no fim de cada volta</td><td><code>repeat … until</code></td></tr>
+<tr><td>Pular só <strong>esta</strong> volta e continuar o laço</td><td><code>if</code> em volta do resto do bloco, ou <code>goto continue</code> (aula <a href="goto.html">goto e Rótulos</a>)</td></tr>
+<tr><td>Sair de dois laços de uma vez</td><td>Uma variável de aviso, ou <code>goto</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+
+<div class="cenario">
+<strong><code>break</code> fora de um laço</strong>
+<pre class="file" data-file="fora.lua">local nota = 8
+if nota &gt;= 6 then
+  print("aprovada")
+  break
+end
+</pre>
+<pre class="term">$ lua fora.lua
+lua: fora.lua:4: break outside loop near 'break'
+</pre>
+<p>"<code>break</code> fora de um laço, perto de <code>break</code>". O <code>break</code> só sai de laços (<code>for</code>, <code>while</code>, <code>repeat</code>); ele não sai de um <code>if</code>, nem do programa. O Lua recusa o arquivo antes de rodar: o <code>aprovada</code> nem apareceu. <strong>Como consertar:</strong> se a ideia era só não fazer o resto do <code>if</code>, use um <code>else</code>; se era encerrar o programa, isso é o <code>os.exit()</code> (aula <a href="os-funcoes.html">os.getenv, os.clock e os.exit</a>).</p>
+</div>
+
+<div class="cenario">
+<strong>Usou <code>continue</code></strong>
+<pre class="file" data-file="continue.lua">for i = 1, 5 do
+  if i == 3 then
+    continue
+  end
+  print(i)
+end
+</pre>
+<pre class="term">$ lua continue.lua
+lua: continue.lua:4: syntax error near 'end'
+</pre>
+<p>Em muitas linguagens, <code>continue</code> quer dizer "pule o resto desta volta e vá para a próxima". <strong>O Lua não tem <code>continue</code>.</strong> Para ele, <code>continue</code> é um nome qualquer, como uma variável, e um nome sozinho numa linha não é um comando completo; quando chega o <code>end</code>, ele reclama. <strong>Como consertar:</strong> inverta o <code>if</code> para envolver o que deve rodar:</p>
+<pre class="file" data-file="semcontinue.lua">for i = 1, 5 do
+  if i ~= 3 then
+    print(i)
+  end
+end
+</pre>
+<p>Para blocos grandes, existe o <code>goto continue</code>, na aula <a href="goto.html">goto e Rótulos</a>. E repare: trocar o <code>continue</code> por <code>break</code> não serve, porque o <code>break</code> pararia o laço inteiro no 3.</p>
+</div>
+
+<div class="cenario">
+<strong>Quis usar a variável do <code>for</code> depois do <code>break</code></strong>
+<pre class="file" data-file="breakvar.lua">for i = 1, 10 do
+  if i * i &gt; 30 then
+    break
+  end
+end
+print("parou em", i)
+</pre>
+<pre class="term">$ lua breakvar.lua
+parou em	nil
+</pre>
+<p>Sem erro, mas <code>nil</code>: a variável <code>i</code> do <code>for</code> só existe dentro do laço. <strong>Como consertar:</strong> guarde o valor numa variável criada antes, antes do <code>break</code>, como o <code>achado</code> da seção 2. (Com <code>while</code>, o contador é criado antes do laço e continua lá: <code>local i = 1</code> / <code>while i &lt;= 5 do if i == 3 then break end … end</code> termina com <code>i</code> valendo 3.)</p>
+</div>
+
+<div class="cenario">
+<strong>O <code>break</code> veio antes de guardar o valor</strong>
+<p>Se o bloco do <code>if</code> for <code>break</code> e depois <code>achado = n</code>, o <code>achado</code> nunca recebe nada: depois do <code>break</code>, nada daquela volta roda. Sem erro, só um <code>nil</code> (ou o erro de concatenar <code>nil</code> mais adiante). <strong>Como consertar:</strong> primeiro guarde, depois <code>break</code>.</p>
+</div>
+
+<div class="trylua" data-goal="outre:^1\n2\n4\n5\n$;;semerro">
+<p class="try-task"><strong>Missão:</strong> este programa quer mostrar de 1 a 5, pulando o 3, mas usou o <code>continue</code>, que não existe no Lua. Conserte para aparecer <code>1</code>, <code>2</code>, <code>4</code> e <code>5</code>, um por linha.</p>
+<pre class="script" data-file="main.lua">for i = 1, 5 do
+  if i == 3 then
+    continue
+  end
+  print(i)
+end
+</pre>
+<pre class="solucao" data-file="main.lua">for i = 1, 5 do
+  if i ~= 3 then
+    print(i)
+  end
+end
+</pre>
+</div>
+
+<hr>
+
+<h2>Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>O que faz</th></tr>
+<tr><td><code>break</code></td><td>Sai do laço mais de dentro (<code>for</code>, <code>while</code> ou <code>repeat</code>) na hora; o programa segue depois do <code>end</code>/<code>until</code></td></tr>
+<tr><td><code>if cond then break end</code></td><td>A forma de sempre: sair quando algo acontece</td></tr>
+<tr><td><code>achado = n; break</code></td><td>Guardar o resultado antes de sair</td></tr>
+<tr><td><code>while true do … if … then break end … end</code></td><td>Laço com a saída no meio</td></tr>
+<tr><td>Laços aninhados</td><td>O <code>break</code> sai só do de dentro</td></tr>
+<tr><td><code>continue</code></td><td>Não existe no Lua: use <code>if</code> ou <code>goto continue</code></td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Sintoma</th><th>Causa provável</th></tr>
+<tr><td><code>break outside loop near 'break'</code></td><td>O <code>break</code> está fora de qualquer laço (num <code>if</code> solto)</td></tr>
+<tr><td><code>syntax error near 'end'</code> (linha depois do <code>continue</code>)</td><td>Usou <code>continue</code></td></tr>
+<tr><td>A variável do <code>for</code> vale <code>nil</code> depois do laço</td><td>Ela só existe dentro do <code>for</code>: guarde antes do <code>break</code></td></tr>
+<tr><td><code>attempt to concatenate a nil value</code> depois de uma busca</td><td>Nada foi achado e o resultado ficou <code>nil</code>: confira com <code>if achado then</code></td></tr>
+<tr><td><code>'end' expected … near …</code> só no Lua 5.1</td><td>Havia linhas depois do <code>break</code> no mesmo bloco</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. Complete</h3>
+<p>Complete para o laço parar quando <code>i</code> chegar a 5:</p>
+<div class="ex-code">for i = 1, 100 do<br>&nbsp;&nbsp;if i == 5 then <input data-answer="break" aria-label="palavra-chave para sair"> end<br>&nbsp;&nbsp;print(i)<br>end</div>
+</div>
+
+<div class="exercise">
+<h3>2. Quantas linhas?</h3>
+<p>Quantos números o programa do exercício 1 mostra?</p>
+<div class="ex-code"><input data-answer="4" aria-label="quantidade de números"> números</div>
+</div>
+
+<div class="mc" data-answer="3">
+<p class="mc-q">3. Para onde o programa vai depois de um <code>break</code> que está dentro de um <code>if</code>, dentro de um <code>while</code>?</p>
+<label><input type="radio" name="q3"> Para depois do <code>end</code> do <code>if</code>, ainda dentro do laço</label>
+<label><input type="radio" name="q3"> Para o começo do laço, na próxima volta</label>
+<label><input type="radio" name="q3"> Para a primeira linha depois do <code>end</code> do <code>while</code></label>
+<label><input type="radio" name="q3"> O programa termina</label>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">4. Com um <code>for</code> dentro de outro <code>for</code>, um <code>break</code> no de dentro…</p>
+<label><input type="radio" name="q4"> …sai dos dois laços</label>
+<label><input type="radio" name="q4"> …sai só do de dentro; o de fora continua</label>
+<label><input type="radio" name="q4"> …dá erro</label>
+<label><input type="radio" name="q4"> …sai só do de fora</label>
+</div>
+
+<div class="mc" data-answer="4">
+<p class="mc-q">5. Qual destas palavras <strong>não</strong> existe no Lua?</p>
+<label><input type="radio" name="q5"> <code>break</code></label>
+<label><input type="radio" name="q5"> <code>until</code></label>
+<label><input type="radio" name="q5"> <code>goto</code></label>
+<label><input type="radio" name="q5"> <code>continue</code></label>
+</div>
+
+<div class="mc" data-answer="1">
+<p class="mc-q">6. Por que <code>if nota &gt;= 6 then print("ok") break end</code>, solto no programa (fora de laço), dá erro?</p>
+<label><input type="radio" name="q6"> Porque o <code>break</code> só pode sair de um laço</label>
+<label><input type="radio" name="q6"> Porque faltou um <code>else</code></label>
+<label><input type="radio" name="q6"> Porque o <code>break</code> precisa de parênteses</label>
+<label><input type="radio" name="q6"> Não dá erro: o <code>break</code> sai do <code>if</code></label>
+</div>
+
+<h3>Missão final: três tentativas</h3>
+
+<div class="trylua" data-stdin="abc\npao123" data-goal="out:Entrou na tentativa 2;;src:\bbreak\b">
+<p class="try-task"><strong>Missão:</strong> o cofre da padaria dá <strong>3 tentativas</strong> para acertar a senha <code>pao123</code>. Complete o <code>for</code>: em cada volta, leia a senha; se estiver certa, guarde o número da tentativa em <code>acertou_em</code> e saia com <code>break</code>. A caixa vai "digitar" <code>abc</code> e <code>pao123</code>; tem de aparecer <code>Entrou na tentativa 2</code>.</p>
+<pre class="script" data-file="main.lua">local acertou_em = nil
+for tentativa = 1, 3 do
+  io.write("Senha: ")
+  local resposta = io.read()
+  -- se a resposta for "pao123", guarde a tentativa e saia do laço
+
+end
+if acertou_em then
+  print("Entrou na tentativa " .. acertou_em)
+else
+  print("Cofre bloqueado!")
+end
+</pre>
+<pre class="solucao" data-file="main.lua">local acertou_em = nil
+for tentativa = 1, 3 do
+  io.write("Senha: ")
+  local resposta = io.read()
+  if resposta == "pao123" then
+    acertou_em = tentativa
+    break
+  end
+end
+if acertou_em then
+  print("Entrou na tentativa " .. acertou_em)
+else
+  print("Cofre bloqueado!")
+end
+</pre>
+</div>
+
+<p>Depois de cumprir a missão, troque a senha do <code>if</code> por outra (por exemplo, <code>"bolo"</code>) e rode de novo: as duas respostas da caixa erram, a terceira leitura encontra a entrada vazia (<code>nil</code>), e tem de aparecer <code>Cofre bloqueado!</code>.</p>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li><code>break</code> ("quebrar") sai do laço na hora: o resto da volta e as voltas seguintes são abandonados, e o programa segue depois do <code>end</code> (ou do <code>until</code>).</li>
+  <li>Ele quase sempre fica dentro de um <code>if</code>: "se aconteceu tal coisa, pare".</li>
+  <li>Numa busca, <strong>guarde</strong> o resultado numa variável criada antes do laço e só depois dê o <code>break</code>; no fim, confira se achou.</li>
+  <li><code>while true do</code> com <code>break</code> é o laço com a saída no meio: ler, testar, usar.</li>
+  <li>O <code>break</code> sai só do laço mais de dentro, e só de laços (fora deles: <code>break outside loop</code>).</li>
+  <li>O Lua não tem <code>continue</code>: use um <code>if</code> em volta do resto do bloco, ou o <code>goto continue</code> da próxima aula, <a href="goto.html">goto e Rótulos</a>.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
