@@ -1,0 +1,701 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua Funções (function) — criando seus próprios comandos | Guia Lua</title>
+<meta name="description" content="Funções em Lua para quem está começando: a ideia da receita, como criar uma função com local function … end, a diferença entre definir e chamar, a ordem em que o programa roda, as três formas de escrever (local function, function global e local f = function) e os erros reais do Lua 5.5: chamar antes de definir (attempt to call a nil value), esquecer os parênteses e esquecer o end.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">Funções (function)</span></h1>
+
+<p class="intro">Você já usou várias funções sem perceber: <code>print()</code>, <code>io.write()</code>, <code>io.read()</code>, <code>type()</code>, <code>string.rep()</code>. Cada uma é um pedaço de código que alguém escreveu, deu um nome e deixou pronto para usar. Nesta aula você vai fazer o mesmo: <strong>criar os seus próprios comandos</strong>. Você junta algumas linhas, dá um nome a elas, e depois basta escrever esse nome para que todas rodem de novo, quantas vezes quiser.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O que é uma função, com a comparação da receita de bolo.</li>
+  <li>A criar uma função com <code>local function … end</code>, e o que é cada parte.</li>
+  <li>A diferença entre <strong>definir</strong> e <strong>chamar</strong> uma função (definir não roda nada).</li>
+  <li>Em que ordem o Lua executa um programa que tem funções.</li>
+  <li>Uma função chamando outra, e por que a ordem das definições importa.</li>
+  <li>As três formas de escrever uma função: <code>local function</code>, <code>function</code> (global) e <code>local f = function</code>, e qual usar.</li>
+  <li>Os erros reais: chamar antes de definir (<code>attempt to call a nil value</code>), errar o nome, esquecer os parênteses ou o <code>end</code>.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>A ideia: uma receita com nome</h2>
+<p>A Ana anotou no caderno a receita do bolo de milho da avó. Escrever a receita <strong>não faz bolo nenhum</strong>: é só uma lista de passos guardada com um título, "Bolo de milho". O bolo só aparece quando alguém pega o caderno e <strong>segue a receita</strong>. E a mesma receita serve para fazer um bolo hoje, outro no sábado, outro no aniversário: ninguém reescreve os passos a cada vez.</p>
+
+<p>Uma <strong>função</strong> é isso: um grupo de linhas de código guardado com um nome. São dois momentos diferentes:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Na cozinha</th><th>No Lua</th><th>O que acontece</th></tr>
+<tr><td>Escrever a receita no caderno</td><td><strong>Definir</strong> a função, com <code>function … end</code></td><td>O Lua guarda os passos com um nome. Nada é executado ainda</td></tr>
+<tr><td>Fazer o bolo seguindo a receita</td><td><strong>Chamar</strong> a função: <code>nome()</code></td><td>O Lua executa os passos guardados, um por um</td></tr>
+</table>
+</div>
+
+<p>"Função", em programação, não tem a ver com a função da matemática da escola (aquela do <em>f(x)</em>), pelo menos por enquanto: pense nela como uma <strong>receita com nome</strong>.</p>
+
+<hr>
+
+<h2>1. Definindo a primeira função</h2>
+<p>Toda manhã, o programa da Ana mostra duas mensagens. Vamos guardá-las numa função chamada <code>bom_dia</code>:</p>
+
+<pre class="file" data-file="so_definir.lua">local function bom_dia()
+  print("Bom dia, Ana!")
+  print("O café está pronto.")
+end
+</pre>
+
+<dl class="anatomy">
+  <dt>local</dt><dd>"Local": o nome <code>bom_dia</code> só vale <strong>neste arquivo</strong>, como uma variável <code>local</code> (aula <a href="local.html">local × Global</a>). É o jeito recomendado; a seção 6 mostra as outras formas.</dd>
+  <dt>function</dt><dd>"Função", em inglês. Avisa ao Lua: "vou criar uma função".</dd>
+  <dt>bom_dia</dt><dd>O <strong>nome</strong> da função, escolhido por você. Segue as mesmas regras dos nomes de variáveis (aula <a href="nomes-variaveis.html">Nomes de Variáveis</a>): letras minúsculas, palavras separadas por <code>_</code>, sem espaços e sem acentos.</dd>
+  <dt>()</dt><dd>Os parênteses são obrigatórios, mesmo vazios. Mais adiante, eles vão guardar as informações que a função recebe (aula <a href="parametros.html">Parâmetros e Argumentos</a>).</dd>
+  <dt>as linhas do meio</dt><dd>O <strong>corpo</strong> da função: os passos da receita. Tudo o que estiver entre a linha do <code>function</code> e o <code>end</code> pertence à função.</dd>
+  <dt>end</dt><dd>"Fim": fecha a função, como fecha o <code>if</code> e o <code>for</code> (aula <a href="sintaxe.html">Sintaxe e Blocos</a>). Quem diz onde a função termina é o <code>end</code>, não o recuo.</dd>
+</dl>
+
+<p>Os 2 espaços antes dos <code>print</code> são só para os olhos: o Lua não exige recuo nenhum. Mas eles mostram, de longe, o que está dentro da função, e todo programador Lua escreve assim.</p>
+
+<p>Agora rode o programa:</p>
+
+<pre class="term">$ lua so_definir.lua
+$                                                  « nenhuma linha de saída
+</pre>
+
+<p><strong>Não apareceu nada.</strong> E está certo: o programa só <strong>definiu</strong> a função. É a receita escrita no caderno. O Lua leu as linhas, guardou-as com o nome <code>bom_dia</code>, chegou ao fim do arquivo e terminou. Ninguém pediu o bolo.</p>
+
+<hr>
+
+<h2>2. Chamando a função</h2>
+<p>Para executar os passos guardados, você <strong>chama</strong> a função: escreve o nome dela seguido de parênteses, fora do bloco <code>function … end</code>.</p>
+
+<pre class="file" data-file="bom_dia.lua">local function bom_dia()
+  print("Bom dia, Ana!")
+  print("O café está pronto.")
+end
+
+bom_dia()
+</pre>
+
+<pre class="term">$ lua bom_dia.lua
+Bom dia, Ana!
+O café está pronto.
+</pre>
+
+<dl class="anatomy">
+  <dt>bom_dia</dt><dd>O nome da função que você quer executar.</dd>
+  <dt>()</dt><dd>Os parênteses são o "faça agora!". É o mesmo jeito de chamar o <code>print()</code>: nome e parênteses. Sem eles, o Lua nem aceita a linha (você vai ver em <a href="#errado">Quando dá errado</a>).</dd>
+</dl>
+
+<div class="tip">
+<strong>Uma linha em branco</strong>
+<p>A linha em branco entre o <code>end</code> e a chamada não é obrigatória. É costume: ela deixa claro onde a função termina e onde o resto do programa começa.</p>
+</div>
+
+<h3>Uma receita, vários bolos</h3>
+<p>A vantagem aparece quando você chama a função mais de uma vez. Cada chamada executa o corpo inteiro de novo:</p>
+
+<pre class="file" data-file="tres_vezes.lua">local function bom_dia()
+  print("Bom dia, Ana!")
+  print("O café está pronto.")
+end
+
+bom_dia()
+bom_dia()
+bom_dia()
+</pre>
+
+<pre class="term">$ lua tres_vezes.lua
+Bom dia, Ana!
+O café está pronto.
+Bom dia, Ana!
+O café está pronto.
+Bom dia, Ana!
+O café está pronto.
+</pre>
+
+<p>Três chamadas, seis linhas de saída: duas linhas por chamada.</p>
+
+<div class="trylua" data-goal="src:function despedida|despedida = function;;outre:Até amanhã!\nAté amanhã!;;semerro">
+<p class="try-task"><strong>Missão:</strong> crie uma função chamada <code>despedida</code> que mostre <code>Até amanhã!</code>. Depois, chame-a <strong>duas vezes</strong>. (A função <code>bom_dia</code> está aí de modelo.)</p>
+<pre class="script" data-file="main.lua">local function bom_dia()
+  print("Bom dia, Ana!")
+end
+
+bom_dia()
+</pre>
+<pre class="solucao" data-file="main.lua">local function bom_dia()
+  print("Bom dia, Ana!")
+end
+
+local function despedida()
+  print("Até amanhã!")
+end
+
+bom_dia()
+despedida()
+despedida()
+</pre>
+</div>
+
+<hr>
+
+<h2>3. Em que ordem o programa roda</h2>
+<p>Quem está começando costuma achar que o Lua executa tudo de cima para baixo, inclusive o que está dentro da função. Os números nas mensagens abaixo mostram a ordem de verdade:</p>
+
+<pre class="file" data-file="ordem.lua">print("1. Começou o programa")
+
+local function bom_dia()
+  print("3. Dentro da função")
+end
+
+print("2. A função foi definida, mas ainda não rodou")
+bom_dia()
+print("4. A função terminou, o programa continua")
+</pre>
+
+<pre class="term">$ lua ordem.lua
+1. Começou o programa
+2. A função foi definida, mas ainda não rodou
+3. Dentro da função
+4. A função terminou, o programa continua
+</pre>
+
+<ol class="passo">
+  <li>O Lua executa a linha 1 e mostra a mensagem 1.</li>
+  <li>Encontra o <code>local function</code>: <strong>guarda</strong> o corpo da função com o nome <code>bom_dia</code> e pula para depois do <code>end</code>, sem executar o <code>print</code> de dentro.</li>
+  <li>Mostra a mensagem 2.</li>
+  <li>Encontra a chamada <code>bom_dia()</code>: <strong>entra</strong> na função e executa o corpo dela (mensagem 3).</li>
+  <li>Quando chega ao <code>end</code>, <strong>volta</strong> para a linha logo depois da chamada e mostra a mensagem 4.</li>
+</ol>
+
+<p>É como a Ana cozinhando: ela está arrumando a cozinha, para, abre o caderno, faz o bolo seguindo a receita e, quando acaba, volta a arrumar a cozinha de onde parou.</p>
+
+<hr>
+
+<h2>4. Para que serve: escrever uma vez, mudar num lugar só</h2>
+<p>A padaria do bairro imprime um cabeçalho em cada nota. Sem função, as quatro linhas do cabeçalho apareceriam repetidas no programa a cada nota. Com uma função:</p>
+
+<pre class="file" data-file="padaria.lua">local function cabecalho()
+  print(string.rep("=", 30))
+  print("   PADARIA PÃO QUENTE")
+  print("   Rua das Flores, 120")
+  print(string.rep("=", 30))
+end
+
+cabecalho()
+print("Pão francês  x10   R$ 8,00")
+print("Leite        x1    R$ 5,50")
+print()
+cabecalho()
+print("Bolo de milho x1   R$ 18,00")
+</pre>
+
+<pre class="term">$ lua padaria.lua
+==============================
+   PADARIA PÃO QUENTE
+   Rua das Flores, 120
+==============================
+Pão francês  x10   R$ 8,00
+Leite        x1    R$ 5,50
+
+==============================
+   PADARIA PÃO QUENTE
+   Rua das Flores, 120
+==============================
+Bolo de milho x1   R$ 18,00
+</pre>
+
+<p>(O <code>string.rep("=", 30)</code> repete o sinal de igual 30 vezes, como na aula <a href="string-metodos.html">Funções de Texto</a>; o <code>print()</code> vazio pula uma linha.)</p>
+
+<p>No dia em que a padaria mudar de endereço, a Ana corrige <strong>uma</strong> linha, dentro da função, e todas as notas saem certas. Com o cabeçalho copiado e colado, ela teria de achar e corrigir cada cópia, e bastaria esquecer uma para uma nota sair com o endereço velho.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Vantagem</th><th>Por quê</th></tr>
+<tr><td>Não repetir código</td><td>Os passos são escritos uma vez e usados quantas vezes for preciso</td></tr>
+<tr><td>Mudar num lugar só</td><td>Corrigir a função corrige todas as chamadas</td></tr>
+<tr><td>Dar nome às coisas</td><td><code>cabecalho()</code> diz o que acontece; quatro <code>print</code> soltos, não</td></tr>
+<tr><td>Dividir um problema grande</td><td>Um programa grande vira várias funções pequenas, cada uma com uma tarefa</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>5. Uma função chamando outra</h2>
+<p>Dentro do corpo de uma função você pode escrever qualquer coisa que escreveria fora dela, inclusive a chamada de <strong>outra</strong> função:</p>
+
+<pre class="file" data-file="aviso.lua">local function linha()
+  print(string.rep("-", 20))
+end
+
+local function aviso()
+  linha()
+  print("Loja fechada às 18h")
+  linha()
+end
+
+aviso()
+</pre>
+
+<pre class="term">$ lua aviso.lua
+--------------------
+Loja fechada às 18h
+--------------------
+</pre>
+
+<p>O programa chama <code>aviso()</code>; o <code>aviso</code> chama <code>linha()</code>, que mostra os tracinhos e volta; o <code>aviso</code> mostra a mensagem; chama <code>linha()</code> de novo; e termina. Cada chamada volta exatamente para o ponto de onde saiu.</p>
+
+<div class="warning">
+<strong>Com <code>local function</code>, a ajudante vem primeiro</strong>
+<p>Repare que <code>linha</code> foi definida <strong>antes</strong> de <code>aviso</code>. Um nome <code>local</code> só existe da linha em que foi criado para baixo. Se <code>aviso</code> viesse primeiro, o <code>linha()</code> dentro dela não enxergaria a função de baixo, e o programa daria erro (veja o terceiro caso de <a href="#errado">Quando dá errado</a>). Regra prática: <strong>as funções pequenas, que as outras usam, ficam no alto do arquivo</strong>.</p>
+</div>
+
+<hr>
+
+<h2>6. Três formas de escrever uma função</h2>
+<p>No Lua, a mesma função pode ser escrita de três jeitos. Os três funcionam:</p>
+
+<pre class="file" data-file="tres_formas.lua">local function forma1()
+  print("forma 1: local function")
+end
+
+function forma2()
+  print("forma 2: function (global)")
+end
+
+local forma3 = function()
+  print("forma 3: local ... = function")
+end
+
+forma1()
+forma2()
+forma3()
+print(type(forma1), type(forma2), type(forma3))
+</pre>
+
+<pre class="term">$ lua tres_formas.lua
+forma 1: local function
+forma 2: function (global)
+forma 3: local ... = function
+function	function	function
+</pre>
+
+<p>O <code>type</code> (aula <a href="type.html">Descobrindo o Tipo</a>) responde <code>function</code> para as três: no Lua, uma função é um <strong>valor</strong>, como um número ou um texto, e fica guardada numa variável. A diferença entre as formas é <strong>que tipo de variável</strong> guarda a função:</p>
+
+<dl class="anatomy">
+  <dt>local function forma1() … end</dt><dd>A função fica numa variável <strong>local</strong>, que só existe deste ponto do arquivo para baixo. <strong>É a forma recomendada.</strong></dd>
+  <dt>function forma2() … end</dt><dd>Sem o <code>local</code>, a função vai para uma variável <strong>global</strong>, visível no programa inteiro, até em outros arquivos (módulos). É o mesmo problema da variável global (aula <a href="local.html">local × Global</a>): qualquer parte do programa pode, sem querer, trocar o que está nesse nome.</dd>
+  <dt>local forma3 = function() … end</dt><dd>Escreve a função <strong>sem nome</strong> (<code>function() … end</code>) e guarda numa variável local, como se guarda um número: <code>local x = 10</code>. Esse jeito fica claro na aula <a href="funcoes-valores.html">Funções São Valores</a>.</dd>
+</dl>
+
+<p>As formas 1 e 3 quase sempre se comportam igual. A diferença aparece quando a função chama a si mesma (aula <a href="recursao.html">Recursão</a>): o <code>local function</code> já conhece o próprio nome por dentro; o <code>local f = function</code>, não (lá dentro, o nome ainda é uma global vazia, e o Lua responde <code>attempt to call a nil value (global 'f')</code>).</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Forma</th><th>Quando usar</th></tr>
+<tr><td><code>local function nome() … end</code></td><td><strong>Sempre que puder.</strong> É o padrão deste guia</td></tr>
+<tr><td><code>local nome = function() … end</code></td><td>Quando a ideia é "guardar uma função numa variável", como nas aulas <a href="funcoes-valores.html">Funções São Valores</a> e <a href="closures.html">Closures</a></td></tr>
+<tr><td><code>function nome() … end</code> (global)</td><td>Só quando a função precisa mesmo ser vista de qualquer lugar. No modo interativo (<code>&gt;</code>) é a que funciona, porque o <code>local</code> não sobrevive de uma linha para a outra lá</td></tr>
+</table>
+</div>
+
+<div class="note">
+<strong>Lua 5.1, LuaJIT, 5.4 e Lua 5.5</strong>
+<p>As três formas são iguais em todas as versões: o mesmo <code>tres_formas.lua</code> roda igual no <code>lua5.1</code>, no <code>luajit</code> e no <code>lua5.4</code>. O que muda é a mensagem de erro do Lua antigo (veja abaixo). O Lua 5.5 acrescentou uma quarta forma, <code>global function nome() … end</code>, que faz parte da declaração <code>global</code> e tem regras próprias: ela fica para a aula <a href="global.html">A Declaração global</a>. <span class="versao">5.5</span></p>
+</div>
+
+<h3>A função vazia</h3>
+<p>Às vezes você já sabe o nome da função, mas ainda não escreveu o corpo. No Lua, uma função vazia é permitida: basta o <code>function</code> e o <code>end</code>, com um comentário no meio para lembrar:</p>
+
+<pre class="file" data-file="rascunho.lua">local function relatorio()
+  -- ainda vou escrever
+end
+
+relatorio()
+print("Fim")
+</pre>
+
+<pre class="term">$ lua rascunho.lua
+Fim
+</pre>
+
+<p>A chamada <code>relatorio()</code> funcionou e não mostrou nada, porque o corpo está vazio. Depois a Ana troca o comentário pelas linhas de verdade.</p>
+
+<h3>Tudo numa linha</h3>
+<p>Para o Lua, o que importa são as palavras <code>function</code> e <code>end</code>, não as quebras de linha. Uma função bem curta pode caber numa linha só:</p>
+
+<pre class="file" data-file="uma_linha.lua">local function bom_dia() print("Bom dia, Ana!") end
+bom_dia()
+</pre>
+
+<pre class="term">$ lua uma_linha.lua
+Bom dia, Ana!
+</pre>
+
+<p>Use isso só para funções de uma linha. Com mais passos, um por linha é bem mais fácil de ler.</p>
+
+<div class="trylua">
+<p class="try-task"><strong>Experimente:</strong> rode o programa e veja as três formas. Depois, tire o <code>local</code> da <code>forma3</code> e rode de novo: continua funcionando (agora é global). Por fim, escreva <code>print(forma1)</code> no final e veja o que aparece.</p>
+<pre class="script" data-file="main.lua">local function forma1()
+  print("forma 1")
+end
+
+function forma2()
+  print("forma 2")
+end
+
+local forma3 = function()
+  print("forma 3")
+end
+
+forma1()
+forma2()
+forma3()
+</pre>
+</div>
+
+<p>O <code>print(forma1)</code> mostra algo como <code>function: 0x80d790</code>: "é uma função, guardada neste endereço da memória". O número muda de uma execução para outra (no lab saiu <code>function: 0x560dd7c3bae0</code> e, rodando de novo, <code>function: 0x55ccf47f6ae0</code>). Se isso aparecer no lugar do que a função deveria mostrar, alguém escreveu <code>print(nome)</code> em vez de <code>nome()</code>.</p>
+
+<hr>
+
+<h2>Formas diferentes de repetir as mesmas linhas</h2>
+<p>As três versões abaixo mostram "Bom dia, Ana!" três vezes:</p>
+
+<pre class="file" data-file="forma_a.lua">print("Bom dia, Ana!")
+print("Bom dia, Ana!")
+print("Bom dia, Ana!")
+</pre>
+
+<pre class="file" data-file="forma_b.lua">for vez = 1, 3 do
+  print("Bom dia, Ana!")
+end
+</pre>
+
+<pre class="file" data-file="forma_c.lua">local function bom_dia()
+  print("Bom dia, Ana!")
+end
+
+bom_dia()
+bom_dia()
+bom_dia()
+</pre>
+
+<pre class="term">$ lua forma_a.lua
+Bom dia, Ana!
+Bom dia, Ana!
+Bom dia, Ana!
+$ lua forma_b.lua
+Bom dia, Ana!
+Bom dia, Ana!
+Bom dia, Ana!
+$ lua forma_c.lua
+Bom dia, Ana!
+Bom dia, Ana!
+Bom dia, Ana!
+</pre>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Forma</th><th>Quando usar</th></tr>
+<tr><td>Copiar e colar as linhas</td><td>Só quando é uma linha curta, usada uma ou duas vezes. Cada cópia é mais um lugar para corrigir depois</td></tr>
+<tr><td>Um laço (<code>for</code>, aula <a href="for-numerico.html">for Numérico</a>)</td><td>Quando as repetições vêm <strong>seguidas</strong>, uma atrás da outra</td></tr>
+<tr><td>Uma função</td><td>Quando o mesmo grupo de linhas aparece em <strong>lugares diferentes</strong> do programa (o cabeçalho antes de cada nota), ou quando dar um nome deixa o programa mais claro</td></tr>
+</table>
+</div>
+
+<p>Laço e função se combinam: dá para chamar uma função dentro de um <code>for</code>, e escrever um <code>for</code> dentro de uma função.</p>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+
+<div class="cenario">
+<strong>Chamar a função antes de definir</strong>
+<pre class="file" data-file="antes.lua">bom_dia()
+
+local function bom_dia()
+  print("Bom dia, Ana!")
+end
+</pre>
+<pre class="term">$ lua antes.lua
+lua: antes.lua:1: attempt to call a nil value (global 'bom_dia')
+stack traceback:
+	antes.lua:1: in main chunk
+	[C]: in ?
+</pre>
+<p>Linha por linha:</p>
+<dl class="anatomy">
+  <dt>lua: antes.lua:1:</dt><dd>Quem reclama é o programa <code>lua</code>; o erro foi no arquivo <code>antes.lua</code>, na <strong>linha 1</strong>.</dd>
+  <dt>attempt to call a nil value</dt><dd>"Tentativa de chamar um valor <code>nil</code>". Chamar é usar os parênteses, <code>bom_dia()</code>. Mas, na linha 1, o nome <code>bom_dia</code> ainda está vazio: guarda <code>nil</code>, o "nada" do Lua (aula <a href="nil.html">O Valor nil</a>). E não dá para "executar o nada".</dd>
+  <dt>(global 'bom_dia')</dt><dd>O Lua conta qual nome estava vazio: a variável <strong>global</strong> <code>bom_dia</code>. Global? Sim: na linha 1, a <code>local</code> da linha 3 ainda não existe, então o Lua procurou uma global com esse nome, e não havia.</dd>
+  <dt>stack traceback:</dt><dd>"Rastro da pilha": o caminho até o erro, da chamada mais recente para a mais antiga.</dd>
+  <dt>antes.lua:1: in main chunk</dt><dd>O erro aconteceu na linha 1, no "pedaço principal" (<em>main chunk</em>): o programa em si, fora de qualquer função.</dd>
+  <dt>[C]: in ?</dt><dd>Quem começou tudo: o próprio programa <code>lua</code>, escrito em linguagem C. Essa linha aparece no fim de todo erro; pode ignorar.</dd>
+</dl>
+<p>Lembre da ordem do programa: a função só passa a existir quando o Lua passa pela definição. É como pedir o bolo de milho antes de a receita ter sido escrita no caderno. Sem o <code>local</code> (<code>function bom_dia()</code>), a mensagem é exatamente a mesma. <strong>Como consertar:</strong> coloque as funções no <strong>começo</strong> do arquivo e as chamadas depois delas.</p>
+<p>No Lua 5.1 e no LuaJIT a mesma frase vem em outra ordem: <code>attempt to call global 'bom_dia' (a nil value)</code>. Se você achar essa forma num fórum, é o mesmo erro.</p>
+</div>
+
+<div class="cenario">
+<strong>Errar o nome na chamada</strong>
+<pre class="file" data-file="nome_errado.lua">local function bom_dia()
+  print("Bom dia, Ana!")
+end
+
+bom_dai()
+</pre>
+<pre class="term">$ lua nome_errado.lua
+lua: nome_errado.lua:5: attempt to call a nil value (global 'bom_dai')
+stack traceback:
+	nome_errado.lua:5: in main chunk
+	[C]: in ?
+</pre>
+<p>O mesmo erro, agora na linha 5 e com o nome trocado: <code>'bom_dai'</code>. O Lua não sugere o nome certo; ele só diz que <code>bom_dai</code> está vazio. <strong>Como consertar:</strong> compare, letra por letra, o nome entre aspas na mensagem com o nome da definição. Maiúsculas e minúsculas também contam (<code>Bom_dia</code> é outro nome).</p>
+</div>
+
+<div class="cenario">
+<strong>A função de cima chama uma função de baixo</strong>
+<pre class="file" data-file="dentro_ordem.lua">local function aviso()
+  linha()
+  print("Loja fechada às 18h")
+end
+
+local function linha()
+  print(string.rep("-", 20))
+end
+
+aviso()
+</pre>
+<pre class="term">$ lua dentro_ordem.lua
+lua: dentro_ordem.lua:2: attempt to call a nil value (global 'linha')
+stack traceback:
+	dentro_ordem.lua:2: in local 'aviso'
+	dentro_ordem.lua:10: in main chunk
+	[C]: in ?
+</pre>
+<p>Agora o rastro tem duas linhas do programa, e vale ler de baixo para cima:</p>
+<dl class="anatomy">
+  <dt>dentro_ordem.lua:10: in main chunk</dt><dd>Na linha 10, o programa principal chamou <code>aviso()</code>.</dd>
+  <dt>dentro_ordem.lua:2: in local 'aviso'</dt><dd>Dentro da função <strong>local</strong> <code>aviso</code>, na linha 2, o <code>linha()</code> deu o erro.</dd>
+</dl>
+<p>A chamada <code>aviso()</code> está no fim, depois das duas definições. Mesmo assim deu erro, porque, quando o Lua leu a linha 2, a <code>local linha</code> (linha 6) ainda não existia. Para a função <code>aviso</code>, o nome <code>linha</code> ficou valendo a global <code>linha</code>, que nunca foi criada. <strong>Como consertar:</strong> mude a ordem: a função <code>linha</code> vem antes da <code>aviso</code>, como na seção 5.</p>
+</div>
+
+<div class="cenario">
+<strong>Esquecer os parênteses na chamada</strong>
+<pre class="file" data-file="sem_parenteses.lua">local function bom_dia()
+  print("Bom dia, Ana!")
+end
+
+bom_dia
+print("Fim do programa")
+</pre>
+<pre class="term">$ lua sem_parenteses.lua
+lua: sem_parenteses.lua:6: syntax error near 'print'
+</pre>
+<p><code>syntax error near 'print'</code>: "erro de sintaxe perto de <code>print</code>". Para o Lua, um nome sozinho numa linha não é um comando completo: depois de <code>bom_dia</code> ele esperava <code>()</code> (chamar) ou <code>=</code> (guardar algo no nome). Em vez disso encontrou o <code>print</code> da linha seguinte, e por isso a mensagem fala da <strong>linha 6</strong>, não da 5. Repare que não há <code>stack traceback</code> nem "Bom dia": com erro de sintaxe, o Lua recusa o arquivo inteiro antes de executar a primeira linha.</p>
+<p><strong>Dica:</strong> quando a mensagem de sintaxe aponta para uma linha que parece certa, olhe a linha de <strong>cima</strong>. <strong>Como consertar:</strong> <code>bom_dia()</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Esquecer o <code>end</code></strong>
+<pre class="file" data-file="sem_end.lua">local function bom_dia()
+  print("Bom dia, Ana!")
+
+bom_dia()
+</pre>
+<pre class="term">$ lua sem_end.lua
+lua: sem_end.lua:5: 'end' expected (to close 'function' at line 1) near &lt;eof&gt;
+</pre>
+<p><code>'end' expected (to close 'function' at line 1) near &lt;eof&gt;</code>: "esperava um <code>end</code> (para fechar o <code>function</code> da linha 1) perto do fim do arquivo". O <code>&lt;eof&gt;</code> é <em>end of file</em>, "fim do arquivo": o Lua leu tudo procurando o <code>end</code> e não achou. Repare que, sem o <code>end</code>, a chamada <code>bom_dia()</code> da linha 4 virou parte do corpo da função. <strong>Como consertar:</strong> coloque o <code>end</code> logo depois do último passo da função.</p>
+</div>
+
+<div class="cenario">
+<strong>Esquecer os parênteses na definição (ou escrever como em outra linguagem)</strong>
+<pre class="file" data-file="sem_parenteses_def.lua">local function bom_dia
+  print("Bom dia, Ana!")
+end
+
+bom_dia()
+</pre>
+<pre class="term">$ lua sem_parenteses_def.lua
+lua: sem_parenteses_def.lua:2: '(' expected near 'print'
+</pre>
+<p><code>'(' expected near 'print'</code>: "esperava <code>(</code> perto de <code>print</code>". Na definição, os parênteses também são obrigatórios. Quem vem do Python e escreve <code>def bom_dia():</code> recebe <code>syntax error near 'bom_dia'</code>: no Lua, a palavra é <code>function</code>, não há dois-pontos e o bloco termina com <code>end</code>. <strong>Como consertar:</strong> <code>local function bom_dia()</code>.</p>
+</div>
+
+<div class="trylua" data-goal="outre:Bem-vindo à Padaria Pão Quente!\nHorário da padaria:\nSeg a sáb: 6h às 20h\nDomingo: 7h às 12h;;semerro">
+<p class="try-task"><strong>Missão:</strong> o programa da padaria deveria mostrar as boas-vindas e, logo depois, o horário de funcionamento. Mas ele tem <strong>dois</strong> erros desta aula. Rode, leia a mensagem, conserte, e rode de novo (o segundo erro só aparece depois que o primeiro sai).</p>
+<pre class="script" data-file="main.lua">mostrar_horario()
+
+local function mostrar_horario()
+  print("Horário da padaria:")
+  print("Seg a sáb: 6h às 20h")
+  print("Domingo: 7h às 12h")
+end
+
+print("Bem-vindo à Padaria Pão Quente!")
+mostrar_horario
+</pre>
+<pre class="solucao" data-file="main.lua">local function mostrar_horario()
+  print("Horário da padaria:")
+  print("Seg a sáb: 6h às 20h")
+  print("Domingo: 7h às 12h")
+end
+
+print("Bem-vindo à Padaria Pão Quente!")
+mostrar_horario()
+</pre>
+</div>
+
+<hr>
+
+<h2>Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>O que faz</th></tr>
+<tr><td><code>local function nome() … end</code></td><td>Define (cria e guarda) uma função numa variável local. Não executa o corpo</td></tr>
+<tr><td><code>function nome() … end</code></td><td>O mesmo, mas numa variável global (evite)</td></tr>
+<tr><td><code>local nome = function() … end</code></td><td>Uma função sem nome guardada numa variável local</td></tr>
+<tr><td><code>nome()</code></td><td>Chama a função: executa o corpo e depois volta para a linha seguinte</td></tr>
+<tr><td><code>print(nome)</code></td><td>Mostra <code>function: 0x…</code> (a função em si, sem executar; o endereço muda a cada execução)</td></tr>
+<tr><td><code>type(nome)</code></td><td><code>function</code></td></tr>
+<tr><td><code>local function nome() end</code></td><td>Uma função vazia: permitida, não faz nada</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Sintoma</th><th>Causa provável</th></tr>
+<tr><td><code>attempt to call a nil value (global '…')</code></td><td>Chamada antes da definição, nome escrito errado, ou uma função <code>local</code> chamando outra que está mais abaixo</td></tr>
+<tr><td><code>syntax error near …</code> na linha seguinte a uma chamada</td><td>Faltaram os parênteses: <code>nome</code> em vez de <code>nome()</code></td></tr>
+<tr><td><code>'end' expected (to close 'function' at line N) near &lt;eof&gt;</code></td><td>Faltou o <code>end</code> da função que começa na linha N</td></tr>
+<tr><td><code>'(' expected near …</code></td><td>Faltaram os parênteses na linha do <code>function</code></td></tr>
+<tr><td><code>function: 0x…</code> na saída</td><td><code>print(nome)</code> no lugar de <code>nome()</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. Criando a função</h3>
+<p>Complete a palavra que cria uma função:</p>
+<div class="ex-code">local <input data-answer="function" aria-label="palavra-chave"> mostrar_menu()<br>&nbsp;&nbsp;print("Café, pão e bolo")<br>end</div>
+</div>
+
+<div class="exercise">
+<h3>2. Fechando a função</h3>
+<p>Complete a palavra que <strong>fecha</strong> a função:</p>
+<div class="ex-code">local function mostrar_menu()<br>&nbsp;&nbsp;print("Café, pão e bolo")<br><input data-answer="end" aria-label="palavra que fecha"></div>
+</div>
+
+<div class="exercise">
+<h3>3. Chamando a função</h3>
+<p>Complete a linha que <strong>executa</strong> a função do exercício anterior:</p>
+<div class="ex-code">mostrar_menu<input data-answer="()" aria-label="o que falta"></div>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">4. Um arquivo tem só a definição de uma função, com dois <code>print</code> dentro, e nenhuma chamada. O que aparece quando você roda o programa?</p>
+<label><input type="radio" name="q4"> As duas mensagens dos <code>print</code></label>
+<label><input type="radio" name="q4"> Nada: definir não executa o corpo</label>
+<label><input type="radio" name="q4"> <code>attempt to call a nil value</code></label>
+<label><input type="radio" name="q4"> Um erro de sintaxe, porque toda função precisa ser chamada</label>
+</div>
+
+<div class="mc" data-answer="3">
+<p class="mc-q">5. A primeira linha de um programa é <code>saudacao()</code>, e a função <code>saudacao</code> é definida na linha 3. O que o Lua responde?</p>
+<label><input type="radio" name="q5"> Mostra a saudação normalmente</label>
+<label><input type="radio" name="q5"> <code>'end' expected</code></label>
+<label><input type="radio" name="q5"> <code>attempt to call a nil value (global 'saudacao')</code></label>
+<label><input type="radio" name="q5"> Nada, e termina sem erro</label>
+</div>
+
+<div class="mc" data-answer="1">
+<p class="mc-q">6. Qual é a ordem das mensagens deste programa?</p>
+<pre class="file" data-file="exercicio.lua">local function b()
+  print("B")
+end
+
+print("A")
+b()
+print("C")
+</pre>
+<label><input type="radio" name="q6"> A, B, C</label>
+<label><input type="radio" name="q6"> B, A, C</label>
+<label><input type="radio" name="q6"> A, C, B</label>
+<label><input type="radio" name="q6"> A, C</label>
+</div>
+
+<div class="mc" data-answer="4">
+<p class="mc-q">7. Qual das três formas este guia recomenda usar sempre que possível?</p>
+<label><input type="radio" name="q7"> <code>function nome() … end</code></label>
+<label><input type="radio" name="q7"> <code>def nome(): …</code></label>
+<label><input type="radio" name="q7"> <code>nome = function() … end</code></label>
+<label><input type="radio" name="q7"> <code>local function nome() … end</code></label>
+</div>
+
+<h3>Missão final: o cardápio do café da manhã</h3>
+
+<div class="trylua" data-goal="src:function cardapio|cardapio = function;;outre:CARDÁPIO\nCafé: R\$ 4,00\nPão na chapa: R\$ 6,00\nCARDÁPIO\nCafé: R\$ 4,00\nPão na chapa: R\$ 6,00;;semerro">
+<p class="try-task"><strong>Missão:</strong> a padaria mostra o cardápio duas vezes, e as linhas estão repetidas. Guarde as três linhas numa função chamada <code>cardapio</code> e troque as repetições por duas chamadas. A saída tem de continuar igual.</p>
+<pre class="script" data-file="main.lua">print("CARDÁPIO")
+print("Café: R$ 4,00")
+print("Pão na chapa: R$ 6,00")
+print("CARDÁPIO")
+print("Café: R$ 4,00")
+print("Pão na chapa: R$ 6,00")
+</pre>
+<pre class="solucao" data-file="main.lua">local function cardapio()
+  print("CARDÁPIO")
+  print("Café: R$ 4,00")
+  print("Pão na chapa: R$ 6,00")
+end
+
+cardapio()
+cardapio()
+</pre>
+</div>
+
+<p>Agora mude o preço do café dentro da função e rode de novo: as duas cópias do cardápio mudam juntas.</p>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li>Uma <strong>função</strong> é um grupo de linhas guardado com um nome: uma receita.</li>
+  <li><strong>Definir</strong> (<code>local function nome() … end</code>) só guarda a receita; não executa nada.</li>
+  <li><strong>Chamar</strong> (<code>nome()</code>) executa o corpo e, no fim, volta para a linha seguinte. Dá para chamar quantas vezes quiser.</li>
+  <li>A definição tem de vir <strong>antes</strong> da chamada, e a função ajudante antes da que a usa; senão, <code>attempt to call a nil value (global '…')</code>.</li>
+  <li>Três formas: <code>local function</code> (use esta), <code>function</code> sem <code>local</code> (global, evite) e <code>local f = function</code> (a função guardada numa variável).</li>
+  <li>Sem parênteses na chamada → <code>syntax error</code>. Sem <code>end</code> → <code>'end' expected … near &lt;eof&gt;</code>. Função vazia é permitida.</li>
+  <li>Funções evitam repetição e deixam corrigir num lugar só. Na próxima aula, elas passam a receber informações: <a href="parametros.html">Parâmetros e Argumentos</a>.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
