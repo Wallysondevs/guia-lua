@@ -147,7 +147,7 @@ Lua 5.5.0  Copyright (C) 1994-2025 Lua.org, PUC-Rio
 <p>As partidas no terminal desta página foram jogadas com a semente fixada <strong>por fora</strong> do programa, com a variável de ambiente <code>LUA_INIT</code> (o <code>lua</code> roda o código dela antes do arquivo). Assim o programa fica igual ao do jogo de verdade, e você pode repetir as partidas no seu computador:</p>
 <pre class="term" data-cwd="~/projetos/adivinhacao">$ export LUA_INIT="math.randomseed(13)"
 $ lua adivinhacao.lua</pre>
-<p>Com a semente 13, os números secretos são 28, 18 e 49. Para voltar ao normal, feche o terminal ou rode <code>unset LUA_INIT</code>.</p>
+<p>Com a semente 13, os números secretos são 28, 18 e 49. Para voltar ao normal, feche o terminal ou rode <code>unset LUA_INIT</code>. No editor do guia não há como definir o <code>LUA_INIT</code> (ele roda só o <code>lua main.lua</code>); por isso as missões trazem o <code>math.randomseed(42)</code> dentro do próprio programa, e lá ele dá os mesmos números do terminal: 50 e 76.</p>
 </div>
 
 <div class="warning">
