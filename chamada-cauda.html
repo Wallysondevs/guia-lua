@@ -344,7 +344,7 @@ Até logo!</pre>
 
 <p>Por mais voltas que o visitante dê pela casa, a pilha nunca cresce: cada cômodo é uma chamada de cauda. Com <code>cozinha()</code> sem o <code>return</code>, cada visita deixaria uma chamada esperando, e um visitante muito animado acabaria num <code>stack overflow</code>.</p>
 
-<div class="trylua">
+<div class="trylua" data-digitar="cozinha\nsala\nquintal\nsala\nsair">
 <p class="try-task"><strong>Experimente:</strong> rode e passeie pela casa digitando os cômodos no terminal da caixa (<code>cozinha</code>, <code>sala</code>, <code>quintal</code>…); para terminar, digite <code>sair</code>. Depois acrescente um cômodo novo, o <code>quarto</code>: uma função <code>quarto()</code> que termina com <code>return sala()</code> (não esqueça de pôr o nome <code>quarto</code> na linha 1) e uma opção a mais no <code>if</code> da <code>sala</code>.</p>
 <pre class="script" data-file="main.lua">local sala, cozinha, quintal
 
@@ -417,7 +417,7 @@ stack traceback:
         [C]: in ?
 $ echo $?
 1</pre>
-<p><code>interrupted!</code> quer dizer "interrompido": foi você que mandou parar. O rastro de novo mostra <code>(...tail calls...)</code> no lugar das chamadas descartadas. No editor do guia, depois de 10 segundos, a caixa para o programa sozinha com a mensagem <code>o editor parou o programa: ele rodou mais de 10 segundos sem terminar — laço infinito?</code>. <strong>Como consertar:</strong> o mesmo de sempre: um caso base que seja alcançado.</p>
+<p><code>interrupted!</code> quer dizer "interrompido": foi você que mandou parar. O rastro de novo mostra <code>(...tail calls...)</code> no lugar das chamadas descartadas. No editor do guia, depois de 10 segundos, a caixa para o programa sozinha com a mensagem <code>o editor parou o programa: ele rodou mais de 10 segundos sem terminar — laço infinito?</code>. Antes disso, dá para parar na hora com o botão <strong>■ Parar</strong>: no editor aparece só <code>^C</code> e <code>[programa interrompido]</code>, sem o <code>interrupted!</code> e o rastro. <strong>Como consertar:</strong> o mesmo de sempre: um caso base que seja alcançado.</p>
 </div>
 
 <div class="cenario">
