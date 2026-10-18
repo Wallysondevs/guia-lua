@@ -1,0 +1,460 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua table.concat — juntando os itens de uma lista num texto | Guia Lua</title>
+<meta name="description" content="table.concat no Lua para quem nunca programou: juntar os itens de uma lista num texto só, com ou sem separador, só uma parte da lista, números na lista, o 'e' antes do último item, listas de fichas, por que ele é melhor que .. num laço, e os erros reais do Lua 5.5: invalid value (table) at index 2 in table for 'concat', item nil, lista nil.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">table.concat</span>: Juntando Itens</h1>
+
+<p class="intro">Você já viu que <code>print(compras)</code> não mostra os itens da lista, só <code>table: 0x…</code> (veja <a href="tabelas.html">Tabelas</a>), e que <code>"Lista: " .. compras</code> dá erro. Para transformar uma lista inteira num texto, como <code>pão, leite, café</code>, o Lua tem a função <code>table.concat</code>. O nome vem de <em>concatenar</em>, "juntar em sequência", a mesma ideia do <a href="concatenacao.html">..</a>, só que para todos os itens de uma lista de uma vez, com o separador que você escolher entre eles.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li><code>table.concat(lista)</code> e <code>table.concat(lista, separador)</code>.</li>
+  <li>Juntar só uma parte: <code>table.concat(lista, sep, i, j)</code>.</li>
+  <li>Listas de números (funciona) e listas com <code>true</code>, tabelas ou <code>nil</code> (não funciona).</li>
+  <li>O "e" antes do último item: <code>pão, leite e café</code>.</li>
+  <li>Como mostrar uma lista de fichas: monte antes uma lista de textos.</li>
+  <li>Por que <code>table.concat</code> é melhor que <code>..</code> dentro de um laço.</li>
+  <li>Os erros reais: <code>invalid value (table) at index 2 in table for 'concat'</code>, o item <code>nil</code> que some sem aviso, a lista <code>nil</code>.</li>
+</ul>
+</div>
+
+<p>Todos os programas desta aula rodaram no <strong>Lua 5.5</strong> da máquina da Ana (usuária <code>ana</code>, computador <code>notebook</code>), com <code>lua arquivo.lua</code>.</p>
+
+<hr>
+
+<h2>A ideia: etiquetas num barbante</h2>
+<p>A Ana escreveu cada item da lista de compras numa etiqueta. Agora quer pendurar todas num barbante, em ordem, para pôr na geladeira. Entre uma etiqueta e outra, ela dá um nó. O <code>table.concat</code> é esse barbante: ele pega as etiquetas (os itens da lista, do 1 até o último) e as junta num texto só, pondo o <strong>separador</strong> (o nó) <strong>entre</strong> elas. Não antes da primeira, não depois da última: só entre.</p>
+
+<hr>
+
+<h2>1. O primeiro <code>table.concat</code></h2>
+
+<pre class="file" data-file="concat1.lua">local compras = {"pão", "leite", "café"}
+print(table.concat(compras))
+print(table.concat(compras, ", "))
+print(table.concat(compras, " | "))
+print(table.concat(compras, "\n"))
+</pre>
+
+<pre class="term">$ lua concat1.lua
+pãoleitecafé
+pão, leite, café
+pão | leite | café
+pão
+leite
+café</pre>
+
+<dl class="anatomy">
+  <dt>table.concat(compras)</dt><dd>Sem separador, os itens ficam grudados: <code>pãoleitecafé</code>. O separador padrão é o texto vazio <code>""</code>.</dd>
+  <dt>table.concat(compras, ", ")</dt><dd>O 2º argumento é o <strong>separador</strong>: aqui, vírgula e espaço. Repare que não sobrou vírgula no fim.</dd>
+  <dt>" | "</dt><dd>Qualquer texto serve de separador.</dd>
+  <dt>"\n"</dt><dd>O "Enter" (veja <a href="strings-escape.html">Caracteres de Escape</a>): um item por linha, num <code>print</code> só.</dd>
+</dl>
+
+<p>O <code>table.concat</code> <strong>devolve</strong> um texto novo e não muda a lista. Você pode mostrar esse texto, guardar numa variável (<code>local linha = table.concat(compras, ", ")</code>) ou juntar com outros textos usando <code>..</code>.</p>
+
+<div class="trylua" data-goal="out:pão; leite; café; manteiga">
+<p class="try-task"><strong>Missão:</strong> o programa mostra os itens grudados. Passe um separador para sair <code>pão; leite; café; manteiga</code> (ponto e vírgula e um espaço).</p>
+<pre class="script" data-file="main.lua">local compras = {"pão", "leite", "café", "manteiga"}
+print(table.concat(compras))
+</pre>
+<pre class="solucao" data-file="main.lua">local compras = {"pão", "leite", "café", "manteiga"}
+print(table.concat(compras, "; "))
+</pre>
+</div>
+
+<hr>
+
+<h2>2. Só uma parte da lista: <code>i</code> e <code>j</code></h2>
+<p>Depois do separador, dá para dizer <strong>de qual posição até qual</strong> juntar:</p>
+
+<pre class="file" data-file="parte.lua">local fila = {"Ana", "Bia", "Caio", "Davi", "Eva"}
+print(table.concat(fila, ", ", 2))
+print(table.concat(fila, ", ", 2, 4))
+print(table.concat(fila, ", ", 3, 3))
+print("[" .. table.concat(fila, ", ", 4, 2) .. "]")
+print("[" .. table.concat({}, ", ") .. "]")
+</pre>
+
+<pre class="term">$ lua parte.lua
+Bia, Caio, Davi, Eva
+Bia, Caio, Davi
+Caio
+[]
+[]</pre>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Chamada</th><th>Junta</th></tr>
+<tr><td><code>table.concat(fila, ", ", 2)</code></td><td>Da posição 2 até o fim (<code>#fila</code>)</td></tr>
+<tr><td><code>table.concat(fila, ", ", 2, 4)</code></td><td>Das posições 2 a 4</td></tr>
+<tr><td><code>table.concat(fila, ", ", 3, 3)</code></td><td>Só a posição 3 (um item só: sem separador)</td></tr>
+<tr><td><code>table.concat(fila, ", ", 4, 2)</code></td><td>Começo depois do fim: texto vazio <code>""</code>, sem erro</td></tr>
+<tr><td><code>table.concat({}, ", ")</code></td><td>Lista vazia: texto vazio <code>""</code></td></tr>
+</table>
+</div>
+
+<p>Os colchetes <code>[</code> e <code>]</code> foram postos em volta só para dar para ver o texto vazio: sem eles, o <code>print</code> mostraria uma linha em branco.</p>
+
+<hr>
+
+<h2>3. Listas de números</h2>
+<p>O <code>table.concat</code> aceita <strong>textos e números</strong>. Os números viram texto do mesmo jeito que o <code>print</code> os mostra:</p>
+
+<pre class="file" data-file="numeros_concat.lua">local notas = {7, 8.5, 10, 6.0}
+print(table.concat(notas, " - "))
+local tabuada = {}
+for i = 1, 10 do
+  tabuada[i] = 3 * i
+end
+print("Tabuada do 3: " .. table.concat(tabuada, " "))
+</pre>
+
+<pre class="term">$ lua numeros_concat.lua
+7 - 8.5 - 10 - 6.0
+Tabuada do 3: 3 6 9 12 15 18 21 24 27 30</pre>
+
+<p>O <code>6.0</code> continuou <code>6.0</code>: ele foi escrito como float, e o Lua mostra o <code>.0</code> dos floats (veja <a href="numeros.html">Números</a>). Para controlar as casas decimais, formate cada número antes com <a href="string-format.html">string.format</a> e junte os textos.</p>
+
+<h3>Uma linha de planilha</h3>
+<p>Com o separador <code>";"</code>, uma lista vira uma linha de arquivo CSV, que as planilhas abrem (veja <a href="arquivos-escrever.html">Escrevendo Arquivos</a>):</p>
+
+<pre class="file" data-file="csv.lua">local aluno = {"Ana", 8, 9.5, 7}
+print(table.concat(aluno, ";"))
+</pre>
+
+<pre class="term">$ lua csv.lua
+Ana;8;9.5;7</pre>
+
+<hr>
+
+<h2>4. O "e" antes do último</h2>
+<p>Em português, a gente diz "pão, leite <strong>e</strong> café". Com as posições <code>i</code> e <code>j</code>, dá para juntar todos menos o último com vírgula, e pôr o último com " e ":</p>
+
+<pre class="file" data-file="e_final.lua">local function juntar(lista)
+  if #lista == 0 then
+    return "nada"
+  elseif #lista == 1 then
+    return lista[1]
+  end
+  return table.concat(lista, ", ", 1, #lista - 1) .. " e " .. lista[#lista]
+end
+print("Comprei " .. juntar({"pão", "leite", "café"}) .. ".")
+print("Comprei " .. juntar({"pão", "leite"}) .. ".")
+print("Comprei " .. juntar({"pão"}) .. ".")
+print("Comprei " .. juntar({}) .. ".")
+</pre>
+
+<pre class="term">$ lua e_final.lua
+Comprei pão, leite e café.
+Comprei pão e leite.
+Comprei pão.
+Comprei nada.</pre>
+
+<dl class="anatomy">
+  <dt>table.concat(lista, ", ", 1, #lista - 1)</dt><dd>Todos os itens, do primeiro ao <strong>penúltimo</strong>, separados por vírgula: <code>pão, leite</code>.</dd>
+  <dt>.. " e " .. lista[#lista]</dt><dd>Mais o " e " e o <strong>último</strong> item (veja <a href="listas.html">Listas</a>): <code>pão, leite e café</code>.</dd>
+  <dt>os dois if</dt><dd>Os casos especiais: com um item só, não há "e"; com zero, não há item nenhum. Sem eles, <code>juntar({})</code> tentaria juntar <code>lista[0]</code>, que é <code>nil</code>, e daria erro.</dd>
+</dl>
+
+<hr>
+
+<h2>5. Uma lista de fichas</h2>
+<p>O <code>table.concat</code> só junta textos e números. Uma lista de <a href="tabelas.html">fichas</a> (tabelas) ele não sabe juntar (veja <a href="#errado">Quando dá errado</a>). A saída é montar <strong>antes</strong> uma lista de textos, um por ficha, e juntar essa lista:</p>
+
+<pre class="file" data-file="fichas_concat.lua">local produtos = {
+  {nome = "Pão", preco = 0.75},
+  {nome = "Leite", preco = 5.49},
+  {nome = "Café", preco = 18.90},
+}
+local nomes = {}
+for _, p in ipairs(produtos) do
+  table.insert(nomes, p.nome .. " (R$ " .. string.format("%.2f", p.preco) .. ")")
+end
+print("Vitrine: " .. table.concat(nomes, ", "))
+</pre>
+
+<pre class="term">$ lua fichas_concat.lua
+Vitrine: Pão (R$ 0.75), Leite (R$ 5.49), Café (R$ 18.90)</pre>
+
+<p>Esse é um padrão que aparece muito: um laço com <a href="ipairs.html">ipairs</a> monta os pedaços com <a href="table-insert-remove.html">table.insert</a>, e um <code>table.concat</code> no fim junta tudo.</p>
+
+<hr>
+
+<h2 id="formas">Formas diferentes de fazer a mesma coisa</h2>
+<p>Sem o <code>table.concat</code>, juntar a lista pede um laço com <code>..</code> e um cuidado para não sobrar vírgula no fim:</p>
+
+<pre class="file" data-file="laco_vs.lua">local compras = {"pão", "leite", "café"}
+local texto = ""
+for i, item in ipairs(compras) do
+  texto = texto .. item
+  if i &lt; #compras then
+    texto = texto .. ", "
+  end
+end
+print(texto)
+print(table.concat(compras, ", "))
+</pre>
+
+<pre class="term">$ lua laco_vs.lua
+pão, leite, café
+pão, leite, café</pre>
+
+<p>O resultado é igual, mas o <code>table.concat</code> ganha em duas coisas. É uma linha só, sem o <code>if</code> da vírgula. E é <strong>mais rápido</strong> com listas grandes: cada <code>texto = texto .. item</code> cria um texto novo, copiando tudo o que já estava lá; com milhares de itens, são milhares de cópias cada vez maiores. O <code>table.concat</code> vai enchendo um espaço de trabalho (um <em>buffer</em>) e cria o texto final uma vez só. Por isso, quando um programa vai montando um texto grande aos poucos (um relatório, um arquivo), o jeito do Lua é: <strong>junte os pedaços numa lista e, no fim, um <code>table.concat</code></strong>.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Situação</th><th>Qual usar</th></tr>
+<tr><td>Mostrar uma lista de textos/números numa linha</td><td><code>table.concat(t, ", ")</code></td></tr>
+<tr><td>Um item por linha</td><td><code>table.concat(t, "\n")</code></td></tr>
+<tr><td>Juntar dois ou três textos</td><td><code>a .. " " .. b</code> (o <a href="concatenacao.html">..</a>)</td></tr>
+<tr><td>Montar um texto grande aos poucos</td><td>Ir pondo os pedaços numa lista; <code>table.concat</code> no fim</td></tr>
+<tr><td>Lista de fichas, ou com <code>true</code>/<code>false</code></td><td>Montar antes uma lista de textos (<code>p.nome</code>, <code>tostring(v)</code>)</td></tr>
+<tr><td>Ver a lista para conferir, enquanto programa</td><td><code>print(table.concat(t, ", "))</code> (o <code>print(t)</code> mostra só o endereço)</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+
+<div class="cenario">
+<strong>Um item é uma tabela</strong>
+<pre class="file" data-file="item_tabela.lua">local itens = {"pão", {"leite", "café"}, "manteiga"}
+print(table.concat(itens, ", "))
+</pre>
+<pre class="term">$ lua item_tabela.lua
+lua: item_tabela.lua:2: invalid value (table) at index 2 in table for 'concat'
+stack traceback:
+	[C]: in field 'concat'
+	item_tabela.lua:2: in main chunk
+	[C]: in ?</pre>
+<p>Linha por linha:</p>
+<dl class="anatomy">
+  <dt>item_tabela.lua:2:</dt><dd>A linha do <code>table.concat</code>.</dd>
+  <dt>invalid value (table)</dt><dd>"Valor inválido (do tipo tabela)." O <code>concat</code> encontrou um item que não é texto nem número.</dd>
+  <dt>at index 2</dt><dd>"Na posição 2." O item 2 é a lista <code>{"leite", "café"}</code>, uma tabela dentro da tabela.</dd>
+  <dt>in table for 'concat'</dt><dd>"Na tabela passada ao <code>concat</code>."</dd>
+  <dt>[C]: in field 'concat'</dt><dd>O erro aconteceu dentro do <code>concat</code> (escrito em C), chamado pela linha 2.</dd>
+</dl>
+<p><strong>Como consertar:</strong> cada item precisa ser texto ou número. Aqui, tire a lista de dentro (<code>{"pão", "leite", "café", "manteiga"}</code>), ou junte a de dentro antes: <code>table.concat(itens[2], ", ")</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Mandou a lista de fichas direto</strong>
+<pre class="file" data-file="fichas_direto.lua">local produtos = {
+  {nome = "Pão", preco = 0.75},
+  {nome = "Leite", preco = 5.49},
+}
+print(table.concat(produtos, ", "))
+</pre>
+<pre class="term">$ lua fichas_direto.lua
+lua: fichas_direto.lua:5: invalid value (table) at index 1 in table for 'concat'
+stack traceback:
+	[C]: in field 'concat'
+	fichas_direto.lua:5: in main chunk
+	[C]: in ?</pre>
+<p>A mesma mensagem, agora na posição 1: <strong>todos</strong> os itens são tabelas, e o primeiro já é inválido. O <code>concat</code> não sabe que você queria o campo <code>nome</code>. <strong>Como consertar:</strong> monte a lista de nomes antes, como na seção 5. É a missão logo abaixo.</p>
+</div>
+
+<div class="trylua" data-goal="out:Temos: Pão, Leite, Café;;semerro;;src:table\.concat">
+<p class="try-task"><strong>Missão:</strong> este programa dá o erro <code>invalid value (table) at index 1</code>. Monte uma lista <code>nomes</code> com o <code>nome</code> de cada produto (um laço com <code>ipairs</code>) e junte essa lista. Deve sair <code>Temos: Pão, Leite, Café</code>.</p>
+<pre class="script" data-file="main.lua">local produtos = {
+  {nome = "Pão", preco = 0.75},
+  {nome = "Leite", preco = 5.49},
+  {nome = "Café", preco = 18.90},
+}
+print("Temos: " .. table.concat(produtos, ", "))
+</pre>
+<pre class="solucao" data-file="main.lua">local produtos = {
+  {nome = "Pão", preco = 0.75},
+  {nome = "Leite", preco = 5.49},
+  {nome = "Café", preco = 18.90},
+}
+local nomes = {}
+for _, p in ipairs(produtos) do
+  table.insert(nomes, p.nome)
+end
+print("Temos: " .. table.concat(nomes, ", "))
+</pre>
+</div>
+
+<div class="cenario">
+<strong>Um item é <code>true</code> ou <code>false</code></strong>
+<pre class="file" data-file="item_bool.lua">local respostas = {"sim", true, "não"}
+print(table.concat(respostas, ", "))
+</pre>
+<pre class="term">$ lua item_bool.lua
+lua: item_bool.lua:2: invalid value (boolean) at index 2 in table for 'concat'
+stack traceback:
+	[C]: in field 'concat'
+	item_bool.lua:2: in main chunk
+	[C]: in ?</pre>
+<p>"Valor inválido (booleano) na posição 2." O <code>concat</code> não transforma <code>true</code> em texto sozinho (o <code>print</code> transforma; o <code>concat</code>, não). <strong>Como consertar:</strong> converta cada item com <a href="conversao.html">tostring</a> antes:</p>
+<pre class="file" data-file="bool_ok.lua">local respostas = {"sim", true, "não"}
+local textos = {}
+for i, r in ipairs(respostas) do
+  textos[i] = tostring(r)
+end
+print(table.concat(textos, ", "))
+</pre>
+<pre class="term">$ lua bool_ok.lua
+sim, true, não</pre>
+</div>
+
+<div class="cenario">
+<strong>Um item é <code>nil</code>: o item que some sem aviso</strong>
+<pre class="file" data-file="item_nil.lua">local compras = {"pão", nil, "café"}
+print(#compras)
+print(table.concat(compras, ", "))
+</pre>
+<pre class="term">$ lua item_nil.lua
+1
+pão</pre>
+<p>Nenhum erro, e o café sumiu. O <code>table.concat</code> junta de 1 até <code>#compras</code>, e com o buraco na posição 2 o <code>#</code> deu 1 (numa lista com buraco, o <code>#</code> não é confiável; veja <a href="sequencias.html">Sequências e Buracos</a>). Se você disser as posições, o buraco aparece como erro:</p>
+<pre class="file" data-file="item_nil2.lua">local compras = {"pão", nil, "café"}
+print(table.concat(compras, ", ", 1, 3))
+</pre>
+<pre class="term">$ lua item_nil2.lua
+lua: item_nil2.lua:2: invalid value (nil) at index 2 in table for 'concat'
+stack traceback:
+	[C]: in field 'concat'
+	item_nil2.lua:2: in main chunk
+	[C]: in ?</pre>
+<p>A mesma coisa acontece com um <code>j</code> maior que a lista: <code>table.concat(compras, ", ", 1, 5)</code> numa lista de 3 itens deu <code>invalid value (nil) at index 4 in table for 'concat'</code>. <strong>Como consertar:</strong> não deixe <code>nil</code> no meio da lista (use <a href="table-insert-remove.html">table.remove</a> para tirar itens), e use <code>j</code> no máximo <code>#lista</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>A lista era <code>nil</code>, ou era um texto</strong>
+<pre class="file" data-file="concat_nil.lua">local lista
+print(table.concat(lista, ", "))
+</pre>
+<pre class="term">$ lua concat_nil.lua
+lua: concat_nil.lua:2: bad argument #1 to 'concat' (table expected, got nil)
+stack traceback:
+	[C]: in field 'concat'
+	concat_nil.lua:2: in main chunk
+	[C]: in ?</pre>
+<p>"Argumento ruim, o 1º, para o <code>concat</code> (era esperada uma tabela, e veio nil)." Com um texto no lugar da lista (<code>table.concat("pão, leite", ", ")</code>), a mensagem termina com <code>(table expected, got string)</code>. <strong>Como consertar:</strong> o 1º argumento é a lista: confira se a variável tem mesmo uma tabela.</p>
+</div>
+
+<div class="note">
+<strong>Em outras versões</strong>
+<p>A mensagem do item inválido é a mesma no Lua 5.4 e no LuaJIT (<code>invalid value (table) at index 2 in table for 'concat'</code>); muda só o rastro: o 5.4 diz <code>[C]: in function 'table.concat'</code>, e o 5.5 diz <code>[C]: in field 'concat'</code>. Veja <a href="versoes.html">As Diferenças entre Versões</a>.</p>
+</div>
+
+<hr>
+
+<h2>Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>Devolve</th></tr>
+<tr><td><code>table.concat(t)</code></td><td>Os itens de <code>t[1]</code> a <code>t[#t]</code>, grudados</td></tr>
+<tr><td><code>table.concat(t, sep)</code></td><td>Os itens com <code>sep</code> entre eles (nunca no começo nem no fim)</td></tr>
+<tr><td><code>table.concat(t, sep, i)</code></td><td>De <code>t[i]</code> até o fim</td></tr>
+<tr><td><code>table.concat(t, sep, i, j)</code></td><td>De <code>t[i]</code> até <code>t[j]</code>; <code>""</code> se <code>i &gt; j</code></td></tr>
+<tr><td><code>table.concat({}, sep)</code></td><td><code>""</code> (texto vazio)</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Mensagem</th><th>Causa provável</th></tr>
+<tr><td><code>invalid value (table) at index N in table for 'concat'</code></td><td>O item N é uma tabela (lista de fichas, lista dentro de lista)</td></tr>
+<tr><td><code>invalid value (boolean) at index N …</code></td><td>O item N é <code>true</code>/<code>false</code>: use <code>tostring</code></td></tr>
+<tr><td><code>invalid value (nil) at index N …</code></td><td>Buraco na lista, ou <code>j</code> maior que <code>#t</code></td></tr>
+<tr><td><code>bad argument #1 to 'concat' (table expected, got nil)</code></td><td>A lista é <code>nil</code></td></tr>
+<tr><td>Faltaram itens, sem erro</td><td>Buraco (<code>nil</code>) no meio da lista</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. O que aparece?</h3>
+<p>O que mostra <code>print(table.concat({"a", "b", "c"}, "-"))</code>?</p>
+<div class="ex-code">Mostra <input data-answer="a-b-c" aria-label="resultado"></div>
+</div>
+
+<div class="exercise">
+<h3>2. E este?</h3>
+<p>O que mostra <code>print(table.concat({10, 20, 30, 40}, "+", 2, 3))</code>?</p>
+<div class="ex-code">Mostra <input data-answer="20+30" aria-label="resultado"></div>
+</div>
+
+<div class="mc" data-answer="3">
+<p class="mc-q">3. Qual lista o <code>table.concat(t, ", ")</code> consegue juntar sem erro?</p>
+<label><input type="radio" name="q3"> <code>{"Ana", true}</code></label>
+<label><input type="radio" name="q3"> <code>{{nome = "Ana"}, {nome = "Bia"}}</code></label>
+<label><input type="radio" name="q3"> <code>{"Ana", 30, 1.75}</code></label>
+<label><input type="radio" name="q3"> Nenhuma: só listas de textos</label>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">4. Onde o <code>table.concat(t, ", ")</code> põe o separador?</p>
+<label><input type="radio" name="q4"> Depois de cada item, inclusive o último</label>
+<label><input type="radio" name="q4"> Só entre um item e o seguinte</label>
+<label><input type="radio" name="q4"> Antes de cada item</label>
+<label><input type="radio" name="q4"> No começo e no fim do texto</label>
+</div>
+
+<div class="mc" data-answer="4">
+<p class="mc-q">5. Um programa monta um relatório com milhares de linhas. Qual é o jeito recomendado?</p>
+<label><input type="radio" name="q5"> <code>texto = texto .. linha</code> a cada volta</label>
+<label><input type="radio" name="q5"> Um <code>print</code> para cada linha, e copiar da tela</label>
+<label><input type="radio" name="q5"> <code>table.concat(texto)</code> a cada volta</label>
+<label><input type="radio" name="q5"> Pôr as linhas numa lista e, no fim, <code>table.concat(linhas, "\n")</code></label>
+</div>
+
+<h3>Missão final: a lista de convidados</h3>
+
+<div class="trylua" data-goal="out:Convidados: Ana, Bia, Caio e Davi.;;src:table\.concat">
+<p class="try-task"><strong>Missão:</strong> a Ana vai fazer um aniversário. Complete a linha do <code>texto</code> para sair <code>Convidados: Ana, Bia, Caio e Davi.</code>: junte do primeiro ao <strong>penúltimo</strong> com <code>", "</code> (use o <code>i</code> e o <code>j</code> do <code>table.concat</code>) e acrescente <code>" e "</code> e o último.</p>
+<pre class="script" data-file="main.lua">local convidados = {"Ana", "Bia", "Caio", "Davi"}
+local texto = table.concat(convidados, ", ")
+print("Convidados: " .. texto .. ".")
+</pre>
+<pre class="solucao" data-file="main.lua">local convidados = {"Ana", "Bia", "Caio", "Davi"}
+local texto = table.concat(convidados, ", ", 1, #convidados - 1) .. " e " .. convidados[#convidados]
+print("Convidados: " .. texto .. ".")
+</pre>
+</div>
+
+<p>Sem mexer, o programa mostra <code>Convidados: Ana, Bia, Caio, Davi.</code>, com vírgula no lugar do "e".</p>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li><code>table.concat(lista, separador)</code> junta os itens de <code>lista[1]</code> até <code>lista[#lista]</code> num texto só, com o separador <strong>entre</strong> eles. Sem separador, gruda tudo.</li>
+  <li><code>table.concat(lista, sep, i, j)</code> junta só das posições <code>i</code> a <code>j</code>; com <code>i &gt; j</code> ou lista vazia, devolve <code>""</code>.</li>
+  <li>Os itens têm de ser <strong>textos ou números</strong>. Tabela, <code>true</code>/<code>false</code> ou <code>nil</code> no meio dão <code>invalid value (…) at index N in table for 'concat'</code>.</li>
+  <li>Um <code>nil</code> no meio pode também fazer itens sumirem sem erro, porque o <code>#</code> da lista com buraco não é confiável.</li>
+  <li>Para fichas, monte antes uma lista de textos. Para montar textos grandes, junte os pedaços numa lista e use <code>table.concat</code> no fim: é mais simples e mais rápido que <code>..</code> num laço.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
