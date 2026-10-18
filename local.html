@@ -1,0 +1,475 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua local × global — por que usar local sempre | Guia Lua</title>
+<meta name="description" content="local e variáveis globais no Lua para quem nunca programou: sem local, a variável é global; por que isso é perigoso (um erro de digitação vira uma variável nova ou um nil silencioso), o (global 'x') das mensagens de erro, o local que vale só dentro do bloco, uma global que estraga outra parte do programa, o truque do luac -l e a declaração global do Lua 5.5, com saídas reais.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">local × Global</span></h1>
+
+<p class="intro">Na aula de <a href="variaveis.html">Variáveis</a>, toda variável nasceu com a palavra <code>local</code> na frente, e o guia prometeu explicar o porquê. É agora. O Lua tem uma regra que surpreende quem está começando: <strong>se você não escrever <code>local</code>, a variável é global</strong>. E variável global, no Lua, é a fonte do erro mais traiçoeiro que existe: o nome escrito errado que não dá erro nenhum.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>A diferença entre uma variável <strong>local</strong> e uma <strong>global</strong>.</li>
+  <li>Por que, no Lua, um nome que ninguém criou vale <code>nil</code> em vez de dar erro.</li>
+  <li>Os dois desastres do erro de digitação: a variável nova criada sem querer e o <code>nil</code> silencioso.</li>
+  <li>A ler o <code>(global 'totl')</code> das mensagens de erro como uma pista.</li>
+  <li>Que o <code>local</code> vale só dentro do bloco onde nasceu.</li>
+  <li>Como uma global de uma parte do programa estraga outra parte.</li>
+  <li>Dois jeitos de achar as globais de um programa: o <code>luac -l</code> e a declaração <code>global</code> do Lua 5.5.</li>
+</ul>
+</div>
+
+<p>Todos os programas desta aula foram rodados com o <strong>Lua 5.5</strong> na máquina fictícia da Ana (usuária <code>ana</code>, computador <code>notebook</code>). As caixas "Experimente" rodam o mesmo Lua de verdade, no seu navegador.</p>
+
+<hr>
+
+<h2>A ideia: o caderno e o quadro de avisos</h2>
+<p>Na padaria há dois lugares para anotar coisas. Cada atendente tem o seu <strong>caderninho</strong>: o que ela escreve ali é dela, ninguém mais lê nem rabisca, e quando o turno acaba o caderno vai embora com ela. E há o <strong>quadro de avisos</strong> na parede: qualquer pessoa lê, qualquer pessoa escreve, qualquer pessoa apaga.</p>
+
+<p>O quadro parece prático, até o dia em que alguém apaga o "Total do pão: 6" e escreve por cima "Total: 25" do bolo. Ou até alguém procurar um aviso com o nome errado, não achar nada e concluir que "não tem aviso".</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Na padaria</th><th>No Lua</th></tr>
+<tr><td>O caderninho da atendente</td><td>Variável <strong>local</strong>: <code>local total = 6</code>. Só existe no pedaço do programa onde foi criada</td></tr>
+<tr><td>O quadro de avisos da parede</td><td>Variável <strong>global</strong>: <code>total = 6</code>. Todo o programa enxerga e pode trocar</td></tr>
+<tr><td>Procurar um aviso que não está no quadro</td><td>Usar um nome que ninguém criou: vale <code>nil</code>, sem erro</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>1. Sem <code>local</code>, a variável é global</h2>
+
+<pre class="file" data-file="global.lua">total = 3 * 2
+print("Total:", total)
+</pre>
+
+<pre class="term">$ lua global.lua
+Total:	6
+</pre>
+
+<p>Funciona: sem <code>local</code>, a linha 1 cria uma variável <strong>global</strong> chamada <code>total</code>. Para o Lua, o que não foi declarado como <code>local</code> é global, e as globais moram todas numa tabela especial chamada <code>_G</code> (o "quadro de avisos"; aula <a href="env.html">_G e _ENV</a>). As locais não moram lá:</p>
+
+<pre class="file" data-file="g.lua">total = 6
+local parcial = 2
+print(_G.total, _G.parcial)
+</pre>
+
+<pre class="term">$ lua g.lua
+6	nil
+</pre>
+
+<p>O <code>print</code>, o <code>io</code>, o <code>type</code>, todas as funções prontas do Lua também são globais, guardadas nesse mesmo quadro. É por isso que você pode usá-las em qualquer lugar. E é aí que mora a regra que faz toda a diferença:</p>
+
+<div class="warning">
+<strong>No Lua, um nome que ninguém criou não é erro: é <code>nil</code></strong>
+<p>Quando o Lua encontra um nome que não é local, ele vai procurar no quadro de globais. Se não achar, ele não reclama: responde <code>nil</code>. Muitas linguagens param o programa na hora com "esse nome não existe"; o Lua continua como se nada fosse. O erro, se aparecer, aparece depois, em outro lugar.</p>
+</div>
+
+<hr>
+
+<h2>2. O primeiro desastre: digitou errado, criou outra variável</h2>
+<p>A Ana conta os pães e quer somar mais um. Ela erra uma letra na linha 3: <code>quantiade</code>, sem o <code>d</code>:</p>
+
+<pre class="file" data-file="digitou-errado.lua">local quantidade = 3
+print("Antes:", quantidade)
+quantiade = quantidade + 1
+print("Depois:", quantidade)
+</pre>
+
+<pre class="term">$ lua digitou-errado.lua
+Antes:	3
+Depois:	3
+</pre>
+
+<p>Nenhuma mensagem de erro. O programa rodou até o fim e mostrou <code>3</code> duas vezes. O que aconteceu na linha 3: o Lua calculou <code>quantidade + 1</code> (deu 4) e guardou o 4 numa variável <strong>global nova</strong>, chamada <code>quantiade</code>, que nasceu ali mesmo, sem avisar ninguém. A <code>quantidade</code> verdadeira nem foi tocada.</p>
+
+<p>Num programa de 5 linhas, você acha o erro olhando. Num de 500, a Ana vai passar uma tarde procurando por que o estoque "não atualiza".</p>
+
+<div class="trylua" data-goal="outre:Depois:\s+4\n;;semerro">
+<p class="try-task"><strong>Missão:</strong> rode e veja o <code>Depois:</code> continuar 3. Ache o nome escrito errado e conserte para que saia <code>Depois:</code> e <code>4</code>.</p>
+<pre class="script" data-file="main.lua">local quantidade = 3
+print("Antes:", quantidade)
+quantiade = quantidade + 1
+print("Depois:", quantidade)
+</pre>
+<pre class="solucao" data-file="main.lua">local quantidade = 3
+print("Antes:", quantidade)
+quantidade = quantidade + 1
+print("Depois:", quantidade)
+</pre>
+</div>
+
+<hr>
+
+<h2>3. O segundo desastre: leu errado, veio <code>nil</code></h2>
+<p>Agora o erro de digitação está na hora de <strong>usar</strong> a variável:</p>
+
+<pre class="file" data-file="silencioso.lua">local cliente = "Ana"
+print("Cliente:", cleinte)
+</pre>
+
+<pre class="term">$ lua silencioso.lua
+Cliente:	nil
+</pre>
+
+<p>O <code>cleinte</code> (com as letras trocadas) não é local; o Lua procurou nas globais, não achou e entregou <code>nil</code> ao <code>print</code>, que mostrou <code>nil</code> sem reclamar. Quando o <code>nil</code> cai numa conta ou numa junção de textos, aí sim vem um erro:</p>
+
+<pre class="file" data-file="leu-errado.lua">local total = 0
+total = total + 10
+total = total + 5
+print("Total: " .. totl)
+</pre>
+
+<pre class="term">$ lua leu-errado.lua
+lua: leu-errado.lua:4: attempt to concatenate a nil value (global 'totl')
+stack traceback:
+	leu-errado.lua:4: in main chunk
+	[C]: in ?
+</pre>
+
+<dl class="anatomy">
+  <dt>leu-errado.lua:4:</dt><dd>A linha do problema: a 4.</dd>
+  <dt>attempt to concatenate a nil value</dt><dd>"Tentativa de concatenar (juntar com <code>..</code>) um valor nil".</dd>
+  <dt>(global 'totl')</dt><dd>A <strong>pista</strong>. O valor <code>nil</code> veio de uma variável <strong>global</strong> chamada <code>totl</code>. Mas você nunca quis criar global nenhuma: a sua variável era <code>local total</code>. Quando a mensagem diz <code>global</code> e você só usa <code>local</code>, quase sempre é um nome escrito errado.</dd>
+</dl>
+
+<p>Com uma conta, a mensagem muda, mas a pista é a mesma:</p>
+
+<pre class="file" data-file="leu-errado2.lua">local total = 15
+local com_taxa = totl * 1.1
+print(com_taxa)
+</pre>
+
+<pre class="term">$ lua leu-errado2.lua
+lua: leu-errado2.lua:2: attempt to perform arithmetic on a nil value (global 'totl')
+stack traceback:
+	leu-errado2.lua:2: in main chunk
+	[C]: in ?
+</pre>
+
+<div class="tip">
+<strong>Lendo a pista entre parênteses</strong>
+<p>O fim da mensagem diz de onde veio o valor ruim:</p>
+<ul>
+  <li><code>(local 'nome')</code>: uma variável local sua, que está <code>nil</code> (ela existe, mas ficou sem valor: veja a aula <a href="io-read.html">io.read</a>).</li>
+  <li><code>(global 'nome')</code>: uma global. Se você usa <code>local</code> sempre, desconfie de erro de digitação.</li>
+  <li><code>(field 'nome')</code>: um campo depois do ponto, como em <code>io.Write</code> (aula <a href="io-write.html">io.write</a>).</li>
+</ul>
+<p>Esse é um dos grandes motivos para usar <code>local</code> <strong>sempre</strong>: assim, toda <code>global</code> que aparecer numa mensagem é um engano, fácil de reconhecer.</p>
+</div>
+
+<div class="trylua" data-goal="out:Total: 15;;semerro">
+<p class="try-task"><strong>Missão:</strong> leia a mensagem de erro, ache o nome errado (a pista está entre parênteses) e conserte para que saia <code>Total: 15</code>.</p>
+<pre class="script" data-file="main.lua">local total = 0
+total = total + 10
+total = total + 5
+print("Total: " .. totl)
+</pre>
+<pre class="solucao" data-file="main.lua">local total = 0
+total = total + 10
+total = total + 5
+print("Total: " .. total)
+</pre>
+</div>
+
+<hr>
+
+<h2>4. O <code>local</code> vale só dentro do bloco</h2>
+<p>Um <strong>bloco</strong> é um pedaço do programa com começo e fim, como o <code>do ... end</code> que você viu em <a href="sintaxe.html">Sintaxe e Blocos</a> (e, mais adiante, o corpo de um <code>if</code>, de um <code>for</code>, de uma função). Uma variável local existe do ponto onde foi criada até o <code>end</code> do bloco onde nasceu. Fora dele, o nome volta a ser "ninguém":</p>
+
+<pre class="file" data-file="bloco.lua">do
+  local desconto = 5
+  print("Dentro:", desconto)
+end
+print("Fora:", desconto)
+</pre>
+
+<pre class="term">$ lua bloco.lua
+Dentro:	5
+Fora:	nil
+</pre>
+
+<p>Dentro do bloco, <code>desconto</code> é 5. Depois do <code>end</code>, o caderninho foi embora: o <code>desconto</code> da linha 5 já não é a local, e sim uma global que ninguém criou, que vale <code>nil</code>. Esse "pedaço onde o nome vale" se chama <strong>escopo</strong> (aula <a href="escopo.html">Escopo e Blocos</a>). Uma variável criada fora de qualquer bloco, no corpo do arquivo, vale do ponto onde nasceu até o fim do arquivo.</p>
+
+<hr>
+
+<h2>5. O terceiro desastre: uma parte estraga a outra</h2>
+<p>A Ana escreveu um programa para o total do pão. Semanas depois, acrescentou um pedaço para o bolo, dentro de um bloco, e usou o mesmo nome, <code>total</code>, sem <code>local</code>:</p>
+
+<pre class="file" data-file="colisao.lua">-- parte 1: o total do pão
+total = 3 * 2
+-- parte 2, escrita semanas depois: o total do bolo
+do
+  total = 25
+  print("Total do bolo:", total)
+end
+print("Total do pão:", total)
+</pre>
+
+<pre class="term">$ lua colisao.lua
+Total do bolo:	25
+Total do pão:	25
+</pre>
+
+<p>O total do pão virou 25. Como as duas partes escreveram no <strong>mesmo</strong> quadro de avisos, a segunda apagou o aviso da primeira. Com <code>local</code>, cada parte tem o seu caderno:</p>
+
+<pre class="file" data-file="colisao2.lua">-- parte 1: o total do pão
+local total = 3 * 2
+-- parte 2, escrita semanas depois: o total do bolo
+do
+  local total = 25
+  print("Total do bolo:", total)
+end
+print("Total do pão:", total)
+</pre>
+
+<pre class="term">$ lua colisao2.lua
+Total do bolo:	25
+Total do pão:	6
+</pre>
+
+<p>O <code>local total</code> de dentro do bloco é uma variável <strong>nova</strong>, que só existe até o <code>end</code>; ela "esconde" a de fora enquanto o bloco dura, sem mexer nela. Quando o bloco acaba, o <code>total</code> do pão continua 6. Em programas grandes, com vários arquivos e funções escritas por pessoas diferentes, isso é o que impede uma parte de estragar a outra.</p>
+
+<h3>Até as funções do Lua podem ser estragadas</h3>
+<p>O <code>type</code> (aula <a href="type.html">type</a>) é uma global como qualquer outra. A Ana quis anotar o tipo do pão e escolheu o nome em inglês:</p>
+
+<pre class="file" data-file="estragou.lua">type = "integral"
+print("Pão:", type)
+print(type(10))
+</pre>
+
+<pre class="term">$ lua estragou.lua
+Pão:	integral
+lua: estragou.lua:3: attempt to call a string value (global 'type')
+stack traceback:
+	estragou.lua:3: in main chunk
+	[C]: in ?
+</pre>
+
+<p>A linha 1 apagou a função <code>type</code> do quadro de avisos e escreveu um texto no lugar, para o programa inteiro. Na linha 3, "tentativa de chamar um valor string": o <code>type</code> agora é o texto <code>"integral"</code>, e texto não se chama com parênteses. Com <code>local type = "integral"</code> o estrago fica só neste arquivo (a mensagem diria <code>(local 'type')</code>), mas continua um estrago: o melhor é <strong>não reaproveitar nomes de funções do Lua</strong>. Use nomes em português, como <code>tipo_pao</code> (aula <a href="nomes-variaveis.html">Nomes de Variáveis</a>).</p>
+
+<hr>
+
+<h2>6. Caçando globais</h2>
+
+<h3>O truque do <code>luac -l</code></h3>
+<p>O <code>luac</code> (o "compilador" que vem com o Lua) consegue listar as instruções que o Lua vai executar. Duas delas interessam aqui: <code>GETTABUP</code> é "ler uma global" e <code>SETTABUP</code> é "escrever uma global". Filtrando só essas com o <code>grep</code>, aparecem <strong>todas</strong> as globais que o programa usa:</p>
+
+<pre class="term">$ luac -p -l digitou-errado.lua | grep -E 'TABUP'
+	3	[2]	GETTABUP 	1 0 0	; _ENV "print"
+	9	[3]	SETTABUP 	0 2 1	; _ENV "quantiade"
+	10	[4]	GETTABUP 	1 0 0	; _ENV "print"
+</pre>
+
+<dl class="anatomy">
+  <dt>-p -l</dt><dd>O <code>-p</code> diz ao <code>luac</code> para só conferir o arquivo (sem gravar nada); o <code>-l</code>, para listar as instruções.</dd>
+  <dt>[2], [3], [4]</dt><dd>A linha do seu arquivo.</dd>
+  <dt>_ENV "print"</dt><dd>Leitura da global <code>print</code>, nas linhas 2 e 4. Essa é esperada (<code>_ENV</code> é o nome técnico do "quadro de globais").</dd>
+  <dt>SETTABUP ... "quantiade"</dt><dd>A linha 3 <strong>escreve</strong> uma global chamada <code>quantiade</code>. Achou o erro de digitação.</dd>
+</dl>
+
+<p>Num programa em que tudo é <code>local</code>, essa lista deve ter só as funções do Lua (<code>print</code>, <code>io</code>, <code>string</code>...). Qualquer outro nome é suspeito.</p>
+
+<h3>A declaração <code>global</code> <span class="versao">5.5</span></h3>
+<p>O Lua 5.5 trouxe uma novidade feita para esse problema: a declaração <code>global</code>. Depois de uma linha <code>global</code>, todo nome que não for local nem declarado <strong>vira erro</strong>, e o erro aparece <strong>antes</strong> de o programa rodar:</p>
+
+<pre class="file" data-file="declarado.lua">global print
+local total = 0
+total = total + 10
+print("Total: " .. totl)
+</pre>
+
+<pre class="term">$ lua declarado.lua
+lua: declarado.lua:4: variable 'totl' not declared
+</pre>
+
+<p>"A variável <code>totl</code> não foi declarada". A linha 1 avisou: "a única global que eu uso é o <code>print</code>". Daí em diante, o <code>totl</code> não é local nem foi declarado, e o Lua recusa o arquivo inteiro, sem rodar nada. Com o nome certo (<code>total</code>), o programa roda normalmente e mostra <code>Total: 10</code>.</p>
+
+<div class="note">
+<strong>Só no 5.5</strong>
+<p>No Lua 5.4 (e no 5.1, no LuaJIT) não existe <code>global</code>, e o mesmo arquivo nem roda: <code>lua5.4: declarado2.lua:1: syntax error near 'print'</code>. A declaração <code>global</code> tem regras próprias (por exemplo, <code>global *</code>, e o que acontece com o <code>print</code> se você esquecer de declará-lo); tudo isso está em <a href="global.html">A Declaração global</a>. Para quem está começando, a regra continua a mesma: <strong><code>local</code> sempre</strong>. Mais sobre as versões em <a href="versoes.html">Lua 5.1, LuaJIT, 5.4 e 5.5</a>.</p>
+</div>
+
+<hr>
+
+<h2>Formas diferentes, e qual usar</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Forma</th><th>O que faz</th><th>Quando usar</th></tr>
+<tr><td><code>local total = 6</code></td><td>Cria uma local: vale até o fim do bloco (ou do arquivo)</td><td><strong>Sempre</strong>, para toda variável nova</td></tr>
+<tr><td><code>total = 6</code> (com <code>local total</code> antes)</td><td>Troca o valor da local que já existe</td><td>Para atualizar uma variável sua</td></tr>
+<tr><td><code>total = 6</code> (sem nenhum <code>local total</code>)</td><td>Cria ou troca uma <strong>global</strong></td><td>Quase nunca. No modo interativo (onde o <code>local</code> não sobrevive à linha) é o jeito de testar</td></tr>
+<tr><td><code>global nome</code> <span class="versao">5.5</span></td><td>Declara as globais que o arquivo usa; o resto vira erro</td><td>Para o Lua achar os erros de digitação antes de rodar (aula <a href="global.html">global</a>)</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th></th><th>local</th><th>global</th></tr>
+<tr><td>Onde vale</td><td>Do ponto onde nasceu até o fim do bloco</td><td>No programa inteiro, em todos os arquivos</td></tr>
+<tr><td>Quem pode trocar</td><td>Só o código daquele pedaço</td><td>Qualquer parte do programa</td></tr>
+<tr><td>Nome escrito errado</td><td>Mensagem com <code>(global '...')</code>: fácil de reconhecer</td><td>Vira outra global, ou <code>nil</code>, sem aviso</td></tr>
+<tr><td>Na mensagem de erro</td><td><code>(local 'total')</code></td><td><code>(global 'total')</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2 id="errado">Quando dá errado (resumo dos sintomas)</h2>
+
+<div class="cenario">
+<strong>"A variável não muda"</strong>
+<p>Você escreve <code>quantidade = quantidade + 1</code> e o valor continua igual? Confira se o nome à <strong>esquerda</strong> do <code>=</code> está escrito igualzinho ao da criação. Um nome diferente cria uma global nova, sem erro (seção 2). <code>luac -p -l arquivo.lua | grep SETTABUP</code> mostra quem está criando globais.</p>
+</div>
+
+<div class="cenario">
+<strong>Apareceu <code>nil</code> onde devia ter um valor</strong>
+<p>Nome escrito errado na hora de <strong>ler</strong> (seção 3), ou variável usada fora do bloco onde nasceu (seção 4), ou antes de ser criada (aula <a href="variaveis.html">Variáveis</a>).</p>
+</div>
+
+<div class="cenario">
+<strong><code>attempt to ... a nil value (global 'totl')</code></strong>
+<pre class="term">$ lua leu-errado.lua
+lua: leu-errado.lua:4: attempt to concatenate a nil value (global 'totl')
+stack traceback:
+	leu-errado.lua:4: in main chunk
+	[C]: in ?
+</pre>
+<p>A palavra <code>global</code> é a pista: procure o nome entre aspas (<code>totl</code>) no seu código e compare com o nome que você criou com <code>local</code>.</p>
+</div>
+
+<div class="cenario">
+<strong><code>attempt to call a string value (global 'type')</code></strong>
+<p>Uma variável sua apagou uma função do Lua de mesmo nome (seção 5). Troque o nome da variável e, se ela era global, ponha <code>local</code>.</p>
+</div>
+
+<div class="cenario">
+<strong><code>variable 'totl' not declared</code></strong>
+<p>Só no Lua 5.5, num arquivo com declaração <code>global</code>: o nome não é local nem foi declarado. Quase sempre é erro de digitação; se não for, declare-o (aula <a href="global.html">global</a>).</p>
+</div>
+
+<hr>
+
+<h2>Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>O que acontece</th></tr>
+<tr><td><code>local x = 1</code></td><td>Cria a local <code>x</code></td></tr>
+<tr><td><code>x = 1</code> sem <code>local x</code> antes</td><td>Cria (ou troca) a global <code>x</code></td></tr>
+<tr><td><code>print(nome_que_ninguem_criou)</code></td><td><code>nil</code>, sem erro</td></tr>
+<tr><td><code>do local x = 1 end print(x)</code></td><td><code>nil</code>: a local morreu no <code>end</code></td></tr>
+<tr><td><code>local x</code> dentro de um bloco, com outro <code>x</code> fora</td><td>Variável nova que esconde a de fora até o <code>end</code></td></tr>
+<tr><td><code>_G.x</code></td><td>A global <code>x</code> (as locais não estão em <code>_G</code>)</td></tr>
+<tr><td><code>luac -p -l prog.lua | grep TABUP</code></td><td>Lista as globais lidas (<code>GETTABUP</code>) e escritas (<code>SETTABUP</code>)</td></tr>
+<tr><td><code>global print</code> <span class="versao">5.5</span></td><td>Daí em diante, nome não declarado é erro antes de rodar</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. Complete</h3>
+<p>Complete para que <code>preco</code> seja uma variável local:</p>
+<div class="ex-code"><input data-answer="local" aria-label="palavra" size="6"> preco = 5</div>
+</div>
+
+<div class="exercise">
+<h3>2. Qual é a saída?</h3>
+<p>Programa: <code>local pontos = 10</code>, depois <code>ponto = pontos + 5</code>, depois <code>print(pontos)</code>. O que aparece?</p>
+<div class="ex-code">Saída: <input data-answer="10" aria-label="saída"></div>
+</div>
+
+<div class="exercise">
+<h3>3. E agora?</h3>
+<p>Programa: <code>do local brinde = "café" end</code>, depois <code>print(brinde)</code>. O que aparece?</p>
+<div class="ex-code">Saída: <input data-answer="nil" aria-label="saída"></div>
+</div>
+
+<div class="mc" data-answer="3">
+<p class="mc-q">4. A mensagem diz <code>attempt to perform arithmetic on a nil value (global 'qtd')</code>, mas o seu programa só tem <code>local quantidade</code>. Qual a causa mais provável?</p>
+<label><input type="radio" name="q4"> O Lua não sabe fazer contas com variáveis locais</label>
+<label><input type="radio" name="q4"> Faltou o <code>print</code></label>
+<label><input type="radio" name="q4"> Um nome escrito diferente do que foi criado: <code>qtd</code> no lugar de <code>quantidade</code></label>
+<label><input type="radio" name="q4"> A variável <code>quantidade</code> é global</label>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">5. O que acontece no Lua quando você usa um nome que ninguém criou, como <code>print(xyz)</code>?</p>
+<label><input type="radio" name="q5"> Erro na hora: "nome não existe"</label>
+<label><input type="radio" name="q5"> O nome vale <code>nil</code>, e o programa continua</label>
+<label><input type="radio" name="q5"> O Lua cria a variável com o valor 0</label>
+<label><input type="radio" name="q5"> O Lua mostra o texto <code>xyz</code></label>
+</div>
+
+<div class="mc" data-answer="4">
+<p class="mc-q">6. Por que este guia usa <code>local</code> sempre?</p>
+<label><input type="radio" name="q6"> Porque sem <code>local</code> o programa não roda</label>
+<label><input type="radio" name="q6"> Porque o <code>local</code> deixa a variável valer em todos os arquivos</label>
+<label><input type="radio" name="q6"> Porque só variáveis locais podem guardar texto</label>
+<label><input type="radio" name="q6"> Para uma parte do programa não estragar a outra, e para que todo <code>(global '...')</code> numa mensagem seja um engano fácil de achar</label>
+</div>
+
+<h3>Missão final: o pão e o bolo</h3>
+
+<div class="trylua" data-goal="outre:Total do bolo:\s+25\n;;outre:Total do pão:\s+6\n;;src:local\s+total">
+<p class="try-task"><strong>Missão:</strong> rode e veja o total do pão sair 25. Use <code>local</code> (nas duas criações de <code>total</code>) para que o bolo continue <code>25</code> e o pão volte a ser <code>6</code>.</p>
+<pre class="script" data-file="main.lua">-- parte 1: o total do pão
+total = 3 * 2
+-- parte 2: o total do bolo
+do
+  total = 25
+  print("Total do bolo:", total)
+end
+print("Total do pão:", total)
+</pre>
+<pre class="solucao" data-file="main.lua">-- parte 1: o total do pão
+local total = 3 * 2
+-- parte 2: o total do bolo
+do
+  local total = 25
+  print("Total do bolo:", total)
+end
+print("Total do pão:", total)
+</pre>
+</div>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li>Com <code>local</code>, a variável vale do ponto onde nasceu até o fim do bloco (ou do arquivo). Sem <code>local</code>, ela é <strong>global</strong>: vale no programa inteiro.</li>
+  <li>No Lua, um nome que ninguém criou vale <code>nil</code>, sem erro na hora.</li>
+  <li>Por isso, um erro de digitação ou cria uma global nova sem aviso (<code>quantiade = ...</code>), ou entrega um <code>nil</code> silencioso (<code>print(cleinte)</code>).</li>
+  <li>Quando uma mensagem diz <code>(global 'nome')</code> e você só usa <code>local</code>, procure um nome escrito errado.</li>
+  <li>Globais com o mesmo nome em partes diferentes se atropelam; até funções do Lua (<code>type</code>, <code>print</code>) podem ser apagadas.</li>
+  <li><code>luac -p -l prog.lua | grep TABUP</code> lista as globais; no Lua 5.5, a declaração <code>global</code> transforma nome não declarado em erro antes de rodar.</li>
+  <li>Regra do guia: <strong><code>local</code> sempre</strong>.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
