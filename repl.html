@@ -1,0 +1,600 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua Modo Interativo — o prompt &gt; do lua | Guia Lua</title>
+<meta name="description" content="O modo interativo do Lua 5.5 (o REPL, com o prompt >) para quem nunca programou: abrir com lua, contas e valores que aparecem sozinhos, várias linhas com o prompt >>, por que o local não sobrevive à linha, o = do Lua 5.1 que não existe mais no 5.5, sair com os.exit() ou Ctrl-D, Ctrl-C, lua -i arquivo.lua, _PROMPT e os erros reais (stdin:1:) explicados em português.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">Modo Interativo (&gt;)</span></h1>
+
+<p class="intro">Até aqui você escreveu o programa num arquivo e mandou o Lua rodar tudo de uma vez. Existe outro jeito de usar o Lua: <strong>conversar</strong> com ele, uma linha de cada vez. Você digita uma instrução, aperta <kbd>Enter</kbd>, e ele responde na hora. É o <strong>modo interativo</strong>, também chamado de <strong>REPL</strong>, e você o reconhece pelo prompt <code>&gt;</code>. Ele é perfeito para testar uma ideia, fazer uma conta ou tirar uma dúvida rápida sobre como algo funciona. Nesta aula você vai abrir, usar e fechar o modo interativo do Lua 5.5, e conhecer as manias dele.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>A abrir o modo interativo com <code>lua</code> e a reconhecer quem está ouvindo: o <code>$</code> ou o <code>&gt;</code>.</li>
+  <li>Que, no <code>&gt;</code>, o valor de uma expressão aparece sozinho, e que num arquivo isso é erro.</li>
+  <li>A escrever várias linhas (um <code>for</code>, um <code>if</code>, uma função) com o prompt de continuação <code>&gt;&gt;</code>.</li>
+  <li>Por que o <code>local</code> não sobrevive de uma linha para a outra no modo interativo.</li>
+  <li>A sair com <code>os.exit()</code> ou <kbd>Ctrl</kbd>+<kbd>D</kbd>, e a parar um laço com <kbd>Ctrl</kbd>+<kbd>C</kbd>.</li>
+  <li>A carregar um arquivo e continuar no Lua, com <code>lua -i arquivo.lua</code>.</li>
+  <li>O <code>=</code> dos tutoriais antigos (Lua 5.1 e LuaJIT), que no 5.5 dá erro.</li>
+</ul>
+</div>
+
+<p>Todas as sessões desta aula foram digitadas de verdade no terminal do computador da Ana, com o Lua 5.5 do Ubuntu 26.04.</p>
+
+<hr>
+
+<h2>A ideia: a calculadora e a carta</h2>
+<p>Existem dois jeitos de pedir uma coisa a alguém. Você pode escrever uma <strong>carta</strong> com todos os pedidos, em ordem, e entregar: a pessoa lê tudo e faz. Ou pode <strong>conversar</strong>: pede uma coisa, espera a resposta, e decide o próximo pedido conforme o que ouviu.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th></th><th>Programa em arquivo (<code>lua ola.lua</code>)</th><th>Modo interativo (<code>&gt;</code>)</th></tr>
+<tr><td><strong>Comparação</strong></td><td>A carta: tudo escrito antes, executado de uma vez</td><td>A conversa (ou uma calculadora): uma linha, uma resposta</td></tr>
+<tr><td><strong>Fica guardado?</strong></td><td>Sim: o arquivo continua lá para rodar de novo</td><td>Não: ao sair, o que você digitou não vira arquivo</td></tr>
+<tr><td><strong>Mostra resultados</strong></td><td>Só o que você mandar com <code>print</code></td><td>O valor de cada expressão aparece sozinho</td></tr>
+<tr><td><strong>Bom para</strong></td><td>Programas de verdade, que você vai usar de novo</td><td>Testar uma ideia, fazer contas, tirar dúvidas</td></tr>
+</table>
+</div>
+
+<p>"REPL" é a sigla em inglês do que ele faz, sem parar: <strong>R</strong>ead (lê o que você digitou), <strong>E</strong>val (avalia, ou seja, executa), <strong>P</strong>rint (mostra o resultado) e <strong>L</strong>oop (volta ao começo e espera a próxima linha).</p>
+
+<hr>
+
+<h2>1. Abrindo o modo interativo</h2>
+<p>No terminal, digite <code>lua</code> sozinho, sem nome de arquivo:</p>
+
+<pre class="term">$ lua
+Lua 5.5.0  Copyright (C) 1994-2025 Lua.org, PUC-Rio
+&gt;
+</pre>
+
+<dl class="anatomy">
+  <dt>Lua 5.5.0  Copyright (C) 1994-2025 Lua.org, PUC-Rio</dt><dd>A "apresentação": a versão do Lua e quem o faz. É a mesma linha do <code>lua -v</code>. O manual oficial explica: <code>lua</code> sem nada, num terminal, é o mesmo que <code>lua -v -i</code> ("mostre a versão e entre no modo interativo").</dd>
+  <dt>&gt;</dt><dd>O <strong>prompt</strong> do Lua: "estou ouvindo, pode digitar".</dd>
+</dl>
+
+<div class="warning">
+<strong><code>$</code> ou <code>&gt;</code>: quem está ouvindo?</strong>
+<p>Repare no começo da linha antes de digitar. Com <code>$</code> (no guia, <code>ana@notebook:~$</code>), quem ouve é o <strong>terminal</strong>: ali vão <code>ls</code>, <code>cd</code>, <code>lua ola.lua</code>. Com <code>&gt;</code>, quem ouve é o <strong>Lua</strong>: ali vão <code>print("Olá")</code>, <code>2 + 3</code>. Trocar um pelo outro é o erro mais comum de quem está começando; a seção <a href="#errado">Quando dá errado</a> mostra as mensagens dos dois lados.</p>
+</div>
+
+<hr>
+
+<h2>2. A calculadora que responde sozinha</h2>
+<p>Digite uma conta e aperte <kbd>Enter</kbd>:</p>
+
+<pre class="term">$ lua
+Lua 5.5.0  Copyright (C) 1994-2025 Lua.org, PUC-Rio
+&gt; 2 + 3
+5
+&gt; 10 / 2
+5.0                                                « a divisão / sempre dá número com ponto
+&gt; 7 // 2
+3                                                  « a divisão inteira: sem as casas decimais
+&gt; 2 ^ 10
+1024.0                                             « 2 elevado a 10
+&gt; math.pi
+3.1415926535897931
+</pre>
+
+<p>O Lua calculou e mostrou o resultado, sem você pedir. O <code>/</code> é a divisão, e o resultado dele sempre vem com <strong>ponto</strong> decimal (<code>5.0</code>), como em inglês; o <code>//</code> é a divisão que joga fora as casas decimais; o <code>^</code> é a potência. Essas diferenças entre <code>5</code> e <code>5.0</code> têm aula própria (<a href="numeros.html">Números</a> e <a href="divisao.html">Divisão: /, // e %</a>). O <code>math.pi</code> é o número π, que já vem pronto na biblioteca <code>math</code>.</p>
+
+<p>Como o Lua sabe o que mostrar? O manual explica a regra: a cada linha, ele <strong>primeiro tenta</strong> entender o que você digitou como uma <strong>expressão</strong> (uma coisa que tem valor, como uma conta ou um texto). Se conseguir, mostra o valor. Se não, executa a linha como uma <strong>instrução</strong> (uma ordem, como <code>nome = "Ana"</code>), que não tem valor para mostrar.</p>
+
+<h3>Textos, com e sem <code>print</code></h3>
+
+<pre class="term">$ lua
+Lua 5.5.0  Copyright (C) 1994-2025 Lua.org, PUC-Rio
+&gt; "Olá, Ana!"
+Olá, Ana!                                          « o valor da expressão
+&gt; print("Olá, Ana!")
+Olá, Ana!                                          « o print escrevendo
+&gt; "Ana" .. " Lima"
+Ana Lima                                           « o .. junta dois textos
+&gt; #"Ana"
+3                                                  « o # mede o tamanho do texto
+&gt; 1, 2, 3
+1	2	3                                              « vários valores, separados por tabulação
+</pre>
+
+<p>No Lua, o texto sai igual com ou sem <code>print</code>, sem aspas: o modo interativo mostra os valores <strong>usando o próprio <code>print</code></strong>. Por isso a lista <code>1, 2, 3</code> saiu com o espaço largo (a tabulação) entre os números, igualzinho a <code>print(1, 2, 3)</code>.</p>
+
+<h3>Variáveis e o <code>nil</code></h3>
+<p>Uma <a href="variaveis.html">variável</a> é um nome que guarda um valor. Criar uma variável é uma instrução, então não aparece nada; pedir o nome depois mostra o valor guardado:</p>
+
+<pre class="term">$ lua
+Lua 5.5.0  Copyright (C) 1994-2025 Lua.org, PUC-Rio
+&gt; nome = "Ana"                                     « instrução: nada a mostrar
+&gt; nome
+Ana
+&gt; print("Olá, " .. nome .. "!")
+Olá, Ana!
+&gt; idade                                            « nunca foi criada
+nil
+</pre>
+
+<p>Repare na última: a Ana pediu <code>idade</code>, que nunca foi criada, e o Lua <strong>não reclamou</strong>. Respondeu <code>nil</code>, o "nada" do Lua: todo nome que ninguém criou vale <code>nil</code>. (É por isso que as mensagens de erro do Lua falam tanto em <code>nil value</code>; o valor tem aula própria: <a href="nil.html">O Valor nil</a>.)</p>
+
+<h3>Num arquivo, um valor solto é erro</h3>
+<p>Essa "resposta sozinha" é <strong>só do modo interativo</strong>. Num programa em arquivo, o Lua não aceita uma expressão sozinha na linha: ele quer instruções. A Ana gravou a conta num arquivo:</p>
+
+<pre class="file" data-file="conta.lua">2 + 3
+</pre>
+
+<pre class="term">$ lua conta.lua
+lua: conta.lua:1: unexpected symbol near '2'
+</pre>
+
+<p>"Símbolo inesperado perto de <code>2</code>": um erro de sintaxe. Num arquivo, o Lua espera uma ordem (mostrar, guardar, repetir…), e <code>2 + 3</code> sozinho não manda fazer nada com o resultado. Com <code>print(2 + 3)</code>, o arquivo mostra <code>5</code>. As caixas Experimente do guia rodam um arquivo (o <code>main.lua</code>), então lá vale a mesma regra: <strong>use <code>print</code></strong>.</p>
+
+<div class="trylua" data-goal="out:5;;semerro;;src:print\s*\(">
+<p class="try-task"><strong>Missão:</strong> o editor roda um arquivo, como <code>lua main.lua</code>, então a conta sozinha dá erro. Rode para ver a mensagem. Depois, ponha a conta dentro de um <code>print( )</code> e rode de novo, até aparecer o <code>5</code>.</p>
+<pre class="script" data-file="main.lua">2 + 3
+</pre>
+<pre class="solucao" data-file="main.lua">print(2 + 3)
+</pre>
+</div>
+
+<hr>
+
+<h2>3. Várias linhas: o prompt <code>&gt;&gt;</code></h2>
+<p>Algumas instruções do Lua ocupam várias linhas: um <code>for</code> (repetição), um <code>if</code> (decisão), uma <code>function</code> (função). Elas começam com uma palavra e terminam com <code>end</code> ("fim"). Quando você digita a primeira linha e aperta <kbd>Enter</kbd>, o Lua percebe que a instrução <strong>ainda não acabou</strong> e muda o prompt para <code>&gt;&gt;</code>, "continue":</p>
+
+<pre class="term">$ lua
+Lua 5.5.0  Copyright (C) 1994-2025 Lua.org, PUC-Rio
+&gt; for i = 1, 3 do
+&gt;&gt; print(i)
+&gt;&gt; end
+1
+2
+3
+&gt; if 10 &gt; 5 then
+&gt;&gt; print("dez é maior")
+&gt;&gt; end
+dez é maior
+</pre>
+
+<p>Linha por linha, no <code>for</code>:</p>
+<ul>
+  <li>Depois de <code>for i = 1, 3 do</code> ("para <code>i</code> de 1 a 3, faça") e <kbd>Enter</kbd>, nada foi executado ainda: o prompt virou <code>&gt;&gt;</code>, porque falta o <code>end</code>.</li>
+  <li>A Ana digitou a linha de dentro, <code>print(i)</code>. O prompt continuou <code>&gt;&gt;</code>.</li>
+  <li>Quando ela digitou <code>end</code>, o <code>for</code> ficou completo, e só então o Lua executou tudo: mostrou 1, 2 e 3.</li>
+</ul>
+
+<p>O modo interativo do Lua <strong>não</strong> coloca recuo sozinho, e não precisa: no Lua, quem diz onde o bloco acaba é o <code>end</code>, e não os espaços (aula <a href="sintaxe.html">Sintaxe e Blocos</a>). Num arquivo, você vai indentar o miolo com 2 espaços para ficar fácil de ler; no <code>&gt;</code>, pode digitar sem recuo.</p>
+
+<h3>Uma função, para usar depois</h3>
+<p>Uma <a href="funcoes.html">função</a> é uma receita com nome, que você escreve uma vez e usa quantas vezes quiser. Criar a função não mostra nada (é uma instrução); usá-la, sim:</p>
+
+<pre class="term">$ lua
+Lua 5.5.0  Copyright (C) 1994-2025 Lua.org, PUC-Rio
+&gt; function dobro(x)
+&gt;&gt; return x * 2
+&gt;&gt; end
+&gt; dobro(21)
+42
+&gt; dobro(dobro(5))
+20
+</pre>
+
+<p>Enquanto o Lua estiver aberto, a função <code>dobro</code> fica lembrada, como as variáveis. O <code>*</code> é a multiplicação.</p>
+
+<div class="note">
+<strong>E se eu não fechar?</strong>
+<p>Se você esquecer o <code>end</code>, o Lua fica esperando no <code>&gt;&gt;</code> para sempre. Digite <code>end</code> e <kbd>Enter</kbd> para fechar o bloco. Se o bloco ficou errado e você quer desistir dele, aperte <kbd>Ctrl</kbd>+<kbd>C</kbd> (seção 5).</p>
+</div>
+
+<hr>
+
+<h2>4. O <code>local</code> não sobrevive à linha</h2>
+<p>Ao longo do guia, você vai aprender a criar variáveis com <code>local</code> na frente (aula <a href="local.html">local × Global</a>): é o jeito certo num arquivo. Mas no modo interativo há uma pegadinha:</p>
+
+<pre class="term">$ lua
+Lua 5.5.0  Copyright (C) 1994-2025 Lua.org, PUC-Rio
+&gt; local y = 5
+warning: locals do not survive across lines in interactive mode
+&gt; y
+nil
+</pre>
+
+<p>"Aviso: variáveis locais não sobrevivem de uma linha para a outra no modo interativo". O manual explica o motivo: no <code>&gt;</code>, <strong>cada linha</strong> que você completa é tratada como um pequeno programa separado (um <em>chunk</em>, "pedaço"). Uma variável <code>local</code> só existe dentro do pedaço em que foi criada; quando a linha termina, o pedaço termina, e o <code>y</code> some. Na linha seguinte, <code>y</code> é um nome que ninguém criou: <code>nil</code>.</p>
+
+<p><strong>O que fazer:</strong> no modo interativo, crie as variáveis <strong>sem</strong> <code>local</code> (<code>y = 5</code>), ou use tudo na mesma linha (<code>local y = 5; print(y * 2)</code>). Num arquivo, continue usando <code>local</code> sempre: lá o arquivo inteiro é um pedaço só, e o problema não existe. O aviso é novidade do 5.5 <span class="versao">5.5</span>: no computador da Ana, o <code>lua5.4</code> e o <code>lua5.1</code> esqueceram a variável do mesmo jeito, mas calados.</p>
+
+<hr>
+
+<h2>5. Saindo, e parando o que travou</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Jeito</th><th>O que acontece</th></tr>
+<tr><td><code>os.exit()</code></td><td>Chama a função que encerra o programa (<code>os</code> = "sistema operacional", <code>exit</code> = "sair"). Funciona em qualquer versão do Lua</td></tr>
+<tr><td><kbd>Ctrl</kbd>+<kbd>D</kbd></td><td>Avisa "acabou o que eu tinha para digitar" (o fim da entrada). O Lua fecha e volta ao <code>$</code>. É o jeito mais rápido</td></tr>
+<tr><td><kbd>Ctrl</kbd>+<kbd>C</kbd> no prompt <code>&gt;</code></td><td>Também fecha o Lua (aparece <code>^C</code>)</td></tr>
+<tr><td><code>exit</code>, <code>quit</code>, <code>exit()</code></td><td><strong>Não</strong> funcionam: veja logo abaixo</td></tr>
+</table>
+</div>
+
+<pre class="term">$ lua
+Lua 5.5.0  Copyright (C) 1994-2025 Lua.org, PUC-Rio
+&gt; 2 + 3
+5
+&gt;                                                  « aqui a Ana apertou Ctrl+D
+$
+</pre>
+
+<p>Quem vem do Python costuma tentar <code>exit</code>. No Lua, não existe nada com esse nome:</p>
+
+<pre class="term">$ lua
+Lua 5.5.0  Copyright (C) 1994-2025 Lua.org, PUC-Rio
+&gt; exit
+nil
+&gt; quit
+nil
+&gt; exit()
+stdin:1: attempt to call a nil value (global 'exit')
+stack traceback:
+        stdin:1: in main chunk
+        [C]: in ?
+&gt; os.exit()
+$
+</pre>
+
+<p><code>exit</code> e <code>quit</code> são nomes que ninguém criou, então valem <code>nil</code> (e o Lua mostra o valor, como mostraria o de <code>idade</code>). Com parênteses, <code>exit()</code> tenta <strong>chamar</strong> esse <code>nil</code> como função: "tentativa de chamar um valor nil (o nome <code>exit</code>)". O <code>stdin:1:</code> é o "arquivo" do modo interativo: <em>stdin</em> é a entrada, o que você digita, e o 1 é a linha (cada pedaço começa na linha 1). O certo é <code>os.exit()</code>, com o <code>os.</code> na frente.</p>
+
+<h3>Um laço que não para: <kbd>Ctrl</kbd>+<kbd>C</kbd></h3>
+<p>Um <code>while true do end</code> ("enquanto verdadeiro, faça… nada") repete para sempre, e o <code>&gt;</code> não volta. Aperte <kbd>Ctrl</kbd>+<kbd>C</kbd>: o Lua interrompe o laço e devolve o prompt, sem fechar:</p>
+
+<pre class="term">$ lua
+Lua 5.5.0  Copyright (C) 1994-2025 Lua.org, PUC-Rio
+&gt; while true do end
+^C                                                 « Ctrl+C
+interrupted!
+stack traceback:
+        stdin:1: in main chunk
+        [C]: in ?
+&gt; 2 + 3                                            « o Lua continua aberto
+5
+</pre>
+
+<p>"Interrompido!", e o rastro de onde ele estava (na linha 1 do que você digitou). O mesmo <kbd>Ctrl</kbd>+<kbd>C</kbd> para um programa de arquivo que travou; aí, como não há prompt para voltar, o <code>lua</code> termina e você volta ao <code>$</code>:</p>
+
+<pre class="term">$ lua -e "while true do end"
+^C
+lua: interrupted!
+stack traceback:
+        (command line):1: in main chunk
+        [C]: in ?
+$ echo $?
+1
+</pre>
+
+<h3>O que você digitou some ao sair</h3>
+<p>Cada vez que você abre o <code>lua</code>, ele começa do zero, como uma calculadora recém-ligada: as variáveis e funções da sessão anterior não existem mais. Tudo o que você quer guardar vai num <strong>arquivo</strong> (aula <a href="executar.html">Rodando um Programa (.lua)</a>). As <strong>linhas</strong> que você digitou ficam no histórico da sessão: a seta <kbd>↑</kbd> traz a anterior de volta, para repetir ou corrigir (desde que a biblioteca readline esteja instalada: veja <a href="instalar.html">Instalar o Lua</a>, seção 3).</p>
+
+<hr>
+
+<h2>6. <code>lua -i</code>: carregar um arquivo e continuar conversando</h2>
+<p>O <code>-i</code> roda um arquivo e, no fim, em vez de sair, abre o <code>&gt;</code>. É ótimo para testar as funções de um programa sem precisar rodá-lo inteiro de novo a cada vez. A Ana tem o programa da padaria:</p>
+
+<pre class="file" data-file="padaria.lua">preco_pao = 0.75
+local segredo = "receita da vó"
+function total(quantidade)
+  return quantidade * preco_pao
+end
+print("Padaria carregada!")
+</pre>
+
+<pre class="term">$ lua -i padaria.lua
+Lua 5.5.0  Copyright (C) 1994-2025 Lua.org, PUC-Rio
+Padaria carregada!                                 « o arquivo rodou
+&gt; total(10)                                        « a função do arquivo
+7.5
+&gt; preco_pao
+0.75
+&gt; segredo                                          « era local no arquivo
+nil
+&gt; preco_pao = 0.80
+&gt; total(10)
+8.0
+&gt; os.exit()
+</pre>
+
+<dl class="anatomy">
+  <dt>Lua 5.5.0 …</dt><dd>A apresentação sai <strong>antes</strong> do que o arquivo imprime.</dd>
+  <dt>Padaria carregada!</dt><dd>O arquivo rodou inteiro, do começo ao fim.</dd>
+  <dt>total(10)</dt><dd>A função <code>total</code>, criada no arquivo, está disponível no <code>&gt;</code>: 10 pães a 0,75 dão <code>7.5</code>.</dd>
+  <dt>segredo → nil</dt><dd>O <code>segredo</code> era <code>local</code> no arquivo, e o <code>local</code> não sai do pedaço onde nasceu (seção 4). Só os nomes criados <strong>sem</strong> <code>local</code> (os "globais") ficam visíveis.</dd>
+  <dt>preco_pao = 0.80</dt><dd>Dá para mudar os valores e testar de novo: agora 10 pães dão <code>8.0</code>.</dd>
+</dl>
+
+<div class="note">
+<strong>Por que este arquivo usa nomes sem <code>local</code>?</strong>
+<p>Só para o <code>lua -i</code> enxergar a função e o preço. Nos programas de verdade, o guia usa <code>local</code> sempre; a aula <a href="local.html">local × Global</a> explica o porquê. Para testar um módulo inteiro no <code>&gt;</code>, o jeito certo é o <code>require</code>, que você vai conhecer em <a href="modulos.html">Módulos e require</a>.</p>
+</div>
+
+<hr>
+
+<h2>7. Mudando o prompt: <code>_PROMPT</code> e <code>_PROMPT2</code></h2>
+<p>Uma curiosidade do manual: se você guardar um texto na variável <code>_PROMPT</code>, o Lua passa a usá-lo como prompt; a <code>_PROMPT2</code> é o prompt de continuação (o <code>&gt;&gt;</code>):</p>
+
+<pre class="term">$ lua
+Lua 5.5.0  Copyright (C) 1994-2025 Lua.org, PUC-Rio
+&gt; _PROMPT = "lua&gt; "
+lua&gt; 2 + 3
+5
+lua&gt; _PROMPT2 = "...&gt; "
+lua&gt; for i = 1, 2 do
+...&gt; print(i)
+...&gt; end
+1
+2
+</pre>
+
+<p>Vale só até você sair. Não serve para nada além de deixar o terminal com a sua cara, mas ajuda a entender que o <code>&gt;</code> não tem nada de mágico: é um texto que o <code>lua</code> mostra enquanto espera.</p>
+
+<hr>
+
+<h2>8. O <code>=</code> dos tutoriais antigos <span class="versao">5.5</span></h2>
+<p>Em muitos tutoriais e livros antigos, você vai ver linhas assim no modo interativo: <code>= 2 + 3</code>. É que, no <strong>Lua 5.1</strong> (e no <strong>LuaJIT</strong>, que segue o 5.1), o modo interativo não mostrava valores sozinho: era preciso começar a linha com <code>=</code>, que queria dizer "mostre o valor de". Os três Lua do computador da Ana, lado a lado:</p>
+
+<pre class="term">$ lua5.1
+Lua 5.1.5  Copyright (C) 1994-2012 Lua.org, PUC-Rio
+&gt; = 2 + 3
+5
+&gt; 2 + 3
+stdin:1: unexpected symbol near '2'                « o 5.1 não mostra sem o =
+&gt; os.exit()
+$ lua5.4
+Lua 5.4.8  Copyright (C) 1994-2025 Lua.org, PUC-Rio
+&gt; = 2 + 3
+5                                                  « o 5.4 aceita os dois
+&gt; 2 + 3
+5
+&gt; os.exit()
+$ lua
+Lua 5.5.0  Copyright (C) 1994-2025 Lua.org, PUC-Rio
+&gt; = 2 + 3
+stdin:1: unexpected symbol near '='                « o 5.5 não aceita mais o =
+&gt; 2 + 3
+5
+</pre>
+
+<p>No Lua 5.5, o <code>=</code> no começo da linha deixou de existir: escreva só a expressão (<code>2 + 3</code>). Se um tutorial mostrar <code>= alguma coisa</code>, apague o <code>=</code>. O LuaJIT, no computador da Ana, se comportou como o 5.1. A aula <a href="versoes.html">Lua 5.1, LuaJIT, 5.4 e 5.5</a> reúne outras diferenças assim.</p>
+
+<hr>
+
+<h2>9. O editor do guia não é um <code>&gt;</code></h2>
+<p>As caixas Experimente rodam o código como um <strong>arquivo</strong>, do começo ao fim, a cada clique em Rodar (como <code>lua main.lua</code>). Por isso, lá:</p>
+<ul>
+  <li>valores soltos <strong>não</strong> aparecem sozinhos (e uma expressão sozinha na linha é erro): use <code>print</code>;</li>
+  <li>o <code>local</code> funciona normalmente, porque o arquivo inteiro é um pedaço só;</li>
+  <li>cada Rodar começa do zero: as variáveis da execução anterior não existem mais.</li>
+</ul>
+
+<div class="trylua" data-goal="out:Total: 7.5;;semerro;;src:\blocal\b">
+<p class="try-task"><strong>Missão:</strong> no editor, o <code>local</code> funciona. Complete o programa: crie, com <code>local</code>, uma variável <code>quantidade</code> valendo <code>10</code>, antes do <code>print</code>. A saída deve ser <code>Total: 7.5</code>.</p>
+<pre class="script" data-file="main.lua">local preco_pao = 0.75
+print("Total: " .. quantidade * preco_pao)
+</pre>
+<pre class="solucao" data-file="main.lua">local preco_pao = 0.75
+local quantidade = 10
+print("Total: " .. quantidade * preco_pao)
+</pre>
+</div>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+
+<div class="cenario">
+<strong>Um erro no <code>&gt;</code> não fecha nada</strong>
+<pre class="term">$ lua
+Lua 5.5.0  Copyright (C) 1994-2025 Lua.org, PUC-Rio
+&gt; pirnt("oi")
+stdin:1: attempt to call a nil value (global 'pirnt')
+stack traceback:
+        stdin:1: in main chunk
+        [C]: in ?
+&gt; print("oi")
+oi
+</pre>
+<p><strong>O que aconteceu:</strong> a Ana trocou duas letras, e o Lua não achou nada chamado <code>pirnt</code> para chamar. É a mesma mensagem de um programa em arquivo, com duas diferenças: o lugar se chama <code>stdin:1:</code> (a linha que você digitou), e a mensagem não começa com <code>lua:</code>. E o principal: diferente de um programa em arquivo, o erro <strong>não encerra</strong> nada. O Lua mostra a mensagem e volta ao <code>&gt;</code>, com tudo o que você já tinha criado.</p>
+<p><strong>Como resolver:</strong> use a seta <kbd>↑</kbd> para trazer a linha de volta, corrija e aperte <kbd>Enter</kbd> (ou redigite a linha).</p>
+</div>
+
+<div class="cenario">
+<strong>Erro de escrita: <code>unexpected symbol</code></strong>
+<pre class="term">$ lua
+Lua 5.5.0  Copyright (C) 1994-2025 Lua.org, PUC-Rio
+&gt; x = = 1
+stdin:1: unexpected symbol near '='
+</pre>
+<p><strong>O que aconteceu:</strong> dois <code>=</code> seguidos não formam nada que o Lua entenda: "símbolo inesperado perto de <code>=</code>". É um erro de sintaxe, por isso não tem <code>stack traceback</code>. <strong>Como resolver:</strong> <code>x = 1</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Aspas que não fecham</strong>
+<pre class="term">$ lua
+Lua 5.5.0  Copyright (C) 1994-2025 Lua.org, PUC-Rio
+&gt; print("oi
+&gt;&gt; ")
+stdin:1: unfinished string near '"oi'
+</pre>
+<p><strong>O que aconteceu:</strong> a Ana esqueceu de fechar as aspas e apertou <kbd>Enter</kbd>. O Lua achou que a linha ainda não tinha acabado e mostrou o <code>&gt;&gt;</code>. Ela fechou na linha de baixo, mas não adiantou: um texto entre aspas não pode ser quebrado no meio por um <kbd>Enter</kbd>. "Texto não terminado perto de <code>"oi</code>". (Textos de várias linhas existem, mas com outra escrita: aula <a href="strings-longas.html">Textos Longos</a>.) <strong>Como resolver:</strong> escreva a linha inteira de novo: <code>print("oi")</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Comando do terminal dentro do <code>&gt;</code></strong>
+<pre class="term">$ lua
+Lua 5.5.0  Copyright (C) 1994-2025 Lua.org, PUC-Rio
+&gt; lua ola.lua
+stdin:1: syntax error near 'ola'
+&gt; lua -v
+stdin:1: attempt to perform arithmetic on a nil value (global 'lua')
+stack traceback:
+        stdin:1: in main chunk
+        [C]: in ?
+</pre>
+<p><strong>O que aconteceu:</strong> <code>lua ola.lua</code> e <code>lua -v</code> são comandos do <strong>terminal</strong>, mas quem estava ouvindo era o Lua. No primeiro, ele nem entendeu a frase: dois nomes lado a lado, separados só por espaço, não formam uma instrução ("erro de sintaxe perto de <code>ola</code>"). No segundo, ele entendeu uma conta, "<code>lua</code> menos <code>v</code>", e não dá para fazer conta com <code>lua</code>, que lá dentro vale <code>nil</code>.</p>
+<p><strong>Como resolver:</strong> saia com <code>os.exit()</code> e digite o comando no <code>$</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Código Lua no terminal</strong>
+<pre class="term">$ print "Olá"
+Comando 'print' não encontrado, mas poder ser instalado com:
+sudo apt install mailcap
+</pre>
+<p><strong>O que aconteceu:</strong> o contrário: a Ana digitou Lua no <code>$</code>. Quem respondeu foi o <strong>Ubuntu</strong>, em português, procurando um programa chamado <code>print</code>. <strong>Como resolver:</strong> não instale nada; abra o Lua com <code>lua</code> primeiro e digite a linha no <code>&gt;</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>A variável sumiu (era <code>local</code>)</strong>
+<pre class="term">$ lua
+Lua 5.5.0  Copyright (C) 1994-2025 Lua.org, PUC-Rio
+&gt; local y = 5
+warning: locals do not survive across lines in interactive mode
+&gt; y
+nil
+</pre>
+<p><strong>O que aconteceu:</strong> no modo interativo, cada linha é um pedaço separado, e a variável <code>local</code> morre com a linha (seção 4). <strong>Como resolver:</strong> no <code>&gt;</code>, escreva <code>y = 5</code>, sem <code>local</code>.</p>
+</div>
+
+<div class="trylua" data-goal="out:dobro de 21: 42;;semerro">
+<p class="try-task"><strong>Missão:</strong> a Ana copiou do modo interativo uma linha que lá mostrava <code>42</code>, mas num arquivo ela não mostra nada: <code>dobro(21)</code> sozinho é só uma chamada, e o resultado se perde (não dá erro, porque chamar uma função é uma instrução). Troque a última linha por <code>print("dobro de 21: " .. dobro(21))</code> e rode.</p>
+<pre class="script" data-file="main.lua">local function dobro(x)
+  return x * 2
+end
+dobro(21)
+</pre>
+<pre class="solucao" data-file="main.lua">local function dobro(x)
+  return x * 2
+end
+print("dobro de 21: " .. dobro(21))
+</pre>
+</div>
+
+<hr>
+
+<h2>Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>No terminal / no <code>&gt;</code></th><th>O que faz</th></tr>
+<tr><td><code>lua</code></td><td>Abre o modo interativo (o mesmo que <code>lua -v -i</code>)</td></tr>
+<tr><td><code>lua -i arquivo.lua</code></td><td>Roda o arquivo e abre o modo interativo, com os globais do arquivo</td></tr>
+<tr><td><code>&gt; 2 + 3</code></td><td>Uma expressão: o valor aparece sozinho</td></tr>
+<tr><td><code>&gt; nome = "Ana"</code></td><td>Uma instrução: não mostra nada</td></tr>
+<tr><td><code>&gt;&gt;</code></td><td>O Lua espera o resto da instrução (falta um <code>end</code>, um <code>)</code>…)</td></tr>
+<tr><td><code>os.exit()</code> ou <kbd>Ctrl</kbd>+<kbd>D</kbd></td><td>Sai do Lua</td></tr>
+<tr><td><kbd>Ctrl</kbd>+<kbd>C</kbd></td><td>Interrompe o que está rodando (no prompt vazio, fecha o Lua)</td></tr>
+<tr><td><kbd>↑</kbd> / <kbd>↓</kbd></td><td>Histórico das linhas digitadas (precisa da readline)</td></tr>
+<tr><td><code>_PROMPT = "…"</code>, <code>_PROMPT2 = "…"</code></td><td>Troca o prompt e o de continuação</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Mensagem ou resposta</th><th>Causa provável</th></tr>
+<tr><td><code>nil</code> (sem erro)</td><td>Você pediu um nome que ninguém criou (ou que era <code>local</code> noutra linha)</td></tr>
+<tr><td><code>warning: locals do not survive across lines in interactive mode</code></td><td><code>local</code> no modo interativo: a variável some no fim da linha</td></tr>
+<tr><td><code>stdin:1: attempt to call a nil value (global 'exit')</code></td><td><code>exit()</code> não existe no Lua: use <code>os.exit()</code></td></tr>
+<tr><td><code>stdin:1: unexpected symbol near '='</code></td><td>O <code>=</code> do Lua 5.1 no começo da linha, ou um <code>= =</code></td></tr>
+<tr><td><code>stdin:1: syntax error near 'ola'</code></td><td>Comando do terminal (<code>lua ola.lua</code>) digitado no <code>&gt;</code></td></tr>
+<tr><td><code>stdin:1: unfinished string near '"oi'</code></td><td>Aspas sem fechar na linha</td></tr>
+<tr><td><code>interrupted!</code></td><td>Você apertou <kbd>Ctrl</kbd>+<kbd>C</kbd> com algo rodando</td></tr>
+<tr><td><code>lua: arquivo.lua:1: unexpected symbol near '2'</code></td><td>Num arquivo, uma expressão sozinha na linha: use <code>print</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. Abrir</h3>
+<p>Qual comando, digitado no <code>$</code>, abre o modo interativo do Lua?</p>
+<div class="ex-code">$ <input data-answer="lua" aria-label="comando"></div>
+</div>
+
+<div class="exercise">
+<h3>2. Sair</h3>
+<p>Complete a função que fecha o Lua:</p>
+<div class="ex-code">&gt; <input data-answer="os" aria-label="biblioteca">.exit()</div>
+</div>
+
+<div class="exercise">
+<h3>3. O que aparece?</h3>
+<p>No modo interativo do Lua 5.5, a Ana digitou <code>&gt; 3 * 4</code>. O que aparece na linha de baixo?</p>
+<div class="ex-code">Saída: <input data-answer="12" aria-label="saída"></div>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">4. A Ana digitou <code>for i = 1, 3 do</code> e apertou <kbd>Enter</kbd>. O prompt virou <code>&gt;&gt;</code>. O que isso quer dizer?</p>
+<label><input type="radio" name="q4"> Que deu erro, e ela precisa sair do Lua.</label>
+<label><input type="radio" name="q4"> Que a instrução ainda não acabou: o Lua espera o resto, até o <code>end</code>.</label>
+<label><input type="radio" name="q4"> Que o <code>for</code> já rodou duas vezes.</label>
+<label><input type="radio" name="q4"> Que ela entrou num segundo Lua, dentro do primeiro.</label>
+</div>
+
+<div class="mc" data-answer="3">
+<p class="mc-q">5. No modo interativo, a Ana digitou <code>local total = 50</code> e, na linha seguinte, <code>total</code>. O que o Lua respondeu?</p>
+<label><input type="radio" name="q5"> <code>50</code></label>
+<label><input type="radio" name="q5"> Um erro: <code>total</code> não existe.</label>
+<label><input type="radio" name="q5"> Um aviso de que locais não sobrevivem entre linhas e, depois, <code>nil</code>.</label>
+<label><input type="radio" name="q5"> <code>local total = 50</code></label>
+</div>
+
+<div class="mc" data-answer="1">
+<p class="mc-q">6. Um tutorial manda digitar <code>&gt; = 10 / 4</code>. No Lua 5.5, o que fazer?</p>
+<label><input type="radio" name="q6"> Apagar o <code>=</code> e digitar só <code>10 / 4</code>: o <code>=</code> era do Lua 5.1 e não existe mais.</label>
+<label><input type="radio" name="q6"> Digitar <code>== 10 / 4</code>.</label>
+<label><input type="radio" name="q6"> Instalar o Lua 5.1, porque o 5.5 não faz contas.</label>
+<label><input type="radio" name="q6"> Digitar a linha no <code>$</code>.</label>
+</div>
+
+<div class="mc" data-answer="4">
+<p class="mc-q">7. Num arquivo <code>conta.lua</code>, a linha <code>2 + 3</code> sozinha (sem <code>print</code>) faz o quê?</p>
+<label><input type="radio" name="q7"> Mostra <code>5</code>.</label>
+<label><input type="radio" name="q7"> Mostra <code>2 + 3</code>.</label>
+<label><input type="radio" name="q7"> Calcula, mas não mostra nada.</label>
+<label><input type="radio" name="q7"> Dá erro de sintaxe: <code>unexpected symbol near '2'</code>.</label>
+</div>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li>O modo interativo (REPL) abre com <code>lua</code>, sem arquivo. O prompt <code>&gt;</code> quer dizer "o Lua está ouvindo"; o <code>$</code>, "o terminal está ouvindo".</li>
+  <li>No <code>&gt;</code>, o valor de uma expressão aparece sozinho (mostrado como o <code>print</code> mostraria); instruções, como <code>nome = "Ana"</code>, não mostram nada. Nome que ninguém criou vale <code>nil</code>.</li>
+  <li>Num arquivo (e no editor do guia), uma expressão sozinha é erro de sintaxe: use <code>print</code>.</li>
+  <li>Instruções de várias linhas mostram o prompt <code>&gt;&gt;</code> até o <code>end</code>; o recuo é opcional.</li>
+  <li>Cada linha do <code>&gt;</code> é um pedaço separado: o <code>local</code> some no fim da linha (e o Lua 5.5 avisa). No <code>&gt;</code>, crie sem <code>local</code>; nos arquivos, use <code>local</code> sempre.</li>
+  <li>Saia com <code>os.exit()</code> ou <kbd>Ctrl</kbd>+<kbd>D</kbd> (<code>exit</code> e <code>quit</code> não existem). <kbd>Ctrl</kbd>+<kbd>C</kbd> interrompe um laço sem fim.</li>
+  <li><code>lua -i arquivo.lua</code> roda o arquivo e abre o <code>&gt;</code>, com os nomes globais do arquivo à mão.</li>
+  <li>O <code>= expressão</code> dos tutoriais antigos é do Lua 5.1 (e do LuaJIT); no 5.5 ele dá <code>unexpected symbol near '='</code>.</li>
+  <li>Próximo passo: conhecer as caixas Experimente por dentro, em <a href="simulador.html">O Editor do Guia</a>, e escrever o <a href="primeiro-programa.html">Seu Primeiro Programa</a>.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
