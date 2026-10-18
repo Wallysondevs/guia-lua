@@ -1,0 +1,1096 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua Projeto Contador de Palavras — read("a"), gmatch, acentos, contagem em tabela e ordenação passo a passo | Guia Lua</title>
+<meta name="description" content="Projeto passo a passo: um contador de palavras em Lua 5.5. Ler um arquivo inteiro com read(&quot;a&quot;), separar as palavras com gmatch, limpar pontuação e maiúsculas (e o que o %a e o lower fazem com acentos no UTF-8), contar numa tabela, ordenar o resultado com desempate (nunca pela ordem do pairs), ignorar palavras comuns, desenhar barras e alinhar colunas com utf8.len. Quatro versões com saídas reais e missões no editor.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Projeto <span class="hl">Contador de Palavras</span></h1>
+
+<p class="intro">Quais palavras um texto mais usa? Neste projeto o programa lê um arquivo de texto, separa as palavras, conta quantas vezes cada uma aparece e mostra as mais frequentes, com barrinhas. Parece simples, e é um ótimo exercício de texto no Lua, porque esbarra em tudo o que é traiçoeiro: pontuação grudada, maiúsculas, <strong>acentos</strong> e a ordem do <code>pairs</code>.</p>
+
+<div class="note">
+<strong>Você vai praticar</strong>
+<ul>
+  <li>Ler um arquivo inteiro com <a href="arquivos-ler.html">read("a")</a>.</li>
+  <li>Separar e limpar palavras com <a href="gmatch.html">gmatch</a>, <a href="padroes.html">padrões</a> e <a href="gsub.html">gsub</a>.</li>
+  <li>Entender o que acontece com os acentos (veja <a href="utf8.html">Acentos e a Biblioteca utf8</a>).</li>
+  <li>Contar numa tabela usada como <a href="dicionarios.html">dicionário</a>.</li>
+  <li>Ordenar o resultado com <a href="table-sort.html">table.sort</a> e desempate, porque a ordem do <a href="pairs.html">pairs</a> muda.</li>
+  <li>Ler o nome do arquivo de <a href="arg.html">arg</a>.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2 id="construir">O que vamos construir</h2>
+<p>O texto que a Ana escreveu sobre a padaria do bairro, <code>texto.txt</code>:</p>
+
+<pre class="file" data-file="texto.txt">A padaria do bairro abre cedo. Às seis horas, a Ana já está na fila do pão.
+O pão de queijo sai quente, e o café sai forte. Quem chega cedo leva o pão
+mais quente; quem chega tarde leva o que sobrou. Não há pão melhor no bairro,
+diz a Ana, e não há fila mais animada. A fila anda, o pão acaba, e amanhã
+a padaria abre cedo de novo.
+</pre>
+
+<p>E o contador pronto, no terminal dela:</p>
+
+<pre class="term" data-cwd="~/projetos/palavras">$ lua palavras.lua
+texto.txt: 72 palavras, 30 diferentes (sem contar as comuns).
+ 1. pão       5 #####
+ 2. cedo      3 ###
+ 3. fila      3 ###
+ 4. abre      2 ##
+ 5. ana       2 ##
+ 6. bairro    2 ##
+ 7. chega     2 ##
+ 8. leva      2 ##
+ 9. mais      2 ##
+10. não       2 ##</pre>
+
+<ol class="passo">
+  <li><a href="#versao1">Ler o arquivo e separar as palavras</a> (<code>read("a")</code>, <code>gmatch("%S+")</code>).</li>
+  <li><a href="#versao2">Limpar: minúsculas e sem pontuação</a> (e os acentos).</li>
+  <li><a href="#versao3">Contar numa tabela e ordenar</a> (com desempate).</li>
+  <li><a href="#versao4">Palavras comuns, barras e colunas</a> (<code>arg</code>, <code>string.rep</code>, <code>utf8.len</code>).</li>
+</ol>
+
+<h3>Antes de começar</h3>
+<p>Crie a pasta, salve o <code>texto.txt</code> nela (ou use um texto seu) e crie o <code>palavras.lua</code> ao lado:</p>
+
+<pre class="term">$ mkdir -p projetos/palavras
+$ cd projetos/palavras</pre>
+
+<hr>
+
+<h2 id="versao1">Versão 1 · Ler o arquivo e separar as palavras</h2>
+<p>Diferente da <a href="projeto-notas.html">Notas da Turma</a>, aqui as linhas não importam: uma frase pode começar numa linha e terminar na outra. Então o programa lê o arquivo <strong>inteiro</strong> num texto só e o separa nos espaços.</p>
+
+<pre class="file" data-file="palavras.lua">-- Contador de Palavras, versão 1: ler o arquivo e separar as palavras
+
+local arquivo = assert(io.open("texto.txt", "r"))
+local texto = arquivo:read("a")       -- o arquivo inteiro, num texto só
+arquivo:close()
+
+local palavras = {}
+for palavra in texto:gmatch("%S+") do
+  palavras[#palavras + 1] = palavra
+end
+
+print("Palavras: " .. #palavras)
+print("As 12 primeiras: " .. table.concat(palavras, " | ", 1, 12))
+</pre>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Peça</th><th>O que faz</th></tr>
+<tr><td><code>arquivo:read("a")</code></td><td>Lê o arquivo todo (<code>"a"</code> de <em>all</em>, "tudo"), com as quebras de linha, num texto só (veja <a href="arquivos-ler.html">Lendo Arquivos</a>).</td></tr>
+<tr><td><code>texto:gmatch("%S+")</code></td><td>Percorre cada pedaço de "um ou mais caracteres que <strong>não</strong> são espaço". <code>%s</code> (minúsculo) é espaço, TAB ou quebra de linha; <code>%S</code> (maiúsculo) é o contrário (veja <a href="ref-padroes.html">Padrões</a>).</td></tr>
+<tr><td><code>table.concat(palavras, " | ", 1, 12)</code></td><td>Junta só os itens de 1 a 12, separados por <code>" | "</code>, para ver onde cada "palavra" começa e termina.</td></tr>
+</table>
+</div>
+
+<pre class="term" data-cwd="~/projetos/palavras">$ lua palavras.lua
+Palavras: 72
+As 12 primeiras: A | padaria | do | bairro | abre | cedo. | Às | seis | horas, | a | Ana | já</pre>
+
+<p>A contagem total já está certa: 72 palavras. Mas os pedaços ainda não servem para contar: <code>cedo.</code> veio com o ponto, <code>horas,</code> com a vírgula, e <code>A</code> e <code>a</code> seriam contadas como palavras diferentes. A versão 2 limpa.</p>
+
+<div class="trylua" data-goal="out:Palavras: 72;;out:A | padaria | do">
+<p class="try-task"><strong>Missão (versão 1):</strong> a caixa tem duas abas, o programa e o <code>texto.txt</code>. O texto já foi lido, mas ainda não foi separado. No lugar do comentário, percorra <code>texto:gmatch("%S+")</code> e guarde cada pedaço no fim de <code>palavras</code>.</p>
+<pre class="script" data-file="palavras.lua">-- Contador de Palavras, versão 1: ler o arquivo e separar as palavras
+
+local arquivo = assert(io.open("texto.txt", "r"))
+local texto = arquivo:read("a")       -- o arquivo inteiro, num texto só
+arquivo:close()
+
+local palavras = {}
+-- separe aqui o texto em palavras, com gmatch
+
+print("Palavras: " .. #palavras)
+print("As 12 primeiras: " .. table.concat(palavras, " | ", 1, 12))
+</pre>
+<pre class="script" data-file="texto.txt">A padaria do bairro abre cedo. Às seis horas, a Ana já está na fila do pão.
+O pão de queijo sai quente, e o café sai forte. Quem chega cedo leva o pão
+mais quente; quem chega tarde leva o que sobrou. Não há pão melhor no bairro,
+diz a Ana, e não há fila mais animada. A fila anda, o pão acaba, e amanhã
+a padaria abre cedo de novo.
+</pre>
+<pre class="solucao" data-file="palavras.lua">-- Contador de Palavras, versão 1: ler o arquivo e separar as palavras
+
+local arquivo = assert(io.open("texto.txt", "r"))
+local texto = arquivo:read("a")       -- o arquivo inteiro, num texto só
+arquivo:close()
+
+local palavras = {}
+for palavra in texto:gmatch("%S+") do
+  palavras[#palavras + 1] = palavra
+end
+
+print("Palavras: " .. #palavras)
+print("As 12 primeiras: " .. table.concat(palavras, " | ", 1, 12))
+</pre>
+</div>
+
+<hr>
+
+<h2 id="versao2">Versão 2 · Limpar: minúsculas e sem pontuação</h2>
+<p>A ideia: passar o texto todo para minúsculas e, em vez de pegar "o que não é espaço", pegar só <strong>sequências de letras</strong>. A pontuação fica de fora sozinha. O padrão óbvio para "letras" seria <code>%a+</code>. Veja o que ele faz com um texto em português:</p>
+
+<pre class="term" data-cwd="~/projetos/palavras">$ lua palavras.lua
+Palavras: 79
+As 12 primeiras: a | padaria | do | bairro | abre | cedo | s | seis | horas | a | ana | j</pre>
+
+<p>79 palavras, 7 a mais que antes, e apareceram <code>s</code> e <code>j</code>: o <code>Às</code> virou <code>s</code> e o <code>já</code> virou <code>j</code>. O <code>%a</code> do Lua só conhece as letras de <code>a</code> a <code>z</code> (e <code>A</code> a <code>Z</code>). No modo interativo dá para ver por quê:</p>
+
+<pre class="term">$ lua
+Lua 5.5.0  Copyright (C) 1994-2025 Lua.org, PUC-Rio
+&gt; ("não"):byte(1, -1)
+110     195     163     111
+&gt; for p in ("não está"):gmatch("%a+") do io.write("[", p, "] ") end print()
+[n] [o] [est]
+&gt; for p in ("não está"):gmatch("[%a\128-\255]+") do io.write("[", p, "] ") end print()
+[não] [está]
+&gt; #"pão", utf8.len("pão")
+4       3
+&gt; os.exit()</pre>
+
+<dl class="anatomy">
+  <dt>("não"):byte(1, -1) → 110 195 163 111</dt><dd>Os <strong>bytes</strong> de <code>"não"</code>, do primeiro ao último: <code>n</code> é 110, <code>o</code> é 111, e o <code>ã</code> ocupa <strong>dois</strong> bytes, 195 e 163. É assim que o UTF-8 (o jeito como o Ubuntu guarda texto) escreve as letras acentuadas.</dd>
+  <dt>gmatch("%a+") → [n] [o] [est]</dt><dd>Para o <code>%a</code>, os bytes 195 e 163 não são letras: o <code>não</code> se partiu em dois, e o <code>á</code> de <code>está</code> sumiu.</dd>
+  <dt>gmatch("[%a\128-\255]+") → [não] [está]</dt><dd>O conjunto <code>[…]</code> aceita uma letra <code>%a</code> <strong>ou</strong> qualquer byte de 128 a 255 (<code>\128-\255</code>). No UTF-8, os bytes acima de 127 só aparecem dentro de caracteres especiais, como as letras acentuadas: aceitando todos eles, o <code>ã</code> inteiro entra na palavra.</dd>
+  <dt>#"pão", utf8.len("pão") → 4 3</dt><dd>O <code>#</code> conta bytes; o <code>utf8.len</code> conta caracteres. A versão 4 vai precisar disso.</dd>
+</dl>
+
+<p>Com o padrão novo, quase tudo se resolve. Falta uma coisa, que aparece quando a Ana usa só o <code>lower()</code>:</p>
+
+<pre class="term" data-cwd="~/projetos/palavras">$ lua palavras.lua
+Palavras: 72
+As 12 primeiras: a | padaria | do | bairro | abre | cedo | Às | seis | horas | a | ana | já
+$ lua
+Lua 5.5.0  Copyright (C) 1994-2025 Lua.org, PUC-Rio
+&gt; ("ÀS SEIS, NÃO"):lower()
+Às seis, nÃo
+&gt; os.exit()</pre>
+
+<p>O <code>lower()</code> também só conhece de <code>A</code> a <code>Z</code>: o <code>S</code> virou <code>s</code>, mas o <code>À</code> e o <code>Ã</code> ficaram maiúsculos. Um texto que começasse com "Às" e tivesse "às" no meio contaria as duas como palavras diferentes. A solução da versão 2 é uma tabela com as maiúsculas acentuadas do português e as minúsculas correspondentes:</p>
+
+<pre class="file" data-file="palavras.lua">-- Contador de Palavras, versão 2: minúsculas e sem pontuação
+
+-- Uma "letra": as letras sem acento (%a) ou um byte de 128 a 255,
+-- que são os pedaços das letras acentuadas no UTF-8.
+local LETRAS = "[%a\128-\255]+"
+
+-- O lower() só conhece A-Z; as maiúsculas acentuadas vão por esta tabela.
+local ACENTUADAS = {
+  ["À"] = "à", ["Á"] = "á", ["Â"] = "â", ["Ã"] = "ã", ["Ç"] = "ç",
+  ["É"] = "é", ["Ê"] = "ê", ["Í"] = "í", ["Ó"] = "ó", ["Ô"] = "ô",
+  ["Õ"] = "õ", ["Ú"] = "ú",
+}
+
+local function minusculas(texto)
+  return (texto:lower():gsub("\195[\128-\159]", ACENTUADAS))
+end
+
+local arquivo = assert(io.open("texto.txt", "r"))
+local texto = minusculas(arquivo:read("a"))
+arquivo:close()
+
+local palavras = {}
+for palavra in texto:gmatch(LETRAS) do
+  palavras[#palavras + 1] = palavra
+end
+
+print("Palavras: " .. #palavras)
+print("As 12 primeiras: " .. table.concat(palavras, " | ", 1, 12))
+</pre>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Peça</th><th>O que faz</th></tr>
+<tr><td><code>local LETRAS = "[%a\128-\255]+"</code></td><td>O padrão de "palavra", guardado num nome que explica o que ele é.</td></tr>
+<tr><td><code>ACENTUADAS = { ["À"] = "à", … }</code></td><td>Uma tabela de troca: cada maiúscula acentuada aponta para a sua minúscula.</td></tr>
+<tr><td><code>texto:lower():gsub("\195[\128-\159]", ACENTUADAS)</code></td><td>Primeiro o <code>lower()</code> cuida de A–Z. Depois o <a href="gsub.html">gsub</a> procura os pares de bytes das maiúsculas acentuadas (no UTF-8, todas as do português começam com o byte 195 e têm o segundo byte entre 128 e 159) e troca cada um pelo valor da tabela. Quando o <code>gsub</code> recebe uma <strong>tabela</strong> como substituição, ele usa <code>tabela[achado]</code>; se não houver (dá <code>nil</code>), mantém o original.</td></tr>
+<tr><td><code>return (…)</code></td><td>Os parênteses em volta guardam só o primeiro valor do <code>gsub</code> (o texto), sem o número de trocas.</td></tr>
+</table>
+</div>
+
+<pre class="term" data-cwd="~/projetos/palavras">$ lua palavras.lua
+Palavras: 72
+As 12 primeiras: a | padaria | do | bairro | abre | cedo | às | seis | horas | a | ana | já</pre>
+
+<p>Agora sim: 72 palavras, todas em minúsculas e sem pontuação, com os acentos inteiros.</p>
+
+<div class="warning">
+<strong>O limite deste jeito</strong>
+<p>Aceitar "qualquer byte acima de 127" também aceita outros caracteres especiais, que não são letras: um travessão (<code>—</code>), aspas curvas (<code>“ ”</code>) ou um emoji viram "palavras". Para um texto simples como o da Ana, funciona; para textos quaisquer, a solução completa percorre os caracteres com <code>utf8.codes</code> e decide caractere por caractere. Veja <a href="utf8.html">Acentos e a Biblioteca utf8</a>.</p>
+</div>
+
+<div class="trylua" data-goal="out:cedo | às | seis;;out:ana | já">
+<p class="try-task"><strong>Missão (versão 2):</strong> este programa usa o padrão <code>%a+</code>, e as palavras acentuadas se partem (<code>s</code>, <code>j</code>). Troque o valor de <code>LETRAS</code> pelo padrão que aceita também os bytes dos acentos: <code>"[%a\128-\255]+"</code>.</p>
+<pre class="script" data-file="palavras.lua">-- Contador de Palavras, versão 2: minúsculas e sem pontuação
+
+-- Uma "letra": as letras sem acento (%a) ou um byte de 128 a 255,
+-- que são os pedaços das letras acentuadas no UTF-8.
+local LETRAS = "%a+"
+
+-- O lower() só conhece A-Z; as maiúsculas acentuadas vão por esta tabela.
+local ACENTUADAS = {
+  ["À"] = "à", ["Á"] = "á", ["Â"] = "â", ["Ã"] = "ã", ["Ç"] = "ç",
+  ["É"] = "é", ["Ê"] = "ê", ["Í"] = "í", ["Ó"] = "ó", ["Ô"] = "ô",
+  ["Õ"] = "õ", ["Ú"] = "ú",
+}
+
+local function minusculas(texto)
+  return (texto:lower():gsub("\195[\128-\159]", ACENTUADAS))
+end
+
+local arquivo = assert(io.open("texto.txt", "r"))
+local texto = minusculas(arquivo:read("a"))
+arquivo:close()
+
+local palavras = {}
+for palavra in texto:gmatch(LETRAS) do
+  palavras[#palavras + 1] = palavra
+end
+
+print("Palavras: " .. #palavras)
+print("As 12 primeiras: " .. table.concat(palavras, " | ", 1, 12))
+</pre>
+<pre class="script" data-file="texto.txt">A padaria do bairro abre cedo. Às seis horas, a Ana já está na fila do pão.
+O pão de queijo sai quente, e o café sai forte. Quem chega cedo leva o pão
+mais quente; quem chega tarde leva o que sobrou. Não há pão melhor no bairro,
+diz a Ana, e não há fila mais animada. A fila anda, o pão acaba, e amanhã
+a padaria abre cedo de novo.
+</pre>
+<pre class="solucao" data-file="palavras.lua">-- Contador de Palavras, versão 2: minúsculas e sem pontuação
+
+-- Uma "letra": as letras sem acento (%a) ou um byte de 128 a 255,
+-- que são os pedaços das letras acentuadas no UTF-8.
+local LETRAS = "[%a\128-\255]+"
+
+-- O lower() só conhece A-Z; as maiúsculas acentuadas vão por esta tabela.
+local ACENTUADAS = {
+  ["À"] = "à", ["Á"] = "á", ["Â"] = "â", ["Ã"] = "ã", ["Ç"] = "ç",
+  ["É"] = "é", ["Ê"] = "ê", ["Í"] = "í", ["Ó"] = "ó", ["Ô"] = "ô",
+  ["Õ"] = "õ", ["Ú"] = "ú",
+}
+
+local function minusculas(texto)
+  return (texto:lower():gsub("\195[\128-\159]", ACENTUADAS))
+end
+
+local arquivo = assert(io.open("texto.txt", "r"))
+local texto = minusculas(arquivo:read("a"))
+arquivo:close()
+
+local palavras = {}
+for palavra in texto:gmatch(LETRAS) do
+  palavras[#palavras + 1] = palavra
+end
+
+print("Palavras: " .. #palavras)
+print("As 12 primeiras: " .. table.concat(palavras, " | ", 1, 12))
+</pre>
+</div>
+
+<hr>
+
+<h2 id="versao3">Versão 3 · Contar numa tabela e ordenar</h2>
+<p>Com as palavras limpas, contar é guardar numa tabela: a chave é a palavra, o valor é quantas vezes ela apareceu. Depois, para mostrar as mais frequentes, a tabela vira uma <strong>lista</strong> e a lista é ordenada. O começo do programa é igual ao da versão 2; muda o fim:</p>
+
+<pre class="file" data-file="palavras.lua">-- Contador de Palavras, versão 3: contar e ordenar
+
+-- Uma "letra": as letras sem acento (%a) ou um byte de 128 a 255,
+-- que são os pedaços das letras acentuadas no UTF-8.
+local LETRAS = "[%a\128-\255]+"
+
+-- O lower() só conhece A-Z; as maiúsculas acentuadas vão por esta tabela.
+local ACENTUADAS = {
+  ["À"] = "à", ["Á"] = "á", ["Â"] = "â", ["Ã"] = "ã", ["Ç"] = "ç",
+  ["É"] = "é", ["Ê"] = "ê", ["Í"] = "í", ["Ó"] = "ó", ["Ô"] = "ô",
+  ["Õ"] = "õ", ["Ú"] = "ú",
+}
+
+local function minusculas(texto)
+  return (texto:lower():gsub("\195[\128-\159]", ACENTUADAS))
+end
+
+local arquivo = assert(io.open("texto.txt", "r"))
+local texto = minusculas(arquivo:read("a"))
+arquivo:close()
+
+local palavras = {}
+for palavra in texto:gmatch(LETRAS) do
+  palavras[#palavras + 1] = palavra
+end
+
+-- Conta: contagem["pão"] = 5
+local contagem = {}
+for _, palavra in ipairs(palavras) do
+  contagem[palavra] = (contagem[palavra] or 0) + 1
+end
+
+-- Passa para uma lista, para poder ordenar (a ordem do pairs não serve).
+local lista = {}
+for palavra, n in pairs(contagem) do
+  lista[#lista + 1] = { palavra = palavra, n = n }
+end
+table.sort(lista, function (a, b)
+  if a.n ~= b.n then
+    return a.n &gt; b.n              -- mais vezes primeiro
+  end
+  return a.palavra &lt; b.palavra    -- empate: ordem alfabética
+end)
+
+print(string.format("%d palavras, %d diferentes.", #palavras, #lista))
+for i = 1, math.min(10, #lista) do
+  print(string.format("%2d. %-8s %d", i, lista[i].palavra, lista[i].n))
+end
+</pre>
+
+<dl class="anatomy">
+  <dt>contagem[palavra] = (contagem[palavra] or 0) + 1</dt><dd>O jeito clássico de contar no Lua. Na primeira vez que a palavra aparece, <code>contagem[palavra]</code> é <code>nil</code>, e o <code>or 0</code> troca por zero; das outras vezes, pega o valor que já estava. Soma 1 e guarda.</dd>
+  <dt>lista[#lista + 1] = { palavra = palavra, n = n }</dt><dd>Cada par do dicionário vira um item da lista, uma tabelinha com os dois campos. Só uma lista pode ser ordenada (o <code>table.sort</code> trabalha com posições 1, 2, 3…).</dd>
+  <dt>if a.n ~= b.n then return a.n &gt; b.n end</dt><dd>Quem aparece mais vem antes.</dd>
+  <dt>return a.palavra &lt; b.palavra</dt><dd>O <strong>desempate</strong>: com o mesmo número, a ordem alfabética. Sem essa linha, o resultado muda de uma execução para outra (veja o cenário).</dd>
+  <dt>math.min(10, #lista)</dt><dd>Mostra 10, ou menos se o texto tiver menos de 10 palavras diferentes.</dd>
+</dl>
+
+<pre class="term" data-cwd="~/projetos/palavras">$ lua palavras.lua
+72 palavras, 40 diferentes.
+ 1. a        5
+ 2. o        5
+ 3. pão     5
+ 4. cedo     3
+ 5. e        3
+ 6. fila     3
+ 7. abre     2
+ 8. ana      2
+ 9. bairro   2
+10. chega    2</pre>
+
+<p>O <code>pão</code> empatou com o <code>a</code> e o <code>o</code>, e o desempate alfabético o pôs em terceiro. Dois incômodos ficam para a versão 4: as palavras mais comuns da língua (<code>a</code>, <code>o</code>, <code>e</code>) dominam o topo e não dizem nada sobre o texto; e o número do <code>pão</code> saiu uma casa para a esquerda (o <code>%-8s</code> conta bytes, e <code>pão</code> tem 4 bytes para 3 letras).</p>
+
+<div class="cenario">
+<strong>Sem o desempate: cada execução, uma resposta</strong>
+<p>Com a função de comparação só com <code>return a.n &gt; b.n</code>, a Ana rodou o programa duas vezes seguidas (aqui, só o começo da saída):</p>
+<pre class="term" data-cwd="~/projetos/palavras">$ lua palavras.lua
+72 palavras, 40 diferentes.
+ 1. a        5
+ 2. o        5
+ 3. pão     5
+ 4. fila     3
+ 5. cedo     3
+ 6. e        3
+ 7. bairro   2
+$ lua palavras.lua
+72 palavras, 40 diferentes.
+ 1. pão     5
+ 2. a        5
+ 3. o        5
+ 4. cedo     3
+ 5. e        3
+ 6. fila     3
+ 7. quente   2</pre>
+<p>Mesmo programa, mesmo texto, resultados diferentes: o 1º lugar trocou, e o 7º virou outra palavra. A lista foi montada com <code>pairs</code>, cuja ordem muda a cada execução, e o <code>table.sort</code> não garante nada sobre os empates: eles saem na ordem em que vieram. <strong>Nunca dependa da ordem do <code>pairs</code></strong>: ordene sempre por um critério completo, que não deixe empate (aqui, o número e depois a própria palavra).</p>
+</div>
+
+<div class="trylua" data-goal="outre: 1\. a +5\n 2\. o +5\n 3\. pão +5\n 4\. cedo +3\n 5\. e +3\n 6\. fila +3;;src:table\.sort">
+<p class="try-task"><strong>Missão (versão 3):</strong> a contagem está pronta, mas a lista não é ordenada, e sai na ordem do <code>pairs</code>. No lugar do comentário, ordene <code>lista</code> com <code>table.sort</code> e uma função de comparação: quem aparece mais vem antes e, no empate, a ordem alfabética da palavra.</p>
+<pre class="script" data-file="palavras.lua">-- Contador de Palavras, versão 3: contar e ordenar
+
+-- Uma "letra": as letras sem acento (%a) ou um byte de 128 a 255,
+-- que são os pedaços das letras acentuadas no UTF-8.
+local LETRAS = "[%a\128-\255]+"
+
+-- O lower() só conhece A-Z; as maiúsculas acentuadas vão por esta tabela.
+local ACENTUADAS = {
+  ["À"] = "à", ["Á"] = "á", ["Â"] = "â", ["Ã"] = "ã", ["Ç"] = "ç",
+  ["É"] = "é", ["Ê"] = "ê", ["Í"] = "í", ["Ó"] = "ó", ["Ô"] = "ô",
+  ["Õ"] = "õ", ["Ú"] = "ú",
+}
+
+local function minusculas(texto)
+  return (texto:lower():gsub("\195[\128-\159]", ACENTUADAS))
+end
+
+local arquivo = assert(io.open("texto.txt", "r"))
+local texto = minusculas(arquivo:read("a"))
+arquivo:close()
+
+local palavras = {}
+for palavra in texto:gmatch(LETRAS) do
+  palavras[#palavras + 1] = palavra
+end
+
+-- Conta: contagem["pão"] = 5
+local contagem = {}
+for _, palavra in ipairs(palavras) do
+  contagem[palavra] = (contagem[palavra] or 0) + 1
+end
+
+-- Passa para uma lista, para poder ordenar (a ordem do pairs não serve).
+local lista = {}
+for palavra, n in pairs(contagem) do
+  lista[#lista + 1] = { palavra = palavra, n = n }
+end
+-- ordene a lista: mais vezes primeiro; empate, ordem alfabética
+
+print(string.format("%d palavras, %d diferentes.", #palavras, #lista))
+for i = 1, math.min(10, #lista) do
+  print(string.format("%2d. %-8s %d", i, lista[i].palavra, lista[i].n))
+end
+</pre>
+<pre class="script" data-file="texto.txt">A padaria do bairro abre cedo. Às seis horas, a Ana já está na fila do pão.
+O pão de queijo sai quente, e o café sai forte. Quem chega cedo leva o pão
+mais quente; quem chega tarde leva o que sobrou. Não há pão melhor no bairro,
+diz a Ana, e não há fila mais animada. A fila anda, o pão acaba, e amanhã
+a padaria abre cedo de novo.
+</pre>
+<pre class="solucao" data-file="palavras.lua">-- Contador de Palavras, versão 3: contar e ordenar
+
+-- Uma "letra": as letras sem acento (%a) ou um byte de 128 a 255,
+-- que são os pedaços das letras acentuadas no UTF-8.
+local LETRAS = "[%a\128-\255]+"
+
+-- O lower() só conhece A-Z; as maiúsculas acentuadas vão por esta tabela.
+local ACENTUADAS = {
+  ["À"] = "à", ["Á"] = "á", ["Â"] = "â", ["Ã"] = "ã", ["Ç"] = "ç",
+  ["É"] = "é", ["Ê"] = "ê", ["Í"] = "í", ["Ó"] = "ó", ["Ô"] = "ô",
+  ["Õ"] = "õ", ["Ú"] = "ú",
+}
+
+local function minusculas(texto)
+  return (texto:lower():gsub("\195[\128-\159]", ACENTUADAS))
+end
+
+local arquivo = assert(io.open("texto.txt", "r"))
+local texto = minusculas(arquivo:read("a"))
+arquivo:close()
+
+local palavras = {}
+for palavra in texto:gmatch(LETRAS) do
+  palavras[#palavras + 1] = palavra
+end
+
+-- Conta: contagem["pão"] = 5
+local contagem = {}
+for _, palavra in ipairs(palavras) do
+  contagem[palavra] = (contagem[palavra] or 0) + 1
+end
+
+-- Passa para uma lista, para poder ordenar (a ordem do pairs não serve).
+local lista = {}
+for palavra, n in pairs(contagem) do
+  lista[#lista + 1] = { palavra = palavra, n = n }
+end
+table.sort(lista, function (a, b)
+  if a.n ~= b.n then
+    return a.n &gt; b.n              -- mais vezes primeiro
+  end
+  return a.palavra &lt; b.palavra    -- empate: ordem alfabética
+end)
+
+print(string.format("%d palavras, %d diferentes.", #palavras, #lista))
+for i = 1, math.min(10, #lista) do
+  print(string.format("%2d. %-8s %d", i, lista[i].palavra, lista[i].n))
+end
+</pre>
+</div>
+
+<hr>
+
+<h2 id="versao4">Versão 4 · Palavras comuns, barras e colunas</h2>
+<p>A versão final ignora as palavras comuns, desenha uma barra para cada contagem, alinha a coluna mesmo com acentos e deixa a Ana escolher o arquivo na linha de comando (<code>lua palavras.lua outro.txt</code>).</p>
+
+<pre class="file" data-file="palavras.lua">-- Contador de Palavras, versão 4: palavras comuns, barras e o arquivo na linha de comando
+
+-- Uma "letra": as letras sem acento (%a) ou um byte de 128 a 255,
+-- que são os pedaços das letras acentuadas no UTF-8.
+local LETRAS = "[%a\128-\255]+"
+
+-- O lower() só conhece A-Z; as maiúsculas acentuadas vão por esta tabela.
+local ACENTUADAS = {
+  ["À"] = "à", ["Á"] = "á", ["Â"] = "â", ["Ã"] = "ã", ["Ç"] = "ç",
+  ["É"] = "é", ["Ê"] = "ê", ["Í"] = "í", ["Ó"] = "ó", ["Ô"] = "ô",
+  ["Õ"] = "õ", ["Ú"] = "ú",
+}
+
+-- Completa com espaços até a largura, contando letras (e não bytes).
+local function coluna(texto, largura)
+  return texto .. string.rep(" ", largura - utf8.len(texto))
+end
+
+local function minusculas(texto)
+  return (texto:lower():gsub("\195[\128-\159]", ACENTUADAS))
+end
+
+-- Palavras que aparecem em todo texto e não dizem nada sobre ele.
+local COMUNS = {}
+for palavra in ("a o e de do da que em um uma os as no na há é já"):gmatch("%S+") do
+  COMUNS[palavra] = true
+end
+
+local nome = arg[1] or "texto.txt"
+local arquivo, erro = io.open(nome, "r")
+if not arquivo then
+  print("Não consegui abrir: " .. erro)
+  os.exit(1)
+end
+local texto = minusculas(arquivo:read("a"))
+arquivo:close()
+
+local palavras = {}
+for palavra in texto:gmatch(LETRAS) do
+  palavras[#palavras + 1] = palavra
+end
+
+-- Conta: contagem["pão"] = 5
+local contagem = {}
+for _, palavra in ipairs(palavras) do
+  if not COMUNS[palavra] then
+    contagem[palavra] = (contagem[palavra] or 0) + 1
+  end
+end
+
+-- Passa para uma lista, para poder ordenar (a ordem do pairs não serve).
+local lista = {}
+for palavra, n in pairs(contagem) do
+  lista[#lista + 1] = { palavra = palavra, n = n }
+end
+table.sort(lista, function (a, b)
+  if a.n ~= b.n then
+    return a.n &gt; b.n              -- mais vezes primeiro
+  end
+  return a.palavra &lt; b.palavra    -- empate: ordem alfabética
+end)
+
+print(string.format("%s: %d palavras, %d diferentes (sem contar as comuns).", nome, #palavras, #lista))
+for i = 1, math.min(10, #lista) do
+  local item = lista[i]
+  print(string.format("%2d. %s %2d %s", i, coluna(item.palavra, 8), item.n, string.rep("#", item.n)))
+end
+</pre>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Peça</th><th>O que faz</th></tr>
+<tr><td><code>COMUNS[palavra] = true</code></td><td>Um conjunto (como as letras tentadas da <a href="projeto-forca.html">Forca</a>), montado a partir de um texto com as palavras separadas por espaço: mais fácil de escrever e de ampliar do que uma tabela com 18 chaves.</td></tr>
+<tr><td><code>if not COMUNS[palavra] then</code></td><td>Na contagem, pula as comuns. O total de palavras (72) continua contando todas.</td></tr>
+<tr><td><code>arg[1] or "texto.txt"</code></td><td>O primeiro argumento da linha de comando, ou o arquivo padrão se não houver nenhum (veja <a href="arg.html">arg</a>).</td></tr>
+<tr><td><code>io.open</code> + <code>os.exit(1)</code></td><td>Arquivo que não existe: uma frase clara, em vez do erro do <code>assert</code>.</td></tr>
+<tr><td><code>coluna(texto, largura)</code></td><td>Completa com espaços até a largura, contando <strong>letras</strong> com <code>utf8.len</code>. É o <code>%-8s</code> que entende acentos.</td></tr>
+<tr><td><code>string.rep("#", item.n)</code></td><td>A barra: um <code>#</code> por ocorrência.</td></tr>
+</table>
+</div>
+
+<pre class="term" data-cwd="~/projetos/palavras">$ lua palavras.lua
+texto.txt: 72 palavras, 30 diferentes (sem contar as comuns).
+ 1. pão       5 #####
+ 2. cedo      3 ###
+ 3. fila      3 ###
+ 4. abre      2 ##
+ 5. ana       2 ##
+ 6. bairro    2 ##
+ 7. chega     2 ##
+ 8. leva      2 ##
+ 9. mais      2 ##
+10. não       2 ##
+$ printf 'Ana Bia ana\nBIA\n' &gt; nomes.txt
+$ lua palavras.lua nomes.txt
+nomes.txt: 4 palavras, 2 diferentes (sem contar as comuns).
+ 1. ana       2 ##
+ 2. bia       2 ##
+$ lua palavras.lua nao-existe.txt
+Não consegui abrir: nao-existe.txt: No such file or directory
+$ echo $?
+1</pre>
+
+<p>Agora o <code>pão</code> está no topo, sozinho, e as colunas se alinham com e sem acento. O segundo teste mostra o <code>arg[1]</code> funcionando com outro arquivo (e <code>Ana</code>, <code>ana</code>, <code>BIA</code> contadas juntas).</p>
+
+<div class="trylua" data-goal="outre: 1\. pão +5 #####;;out:30 diferentes">
+<p class="try-task"><strong>Missão (versão 4):</strong> a tabela <code>COMUNS</code> está vazia, e <code>a</code> e <code>o</code> continuam no topo. No lugar do comentário, percorra o texto <code>"a o e de do da que em um uma os as no na há é já"</code> com <code>gmatch("%S+")</code> e marque cada palavra com <code>COMUNS[palavra] = true</code>.</p>
+<pre class="script" data-file="palavras.lua">-- Contador de Palavras, versão 4: palavras comuns, barras e o arquivo na linha de comando
+
+-- Uma "letra": as letras sem acento (%a) ou um byte de 128 a 255,
+-- que são os pedaços das letras acentuadas no UTF-8.
+local LETRAS = "[%a\128-\255]+"
+
+-- O lower() só conhece A-Z; as maiúsculas acentuadas vão por esta tabela.
+local ACENTUADAS = {
+  ["À"] = "à", ["Á"] = "á", ["Â"] = "â", ["Ã"] = "ã", ["Ç"] = "ç",
+  ["É"] = "é", ["Ê"] = "ê", ["Í"] = "í", ["Ó"] = "ó", ["Ô"] = "ô",
+  ["Õ"] = "õ", ["Ú"] = "ú",
+}
+
+-- Completa com espaços até a largura, contando letras (e não bytes).
+local function coluna(texto, largura)
+  return texto .. string.rep(" ", largura - utf8.len(texto))
+end
+
+local function minusculas(texto)
+  return (texto:lower():gsub("\195[\128-\159]", ACENTUADAS))
+end
+
+-- Palavras que aparecem em todo texto e não dizem nada sobre ele.
+local COMUNS = {}
+-- marque aqui as palavras comuns: COMUNS["a"] = true, …
+
+local nome = arg[1] or "texto.txt"
+local arquivo, erro = io.open(nome, "r")
+if not arquivo then
+  print("Não consegui abrir: " .. erro)
+  os.exit(1)
+end
+local texto = minusculas(arquivo:read("a"))
+arquivo:close()
+
+local palavras = {}
+for palavra in texto:gmatch(LETRAS) do
+  palavras[#palavras + 1] = palavra
+end
+
+-- Conta: contagem["pão"] = 5
+local contagem = {}
+for _, palavra in ipairs(palavras) do
+  if not COMUNS[palavra] then
+    contagem[palavra] = (contagem[palavra] or 0) + 1
+  end
+end
+
+-- Passa para uma lista, para poder ordenar (a ordem do pairs não serve).
+local lista = {}
+for palavra, n in pairs(contagem) do
+  lista[#lista + 1] = { palavra = palavra, n = n }
+end
+table.sort(lista, function (a, b)
+  if a.n ~= b.n then
+    return a.n &gt; b.n              -- mais vezes primeiro
+  end
+  return a.palavra &lt; b.palavra    -- empate: ordem alfabética
+end)
+
+print(string.format("%s: %d palavras, %d diferentes (sem contar as comuns).", nome, #palavras, #lista))
+for i = 1, math.min(10, #lista) do
+  local item = lista[i]
+  print(string.format("%2d. %s %2d %s", i, coluna(item.palavra, 8), item.n, string.rep("#", item.n)))
+end
+</pre>
+<pre class="script" data-file="texto.txt">A padaria do bairro abre cedo. Às seis horas, a Ana já está na fila do pão.
+O pão de queijo sai quente, e o café sai forte. Quem chega cedo leva o pão
+mais quente; quem chega tarde leva o que sobrou. Não há pão melhor no bairro,
+diz a Ana, e não há fila mais animada. A fila anda, o pão acaba, e amanhã
+a padaria abre cedo de novo.
+</pre>
+<pre class="solucao" data-file="palavras.lua">-- Contador de Palavras, versão 4: palavras comuns, barras e o arquivo na linha de comando
+
+-- Uma "letra": as letras sem acento (%a) ou um byte de 128 a 255,
+-- que são os pedaços das letras acentuadas no UTF-8.
+local LETRAS = "[%a\128-\255]+"
+
+-- O lower() só conhece A-Z; as maiúsculas acentuadas vão por esta tabela.
+local ACENTUADAS = {
+  ["À"] = "à", ["Á"] = "á", ["Â"] = "â", ["Ã"] = "ã", ["Ç"] = "ç",
+  ["É"] = "é", ["Ê"] = "ê", ["Í"] = "í", ["Ó"] = "ó", ["Ô"] = "ô",
+  ["Õ"] = "õ", ["Ú"] = "ú",
+}
+
+-- Completa com espaços até a largura, contando letras (e não bytes).
+local function coluna(texto, largura)
+  return texto .. string.rep(" ", largura - utf8.len(texto))
+end
+
+local function minusculas(texto)
+  return (texto:lower():gsub("\195[\128-\159]", ACENTUADAS))
+end
+
+-- Palavras que aparecem em todo texto e não dizem nada sobre ele.
+local COMUNS = {}
+for palavra in ("a o e de do da que em um uma os as no na há é já"):gmatch("%S+") do
+  COMUNS[palavra] = true
+end
+
+local nome = arg[1] or "texto.txt"
+local arquivo, erro = io.open(nome, "r")
+if not arquivo then
+  print("Não consegui abrir: " .. erro)
+  os.exit(1)
+end
+local texto = minusculas(arquivo:read("a"))
+arquivo:close()
+
+local palavras = {}
+for palavra in texto:gmatch(LETRAS) do
+  palavras[#palavras + 1] = palavra
+end
+
+-- Conta: contagem["pão"] = 5
+local contagem = {}
+for _, palavra in ipairs(palavras) do
+  if not COMUNS[palavra] then
+    contagem[palavra] = (contagem[palavra] or 0) + 1
+  end
+end
+
+-- Passa para uma lista, para poder ordenar (a ordem do pairs não serve).
+local lista = {}
+for palavra, n in pairs(contagem) do
+  lista[#lista + 1] = { palavra = palavra, n = n }
+end
+table.sort(lista, function (a, b)
+  if a.n ~= b.n then
+    return a.n &gt; b.n              -- mais vezes primeiro
+  end
+  return a.palavra &lt; b.palavra    -- empate: ordem alfabética
+end)
+
+print(string.format("%s: %d palavras, %d diferentes (sem contar as comuns).", nome, #palavras, #lista))
+for i = 1, math.min(10, #lista) do
+  local item = lista[i]
+  print(string.format("%2d. %s %2d %s", i, coluna(item.palavra, 8), item.n, string.rep("#", item.n)))
+end
+</pre>
+</div>
+
+<hr>
+
+<h2>Formas diferentes de limpar e de contar</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Para</th><th>Forma</th><th>O que acontece</th></tr>
+<tr><td rowspan="3">Separar as palavras</td><td><code>gmatch("%S+")</code></td><td>Mantém a pontuação grudada (<code>cedo.</code>).</td></tr>
+<tr><td><code>gmatch("%a+")</code></td><td>Tira a pontuação, mas parte as palavras acentuadas (<code>não</code> → <code>n</code>, <code>o</code>).</td></tr>
+<tr><td><code>gmatch("[%a\128-\255]+")</code> (este projeto)</td><td>Mantém os acentos; aceita também outros símbolos fora do ASCII.</td></tr>
+<tr><td rowspan="2">Minúsculas</td><td><code>texto:lower()</code></td><td>Só A–Z: <code>Às</code> continua <code>Às</code>.</td></tr>
+<tr><td><code>lower()</code> + <code>gsub</code> com tabela (este projeto)</td><td>Cobre as maiúsculas acentuadas do português.</td></tr>
+<tr><td rowspan="2">Contar</td><td><code>contagem[p] = (contagem[p] or 0) + 1</code></td><td>Uma linha, o costume do Lua.</td></tr>
+<tr><td><code>if contagem[p] then contagem[p] = contagem[p] + 1 else contagem[p] = 1 end</code></td><td>O mesmo, por extenso: mais fácil de entender na primeira vez.</td></tr>
+<tr><td>Mostrar</td><td>Lista + <code>table.sort</code> com desempate</td><td>A única forma de o resultado sair sempre igual. Mostrar direto com <code>pairs</code> dá uma ordem diferente a cada execução.</td></tr>
+</table>
+</div>
+
+<h2 id="errado">Quando dá errado</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Sintoma</th><th>Causa provável</th></tr>
+<tr><td>Palavras como <code>s</code>, <code>j</code>, <code>est</code></td><td><code>%a</code> não reconhece os bytes dos acentos: use <code>[%a\128-\255]</code></td></tr>
+<tr><td><code>Às</code> e <code>às</code> contadas separadas</td><td>O <code>lower()</code> não converte maiúsculas acentuadas</td></tr>
+<tr><td><code>cedo</code> e <code>cedo.</code> contadas separadas</td><td>Separou com <code>%S+</code>, que mantém a pontuação</td></tr>
+<tr><td>O resultado muda de uma execução para outra</td><td>Ordem do <code>pairs</code>, ou ordenação sem desempate</td></tr>
+<tr><td>A coluna de números sai torta nas palavras com acento</td><td><code>%-8s</code> conta bytes: complete com <code>utf8.len</code></td></tr>
+<tr><td><code>attempt to compare two table values</code></td><td><code>table.sort(lista)</code> sem função de comparação, numa lista de tabelas: o Lua não sabe qual tabela é "menor"</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Desafio extra: perguntar por uma palavra</h2>
+<p>Depois do relatório, o programa pode perguntar por palavras específicas. A pergunta passa pela mesma limpeza do texto (<code>minusculas</code>), senão <code>PÃO</code> não acharia <code>pão</code>. No fim da versão 4, mais este laço:</p>
+
+<pre class="file" data-file="palavras.lua">-- Pergunta por palavras até a entrada acabar (ou uma linha vazia).
+while true do
+  io.write("Procurar a palavra: ")
+  local pedido = io.read()
+  if pedido == nil or pedido == "" then
+    break
+  end
+  pedido = minusculas(pedido)
+  local n = contagem[pedido] or 0
+  if COMUNS[pedido] then
+    print(string.format('"%s" é uma palavra comum (não foi contada).', pedido))
+  else
+    print(string.format('"%s" aparece %d vez(es).', pedido, n))
+  end
+end
+</pre>
+
+<pre class="term" data-cwd="~/projetos/palavras">$ lua palavras.lua
+texto.txt: 72 palavras, 30 diferentes (sem contar as comuns).
+…
+Procurar a palavra: pão
+"pão" aparece 5 vez(es).
+Procurar a palavra: PÃO
+"pão" aparece 5 vez(es).
+Procurar a palavra: Fila
+"fila" aparece 3 vez(es).
+Procurar a palavra: de
+"de" é uma palavra comum (não foi contada).
+Procurar a palavra: xícara
+"xícara" aparece 0 vez(es).
+Procurar a palavra:</pre>
+
+<p>(A última pergunta recebeu só <kbd>Enter</kbd>, e o laço terminou.)</p>
+
+<div class="trylua" data-stdin="pão\nPÃO\nxícara" data-goal="outre:&quot;pão&quot; aparece 5 vez\(es\)\.[\s\S]*&quot;pão&quot; aparece 5 vez\(es\)\.;;out:&quot;xícara&quot; aparece 0 vez(es).">
+<p class="try-task"><strong>Desafio no editor:</strong> o laço de perguntas está no fim do programa, mas o pedido não passa pela limpeza, e <code>PÃO</code> não acha nada. Acrescente <code>pedido = minusculas(pedido)</code> no lugar certo. A entrada pergunta <code>pão</code>, <code>PÃO</code> e <code>xícara</code>: as duas primeiras devem achar 5.</p>
+<pre class="script" data-file="palavras.lua">-- Contador de Palavras, desafio: perguntar por uma palavra
+
+-- Uma "letra": as letras sem acento (%a) ou um byte de 128 a 255,
+-- que são os pedaços das letras acentuadas no UTF-8.
+local LETRAS = "[%a\128-\255]+"
+
+-- O lower() só conhece A-Z; as maiúsculas acentuadas vão por esta tabela.
+local ACENTUADAS = {
+  ["À"] = "à", ["Á"] = "á", ["Â"] = "â", ["Ã"] = "ã", ["Ç"] = "ç",
+  ["É"] = "é", ["Ê"] = "ê", ["Í"] = "í", ["Ó"] = "ó", ["Ô"] = "ô",
+  ["Õ"] = "õ", ["Ú"] = "ú",
+}
+
+-- Completa com espaços até a largura, contando letras (e não bytes).
+local function coluna(texto, largura)
+  return texto .. string.rep(" ", largura - utf8.len(texto))
+end
+
+local function minusculas(texto)
+  return (texto:lower():gsub("\195[\128-\159]", ACENTUADAS))
+end
+
+-- Palavras que aparecem em todo texto e não dizem nada sobre ele.
+local COMUNS = {}
+for palavra in ("a o e de do da que em um uma os as no na há é já"):gmatch("%S+") do
+  COMUNS[palavra] = true
+end
+
+local nome = arg[1] or "texto.txt"
+local arquivo, erro = io.open(nome, "r")
+if not arquivo then
+  print("Não consegui abrir: " .. erro)
+  os.exit(1)
+end
+local texto = minusculas(arquivo:read("a"))
+arquivo:close()
+
+local palavras = {}
+for palavra in texto:gmatch(LETRAS) do
+  palavras[#palavras + 1] = palavra
+end
+
+-- Conta: contagem["pão"] = 5
+local contagem = {}
+for _, palavra in ipairs(palavras) do
+  if not COMUNS[palavra] then
+    contagem[palavra] = (contagem[palavra] or 0) + 1
+  end
+end
+
+-- Passa para uma lista, para poder ordenar (a ordem do pairs não serve).
+local lista = {}
+for palavra, n in pairs(contagem) do
+  lista[#lista + 1] = { palavra = palavra, n = n }
+end
+table.sort(lista, function (a, b)
+  if a.n ~= b.n then
+    return a.n &gt; b.n              -- mais vezes primeiro
+  end
+  return a.palavra &lt; b.palavra    -- empate: ordem alfabética
+end)
+
+print(string.format("%s: %d palavras, %d diferentes (sem contar as comuns).", nome, #palavras, #lista))
+for i = 1, math.min(10, #lista) do
+  local item = lista[i]
+  print(string.format("%2d. %s %2d %s", i, coluna(item.palavra, 8), item.n, string.rep("#", item.n)))
+end
+
+-- Pergunta por palavras até a entrada acabar (ou uma linha vazia).
+while true do
+  io.write("Procurar a palavra: ")
+  local pedido = io.read()
+  if pedido == nil or pedido == "" then
+    break
+  end
+  local n = contagem[pedido] or 0
+  if COMUNS[pedido] then
+    print(string.format('"%s" é uma palavra comum (não foi contada).', pedido))
+  else
+    print(string.format('"%s" aparece %d vez(es).', pedido, n))
+  end
+end
+</pre>
+<pre class="script" data-file="texto.txt">A padaria do bairro abre cedo. Às seis horas, a Ana já está na fila do pão.
+O pão de queijo sai quente, e o café sai forte. Quem chega cedo leva o pão
+mais quente; quem chega tarde leva o que sobrou. Não há pão melhor no bairro,
+diz a Ana, e não há fila mais animada. A fila anda, o pão acaba, e amanhã
+a padaria abre cedo de novo.
+</pre>
+<pre class="solucao" data-file="palavras.lua">-- Contador de Palavras, desafio: perguntar por uma palavra
+
+-- Uma "letra": as letras sem acento (%a) ou um byte de 128 a 255,
+-- que são os pedaços das letras acentuadas no UTF-8.
+local LETRAS = "[%a\128-\255]+"
+
+-- O lower() só conhece A-Z; as maiúsculas acentuadas vão por esta tabela.
+local ACENTUADAS = {
+  ["À"] = "à", ["Á"] = "á", ["Â"] = "â", ["Ã"] = "ã", ["Ç"] = "ç",
+  ["É"] = "é", ["Ê"] = "ê", ["Í"] = "í", ["Ó"] = "ó", ["Ô"] = "ô",
+  ["Õ"] = "õ", ["Ú"] = "ú",
+}
+
+-- Completa com espaços até a largura, contando letras (e não bytes).
+local function coluna(texto, largura)
+  return texto .. string.rep(" ", largura - utf8.len(texto))
+end
+
+local function minusculas(texto)
+  return (texto:lower():gsub("\195[\128-\159]", ACENTUADAS))
+end
+
+-- Palavras que aparecem em todo texto e não dizem nada sobre ele.
+local COMUNS = {}
+for palavra in ("a o e de do da que em um uma os as no na há é já"):gmatch("%S+") do
+  COMUNS[palavra] = true
+end
+
+local nome = arg[1] or "texto.txt"
+local arquivo, erro = io.open(nome, "r")
+if not arquivo then
+  print("Não consegui abrir: " .. erro)
+  os.exit(1)
+end
+local texto = minusculas(arquivo:read("a"))
+arquivo:close()
+
+local palavras = {}
+for palavra in texto:gmatch(LETRAS) do
+  palavras[#palavras + 1] = palavra
+end
+
+-- Conta: contagem["pão"] = 5
+local contagem = {}
+for _, palavra in ipairs(palavras) do
+  if not COMUNS[palavra] then
+    contagem[palavra] = (contagem[palavra] or 0) + 1
+  end
+end
+
+-- Passa para uma lista, para poder ordenar (a ordem do pairs não serve).
+local lista = {}
+for palavra, n in pairs(contagem) do
+  lista[#lista + 1] = { palavra = palavra, n = n }
+end
+table.sort(lista, function (a, b)
+  if a.n ~= b.n then
+    return a.n &gt; b.n              -- mais vezes primeiro
+  end
+  return a.palavra &lt; b.palavra    -- empate: ordem alfabética
+end)
+
+print(string.format("%s: %d palavras, %d diferentes (sem contar as comuns).", nome, #palavras, #lista))
+for i = 1, math.min(10, #lista) do
+  local item = lista[i]
+  print(string.format("%2d. %s %2d %s", i, coluna(item.palavra, 8), item.n, string.rep("#", item.n)))
+end
+
+-- Pergunta por palavras até a entrada acabar (ou uma linha vazia).
+while true do
+  io.write("Procurar a palavra: ")
+  local pedido = io.read()
+  if pedido == nil or pedido == "" then
+    break
+  end
+  pedido = minusculas(pedido)
+  local n = contagem[pedido] or 0
+  if COMUNS[pedido] then
+    print(string.format('"%s" é uma palavra comum (não foi contada).', pedido))
+  else
+    print(string.format('"%s" aparece %d vez(es).', pedido, n))
+  end
+end
+</pre>
+</div>
+
+<hr>
+
+<h2>Referência rápida do projeto</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>Para que serviu</th></tr>
+<tr><td><code>arquivo:read("a")</code></td><td>O arquivo inteiro num texto</td></tr>
+<tr><td><code>texto:gmatch("%S+")</code></td><td>Pedaços entre espaços</td></tr>
+<tr><td><code>texto:gmatch("[%a\128-\255]+")</code></td><td>Sequências de letras, com acentos</td></tr>
+<tr><td><code>s:byte(1, -1)</code></td><td>Ver os bytes de um texto</td></tr>
+<tr><td><code>texto:gsub(padrao, tabela)</code></td><td>Trocar cada achado pelo valor da tabela</td></tr>
+<tr><td><code>contagem[p] = (contagem[p] or 0) + 1</code></td><td>Contar</td></tr>
+<tr><td><code>table.sort(lista, function (a, b) … end)</code> com desempate</td><td>Ordem que não muda entre execuções</td></tr>
+<tr><td><code>utf8.len(texto)</code></td><td>Quantos caracteres (e não bytes)</td></tr>
+<tr><td><code>string.rep("#", n)</code></td><td>Uma barra de tamanho <code>n</code></td></tr>
+<tr><td><code>arg[1] or "texto.txt"</code></td><td>O arquivo da linha de comando, com um padrão</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. O arquivo inteiro</h3>
+<p>Complete para ler o arquivo todo de uma vez:</p>
+<div class="ex-code">local texto = arquivo:read("<input data-answer="a" aria-label="formato">")</div>
+</div>
+
+<div class="exercise">
+<h3>2. Contar</h3>
+<p>Complete a linha que conta a palavra:</p>
+<div class="ex-code">contagem[palavra] = (contagem[palavra] <input data-answer="or" aria-label="operador"> 0) + 1</div>
+</div>
+
+<div class="exercise">
+<h3>3. Bytes</h3>
+<p>Quanto dá <code>#"pão"</code>?</p>
+<div class="ex-code"><input data-answer="4" aria-label="resposta"></div>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">4. Por que <code>("não"):gmatch("%a+")</code> devolve <code>n</code> e <code>o</code>?</p>
+<label><input type="radio" name="q4"> Porque o <code>gmatch</code> não funciona com textos curtos</label>
+<label><input type="radio" name="q4"> Porque o <code>ã</code> são dois bytes (195 e 163) que o <code>%a</code> não reconhece como letra</label>
+<label><input type="radio" name="q4"> Porque falta o <code>lower()</code></label>
+<label><input type="radio" name="q4"> Porque o <code>%a</code> só aceita uma letra</label>
+</div>
+
+<div class="mc" data-answer="4">
+<p class="mc-q">5. Sem a linha do desempate (<code>return a.palavra &lt; b.palavra</code>), o que acontece com as palavras que aparecem o mesmo número de vezes?</p>
+<label><input type="radio" name="q5"> Ficam em ordem alfabética do mesmo jeito</label>
+<label><input type="radio" name="q5"> Dá erro no <code>table.sort</code></label>
+<label><input type="radio" name="q5"> Somem da lista</label>
+<label><input type="radio" name="q5"> Saem numa ordem que pode mudar a cada execução, porque a lista veio do <code>pairs</code></label>
+</div>
+
+<div class="mc" data-answer="1">
+<p class="mc-q">6. O que faz <code>texto:gsub("\195[\128-\159]", ACENTUADAS)</code> com um achado que não está na tabela?</p>
+<label><input type="radio" name="q6"> Mantém o achado como estava</label>
+<label><input type="radio" name="q6"> Apaga o achado</label>
+<label><input type="radio" name="q6"> Troca por <code>nil</code> e dá erro</label>
+<label><input type="radio" name="q6"> Troca por um espaço</label>
+</div>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li><code>read("a")</code> lê o arquivo inteiro; <code>gmatch</code> com um padrão separa as palavras.</li>
+  <li>No Lua, texto é uma sequência de <strong>bytes</strong>: <code>%a</code> e <code>lower()</code> só conhecem A–Z, e uma letra acentuada ocupa 2 bytes. <code>[%a\128-\255]+</code> mantém os acentos; uma tabela no <code>gsub</code> cuida das maiúsculas acentuadas.</li>
+  <li>Contar é <code>contagem[p] = (contagem[p] or 0) + 1</code>.</li>
+  <li>Para mostrar, passe para uma lista e ordene com desempate: a ordem do <code>pairs</code> muda a cada execução, e um empate sem critério também.</li>
+  <li><code>utf8.len</code> conta caracteres; use-o para alinhar colunas com acentos.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
