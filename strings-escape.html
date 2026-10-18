@@ -1,0 +1,425 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua caracteres de escape — \n, \t, \&quot; e \u{…} | Guia Lua</title>
+<meta name="description" content="Os caracteres de escape do Lua para quem nunca programou: \n (pular linha), \t (tabulação), \&quot; e \' (aspas dentro do texto), \\ (a própria barra), \r, os códigos \ddd, \xXX e \u{…} (ç, €, emoji), o \z para quebrar texto comprido, o caminho do Windows que vira bagunça, e os erros reais do Lua 5.5 (invalid escape sequence, decimal escape too large, missing '{').">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">caracteres de escape</span> (\n, \t)</h1>
+
+<p class="intro">Como escrever, dentro de um texto entre aspas, uma <strong>quebra de linha</strong>? E uma aspa igual à que fecha o texto? Ou um caractere que não está no teclado, como o <code>€</code>? A resposta é a <strong>contrabarra</strong>, <code>\</code>. Ela avisa ao Lua: "o próximo caractere não é para ser lido ao pé da letra; ele é um código". Essas combinações se chamam <strong>sequências de escape</strong> (o caractere "escapa" do significado normal).</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li><code>\n</code> (pular linha) e <code>\t</code> (tabulação, para alinhar colunas).</li>
+  <li><code>\"</code>, <code>\'</code> e <code>\\</code>: aspas e a própria contrabarra dentro do texto.</li>
+  <li>Os códigos numéricos: <code>\65</code>, <code>\x41</code> e <code>\u{E7}</code> (para ç, €, emoji…).</li>
+  <li>O <code>\z</code>, para quebrar um texto comprido em várias linhas do código sem que a quebra apareça.</li>
+  <li>Por que <code>"C:\novo\tabela.txt"</code> sai todo bagunçado.</li>
+  <li>Os erros reais: <code>invalid escape sequence</code> e companhia.</li>
+</ul>
+</div>
+
+<p>Todos os programas desta aula rodaram no <strong>Lua 5.5</strong> da máquina da Ana (usuária <code>ana</code>, computador <code>notebook</code>), salvos na pasta pessoal dela e executados com <code>lua arquivo.lua</code> (veja <a href="executar.html">Rodando um Programa</a>). Você pode rodar cada um no editor do guia.</p>
+
+<hr>
+
+<h2>A ideia: os sinais de revisão de texto</h2>
+<p>Quando um professor corrige uma redação à mão, ele usa sinais combinados: um <strong>¶</strong> quer dizer "comece um parágrafo aqui", um tracinho quer dizer "junte estas palavras". Ninguém lê o ¶ como uma letra: é uma <strong>instrução</strong> escrita no meio do texto.</p>
+<p>A contrabarra é o sinal de revisão do Lua. Dentro das aspas, <code>\n</code> não são as letras "contrabarra" e "n": é a instrução "pule uma linha aqui". O Lua troca a combinação pelo caractere certo <strong>quando lê o seu programa</strong>; na tela, aparece só o resultado.</p>
+
+<div class="tip">
+<strong>Onde fica a contrabarra</strong>
+<p>A contrabarra <code>\</code> é a barra "deitada para trás" (diferente da barra <code>/</code> da divisão). No teclado brasileiro (ABNT2), ela fica ao lado do <kbd>Shift</kbd> da esquerda, ou ao lado do <kbd>Enter</kbd>, dependendo do modelo.</p>
+</div>
+
+<hr>
+
+<h2>1. <code>\n</code>: pular linha</h2>
+<p>O <code>n</code> é de <em>new line</em>, "linha nova":</p>
+
+<pre class="file" data-file="quebra.lua">print("Lista de compras:\n- pão\n- leite\n- café")
+</pre>
+
+<pre class="term">$ lua quebra.lua
+Lista de compras:
+- pão
+- leite
+- café</pre>
+
+<p>Um único <code>print</code>, um único texto, e quatro linhas na tela: cada <code>\n</code> virou uma quebra de linha. Repare que o texto continua <strong>numa linha só</strong> no código. Um texto entre aspas não pode atravessar a linha do arquivo (dá <code>unfinished string</code>; veja <a href="strings.html">Strings</a>); o <code>\n</code> é o jeito de pôr a quebra lá dentro.</p>
+
+<h3>Com o <code>io.write</code></h3>
+<p>O <code>print</code> pula uma linha sozinho no fim. O <code>io.write</code> não (veja <a href="io-write.html">io.write()</a>): com ele, o <code>\n</code> é <strong>você</strong> quem põe, onde quiser.</p>
+
+<pre class="file" data-file="io_write.lua">io.write("Primeira linha\n")
+io.write("Segunda linha\n")
+io.write("Sem quebra... ")
+io.write("continua aqui\n")
+</pre>
+
+<pre class="term">$ lua io_write.lua
+Primeira linha
+Segunda linha
+Sem quebra... continua aqui</pre>
+
+<div class="trylua" data-goal="outre:^Compras:\npão\nleite\ncafé\n$;;src:\\n">
+<p class="try-task"><strong>Missão:</strong> faça este <strong>único</strong> <code>print</code> mostrar <code>Compras:</code> e depois um item por linha (<code>pão</code>, <code>leite</code>, <code>café</code>), trocando os <code>": "</code> e as <code>", "</code> por <code>\n</code>.</p>
+<pre class="script" data-file="main.lua">print("Compras: pão, leite, café")
+</pre>
+<pre class="solucao" data-file="main.lua">print("Compras:\npão\nleite\ncafé")
+</pre>
+</div>
+
+<hr>
+
+<h2>2. <code>\t</code>: tabulação</h2>
+<p>O <code>t</code> é de <em>tab</em>, a <strong>tabulação</strong>: o mesmo espaço largo da tecla <kbd>Tab</kbd>, que pula para a próxima "coluna" do terminal. É útil para alinhar uma tabelinha:</p>
+
+<pre class="file" data-file="tab.lua">print("Item\tQtd\tPreço")
+print("pão\t6\t4.50")
+print("leite\t2\t11.80")
+</pre>
+
+<pre class="term">$ lua tab.lua
+Item	Qtd	Preço
+pão	6	4.50
+leite	2	11.80</pre>
+
+<p>As colunas do terminal costumam ter 8 caracteres de largura. Se um item tiver 8 letras ou mais, ele empurra a coluna seguinte e o alinhamento se perde. Para um alinhamento que não depende disso, use o <code>string.format</code> com larguras (<code>%-10s</code>; veja <a href="string-format.html">string.format</a>). É também um TAB que o <code>print</code> põe entre os valores quando você usa vírgulas: <code>print("a", "b")</code> (veja <a href="print.html">print()</a>).</p>
+
+<hr>
+
+<h2>3. Aspas e a própria contrabarra</h2>
+
+<pre class="file" data-file="aspas_esc.lua">print("Ela disse \"bom dia\"")
+print('Copo d\'água')
+print("Pasta: C:\\Users\\ana")
+print(#"\n", #"\t", #"\\", #"\"")
+</pre>
+
+<pre class="term">$ lua aspas_esc.lua
+Ela disse "bom dia"
+Copo d'água
+Pasta: C:\Users\ana
+1	1	1	1</pre>
+
+<dl class="anatomy">
+  <dt>\"</dt><dd>Uma aspa dupla que <strong>não</strong> fecha o texto. Com ela, dá para usar aspas duplas por fora e por dentro.</dd>
+  <dt>\'</dt><dd>O mesmo para o apóstrofo, num texto entre aspas simples. (Lembre que também dá para trocar as aspas de fora; veja <a href="strings.html">Strings</a>.)</dd>
+  <dt>\\</dt><dd>Como a contrabarra é o "sinal de revisão", para escrever uma contrabarra de verdade são precisas <strong>duas</strong>: <code>\\</code> vira uma <code>\</code>. É o que se usa nos caminhos de pasta do Windows.</dd>
+  <dt>#"\n" … → 1</dt><dd>Cada sequência de escape vira <strong>um</strong> caractere só: <code>#"\n"</code> é 1, não 2 (o <code>#</code> mede o tamanho; veja <a href="operador-tamanho.html">O Operador de Tamanho</a>).</dd>
+</dl>
+
+<hr>
+
+<h2>4. Os outros escapes de uma letra</h2>
+<p>Além de <code>\n</code> e <code>\t</code>, o Lua conhece mais alguns, herdados dos terminais e impressoras antigos. Raramente são usados, mas é bom reconhecê-los:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escape</th><th>Nome</th><th>O que faz</th></tr>
+<tr><td><code>\n</code></td><td>nova linha (<em>newline</em>)</td><td>Pula para a linha de baixo</td></tr>
+<tr><td><code>\t</code></td><td>tabulação (<em>tab</em>)</td><td>Pula para a próxima coluna</td></tr>
+<tr><td><code>\r</code></td><td>retorno de carro (<em>carriage return</em>)</td><td>Volta ao <strong>começo</strong> da mesma linha</td></tr>
+<tr><td><code>\a</code></td><td>campainha (<em>bell</em>)</td><td>Pede um "bip" ao terminal (muitos terminais estão em silêncio)</td></tr>
+<tr><td><code>\b</code></td><td>retrocesso (<em>backspace</em>)</td><td>Volta uma posição</td></tr>
+<tr><td><code>\f</code>, <code>\v</code></td><td>avanço de página, tabulação vertical</td><td>Coisas de impressora; quase nunca usados</td></tr>
+<tr><td><code>\\</code>, <code>\"</code>, <code>\'</code></td><td>contrabarra e aspas</td><td>O próprio caractere</td></tr>
+</table>
+</div>
+
+<p>O <code>\r</code> tem um efeito curioso no terminal: o texto depois dele é escrito <strong>por cima</strong> do começo da linha. No modo interativo (veja <a href="repl.html">O Modo Interativo</a>):</p>
+
+<pre class="term">$ lua
+Lua 5.5.0  Copyright (C) 1994-2025 Lua.org, PUC-Rio
+&gt; print("Carregando... 50%\rPronto!")
+Pronto!ndo... 50%
+&gt; os.exit()</pre>
+
+<p>O <code>Pronto!</code> (7 letras) cobriu as 7 primeiras letras de <code>Carregando... 50%</code>, e o resto ficou aparecendo. É assim que alguns programas fazem barras de progresso que "se atualizam" na mesma linha. Arquivos de texto do Windows terminam cada linha com <code>\r\n</code>; aparece em <a href="arquivos-ler.html">Lendo Arquivos</a>.</p>
+
+<p>No modo interativo também dá para ver o <code>\t</code> e o <code>\n</code> funcionando, sem <code>print</code>:</p>
+<pre class="term">$ lua
+Lua 5.5.0  Copyright (C) 1994-2025 Lua.org, PUC-Rio
+&gt; "pão\tleite"
+pão     leite
+&gt; "linha 1\nlinha 2"
+linha 1
+linha 2
+&gt; os.exit()</pre>
+
+<hr>
+
+<h2>5. Códigos numéricos: <code>\ddd</code>, <code>\xXX</code> e <code>\u{…}</code></h2>
+<p>Todo caractere tem um <strong>número</strong> (o "A" é 65, o "n" é 110…). Com a contrabarra, dá para escrever um caractere pelo seu número. Há três formas:</p>
+
+<pre class="file" data-file="numericos.lua">print("\65\110\97")
+print("\x41\x6E\x61")
+print("\u{41}\u{6E}\u{61}")
+print("\u{E7}\u{E3}o", "\u{20AC}", "\u{1F600}")
+print("\195\167", #"\u{E7}")
+print("\0659")
+print("\06509")
+</pre>
+
+<pre class="term">$ lua numericos.lua
+Ana
+Ana
+Ana
+ção	€	😀
+ç	2
+A9
+A09</pre>
+
+<dl class="anatomy">
+  <dt>\65\110\97</dt><dd><strong><code>\ddd</code></strong>: a contrabarra seguida de até <strong>3 algarismos decimais</strong>, o número de um <strong>byte</strong> (de 0 a 255). 65 = A, 110 = n, 97 = a.</dd>
+  <dt>\x41\x6E\x61</dt><dd><strong><code>\xXX</code></strong>: <code>\x</code> seguido de <strong>exatamente 2</strong> algarismos hexadecimais (a base 16, de 0 a F; veja <a href="operadores-bits.html">Operadores de Bits</a>). <code>0x41</code> = 65 = A.</dd>
+  <dt>\u{41}…</dt><dd><strong><code>\u{XXX}</code></strong>: o número <strong>Unicode</strong> do caractere, em hexadecimal, entre chaves. O Unicode é a grande tabela que dá um número para cada caractere de todas as línguas, mais símbolos e emojis. O Lua grava o caractere em UTF-8, com quantos bytes ele precisar.</dd>
+  <dt>\u{E7}\u{E3}o → ção</dt><dd>O ç é o Unicode E7 e o ã é o E3. Útil quando o teclado (ou o editor) não tem o caractere.</dd>
+  <dt>\u{20AC}, \u{1F600}</dt><dd>O símbolo do euro e um emoji sorrindo.</dd>
+  <dt>"\195\167" e #"\u{E7}" → ç e 2</dt><dd>Em UTF-8, o ç ocupa <strong>dois bytes</strong>, 195 e 167. Escrever os dois bytes com <code>\ddd</code> dá o mesmo ç; e o tamanho de <code>"\u{E7}"</code> é 2. Mais sobre isso em <a href="utf8.html">Acentos e a Biblioteca utf8</a>.</dd>
+  <dt>"\0659" → A9</dt><dd>Cuidado com o <code>\ddd</code> seguido de algarismo: o Lua lê <strong>no máximo 3</strong> algarismos. Em <code>"\0659"</code>, ele leu <code>\065</code> (A) e deixou o 9 como letra comum. Já <code>"\659"</code> é lido como o byte 659, que não existe, e dá <code>decimal escape too large</code> (veja <a href="#errado">Quando dá errado</a>). Para não ter dúvida, escreva sempre 3 algarismos (<code>\065</code>) quando vier um algarismo depois.</dd>
+</dl>
+
+<div class="note">
+<strong>Em outras versões</strong>
+<p>O <code>\xXX</code>, o <code>\z</code> e o <code>\u{…}</code> não existem no Lua 5.1, e ele nem reclama: ignora a contrabarra e deixa as letras. No LuaJIT, os três funcionam. No lab:</p>
+<pre class="term">$ lua5.1 -e 'print("\x41", "a\z  b")'
+x41	az  b
+$ lua5.1 -e 'print("\u{E7}")'
+u{E7}
+$ luajit -e 'print("\x41", "a\z  b", "\u{E7}")'
+A	ab	ç</pre>
+<p>Quem precisa de um texto que funcione em todos os Luas usa os bytes em <code>\ddd</code>. Veja <a href="versoes.html">Lua 5.1, LuaJIT, 5.4 e 5.5</a>.</p>
+</div>
+
+<hr>
+
+<h2>6. Textos compridos: <code>\z</code> e a contrabarra no fim da linha</h2>
+<p>Às vezes um texto é tão comprido que a linha do código fica enorme. Há dois escapes para quebrá-lo em várias linhas do arquivo:</p>
+
+<pre class="file" data-file="z.lua">local aviso = "A padaria abre às 6h \z
+               e fecha às 20h."
+print(aviso)
+local outro = "linha 1\
+linha 2"
+print(outro)
+</pre>
+
+<pre class="term">$ lua z.lua
+A padaria abre às 6h e fecha às 20h.
+linha 1
+linha 2</pre>
+
+<dl class="anatomy">
+  <dt>\z</dt><dd>"Pule todos os espaços daqui em diante": o Lua ignora a quebra de linha e os espaços da indentação até o próximo caractere de verdade (o <code>e</code>). O texto fica numa linha só na tela. O espaço antes do <code>\z</code> (depois de <code>6h</code>) é mantido, e é ele que separa as palavras.</dd>
+  <dt>\ no fim da linha</dt><dd>Uma contrabarra seguida de <kbd>Enter</kbd> põe uma <strong>quebra de linha</strong> no texto (igual a <code>\n</code>) e deixa o texto continuar na linha de baixo do arquivo.</dd>
+</dl>
+
+<p>Para textos com muitas linhas (um menu, uma ajuda), há um jeito bem mais confortável, sem contrabarra nenhuma: os textos longos <code>[[ … ]]</code>, na próxima aula, <a href="strings-longas.html">Textos Longos</a>.</p>
+
+<hr>
+
+<h2 id="formas">Formas diferentes de fazer a mesma coisa</h2>
+<p>Para pôr aspas dentro de um texto, ou para escrever várias linhas, há sempre mais de um caminho:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Para…</th><th>Opções</th><th>Qual usar</th></tr>
+<tr><td>Aspas duplas dentro do texto</td><td><code>'Ela disse "oi"'</code> · <code>"Ela disse \"oi\""</code> · <code>[[Ela disse "oi"]]</code></td><td>As simples por fora; o <code>\"</code> quando o texto tem os dois tipos de aspas</td></tr>
+<tr><td>Várias linhas</td><td><code>"a\nb"</code> · vários <code>print</code> · <code>[[a</code>/<code>b]]</code></td><td><code>\n</code> para 2 ou 3 linhas; <code>[[ ]]</code> para um bloco de texto</td></tr>
+<tr><td>Uma contrabarra (caminho do Windows)</td><td><code>"C:\\pasta"</code> · <code>[[C:\pasta]]</code> · <code>"C:/pasta"</code></td><td><code>\\</code>; o Windows também aceita <code>/</code> na maioria dos programas</td></tr>
+<tr><td>Um caractere fora do teclado</td><td><code>"€"</code> (colado) · <code>"\u{20AC}"</code> · <code>"\226\130\172"</code></td><td>Colado, se o editor salvar em UTF-8; <code>\u{…}</code> se quiser deixar claro qual é</td></tr>
+<tr><td>Alinhar colunas</td><td><code>\t</code> · <code>string.format("%-10s", …)</code></td><td><code>string.format</code>, que não depende do terminal</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+
+<div class="cenario">
+<strong>O caminho do Windows que virou bagunça</strong>
+<p>Este é traiçoeiro porque <strong>não dá erro</strong>:</p>
+<pre class="file" data-file="windows.lua">print("C:\novo\tabela.txt")
+</pre>
+<pre class="term">$ lua windows.lua
+C:
+ovo	abela.txt</pre>
+<p>A Ana queria mostrar um caminho de pasta do Windows. Mas o <code>\n</code> de <code>\novo</code> virou uma quebra de linha, e o <code>\t</code> de <code>\tabela</code> virou uma tabulação. O <code>n</code> e o <code>t</code> "sumiram", engolidos pelo escape. <strong>Como consertar:</strong> dobre as contrabarras: <code>"C:\\novo\\tabela.txt"</code>.</p>
+</div>
+
+<div class="trylua" data-goal="out:C:\novo\tabela.txt">
+<p class="try-task"><strong>Missão:</strong> conserte o caminho para o programa mostrar exatamente <code>C:\novo\tabela.txt</code>, numa linha só.</p>
+<pre class="script" data-file="main.lua">print("C:\novo\tabela.txt")
+</pre>
+<pre class="solucao" data-file="main.lua">print("C:\\novo\\tabela.txt")
+</pre>
+</div>
+
+<div class="cenario">
+<strong>Contrabarra com uma letra que não é escape</strong>
+<pre class="file" data-file="invalido.lua">print("C:\pasta\arquivo.txt")
+</pre>
+<pre class="term">$ lua invalido.lua
+lua: invalido.lua:1: invalid escape sequence near '"C:\p'</pre>
+<p>Linha por linha:</p>
+<dl class="anatomy">
+  <dt>lua: invalido.lua:1:</dt><dd>O problema está na linha 1.</dd>
+  <dt>invalid escape sequence</dt><dd>"Sequência de escape inválida": o Lua encontrou uma contrabarra seguida de uma letra que não está na lista (<code>\p</code> não quer dizer nada).</dd>
+  <dt>near '"C:\p'</dt><dd>Ele mostra o texto até o ponto do problema: o <code>\p</code>. (O <code>\a</code> de <code>\arquivo</code> nem chegou a ser lido; se chegasse, viraria a "campainha", sem erro.)</dd>
+</dl>
+<p>É erro de sintaxe: o programa nem começa. A mesma mensagem aparece para qualquer contrabarra "solta": <code>"Preço: R$ 5\,00"</code> dá <code>invalid escape sequence near '"Preço: R$ 5\,'</code>, e <code>"C:\Users\"</code> dá <code>invalid escape sequence near '"C:\U'</code>. <strong>Como consertar:</strong> <code>\\</code> onde você quer a contrabarra de verdade; e, se não queria contrabarra nenhuma, apague-a.</p>
+</div>
+
+<div class="cenario">
+<strong>Contrabarra no fim do texto</strong>
+<pre class="file" data-file="barra_fim3.lua">print("minha pasta\")
+</pre>
+<pre class="term">$ lua barra_fim3.lua
+lua: barra_fim3.lua:1: unfinished string near '"minha pasta")'</pre>
+<p>"String não terminada". O <code>\"</code> virou uma aspa <strong>dentro</strong> do texto, e o texto ficou sem a aspa de fechar. Repare que o <code>")</code> aparece como parte do texto na mensagem. <strong>Como consertar:</strong> <code>"minha pasta\\"</code>, que mostra <code>minha pasta\</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Códigos numéricos fora do lugar</strong>
+<pre class="file" data-file="grande.lua">print("\256")
+</pre>
+<pre class="term">$ lua grande.lua
+lua: grande.lua:1: decimal escape too large near '"\256"'</pre>
+<p>"Escape decimal grande demais": o <code>\ddd</code> é um <strong>byte</strong>, e um byte vai só até 255. Para caracteres acima disso, use <code>\u{…}</code>. Os outros dois códigos também têm regras:</p>
+<pre class="file" data-file="hex_curto.lua">print("\x4")
+</pre>
+<pre class="term">$ lua hex_curto.lua
+lua: hex_curto.lua:1: hexadecimal digit expected near '"\x4"'</pre>
+<p>"Era esperado um algarismo hexadecimal": o <code>\x</code> precisa de <strong>exatamente dois</strong> (<code>\x04</code>).</p>
+<pre class="file" data-file="u_sem_chave.lua">print("\u00E7")
+</pre>
+<pre class="term">$ lua u_sem_chave.lua
+lua: u_sem_chave.lua:1: missing '{' near '"\u0'</pre>
+<p>"Falta o <code>{</code>": no Lua, o <code>\u</code> sempre usa chaves, <code>\u{E7}</code>. (Em outras linguagens, como JavaScript e Java, se escreve <code>\u00E7</code>, sem chaves; quem copia de lá cai nesse erro.)</p>
+</div>
+
+<hr>
+
+<h2>Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escape</th><th>Vira</th><th>Exemplo</th></tr>
+<tr><td><code>\n</code></td><td>quebra de linha</td><td><code>"a\nb"</code></td></tr>
+<tr><td><code>\t</code></td><td>tabulação</td><td><code>"Item\tQtd"</code></td></tr>
+<tr><td><code>\\</code></td><td><code>\</code></td><td><code>"C:\\Users"</code></td></tr>
+<tr><td><code>\"</code> / <code>\'</code></td><td><code>"</code> / <code>'</code></td><td><code>"Ela disse \"oi\""</code></td></tr>
+<tr><td><code>\r</code></td><td>volta ao começo da linha</td><td><code>"50%\rPronto"</code></td></tr>
+<tr><td><code>\a</code> <code>\b</code> <code>\f</code> <code>\v</code></td><td>campainha, retrocesso, avanço de página, tabulação vertical</td><td>raros</td></tr>
+<tr><td><code>\ddd</code></td><td>o byte de número <code>ddd</code> (0 a 255; até 3 algarismos)</td><td><code>"\65"</code> = <code>A</code></td></tr>
+<tr><td><code>\xXX</code></td><td>o byte de número hexadecimal <code>XX</code> (2 algarismos)</td><td><code>"\x41"</code> = <code>A</code></td></tr>
+<tr><td><code>\u{XXX}</code></td><td>o caractere Unicode <code>XXX</code>, em UTF-8</td><td><code>"\u{E7}"</code> = <code>ç</code></td></tr>
+<tr><td><code>\z</code></td><td>pula os espaços e quebras de linha seguintes</td><td>texto comprido em várias linhas do código</td></tr>
+<tr><td><code>\</code> + <kbd>Enter</kbd></td><td>quebra de linha</td><td>igual a <code>\n</code></td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Mensagem / sintoma</th><th>Causa provável</th></tr>
+<tr><td><code>invalid escape sequence near '…\p'</code></td><td>Contrabarra seguida de letra que não é escape: use <code>\\</code></td></tr>
+<tr><td><code>unfinished string</code></td><td>O texto termina com <code>\"</code>: a aspa final virou parte do texto</td></tr>
+<tr><td><code>decimal escape too large</code></td><td><code>\ddd</code> acima de 255</td></tr>
+<tr><td><code>hexadecimal digit expected</code></td><td><code>\x</code> sem os dois algarismos</td></tr>
+<tr><td><code>missing '{'</code></td><td><code>\u</code> sem chaves (<code>\u00E7</code> → <code>\u{E7}</code>)</td></tr>
+<tr><td>Caminho do Windows sem algumas letras, quebrado em linhas</td><td><code>\n</code>, <code>\t</code>… dentro do caminho: dobre as contrabarras</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. Complete os escapes</h3>
+<p>Complete para mostrar <code>Nome</code> e <code>Ana</code> separados por uma tabulação, e depois pular uma linha:</p>
+<div class="ex-code">io.write("Nome<input data-answer="\t" aria-label="tabulação">Ana<input data-answer="\n" aria-label="nova linha">")</div>
+</div>
+
+<div class="exercise">
+<h3>2. Quanto dá?</h3>
+<p>Responda com um número.</p>
+<div class="ex-code"><code>#"a\nb"</code> = <input data-answer="3" aria-label="tamanho de a\nb"><br><code>#"\\"</code> = <input data-answer="1" aria-label="tamanho de \\"></div>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">3. Qual linha mostra <code>Ela disse "oi"</code>?</p>
+<label><input type="radio" name="q3"> <code>print("Ela disse "oi"")</code></label>
+<label><input type="radio" name="q3"> <code>print("Ela disse \"oi\"")</code></label>
+<label><input type="radio" name="q3"> <code>print("Ela disse /"oi/"")</code></label>
+<label><input type="radio" name="q3"> <code>print("Ela disse \\"oi\\"")</code></label>
+</div>
+
+<div class="mc" data-answer="4">
+<p class="mc-q">4. O que <code>print("C:\\temp")</code> mostra?</p>
+<label><input type="radio" name="q4"> <code>C:\\temp</code></label>
+<label><input type="radio" name="q4"> <code>C:</code> e, depois de uma tabulação, <code>emp</code></label>
+<label><input type="radio" name="q4"> Um erro</label>
+<label><input type="radio" name="q4"> <code>C:\temp</code></label>
+</div>
+
+<div class="mc" data-answer="1">
+<p class="mc-q">5. Qual escape escreve o caractere Unicode E7 (o ç)?</p>
+<label><input type="radio" name="q5"> <code>\u{E7}</code></label>
+<label><input type="radio" name="q5"> <code>\uE7</code></label>
+<label><input type="radio" name="q5"> <code>\xE7\x00</code></label>
+<label><input type="radio" name="q5"> <code>\E7</code></label>
+</div>
+
+<div class="mc" data-answer="3">
+<p class="mc-q">6. Qual destas linhas para com <code>invalid escape sequence</code>? (Dica: <code>\f</code> é um escape que existe; <code>\m</code>, não.)</p>
+<label><input type="radio" name="q6"> <code>print("D:\fotos")</code></label>
+<label><input type="radio" name="q6"> <code>print("D:\\musicas")</code></label>
+<label><input type="radio" name="q6"> <code>print("D:\musicas")</code></label>
+<label><input type="radio" name="q6"> <code>print("D:/musicas")</code></label>
+</div>
+
+<h3>Missão final: o preço em euros</h3>
+
+<div class="trylua" data-goal="out:Preço: 5 € o quilo;;src:\\u\{20AC\}">
+<p class="try-task"><strong>Missão:</strong> a padaria vai receber turistas. Troque o <code>?</code> pelo símbolo do euro escrito com o escape Unicode <code>\u{20AC}</code>, para o programa mostrar <code>Preço: 5 € o quilo</code>. (Repare: o ç de "Preço" já está escrito com <code>\u{E7}</code>.)</p>
+<pre class="script" data-file="main.lua">print("Pre\u{E7}o: 5 ? o quilo")
+</pre>
+<pre class="solucao" data-file="main.lua">print("Pre\u{E7}o: 5 \u{20AC} o quilo")
+</pre>
+</div>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li>Dentro das aspas, a contrabarra <code>\</code> começa uma <strong>sequência de escape</strong>: um código que vira um caractere só.</li>
+  <li><code>\n</code> pula linha, <code>\t</code> põe uma tabulação, <code>\"</code> e <code>\'</code> são aspas que não fecham o texto, <code>\\</code> é a própria contrabarra.</li>
+  <li><code>\ddd</code> (byte em decimal, até 255), <code>\xXX</code> (byte em hexadecimal) e <code>\u{XXX}</code> (caractere Unicode) escrevem caracteres pelo número.</li>
+  <li><code>\z</code> pula espaços e quebras de linha: serve para quebrar um texto comprido no código.</li>
+  <li>Caminhos do Windows precisam de <code>\\</code>: senão o <code>\n</code> e o <code>\t</code> do caminho viram quebras e tabulações, sem erro.</li>
+  <li>Contrabarra com letra desconhecida dá <code>invalid escape sequence</code>.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
