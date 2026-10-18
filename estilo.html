@@ -1,0 +1,508 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua estilo de código — indentação, local, nomes, aspas e comentários | Guia Lua</title>
+<meta name="description" content="Estilo de código em Lua para quem nunca programou: indentação (o guia usa 2 espaços; a comunidade usa 2, 3 ou 4), local sempre e como achar globais criadas sem querer, nomes claros, aspas simples e duplas, espaços, comentários e os comentários de documentação --- do LuaLS (LuaCATS).">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">Estilo</span> de Código</h1>
+
+<p class="intro">O Lua não liga se o seu programa está bonito ou feio: o mesmo código, todo torto ou todo arrumado, roda igual. Mas um programa é lido muito mais vezes do que é escrito, por outras pessoas e, principalmente, por <strong>você daqui a um mês</strong>. <strong>Estilo de código</strong> é o conjunto de combinados que deixa o programa fácil de ler: como indentar, como dar nomes, quando comentar. Esta aula reúne os combinados que o guia usou desde a primeira aula, com o porquê de cada um.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li><strong>Indentação</strong>: o guia usa 2 espaços; a comunidade usa 2, 3 ou 4. O que importa é ser sempre igual.</li>
+  <li><strong><code>local</code> sempre</strong>, o defeito que uma global esquecida causa e dois jeitos de achar globais criadas sem querer.</li>
+  <li><strong>Nomes</strong> claros: <code>minusculas_com_sublinhado</code>, <code>CONSTANTES</code>, o <code>_</code> e por que sem acento.</li>
+  <li><strong>Aspas</strong> simples ou duplas, espaços em volta dos operadores e uma instrução por linha.</li>
+  <li><strong>Comentários</strong> que explicam o porquê, e os comentários de documentação <code>---</code> que os editores entendem.</li>
+</ul>
+</div>
+
+<p>Os programas desta aula rodaram no <strong>Lua 5.5</strong> da máquina da Ana (usuária <code>ana</code>, computador <code>notebook</code>), com <code>lua arquivo.lua</code>.</p>
+
+<hr>
+
+<h2>A ideia: a letra da receita</h2>
+<p>A avó da Ana tinha um caderno de receitas. Algumas eram escritas com capricho: o título em cima, os ingredientes em lista, um passo por linha. Outras eram rabiscadas na pressa, tudo emendado num parágrafo só, com abreviações que só ela entendia. As duas receitas faziam o mesmo bolo. Mas só a primeira dava para seguir sem errar.</p>
+<p>O estilo de código é a "letra caprichada" do programa. Ele não muda o que o programa faz; muda o quanto custa <strong>entender</strong> o que ele faz, achar um defeito e mudar alguma coisa sem quebrar outra.</p>
+
+<hr>
+
+<h2>1. Indentação: os degraus do código</h2>
+<p><strong>Indentar</strong> é empurrar uma linha para a direita com espaços, para mostrar que ela está <strong>dentro</strong> de outra coisa (de um <code>if</code>, de um <code>for</code>, de uma <code>function</code>). Olhe o mesmo programa de dois jeitos:</p>
+
+<pre class="file" data-file="baguncado.lua">local notas={7,4,9,5}
+for i=1,#notas do
+if notas[i]&gt;=6 then
+print(i,"aprovada")
+else
+print(i,"reprovada")
+end
+end
+</pre>
+
+<pre class="file" data-file="arrumado.lua">local notas = { 7, 4, 9, 5 }
+for i = 1, #notas do
+  if notas[i] &gt;= 6 then
+    print(i, "aprovada")
+  else
+    print(i, "reprovada")
+  end
+end
+</pre>
+
+<pre class="term">$ lua baguncado.lua
+1	aprovada
+2	reprovada
+3	aprovada
+4	reprovada
+$ lua arrumado.lua
+1	aprovada
+2	reprovada
+3	aprovada
+4	reprovada</pre>
+
+<p>A saída é idêntica. Para o Lua, quem diz onde um bloco começa e termina são as palavras <code>do</code>, <code>then</code>, <code>else</code> e <code>end</code>, não os espaços (veja <a href="sintaxe.html">Sintaxe e Blocos</a>). A indentação é <strong>para você</strong>: no arrumado, cada <code>end</code> fica embaixo da linha que ele fecha, e dá para ver de longe que o <code>print</code> está dentro do <code>if</code>, que está dentro do <code>for</code>. No bagunçado, faltar um <code>end</code> passaria despercebido.</p>
+
+<h3>Quantos espaços?</h3>
+<p>Este guia usa <strong>2 espaços</strong> por nível, em todos os programas. Na comunidade do Lua não existe uma regra oficial: você vai encontrar códigos com <strong>2</strong>, <strong>3</strong> ou <strong>4</strong> espaços, e alguns com o caractere TAB. Todos estão certos. A regra que importa é outra:</p>
+<ul>
+  <li><strong>Seja sempre igual dentro do mesmo arquivo</strong> (e do mesmo projeto). Misturar 2 e 4 espaços é pior do que qualquer um dos dois.</li>
+  <li><strong>Num projeto dos outros, siga o estilo de lá.</strong> Se o projeto usa 4 espaços, você usa 4.</li>
+  <li><strong>Não misture TAB com espaços.</strong> Um TAB aparece com tamanhos diferentes em editores diferentes, e o código que estava alinhado no seu fica torto no do colega.</li>
+</ul>
+
+<div class="tip">
+<strong>Deixe o editor de texto fazer</strong>
+<p>Quase todo editor de programação tem uma configuração de "tamanho da indentação" e "usar espaços em vez de TAB". Configure uma vez (2 espaços, se quiser seguir o guia) e ele indenta sozinho quando você aperta <kbd>Enter</kbd> depois de um <code>then</code> ou de um <code>do</code>.</p>
+</div>
+
+<hr>
+
+<h2>2. <code>local</code> sempre</h2>
+<p>Este é o combinado mais importante, e o único desta aula que muda o que o programa <strong>faz</strong>. Uma variável sem <code>local</code> é <strong>global</strong>: ela é a mesma para o programa inteiro, e qualquer função pode mexer nela sem avisar (veja <a href="local.html">local × Global</a>). Olhe um defeito real que isso causa. A Ana quer desenhar um triângulo de estrelas:</p>
+
+<pre class="file" data-file="estrelas.lua">local function linha(n)
+  i = 1
+  local s = ""
+  while i &lt;= n do
+    s = s .. "*"
+    i = i + 1
+  end
+  return s
+end
+
+i = 1
+while i &lt;= 3 do
+  print(linha(i))
+  i = i + 1
+end
+</pre>
+
+<pre class="term">$ lua estrelas.lua
+*
+***</pre>
+
+<p>Sumiu a linha de 2 estrelas! O programa principal e a função <code>linha</code> usam o <strong>mesmo</strong> <code>i</code> global. Siga: o programa principal põe <code>i = 1</code> e chama <code>linha(1)</code>; lá dentro, o laço deixa o <code>i</code> valendo 2. Quando volta, o programa principal faz <code>i = i + 1</code>: o <code>i</code> vira <strong>3</strong>, e ele chama <code>linha(3)</code> direto. O 2 foi pulado. Nenhuma mensagem de erro: só um resultado errado, que pode levar horas para ser achado num programa grande.</p>
+
+<div class="trylua" data-goal="outre:^\*\n\*\*\n\*\*\*\n$;;src:local\s+i\b">
+<p class="try-task"><strong>Missão:</strong> conserte o triângulo pondo <code>local</code> nas variáveis que devem ser só de cada parte do programa. Deve sair <code>*</code>, <code>**</code> e <code>***</code>.</p>
+<pre class="script" data-file="main.lua">local function linha(n)
+  i = 1
+  local s = ""
+  while i &lt;= n do
+    s = s .. "*"
+    i = i + 1
+  end
+  return s
+end
+
+i = 1
+while i &lt;= 3 do
+  print(linha(i))
+  i = i + 1
+end
+</pre>
+<pre class="solucao" data-file="main.lua">local function linha(n)
+  local i = 1
+  local s = ""
+  while i &lt;= n do
+    s = s .. "*"
+    i = i + 1
+  end
+  return s
+end
+
+local i = 1
+while i &lt;= 3 do
+  print(linha(i))
+  i = i + 1
+end
+</pre>
+</div>
+
+<p>Com <code>local i</code> nos dois lugares, cada parte tem o <strong>seu</strong> <code>i</code>, e uma não mexe no da outra. Por isso o guia escreve <code>local</code> em <strong>toda</strong> variável e em toda função (<code>local function</code>), a não ser quando existe um motivo claro para ser global. Além de evitar esse tipo de defeito, variável local é mais rápida para o Lua acessar.</p>
+
+<h3>Achando globais criadas sem querer</h3>
+<p><strong>Jeito 1, em qualquer versão: o <code>luac -l</code>.</strong> O <code>luac</code> com <code>-p -l</code> mostra as instruções que o Lua gerou, sem rodar o programa. Toda vez que o programa <strong>guarda</strong> um valor numa global, aparece uma instrução <code>SETTABUP</code> com o nome dela:</p>
+
+<pre class="term">$ luac -p -l estrelas.lua | grep SETTABUP
+	3	[11]	SETTABUP 	0 0 1k	; _ENV "i" 1
+	15	[14]	SETTABUP 	0 0 1	; _ENV "i"
+	1	[2]	SETTABUP 	0 0 1k	; _ENV "i" 1
+	13	[6]	SETTABUP 	0 0 2	; _ENV "i"</pre>
+
+<p>O número entre colchetes é a linha do arquivo: o programa grava na global <code>i</code> nas linhas 11, 14, 2 e 6. Se o seu programa é para ter <strong>zero</strong> globais, essa lista deveria sair vazia. (O <code>_ENV</code> é o "ambiente" onde moram as globais; veja <a href="env.html">_G e _ENV</a>.)</p>
+
+<p><strong>Jeito 2, no Lua 5.5: a declaração <code>global</code></strong> <span class="versao">5.5</span>. Depois de uma declaração <code>global</code>, todo nome que não for <code>local</code> nem estiver declarado vira <strong>erro</strong> antes de o programa rodar:</p>
+
+<pre class="file" data-file="estrelas_global.lua">global print
+local function linha(n)
+  i = 1
+  local s = ""
+  while i &lt;= n do
+    s = s .. "*"
+    i = i + 1
+  end
+  return s
+end
+print(linha(3))
+</pre>
+
+<pre class="term">$ lua estrelas_global.lua
+lua: estrelas_global.lua:3: variable 'i' not declared</pre>
+
+<p>A linha <code>global print</code> diz: "neste arquivo, a única global que eu uso é o <code>print</code>". Aí o <code>i</code> da linha 3, que não é <code>local</code>, vira o erro "variável <code>i</code> não declarada". Os detalhes estão em <a href="global.html">A Declaração global</a>. (Funciona só no Lua 5.5; no 5.4 e antes, <code>global</code> é um nome comum e essa linha dá erro de sintaxe; veja <a href="versoes.html">as versões</a>.)</p>
+
+<hr>
+
+<h2>3. Nomes</h2>
+<p>Um bom nome diz <strong>o que a variável guarda</strong>, sem precisar de comentário. Compare <code>local x = 40</code> com <code>local MAXIMO_DE_ALUNOS = 40</code>. Os combinados mais comuns na comunidade, e os que o guia segue:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>O quê</th><th>Como</th><th>Exemplo</th></tr>
+<tr><td>Variáveis e funções</td><td>minúsculas, palavras separadas por <code>_</code> (o estilo <em>snake_case</em>)</td><td><code>nome_do_aluno</code>, <code>calcular_media</code></td></tr>
+<tr><td>Valores que não mudam (constantes)</td><td>MAIÚSCULAS com <code>_</code></td><td><code>MAXIMO_DE_ALUNOS</code>, <code>TAXA_DE_ENTREGA</code></td></tr>
+<tr><td>"Classes" (tabelas que criam objetos)</td><td>Primeira letra maiúscula</td><td><code>Conta</code>, <code>Produto</code> (veja <a href="classes.html">Classes</a>)</td></tr>
+<tr><td>Verdadeiro/falso</td><td>uma pergunta: <code>tem_</code>, <code>esta_</code>, <code>pode_</code></td><td><code>tem_estoque</code>, <code>esta_aberta</code></td></tr>
+<tr><td>Um valor que você vai ignorar</td><td>só o sublinhado: <code>_</code></td><td><code>for _, valor in ipairs(lista)</code></td></tr>
+<tr><td>Contadores de laço curtinhos</td><td>pode ser uma letra</td><td><code>i</code>, <code>j</code>, <code>k</code>, <code>v</code></td></tr>
+</table>
+</div>
+
+<pre class="file" data-file="nomes.lua">local MAXIMO_DE_ALUNOS = 40
+local nome_do_aluno = "Bia"
+local tem_estoque = true
+for _, valor in ipairs({ "a", "b" }) do
+  print(valor)
+end
+print(MAXIMO_DE_ALUNOS, nome_do_aluno, tem_estoque)
+</pre>
+
+<pre class="term">$ lua nomes.lua
+a
+b
+40	Bia	true</pre>
+
+<ul>
+  <li><strong>Sem acento nos nomes.</strong> No Lua, <code>local preço = 5</code> é erro de sintaxe (<code>unexpected symbol near '&lt;\195&gt;'</code>; veja <a href="nomes-variaveis.html">Nomes de Variáveis</a>). Escreva <code>preco</code>, <code>acao</code>. Dentro dos textos, acento pode à vontade.</li>
+  <li><strong>Nome curto só em lugar curto.</strong> Um <code>i</code> num laço de 3 linhas é claro; um <code>t</code> que atravessa o programa inteiro, não.</li>
+  <li><strong>Português ou inglês, mas um só.</strong> O guia usa português (<code>preco</code>, <code>quantidade</code>). Muitos projetos usam inglês. Misturar <code>total_price</code> com <code>quantidade</code> no mesmo arquivo confunde.</li>
+  <li>O <code>MAIÚSCULAS</code> é só um aviso para quem lê: o Lua não impede ninguém de mudar o valor. No 5.4 e no 5.5, para o Lua <strong>impedir</strong>, use <code>local MAXIMO &lt;const&gt; = 40</code> (veja <a href="const.html">Constantes</a>).</li>
+</ul>
+
+<hr>
+
+<h2>4. Aspas, espaços e uma coisa por linha</h2>
+
+<h3>Aspas simples ou duplas?</h3>
+<p>No Lua, <code>"texto"</code> e <code>'texto'</code> são <strong>exatamente</strong> a mesma coisa:</p>
+
+<pre class="file" data-file="aspas.lua">local a = "Olá, Ana"
+local b = 'Olá, Ana'
+print(a == b)
+print('Ela disse "bom dia"')
+print("It's ok")
+print("Ela disse \"bom dia\"")
+</pre>
+
+<pre class="term">$ lua aspas.lua
+true
+Ela disse "bom dia"
+It's ok
+Ela disse "bom dia"</pre>
+
+<p>O combinado do guia: <strong>aspas duplas</strong> no dia a dia, e as simples quando o texto tem aspas duplas dentro (<code>'Ela disse "bom dia"'</code>), para não precisar do <code>\"</code> (veja <a href="strings-escape.html">Caracteres de Escape</a>). Para textos de várias linhas, <code>[[ … ]]</code> (veja <a href="strings-longas.html">Textos Longos</a>). Muitos projetos preferem as simples; de novo, o que vale é ser igual no projeto inteiro.</p>
+
+<h3>Espaços</h3>
+<ul>
+  <li>Um espaço <strong>em volta</strong> dos operadores: <code>total = preco * quantidade</code>, não <code>total=preco*quantidade</code>.</li>
+  <li>Um espaço <strong>depois</strong> da vírgula: <code>print(i, "aprovada")</code>.</li>
+  <li>Nas tabelas, o guia põe um espaço dentro das chaves: <code>{ 7, 4, 9 }</code> e <code>{ nome = "Ana" }</code>.</li>
+  <li><strong>Linhas vazias</strong> separam as partes do programa, como parágrafos num texto.</li>
+  <li>Linhas não muito compridas (até umas 80 a 100 letras): uma linha que não cabe na tela esconde a parte do fim.</li>
+</ul>
+
+<h3>Uma instrução por linha, sem ponto e vírgula</h3>
+<pre class="file" data-file="pontovirgula.lua">local a = 1; local b = 2; print(a + b)
+local c = 3 local d = 4 print(c + d)
+</pre>
+<pre class="term">$ lua pontovirgula.lua
+3
+7</pre>
+<p>O Lua aceita várias instruções na mesma linha, com ou sem <code>;</code> entre elas. Aceitar não quer dizer que seja bom: a linha 2 é difícil de ler, e uma mensagem de erro que diz "linha 2" não diz <strong>qual</strong> das três instruções. O combinado: uma instrução por linha e nada de <code>;</code> no fim (ele não faz falta no Lua).</p>
+
+<h3>Sair cedo</h3>
+<p>Em vez de empilhar <code>if</code> dentro de <code>if</code>, trate os casos especiais primeiro e saia com <code>return</code>. O caminho principal fica sem degraus:</p>
+
+<pre class="file" data-file="cedo.lua">local function situacao(nota)
+  if type(nota) ~= "number" then
+    return "nota inválida"
+  end
+  if nota &gt;= 6 then
+    return "aprovada"
+  end
+  return "reprovada"
+end
+
+print(situacao(7), situacao(3), situacao("dez"))
+</pre>
+
+<pre class="term">$ lua cedo.lua
+aprovada	reprovada	nota inválida</pre>
+
+<hr>
+
+<h2>5. Comentários</h2>
+<p>Comentários (<code>--</code> até o fim da linha, <code>--[[ … ]]</code> para várias linhas; veja <a href="comentarios.html">Comentários</a>) são lidos por pessoas, nunca pelo Lua. Os combinados:</p>
+<ul>
+  <li><strong>Explique o porquê, não o quê.</strong> <code>total = total + 1  -- soma 1 no total</code> não ajuda ninguém; o código já diz isso. <code>-- a loja conta o pedido mesmo cancelado (pedido da contabilidade)</code> diz algo que o código não diz.</li>
+  <li><strong>Um bom nome economiza um comentário.</strong> Antes de escrever <code>local t = 40 -- tempo em minutos</code>, tente <code>local tempo_em_minutos = 40</code>.</li>
+  <li><strong>Comentário velho é pior que nenhum.</strong> Mudou o código, mude o comentário.</li>
+  <li>Não deixe código "comentado" esquecido no arquivo: se não serve mais, apague.</li>
+</ul>
+
+<h3>Comentários de documentação: <code>---</code></h3>
+<p>Muitos projetos em Lua documentam as funções com comentários que começam com <strong>três</strong> tracinhos, num formato que os editores de programação entendem. O mais usado hoje é o do <strong>Lua Language Server</strong> (LuaLS), um programa que dá aos editores (como o VS Code e o Neovim) o autocompletar e os avisos de erro enquanto você digita. O formato se chama <strong>LuaCATS</strong> (<em>Lua Comment And Type System</em>, "sistema de comentários e tipos do Lua"):</p>
+
+<pre class="file" data-file="documentado.lua">--- Calcula o preço final de um produto, com desconto.
+---@param preco number o preço cheio, em reais
+---@param desconto number a porcentagem de desconto (0 a 100)
+---@return number preco_final o preço com o desconto aplicado
+local function preco_com_desconto(preco, desconto)
+  return preco * (1 - desconto / 100)
+end
+
+print(preco_com_desconto(50, 10))
+</pre>
+
+<pre class="term">$ lua documentado.lua
+45.0</pre>
+
+<dl class="anatomy">
+  <dt>--- Calcula o preço…</dt><dd>A descrição da função, em uma frase.</dd>
+  <dt>---@param preco number …</dt><dd>Um parâmetro: o nome (<code>preco</code>), o tipo (<code>number</code>) e uma explicação.</dd>
+  <dt>---@return number preco_final …</dt><dd>O que a função devolve: o tipo, um nome e uma explicação.</dd>
+</dl>
+
+<p>Para o Lua, essas linhas são <strong>comentários comuns</strong> (começam com <code>--</code>): o programa rodou normalmente e mostrou <code>45.0</code>. Quem lê os <code>---@</code> é o editor com o LuaLS, que passa a mostrar a explicação quando você passa o mouse em <code>preco_com_desconto</code> e a avisar se alguém chamar a função com um texto no lugar do número. Esse comportamento do editor é <strong>ilustrativo</strong> aqui: o lab da Ana não tem um editor gráfico com o LuaLS, então não deu para mostrar a tela. As outras etiquetas mais comuns, segundo a documentação do LuaLS: <code>---@type</code> (o tipo de uma variável), <code>---@class</code> e <code>---@field</code> (descrevem uma tabela com campos).</p>
+
+<div class="note">
+<strong>Ferramentas que arrumam e conferem o estilo</strong>
+<p>Existem programas que formatam o código sozinhos (o mais conhecido para Lua é o StyLua) e programas que apontam globais esquecidas, variáveis não usadas e outros deslizes (como o luacheck). Eles não vêm com o Lua e não estão no computador da Ana, por isso esta aula não mostra a saída deles. O <code>luac -p -l</code> e a declaração <code>global</code> da seção 2 fazem parte do trabalho e já estão aí.</p>
+</div>
+
+<hr>
+
+<h2 id="formas">Formas diferentes de fazer a mesma coisa</h2>
+<p>O mesmo programa, escrito "de qualquer jeito" e "com estilo":</p>
+
+<pre class="file" data-file="feio.lua">t={4.5,12.9,7.25} s=0
+for i=1,#t do s=s+t[i] end print("Total: R$ "..string.format("%.2f",s))
+</pre>
+
+<pre class="file" data-file="bonito.lua">-- Soma os preços da lista de compras da Ana.
+local precos = { 4.5, 12.9, 7.25 }
+
+local total = 0
+for _, preco in ipairs(precos) do
+  total = total + preco
+end
+
+print(string.format("Total: R$ %.2f", total))
+</pre>
+
+<pre class="term">$ lua feio.lua
+Total: R$ 24.65
+$ lua bonito.lua
+Total: R$ 24.65</pre>
+
+<p>O feio cria duas globais (<code>t</code> e <code>s</code>), não diz o que <code>t</code> guarda e esmaga três instruções numa linha. O bonito tem <code>local</code>, nomes que se explicam, um passo por linha e um comentário que diz para que serve o programa.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Situação</th><th>O combinado</th></tr>
+<tr><td>Seu próprio projeto</td><td>Escolha um estilo (o do guia, por exemplo) e siga em todos os arquivos</td></tr>
+<tr><td>Projeto dos outros (um jogo, um plugin do Neovim)</td><td>Siga o estilo que o projeto já usa, mesmo que seja diferente do seu</td></tr>
+<tr><td>Indentação</td><td>2, 3 ou 4 espaços: qualquer um, sempre o mesmo (o guia usa 2)</td></tr>
+<tr><td>Variáveis e funções</td><td><code>local</code>, <code>minusculas_com_sublinhado</code>, sem acento</td></tr>
+<tr><td>Comentário</td><td>O porquê; para documentar uma função, <code>---</code> e <code>---@param</code>/<code>---@return</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+
+<div class="cenario">
+<strong>Um <code>end</code> a menos, escondido pela indentação torta</strong>
+<pre class="file" data-file="sintaxe.lua">local notas = { 7, 8.5, 10, 6 }
+for i = 1, #notas do
+  if notas[i] &gt;= 7 then
+    print(i, "aprovada")
+  else
+    print(i, "reprovada")
+end
+</pre>
+<pre class="term">$ lua sintaxe.lua
+lua: sintaxe.lua:8: 'end' expected (to close 'for' at line 2) near &lt;eof&gt;</pre>
+<p>"Era esperado um <code>end</code> (para fechar o <code>for</code> da linha 2) perto do fim do arquivo". O <code>end</code> da linha 7 está na coluna do <code>for</code>, então <strong>parece</strong> que fecha o <code>for</code>, mas quem ele fecha de verdade é o <code>if</code>. A indentação mentiu. <strong>Como consertar:</strong> o <code>end</code> do <code>if</code> com 2 espaços, embaixo do <code>if</code>, e mais um <code>end</code> na margem para o <code>for</code>. Com a indentação certa, a falta salta aos olhos.</p>
+</div>
+
+<div class="cenario">
+<strong>Nome com acento</strong>
+<pre class="term">$ printf 'local preço = 5\nprint(preço)\n' &gt; acento.lua
+$ lua acento.lua
+lua: acento.lua:1: unexpected symbol near '&lt;\195&gt;'</pre>
+<p>"Símbolo inesperado perto de <code>&lt;\195&gt;</code>": o <code>\195</code> é o primeiro byte do <code>ç</code> no computador. O Lua só aceita letras sem acento, números e <code>_</code> nos nomes. <strong>Como consertar:</strong> <code>preco</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>A global esquecida</strong>
+<p>O triângulo de estrelas da seção 2: nenhuma mensagem, só uma linha a menos. Toda vez que um resultado "pula" ou muda sozinho, procure globais com <code>luac -p -l arquivo.lua | grep SETTABUP</code>.</p>
+</div>
+
+<hr>
+
+<h2>Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Assunto</th><th>O combinado do guia</th></tr>
+<tr><td>Indentação</td><td>2 espaços por nível, sem TAB (a comunidade usa 2, 3 ou 4)</td></tr>
+<tr><td>Variáveis e funções</td><td>sempre <code>local</code>; <code>local function nome()</code></td></tr>
+<tr><td>Nomes</td><td><code>minusculas_com_sublinhado</code>; <code>CONSTANTES</code>; <code>Classes</code>; <code>_</code> para ignorar; sem acento</td></tr>
+<tr><td>Aspas</td><td>duplas; simples quando o texto tem aspas duplas; <code>[[ ]]</code> para várias linhas</td></tr>
+<tr><td>Espaços</td><td>em volta de operadores, depois de vírgula, dentro de <code>{ }</code></td></tr>
+<tr><td>Linhas</td><td>uma instrução por linha, sem <code>;</code>; linhas vazias entre as partes</td></tr>
+<tr><td>Comentários</td><td>o porquê; <code>---</code> com <code>@param</code>/<code>@return</code> para documentar funções</td></tr>
+<tr><td>Achar globais</td><td><code>luac -p -l arquivo.lua | grep SETTABUP</code>; no 5.5, <code>global</code> no começo do arquivo</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. O mais importante</h3>
+<p>Que palavra o guia põe na frente de toda variável nova?</p>
+<div class="ex-code"><input data-answer="local" aria-label="palavra-chave"> preco = 4.5</div>
+</div>
+
+<div class="exercise">
+<h3>2. Constante</h3>
+<p>Escreva, no estilo do guia, o nome de uma constante para "taxa de entrega":</p>
+<div class="ex-code">local <input data-answer="TAXA_DE_ENTREGA|TAXA_ENTREGA" aria-label="nome"> = 7</div>
+</div>
+
+<div class="mc" data-answer="3">
+<p class="mc-q">3. Quantos espaços de indentação são "o certo" no Lua?</p>
+<label><input type="radio" name="q3"> Exatamente 4; com outro número o programa não roda</label>
+<label><input type="radio" name="q3"> Exatamente 2; é a regra oficial do Lua</label>
+<label><input type="radio" name="q3"> Não há regra oficial: 2, 3 ou 4 são comuns; o importante é ser sempre igual</label>
+<label><input type="radio" name="q3"> Nenhum: o Lua proíbe indentação</label>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">4. Qual destes nomes segue o estilo do guia para uma variável?</p>
+<label><input type="radio" name="q4"> <code>QuantidadeDePães</code></label>
+<label><input type="radio" name="q4"> <code>quantidade_de_paes</code></label>
+<label><input type="radio" name="q4"> <code>quantidade_de_pães</code></label>
+<label><input type="radio" name="q4"> <code>q</code></label>
+</div>
+
+<div class="mc" data-answer="4">
+<p class="mc-q">5. O que o Lua faz com a linha <code>---@param preco number</code>?</p>
+<label><input type="radio" name="q5"> Confere se <code>preco</code> é um número e dá erro se não for</label>
+<label><input type="radio" name="q5"> Cria a variável <code>preco</code></label>
+<label><input type="radio" name="q5"> Dá erro de sintaxe</label>
+<label><input type="radio" name="q5"> Nada: para o Lua é um comentário (quem lê é o editor com o LuaLS)</label>
+</div>
+
+<div class="mc" data-answer="1">
+<p class="mc-q">6. <code>"Ana"</code> e <code>'Ana'</code>…</p>
+<label><input type="radio" name="q6"> são exatamente o mesmo texto</label>
+<label><input type="radio" name="q6"> são diferentes: uma é texto e a outra é caractere</label>
+<label><input type="radio" name="q6"> só as duplas funcionam no Lua 5.5</label>
+<label><input type="radio" name="q6"> só as simples aceitam acento</label>
+</div>
+
+<h3>Missão final: arrume o programa</h3>
+
+<div class="trylua" data-goal="out:Total: R$ 24.65;;src:^local\s+\w+\s*=\s*\{;;src:---@param;;src:---@return">
+<p class="try-task"><strong>Missão:</strong> este programa funciona, mas está escrito "de qualquer jeito". Reescreva no estilo da aula, sem mudar o resultado: <code>local</code> nas variáveis (a lista começa com <code>local … = {</code>), nomes claros, uma instrução por linha, e a função documentada com <code>---@param</code> e <code>---@return</code>.</p>
+<pre class="script" data-file="main.lua">function S(t) s=0 for i=1,#t do s=s+t[i] end return s end
+t={4.5,12.9,7.25} print("Total: R$ "..string.format("%.2f",S(t)))
+</pre>
+<pre class="solucao" data-file="main.lua">--- Soma todos os preços de uma lista.
+---@param precos number[] a lista de preços
+---@return number total a soma dos preços
+local function somar(precos)
+  local total = 0
+  for _, preco in ipairs(precos) do
+    total = total + preco
+  end
+  return total
+end
+
+local precos = { 4.5, 12.9, 7.25 }
+print(string.format("Total: R$ %.2f", somar(precos)))
+</pre>
+</div>
+
+<p>O <code>number[]</code> no <code>---@param</code> é o jeito do LuaCATS de dizer "uma lista de números". No lab, a versão arrumada mostrou o mesmo <code>Total: R$ 24.65</code> da bagunçada.</p>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li>Estilo não muda o que o programa faz (com uma exceção: o <code>local</code>); muda o quanto é fácil ler, achar defeitos e mudar.</li>
+  <li><strong>Indentação</strong>: o guia usa 2 espaços; a comunidade usa 2, 3 ou 4. Seja sempre igual, siga o estilo do projeto e não misture TAB com espaços.</li>
+  <li><strong><code>local</code> sempre</strong>: uma global esquecida faz partes do programa mexerem nas variáveis umas das outras. Para achar: <code>luac -p -l … | grep SETTABUP</code>, ou a declaração <code>global</code> do 5.5.</li>
+  <li><strong>Nomes</strong>: <code>minusculas_com_sublinhado</code>, <code>CONSTANTES</code>, <code>Classes</code>, <code>_</code> para ignorar, sem acento.</li>
+  <li><strong>Aspas</strong> simples e duplas são iguais; espaços em volta dos operadores; uma instrução por linha.</li>
+  <li><strong>Comentários</strong> explicam o porquê; <code>---@param</code> e <code>---@return</code> (LuaCATS) documentam funções para o editor.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
