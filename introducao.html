@@ -1,0 +1,415 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua Introdução — o que é Lua e para que serve | Guia Lua</title>
+<meta name="description" content="O que é a linguagem Lua para quem nunca programou: o que é programar, o que quer dizer linguagem interpretada e de extensão, a história brasileira da PUC-Rio (de onde vem o nome Lua), onde o Lua é usado hoje (jogos, Roblox, Neovim, Lightroom), as versões 5.1 a 5.5 e a primeira mensagem de erro real do Lua 5.5, explicada em português.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">Introdução</span></h1>
+
+<p class="intro">O <strong>Lua</strong> (lê-se "lua", como a lua do céu) é uma linguagem de programação <strong>pequena, rápida e simples</strong>, criada no Brasil, na PUC do Rio de Janeiro. Ela tem poucas regras e poucas palavras, e por isso cabe inteira na cabeça de quem está aprendendo. Mas não se engane com o tamanho: o Lua está dentro de jogos famosos, do Roblox, de editores de texto, de programas de fotografia e de equipamentos de rede. Nesta aula você vai entender o que é programar, como o Lua funciona por dentro, de onde ele veio e onde ele está hoje.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O que é programar e o que é uma linguagem de programação.</li>
+  <li>O que quer dizer que o Lua é uma linguagem <strong>interpretada</strong>, e o que é o tal do <em>bytecode</em>.</li>
+  <li>O que é uma linguagem de <strong>extensão</strong> (a que vai "dentro" de outro programa), a especialidade do Lua.</li>
+  <li>A história: a PUC-Rio, a Petrobras, a linguagem "Sol" e por que esta se chama "Lua".</li>
+  <li>Onde o Lua é usado hoje, e as versões que você vai encontrar por aí (5.1, LuaJIT, 5.4, 5.5).</li>
+  <li>A sua primeira mensagem de erro de verdade, e como ler o que ela diz.</li>
+</ul>
+</div>
+
+<p>Tudo o que aparece num terminal nesta aula foi rodado de verdade com o <strong>Lua 5.5</strong> no computador fictício da Ana (usuária <code>ana</code>, computador <code>notebook</code>, com Ubuntu). E cada caixa <strong>Experimente</strong> roda o mesmo Lua 5.5, de verdade, no seu navegador.</p>
+
+<hr>
+
+<h2>Primeiro: o que é programar?</h2>
+<p>Um computador não "entende" nada sozinho. Ele só sabe seguir instruções, uma de cada vez, muito rápido. <strong>Programar</strong> é escrever essas instruções. Uma <strong>linguagem de programação</strong> é o idioma combinado entre você e o computador: um conjunto pequeno de palavras e símbolos, com regras rígidas sobre onde cada coisa vai.</p>
+
+<p>Pense numa <strong>receita de bolo</strong>. Ela tem uma lista de passos, em ordem: "pré-aqueça o forno", "misture os ovos com o açúcar", "<em>se</em> a massa estiver grossa, acrescente leite", "bata <em>até</em> ficar lisa". Um programa é igual: uma lista de passos, alguns com decisões ("se…") e outros com repetições ("até…"). A diferença é que o computador segue a receita <strong>ao pé da letra</strong>. Uma pessoa entende "açucar" sem acento; o computador, não. Se você escrever <code>pirnt</code> em vez de <code>print</code>, ele não adivinha o que você quis dizer: ele para e reclama. Essas reclamações são as <strong>mensagens de erro</strong>, e este guia vai ensinar você a ler cada uma delas.</p>
+
+<p>Veja um programa Lua de verdade. É a lista de compras da Ana:</p>
+
+<pre class="file" data-file="lista.lua">local compras = {"arroz", "feijão", "café"}
+for _, item in ipairs(compras) do
+  print("Comprar:", item)
+end
+</pre>
+
+<p>Mesmo sem saber nada de Lua, dá para desconfiar do que ele faz. A primeira linha guarda três itens entre chaves, numa <strong>tabela</strong> chamada <code>compras</code>. Depois, <strong>para cada item</strong> da tabela (<code>for</code> = "para"; <code>do</code> = "faça"), o programa mostra na tela (<code>print</code> = "imprimir") a palavra "Comprar:" e o item. O <code>end</code> ("fim") marca onde termina o que deve ser repetido. A Ana rodou o programa no terminal do computador dela:</p>
+
+<pre class="term">$ lua lista.lua
+Comprar:	arroz
+Comprar:	feijão
+Comprar:	café
+</pre>
+
+<p>Você não precisa entender cada detalhe agora: as tabelas têm aula própria (<a href="tabelas.html">Tabelas</a>), o <code>for</code> com <code>ipairs</code> também (<a href="ipairs.html">Percorrendo uma Lista</a>), e o <code>print</code> é o assunto de <a href="print.html">print()</a> (é ele quem põe aquele espaço largo, uma tabulação, entre "Comprar:" e o item). Por enquanto, repare em como o programa é <strong>curto</strong> e quase se lê em voz alta.</p>
+
+<p>Você mesmo pode rodar esse programa aqui, sem instalar nada. As caixas <strong>Experimente</strong> do guia rodam o Lua de verdade, dentro do navegador (a aula <a href="simulador.html">O Editor do Guia</a> mostra tudo o que elas fazem):</p>
+
+<div class="trylua" data-goal="outre:Comprar:\tleite">
+<p class="try-task"><strong>Missão:</strong> rode o programa como está. Depois, acrescente <code>"leite"</code> à lista (dentro das chaves, depois de <code>"café"</code>, separado por vírgula) e rode de novo: deve aparecer uma quarta linha, <code>Comprar: leite</code>.</p>
+<pre class="script" data-file="main.lua">local compras = {"arroz", "feijão", "café"}
+for _, item in ipairs(compras) do
+  print("Comprar:", item)
+end
+</pre>
+<pre class="solucao" data-file="main.lua">local compras = {"arroz", "feijão", "café", "leite"}
+for _, item in ipairs(compras) do
+  print("Comprar:", item)
+end
+</pre>
+</div>
+
+<p>Você mudou <strong>um dado</strong> (a lista) e o programa se adaptou sozinho, sem você mexer nas outras linhas. Essa é a graça de programar: escrever a receita uma vez e usá-la com outros ingredientes.</p>
+
+<hr>
+
+<h2>O Lua é uma linguagem interpretada</h2>
+<p>O processador do computador (a CPU, o "cérebro") não entende português, nem inglês, nem Lua. Ele só entende <strong>código de máquina</strong>: sequências de números que querem dizer coisas como "some estes dois valores" ou "guarde isto na memória". Alguém precisa traduzir o texto do programa para essa língua. Existem dois jeitos de fazer isso:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Jeito</th><th>Como funciona</th><th>Comparação</th><th>Exemplos</th></tr>
+<tr><td><strong>Compilar</strong></td><td>Um programa chamado <strong>compilador</strong> traduz o texto inteiro <strong>antes</strong>, uma vez só, e gera um arquivo executável, que depois roda sozinho.</td><td>Traduzir um livro inteiro e imprimir a tradução. Quem lê a versão traduzida não precisa do tradutor.</td><td>C, C++, Rust, Go</td></tr>
+<tr><td><strong>Interpretar</strong></td><td>Um programa chamado <strong>interpretador</strong> lê o texto e vai executando as instruções, <strong>toda vez</strong> que o programa roda.</td><td>Um intérprete numa palestra, traduzindo frase por frase enquanto a pessoa fala. Sem o intérprete na sala, ninguém entende.</td><td><strong>Lua</strong>, Python, JavaScript, PHP</td></tr>
+</table>
+</div>
+
+<p>O Lua é <strong>interpretado</strong>. O seu programa é um arquivo de texto comum, terminado em <code>.lua</code>, e quem o executa é o <strong>interpretador</strong>, um programa que se chama simplesmente <code>lua</code>. Foi ele que a Ana chamou no terminal (<code>lua lista.lua</code>): "interpretador, leia o arquivo <code>lista.lua</code> e faça o que está escrito". A aula <a href="executar.html">Rodando um Programa (.lua)</a> mostra isso passo a passo.</p>
+
+<p>O próprio interpretador diz qual versão ele é:</p>
+
+<pre class="term">$ lua -v
+Lua 5.5.0  Copyright (C) 1994-2025 Lua.org, PUC-Rio     « versão 5.5.0, feita na PUC-Rio
+</pre>
+
+<p>(O <code>-v</code> quer dizer "versão". O <code>Copyright</code> é o aviso de direitos autorais: "Lua.org, PUC-Rio" é a equipe que faz o Lua, na universidade.)</p>
+
+<h3>Uma tradução escondida: o <em>bytecode</em></h3>
+<p>Para ser exato: antes de executar, o <code>lua</code> traduz o seu programa inteiro para um formato intermediário, o <strong>bytecode</strong> ("código em bytes"), que é muito mais rápido de executar do que o texto. Isso acontece sozinho, em milésimos de segundo, toda vez que você roda o programa, e você nem percebe.</p>
+
+<p>Dá para ver essa tradução com o <code>luac</code> (o "c" é de <em>compiler</em>, compilador), que vem junto com o Lua. Ele traduz e grava o resultado num arquivo, <code>luac.out</code>, sem rodar nada:</p>
+
+<pre class="file" data-file="ola.lua">print("Olá, mundo!")
+</pre>
+
+<pre class="term">$ lua ola.lua
+Olá, mundo!
+$ luac ola.lua                     « traduz, não mostra nada
+$ file ola.lua
+ola.lua: Unicode text, UTF-8 text    « o seu programa: texto
+$ file luac.out
+luac.out: Lua bytecode,              « a tradução: bytecode do Lua
+$ lua luac.out                     « o lua também roda a tradução
+Olá, mundo!
+</pre>
+
+<p>(O <code>file</code> é um comando do Linux que diz que tipo de arquivo é cada um.) Você <strong>não precisa</strong> do <code>luac</code> para nada neste guia: o <code>lua</code> faz essa tradução sozinho. Ela está aqui só para você saber o que acontece por baixo dos panos.</p>
+
+<h3>O lado bom e o lado ruim</h3>
+<p>A interpretação traz uma vantagem enorme para quem está aprendendo: você escreve, roda e vê o resultado na hora. Dá até para conversar com o Lua linha por linha, no <a href="repl.html">modo interativo (<code>&gt;</code>)</a>. O preço costuma ser a velocidade: em contas muito pesadas, um programa interpretado é mais lento que o mesmo programa em C. Só que o Lua é conhecido justamente por ser um dos interpretados mais rápidos: o site oficial diz que vários testes de desempenho o colocam como <em>"the fastest among interpreted scripting languages"</em> ("o mais rápido entre as linguagens de script interpretadas").</p>
+
+<hr>
+
+<h2>Pequeno de verdade</h2>
+<p>O Lua inteiro é escrito na linguagem C, em cerca de 32 mil linhas. Segundo o site oficial (lua.org), no Linux de 64 bits o interpretador com todas as bibliotecas padrão ocupa uns <strong>293 KB</strong>, menos que uma foto de celular. Por isso ele cabe em quase qualquer lugar: num videogame, num roteador, numa câmera, numa calculadora.</p>
+
+<p>E é pequeno também por dentro. A linguagem tem só <strong>23 palavras reservadas</strong> no 5.5 (as palavras com significado especial, como <code>if</code>, <code>for</code>, <code>end</code>; a lista está em <a href="ref-palavras-chave.html">Palavras Reservadas</a>) e <strong>uma única estrutura de dados</strong>: a <strong>tabela</strong>. Lista de compras, ficha de cadastro, agenda de contatos, até os "objetos" do nível avançado: tudo no Lua é feito com tabelas. Aprender tabelas bem é aprender metade do Lua.</p>
+
+<div class="note">
+<strong>Não é "LUA"</strong>
+<p>"Lua" é um nome, não uma sigla: o site oficial insiste que se escreve <strong>Lua</strong>, com só a primeira letra maiúscula (<em>"it is neither an acronym nor an abbreviation, but a noun"</em>: "não é sigla nem abreviação, é um substantivo"). Quando você vir "LUA" em algum lugar, já sabe que quem escreveu não leu o site.</p>
+</div>
+
+<hr>
+
+<h2>Uma linguagem para ir "dentro" de outros programas</h2>
+<p>O Lua foi pensado desde o começo para ser uma linguagem de <strong>extensão</strong> (ou "embutida", do inglês <em>embeddable</em>): uma linguagem que vai <strong>dentro</strong> de outro programa, maior, para deixar esse programa ser personalizado.</p>
+
+<p>Pense num jogo de videogame. O "motor" do jogo, a parte pesada que desenha a tela e toca os sons, é escrito em C ou C++. Mas as regras de cada fase (quantas vidas o jogador tem, o que o chefão faz, o texto de cada personagem) mudam o tempo todo, e recompilar o motor a cada mudança seria lento. Então o motor <strong>embute</strong> um interpretador Lua, e as regras ficam em arquivos <code>.lua</code>, que qualquer pessoa da equipe consegue editar. É como um carro (o motor em C) com um painel de botões (o Lua) que o motorista pode reprogramar.</p>
+
+<p>Por isso, muita gente usa Lua <strong>sem nunca ter rodado o comando <code>lua</code></strong>: o Lua vem escondido dentro do jogo, do editor ou do aparelho. Neste guia, você vai usar o interpretador "sozinho", o <code>lua</code> do terminal, que é o melhor jeito de aprender a linguagem. Tudo o que você aprender aqui vale lá dentro também.</p>
+
+<hr>
+
+<h2>Por que dizem que o Lua é fácil</h2>
+<p>Compare o programa mais simples que existe, o que escreve uma frase na tela, em duas linguagens. Em <strong>C</strong>:</p>
+
+<pre class="file" data-file="ola.c">#include &lt;stdio.h&gt;
+
+int main(void) {
+    printf("Olá, mundo!\n");
+    return 0;
+}
+</pre>
+
+<p>Em <strong>Lua</strong>:</p>
+
+<pre class="file" data-file="ola.lua">print("Olá, mundo!")
+</pre>
+
+<p>Uma linha. Sem <code>#include</code>, sem <code>main</code>, sem chaves, sem ponto e vírgula, sem compilar. Isso não quer dizer que o C seja ruim (ele é ótimo no que faz, e o próprio Lua é escrito em C: veja o <a href="https://wallysondevs.github.io/guia-c/">Guia C</a>), mas mostra a escolha do Lua: <strong>deixar o programa limpo</strong>, para que você pense no problema, e não na pontuação.</p>
+
+<p>Quatro características explicam essa fama:</p>
+<ul>
+  <li><strong>Palavras no lugar de símbolos.</strong> Onde outras linguagens usam chaves <code>{ }</code> para agrupar instruções, o Lua usa palavras: <code>then</code> ("então"), <code>do</code> ("faça") e <code>end</code> ("fim"). Um bloco começa com uma palavra e termina com <code>end</code>. A aula <a href="sintaxe.html">Sintaxe e Blocos</a> explica essa regra.</li>
+  <li><strong>Palavras em inglês simples.</strong> <code>if</code> ("se"), <code>while</code> ("enquanto"), <code>and</code> ("e"), <code>not</code> ("não"), <code>true</code> ("verdadeiro"), <code>nil</code> ("nada"). Muito programa Lua se lê como uma frase.</li>
+  <li><strong>Poucas regras.</strong> Uma estrutura de dados só (a tabela), poucos tipos de valor, poucas palavras reservadas. O manual oficial inteiro da linguagem cabe numa página da web.</li>
+  <li><strong>Sem tipos para declarar.</strong> Você não precisa avisar antes que uma variável vai guardar um número ou um texto: o Lua descobre sozinho (aula <a href="tipos-de-dados.html">Os Tipos de Dados</a>).</li>
+</ul>
+
+<hr>
+
+<h2>Um pouco de história: uma linguagem brasileira</h2>
+<p>O Lua nasceu em <strong>1993</strong>, no <strong>Tecgraf</strong>, o grupo de computação gráfica da <strong>PUC-Rio</strong> (a Pontifícia Universidade Católica do Rio de Janeiro). Os criadores são três professores e pesquisadores brasileiros: <strong>Roberto Ierusalimschy</strong>, <strong>Luiz Henrique de Figueiredo</strong> e <strong>Waldemar Celes</strong>. Os três cuidam da linguagem até hoje.</p>
+
+<p>A história começa na <strong>Petrobras</strong>. Os engenheiros de lá precisavam preparar, várias vezes por dia, arquivos de dados para os programas de simulação, e o Tecgraf criou para eles uma pequena linguagem de entrada de dados, a <strong>DEL</strong>. Depois veio uma segunda linguagem, mais completa, chamada <strong>Sol</strong> (sigla em inglês para "linguagem simples de objetos", que também quer dizer <strong>sol</strong> em português). Quando chegou a hora de criar uma linguagem nova, que juntasse as ideias das duas e fosse uma linguagem de programação de verdade, um colega do Tecgraf sugeriu o nome: se a anterior era o Sol, a nova seria a <strong>Lua</strong>.</p>
+
+<p>Algumas ideias vieram de outras linguagens: os construtores de tabela (<code>{ ... }</code>) vieram do Sol, os vários valores de retorno de uma função vieram da linguagem CLU, e o jeito de escrever <code>if ... then ... end</code> e <code>while ... do ... end</code> veio da linguagem Modula.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Ano</th><th>O que aconteceu</th></tr>
+<tr><td>1993</td><td>O Lua 1.0 fica pronto no Tecgraf (28 de julho), para uso interno.</td></tr>
+<tr><td>1994</td><td>Lua 1.1, a primeira versão distribuída para fora da PUC-Rio.</td></tr>
+<tr><td>2003</td><td>Lua 5.0.</td></tr>
+<tr><td>2006</td><td><strong>Lua 5.1</strong>: o sistema de módulos (<code>require</code>). É a versão "congelada" no LuaJIT, no Roblox e em muitos programas até hoje.</td></tr>
+<tr><td>2011</td><td>Lua 5.2 (o <code>goto</code> e o <code>_ENV</code>).</td></tr>
+<tr><td>2015</td><td>Lua 5.3: os números passam a ter dois tipos, inteiro e decimal (aula <a href="numeros.html">Números</a>), e a divisão inteira <code>//</code>.</td></tr>
+<tr><td>2020</td><td>Lua 5.4: as variáveis constantes (<code>&lt;const&gt;</code>) e de fechamento automático (<code>&lt;close&gt;</code>).</td></tr>
+<tr><td>2025</td><td><strong>Lua 5.5</strong> (22 de dezembro): a declaração <code>global</code>, entre outras novidades. É a versão que este guia ensina <span class="versao">5.5</span></td></tr>
+</table>
+</div>
+
+<p>Essas datas são as do site oficial (lua.org/versions.html). Repare que o Lua muda devagar: uma versão nova a cada quatro ou cinco anos, mais ou menos. Isso é de propósito: a equipe prefere uma linguagem pequena e estável a uma cheia de novidades.</p>
+
+<hr>
+
+<h2>Onde o Lua está hoje</h2>
+<p>O site oficial estima que <strong>metade</strong> dos usuários de Lua trabalha de algum jeito com jogos. Mas ele aparece em muito mais lugares. Alguns exemplos conhecidos:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Onde</th><th>Exemplos</th></tr>
+<tr><td><strong>Jogos</strong></td><td>Os <em>addons</em> (extensões) do <em>World of Warcraft</em>, o <em>Angry Birds</em>, os jogos feitos com o motor <strong>LÖVE</strong> e com o <strong>Defold</strong>.</td></tr>
+<tr><td><strong>Roblox</strong></td><td>Os jogos do Roblox são programados em <strong>Luau</strong>, uma linguagem derivada do Lua 5.1, com algumas mudanças próprias.</td></tr>
+<tr><td><strong>Editores de texto</strong></td><td>O <strong>Neovim</strong> é configurado e estendido em Lua (o arquivo <code>init.lua</code>).</td></tr>
+<tr><td><strong>Programas de fotografia e imagem</strong></td><td>O <strong>Adobe Photoshop Lightroom</strong> usa Lua por dentro e nos seus plugins.</td></tr>
+<tr><td><strong>Redes e servidores</strong></td><td>Os scripts do <strong>Nmap</strong> e os plugins do <strong>Wireshark</strong> (ferramentas de rede), os scripts do banco de dados <strong>Redis</strong> e o servidor web <strong>OpenResty</strong> (Nginx com Lua).</td></tr>
+<tr><td><strong>TV digital brasileira</strong></td><td>O Ginga, a plataforma de aplicativos interativos da TV digital do Brasil, usa Lua.</td></tr>
+</table>
+</div>
+
+<p>A aula <a href="lua-no-mundo.html">Onde o Lua É Usado</a> conta mais sobre cada um.</p>
+
+<div class="warning">
+<strong>Nem todo Lua é o 5.5</strong>
+<p>Muito programa que embute o Lua parou numa versão antiga. O Neovim, o LÖVE e o OpenResty usam o <strong>LuaJIT</strong>, um interpretador muito rápido que segue o <strong>Lua 5.1</strong>; o Roblox usa o Luau (também derivado do 5.1); o Debian 13 e muitos jogos usam o 5.4. Quase tudo o que você vai aprender aqui funciona igual em todos eles, mas alguns detalhes mudam (as contas com números inteiros, o <code>//</code>, o <code>goto</code>, o <code>&lt;const&gt;</code>). Quando isso acontecer, o guia avisa numa caixa como esta. A aula <a href="versoes.html">Lua 5.1, LuaJIT, 5.4 e 5.5</a> reúne as diferenças.</p>
+</div>
+
+<div class="trylua">
+<p class="try-task"><strong>Experimente:</strong> clique em Rodar. O <code>_VERSION</code> é um valor que todo Lua tem, com o nome da versão. Este é o Lua que roda no seu navegador.</p>
+<pre class="script" data-file="main.lua">print(_VERSION)
+</pre>
+</div>
+
+<hr>
+
+<h2>Lua e outras linguagens</h2>
+<p>Quem começa a estudar programação ouve falar de muitas linguagens. Cada uma brilha num lugar diferente:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th></th><th>Lua</th><th>Python</th><th>C</th></tr>
+<tr><td><strong>Nasceu</strong></td><td>1993, PUC-Rio (Brasil)</td><td>1991, Guido van Rossum (Holanda)</td><td>1972, Dennis Ritchie (EUA)</td></tr>
+<tr><td><strong>Como roda</strong></td><td>Interpretado (pelo <code>lua</code>), quase sempre embutido em outro programa</td><td>Interpretado (pelo <code>python3</code>)</td><td>Compilado para código de máquina</td></tr>
+<tr><td><strong>Agrupa instruções com</strong></td><td>Palavras: <code>do</code>/<code>then</code> … <code>end</code></td><td>Indentação (o recuo)</td><td>Chaves <code>{ }</code></td></tr>
+<tr><td><strong>Olá, mundo</strong></td><td><code>print("Olá")</code></td><td><code>print("Olá")</code></td><td><code>printf("Olá\n");</code> (dentro de <code>main</code>)</td></tr>
+<tr><td><strong>Tamanho</strong></td><td>Minúsculo (uns 300 KB)</td><td>Grande (biblioteca padrão enorme)</td><td>Depende do programa</td></tr>
+<tr><td><strong>Famoso por</strong></td><td>Jogos, Roblox, extensões de programas, aparelhos pequenos</td><td>Automação, dados, inteligência artificial</td><td>Sistemas operacionais, aparelhos eletrônicos</td></tr>
+</table>
+</div>
+
+<p>Nenhuma é "a melhor": cada uma resolve um tipo de problema. E a boa notícia é que as ideias de programação (variáveis, decisões, repetições, funções) são as mesmas em todas. Quem aprende a programar em Lua aprende qualquer outra linguagem muito mais rápido. Se quiser comparar, o <a href="https://wallysondevs.github.io/guia-python/">Guia Python</a> ensina as mesmas ideias em Python.</p>
+
+<hr>
+
+<h2>Quando dá errado</h2>
+<p>Você ainda não escreveu programas, mas já dá para conhecer a sua primeira mensagem de erro de verdade, e duas confusões muito comuns de quem está começando.</p>
+
+<div class="cenario">
+<strong>Uma letra trocada: <code>pirnt</code></strong>
+<p>A Ana escreveu o "Olá, mundo" com pressa e trocou duas letras:</p>
+<pre class="file" data-file="erro.lua">pirnt("Olá, mundo!")
+</pre>
+<pre class="term">$ lua erro.lua
+lua: erro.lua:1: attempt to call a nil value (global 'pirnt')
+stack traceback:
+	erro.lua:1: in main chunk
+	[C]: in ?
+</pre>
+<p>As mensagens do Lua saem <strong>em inglês</strong>, mesmo num computador em português. O guia traduz e explica cada uma. Esta, pedaço por pedaço:</p>
+<dl class="anatomy">
+  <dt>lua:</dt><dd>Quem está reclamando: o interpretador <code>lua</code>.</dd>
+  <dt>erro.lua:1:</dt><dd><strong>Onde</strong> está o problema: no arquivo <code>erro.lua</code>, linha <strong>1</strong>. É a parte mais útil: vá direto a essa linha.</dd>
+  <dt>attempt to call a nil value</dt><dd>"Tentativa de chamar um valor <code>nil</code>." <strong>Chamar</strong> é usar uma função (o que os parênteses fazem). <code>nil</code> é o "nada" do Lua: o valor de um nome que não existe. O Lua tentou usar como função uma coisa que não existe.</dd>
+  <dt>(global 'pirnt')</dt><dd>A coisa que não existe: um nome chamado <code>pirnt</code>. ("Global" é um tipo de variável, assunto da aula <a href="local.html">local × Global</a>.)</dd>
+  <dt>stack traceback:</dt><dd>"Rastro da pilha": o caminho que o programa fez até o erro, do ponto do erro para trás. Aqui é curto.</dd>
+  <dt>erro.lua:1: in main chunk</dt><dd>"Na linha 1, no pedaço principal": o erro aconteceu no corpo do programa (fora de qualquer função sua). <em>Chunk</em> ("pedaço") é o nome que o Lua dá a um arquivo de programa.</dd>
+  <dt>[C]: in ?</dt><dd>O começo de tudo: o próprio interpretador (escrito em C) que rodou o seu arquivo. Aparece no fim de todo traceback; pode ignorar.</dd>
+</dl>
+<p><strong>O que aconteceu:</strong> o Lua não conhece nenhuma função chamada <code>pirnt</code>, então o nome vale <code>nil</code>, e não dá para chamar <code>nil</code>. O computador não adivinha que você quis dizer <code>print</code>. <strong>Como resolver:</strong> corrija o nome para <code>print</code>. A aula <a href="erros.html">Lendo uma Mensagem de Erro</a> aprofunda o assunto.</p>
+</div>
+
+<div class="cenario">
+<strong>"Dei dois cliques no arquivo <code>.lua</code> e só abriu um texto"</strong>
+<p><strong>O que aconteceu:</strong> nada de errado. Um arquivo <code>.lua</code> é só <strong>texto</strong>, o "código-fonte" do programa. No Linux, dois cliques nele abrem um editor de texto, como abririam uma receita salva no computador. A receita não faz o bolo sozinha: alguém precisa ler e executar.</p>
+<p><strong>Como resolver:</strong> quem executa é o interpretador. Abra o terminal e rode <code>lua arquivo.lua</code> (aula <a href="executar.html">Rodando um Programa (.lua)</a>), ou use as caixas Experimente do guia, que rodam o programa com um clique.</p>
+</div>
+
+<div class="cenario">
+<strong>Código de Lua no terminal, sem o <code>lua</code></strong>
+<p>A Ana digitou a linha do programa direto no terminal, como se o terminal fosse o Lua:</p>
+<pre class="term">$ print "Olá"
+Comando 'print' não encontrado, mas poder ser instalado com:
+sudo apt install mailcap
+</pre>
+<p><strong>O que aconteceu:</strong> o terminal (o programa <code>bash</code>, que mostra o <code>$</code>) <strong>não é</strong> o Lua. Ele procurou um programa chamado <code>print</code> no computador, não achou e sugeriu instalar um pacote que tem um comando com esse nome, que não tem nada a ver com o Lua. (O "mas poder ser" com erro de português é do próprio Ubuntu.) <strong>Como resolver:</strong> não instale nada. Ponha o código num arquivo <code>.lua</code> e rode com <code>lua arquivo.lua</code>, ou entre primeiro no modo interativo do Lua, digitando <code>lua</code> (aula <a href="repl.html">O Modo Interativo</a>).</p>
+</div>
+
+<div class="trylua" data-goal="erro:attempt to call a nil value">
+<p class="try-task"><strong>Missão:</strong> veja com os próprios olhos a mensagem de erro. Troque <code>print</code> por <code>pirnt</code> e clique em Rodar: a caixa deve mostrar <code>attempt to call a nil value (global 'pirnt')</code>. Depois, conserte e rode de novo.</p>
+<pre class="script" data-file="main.lua">print("Olá, mundo!")
+</pre>
+<pre class="solucao" data-file="main.lua">pirnt("Olá, mundo!")
+</pre>
+</div>
+
+<p>Repare que no editor o arquivo se chama <code>main.lua</code>, então a mensagem começa com <code>lua: main.lua:1:</code>. Errar de propósito é um ótimo jeito de aprender: você fica conhecendo a mensagem antes de precisar dela de verdade.</p>
+
+<hr>
+
+<h2>O que você vai conseguir fazer</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Ao terminar</th><th>Você consegue</th></tr>
+<tr><td><strong>Nível 1 · Iniciante</strong></td><td>Escrever e rodar programas que mostram coisas na tela, leem o que a pessoa digita, guardam valores em variáveis, fazem contas, trabalham com textos, tomam decisões (<code>if</code>) e repetem tarefas (<code>while</code>, <code>repeat</code> e <code>for</code>). Ler as mensagens de erro do Lua.</td></tr>
+<tr><td><strong>Nível 2 · Intermediário</strong></td><td>Organizar dados em tabelas (listas e dicionários), criar as suas próprias funções, tratar erros com <code>pcall</code>, ler e gravar arquivos, criar módulos e instalar bibliotecas com o LuaRocks.</td></tr>
+<tr><td><strong>Nível 3 · Avançado</strong></td><td>Usar metatabelas para criar "classes" e objetos, corrotinas, iteradores próprios e as ferramentas do dia a dia de quem programa em Lua.</td></tr>
+<tr><td><strong>Projetos</strong></td><td>Juntar tudo em programas completos, como os da vida da Ana: a calculadora, o jogo da forca, a lista de tarefas, as notas da turma.</td></tr>
+</table>
+</div>
+
+<p>Para fechar, rode o seu primeiro programa da aula:</p>
+
+<div class="trylua" data-goal="out:e eu vou aprender Lua!;;src:Meu nome é (?!\?\?\?)">
+<p class="try-task"><strong>Missão:</strong> o programa já escreve a primeira linha. Complete a segunda: troque <code>???</code> pelo seu nome e coloque um <code>!</code> depois de <code>Lua</code>, para a saída ficar <code>Meu nome é Ana e eu vou aprender Lua!</code> (com o seu nome no lugar de Ana).</p>
+<pre class="script" data-file="main.lua">print("Olá! Este é o meu primeiro programa em Lua.")
+print("Meu nome é ??? e eu vou aprender Lua")
+</pre>
+<pre class="solucao" data-file="main.lua">print("Olá! Este é o meu primeiro programa em Lua.")
+print("Meu nome é Ana e eu vou aprender Lua!")
+</pre>
+</div>
+
+<p>Repare que cada <code>print</code> escreveu numa linha nova, sozinho. A aula <a href="primeiro-programa.html">Seu Primeiro Programa</a> conta isso e muito mais.</p>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">1. O que quer dizer que o Lua é uma linguagem <strong>interpretada</strong>?</p>
+<label><input type="radio" name="q1"> Que o programa só funciona dentro do navegador.</label>
+<label><input type="radio" name="q1"> Que um programa, o interpretador (<code>lua</code>), lê o seu arquivo e executa as instruções toda vez que o programa roda.</label>
+<label><input type="radio" name="q1"> Que o programa é traduzido uma vez só e vira um executável que roda sem o Lua.</label>
+<label><input type="radio" name="q1"> Que o Lua entende português.</label>
+</div>
+
+<div class="mc" data-answer="3">
+<p class="mc-q">2. De onde vem o nome "Lua"?</p>
+<label><input type="radio" name="q2"> É uma sigla em inglês para "linguagem universal avançada".</label>
+<label><input type="radio" name="q2"> É o sobrenome de um dos criadores.</label>
+<label><input type="radio" name="q2"> A linguagem anterior do mesmo grupo da PUC-Rio se chamava Sol; a nova virou Lua.</label>
+<label><input type="radio" name="q2"> Foi escolhido porque o Lua só roda à noite.</label>
+</div>
+
+<div class="mc" data-answer="1">
+<p class="mc-q">3. A Ana rodou um programa e recebeu <code>lua: contas.lua:4: attempt to call a nil value (global 'prnt')</code>. Onde ela deve procurar o erro?</p>
+<label><input type="radio" name="q3"> Na linha 4 do arquivo <code>contas.lua</code>, onde está escrito <code>prnt</code> em vez de <code>print</code>.</label>
+<label><input type="radio" name="q3"> Na instalação do Lua, que está com defeito.</label>
+<label><input type="radio" name="q3"> Na primeira linha do arquivo, porque o erro sempre está lá.</label>
+<label><input type="radio" name="q3"> No nome do arquivo, que não pode ter a palavra "contas".</label>
+</div>
+
+<div class="mc" data-answer="4">
+<p class="mc-q">4. Qual destas frases é verdadeira?</p>
+<label><input type="radio" name="q4"> O Lua foi criado nos Estados Unidos, no mesmo lugar que a linguagem C.</label>
+<label><input type="radio" name="q4"> No Lua, os blocos de instruções são agrupados com chaves <code>{ }</code>.</label>
+<label><input type="radio" name="q4"> O certo é escrever "LUA", em maiúsculas, porque é uma sigla.</label>
+<label><input type="radio" name="q4"> O Lua é muito usado embutido dentro de outros programas, como jogos e editores.</label>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">5. Um jogo usa "Lua", mas o seu programa de Lua 5.5 dá erro lá. Qual é a explicação mais provável?</p>
+<label><input type="radio" name="q5"> O jogo não usa Lua de verdade.</label>
+<label><input type="radio" name="q5"> O jogo embute uma versão mais antiga (como o LuaJIT, que segue o 5.1), e alguns detalhes mudam entre as versões.</label>
+<label><input type="radio" name="q5"> Programas de Lua só funcionam no computador onde foram escritos.</label>
+<label><input type="radio" name="q5"> O Lua 5.5 ainda não foi lançado.</label>
+</div>
+
+<div class="exercise">
+<h3>6. O comando do interpretador</h3>
+<p>Qual é o comando que roda um programa Lua no terminal? Complete:</p>
+<div class="ex-code">$ <input data-answer="lua" aria-label="comando"> lista.lua</div>
+</div>
+
+<div class="exercise">
+<h3>7. A extensão</h3>
+<p>Os arquivos de programa Lua terminam com qual extensão? Complete:</p>
+<div class="ex-code">lista<input data-answer=".lua" aria-label="extensão"></div>
+</div>
+
+<div class="exercise">
+<h3>8. A palavra que fecha</h3>
+<p>No Lua, qual palavra termina um bloco, como o do <code>for</code> da lista de compras?</p>
+<div class="ex-code"><input data-answer="end" aria-label="palavra"></div>
+</div>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li>Programar é escrever instruções, como uma receita que o computador segue ao pé da letra; quando algo não faz sentido, ele mostra uma mensagem de erro.</li>
+  <li>O Lua é <strong>interpretado</strong>: o programa é um arquivo de texto <code>.lua</code>, e quem o executa é o interpretador <code>lua</code>. Por baixo, ele traduz o programa para <em>bytecode</em> antes de rodar (o <code>luac</code> mostra essa tradução).</li>
+  <li>Ele é <strong>pequeno</strong> (uns 300 KB), <strong>rápido</strong> e feito para ir <strong>dentro de outros programas</strong> (linguagem de extensão).</li>
+  <li>Foi criado em <strong>1993</strong>, na <strong>PUC-Rio</strong>, por Roberto Ierusalimschy, Luiz Henrique de Figueiredo e Waldemar Celes. O nome veio da linguagem anterior, a Sol. Escreve-se <strong>Lua</strong>, não "LUA".</li>
+  <li>Ele está nos jogos, no Roblox (Luau), no Neovim, no Lightroom, em ferramentas de rede e na TV digital brasileira. Muitos desses lugares usam versões antigas (5.1, LuaJIT); este guia ensina o <strong>5.5</strong> e avisa quando algo muda.</li>
+  <li>As mensagens de erro saem em inglês e começam por <code>lua: arquivo.lua:LINHA:</code>, que diz <strong>onde</strong> está o problema, seguido da explicação e do <code>stack traceback</code>.</li>
+  <li>Próximo passo: ter o Lua no seu computador, em <a href="instalar.html">Instalar o Lua</a>.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
