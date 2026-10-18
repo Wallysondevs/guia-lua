@@ -1,0 +1,517 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua pcall — capturando erros sem parar o programa | Guia Lua</title>
+<meta name="description" content="A função pcall do Lua 5.5 para quem nunca programou: rodar uma função em modo protegido, o true/false e a mensagem que ela devolve, pcall com argumentos e com função anônima, erros em tabela, pedir de novo até a entrada ser válida, o engano pcall(f(x)) e as saídas reais do lab, inclusive o <no error object> do 5.5.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">pcall</span>: Capturando Erros</h1>
+
+<p class="intro">Até aqui, todo erro parava o programa inteiro. Às vezes é isso mesmo que você quer; mas imagine o caixa da padaria fechando sozinho porque um cliente digitou o preço errado. O <code>pcall</code> (de <em>protected call</em>, "chamada protegida") roda uma função e, se ela der erro, <strong>em vez de parar o programa</strong>, devolve <code>false</code> e a mensagem. Você decide o que fazer: avisar, tentar de novo, pular aquele item. Em outras linguagens, isso se chama <code>try</code>/<code>catch</code>; no Lua, é uma função comum.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>Como chamar uma função com <code>pcall(funcao, arg1, arg2…)</code> e ler o que ela devolve: <code>true</code> e os resultados, ou <code>false</code> e a mensagem.</li>
+  <li>O jeito de sempre: <code>local ok, resultado = pcall(…)</code> e um <code>if</code>.</li>
+  <li>Como proteger um trecho de código com uma função anônima.</li>
+  <li>Como capturar um erro lançado como <strong>tabela</strong> e ler os campos.</li>
+  <li>Um programa que pede a idade de novo até a resposta ser válida.</li>
+  <li>O engano clássico <code>pcall(f(x))</code>, e o que o <code>pcall</code> não mostra (o rastro).</li>
+</ul>
+</div>
+
+<p>Todos os programas desta aula rodaram no <strong>Lua 5.5</strong> da máquina da Ana (usuária <code>ana</code>, computador <code>notebook</code>) com <code>lua arquivo.lua</code>. Antes, convém conhecer <a href="error.html">error</a>.</p>
+
+<hr>
+
+<h2>A ideia: a rede do trapezista</h2>
+<p>No circo, o trapezista faz o número lá em cima, e embaixo há uma <strong>rede de proteção</strong>. Se ele cair, a rede segura, o público respira aliviado, e o espetáculo continua com o próximo número. Sem a rede, uma queda encerraria a noite.</p>
+<p>O <code>pcall</code> é a rede. Você entrega a ele a função "arriscada"; ele a executa. Se tudo der certo, ele devolve <code>true</code> e o que a função devolveu. Se ela "cair" (der erro), a rede segura: o programa não para, e o <code>pcall</code> devolve <code>false</code> e a mensagem do erro, para você saber o que aconteceu.</p>
+
+<hr>
+
+<h2>1. O primeiro <code>pcall</code></h2>
+
+<pre class="file" data-file="p1.lua">local function dividir(a, b)
+  if b == 0 then
+    error("divisão por zero")
+  end
+  return a / b
+end
+
+print(pcall(dividir, 10, 2))
+print(pcall(dividir, 7, 0))
+print("O programa continua!")
+</pre>
+
+<pre class="term">$ lua p1.lua
+true	5.0
+false	p1.lua:3: divisão por zero
+O programa continua!
+$ echo $?
+0</pre>
+
+<dl class="anatomy">
+  <dt>pcall(dividir, 10, 2)</dt><dd>O primeiro argumento é a <strong>função</strong>, sem parênteses: <code>dividir</code>, e não <code>dividir(…)</code>. Os outros (<code>10, 2</code>) são os argumentos que o <code>pcall</code> vai passar para ela. É como dizer: "pcall, chame o <code>dividir</code> com 10 e 2, e me segure se cair".</dd>
+  <dt>true	5.0</dt><dd>Deu certo: o primeiro valor é <code>true</code>, e depois vem o que a função devolveu.</dd>
+  <dt>false	p1.lua:3: divisão por zero</dt><dd>Deu erro: o primeiro valor é <code>false</code>, e o segundo é a <strong>mensagem</strong>, exatamente como apareceria no terminal, com <code>arquivo:linha:</code> e sem o <code>lua:</code> na frente.</dd>
+  <dt>O programa continua!</dt><dd>O erro foi capturado; o programa seguiu até o fim e terminou com código de saída 0, como se nada tivesse acontecido.</dd>
+</dl>
+
+<p>Repare que não há <code>stack traceback</code>: quem mostra o rastro é o programa <code>lua</code>, quando um erro chega até ele sem ser capturado. Aqui o erro foi segurado antes. (Para ter o rastro mesmo capturando o erro, existe o <a href="xpcall.html">xpcall</a>.)</p>
+
+<hr>
+
+<h2>2. O jeito de sempre: <code>ok, resultado</code> e um <code>if</code></h2>
+<p>Na prática, ninguém imprime o <code>pcall</code> direto. Guarde os dois valores em locais e teste o primeiro:</p>
+
+<pre class="file" data-file="p2.lua">local saldo = 100
+
+local function sacar(valor)
+  if valor &gt; saldo then
+    error("saldo insuficiente: tem " .. saldo .. ", pediu " .. valor, 0)
+  end
+  saldo = saldo - valor
+  return saldo
+end
+
+for _, valor in ipairs({30, 50, 40, 10}) do
+  local ok, resultado = pcall(sacar, valor)
+  if ok then
+    print("Saque de " .. valor .. " ok. Saldo: " .. resultado)
+  else
+    print("Saque de " .. valor .. " recusado: " .. resultado)
+  end
+end
+</pre>
+
+<pre class="term">$ lua p2.lua
+Saque de 30 ok. Saldo: 70
+Saque de 50 ok. Saldo: 20
+Saque de 40 recusado: saldo insuficiente: tem 20, pediu 40
+Saque de 10 ok. Saldo: 10</pre>
+
+<dl class="anatomy">
+  <dt>error(…, 0)</dt><dd>O nível 0 tira o <code>arquivo:linha:</code> da mensagem (veja <a href="error.html">error</a>). Como ela vai ser mostrada para a cliente, fica mais limpa assim.</dd>
+  <dt>local ok, resultado = pcall(sacar, valor)</dt><dd>Dois valores, duas variáveis (veja <a href="retornos-multiplos.html">Vários Retornos</a>). O nome <code>ok</code> é o costume da comunidade.</dd>
+  <dt>if ok then</dt><dd>Deu certo: o <code>resultado</code> é o que a função devolveu (o saldo novo).</dd>
+  <dt>else</dt><dd>Deu erro: o <code>resultado</code> é a mensagem. O mesmo nome guarda coisas diferentes conforme o caso; por isso o <code>if</code> vem sempre antes de usar.</dd>
+</dl>
+
+<p>O saque de 40 foi recusado, e o de 10, depois dele, funcionou: um erro no meio da lista não estragou os outros. Sem o <code>pcall</code>, o programa teria parado no terceiro saque.</p>
+
+<div class="trylua" data-goal="out:Saque de 10 ok. Saldo: 10;;semerro;;src:pcall\(">
+<p class="try-task"><strong>Missão:</strong> este caixa chama o <code>sacar</code> direto e fecha no terceiro saque. Use o <code>pcall</code> no laço para os quatro saques serem processados: os que der, com o saldo; os que não der, com a mensagem de recusa.</p>
+<pre class="script" data-file="main.lua">local saldo = 100
+
+local function sacar(valor)
+  if valor &gt; saldo then
+    error("saldo insuficiente: tem " .. saldo .. ", pediu " .. valor, 0)
+  end
+  saldo = saldo - valor
+  return saldo
+end
+
+for _, valor in ipairs({30, 50, 40, 10}) do
+  local resultado = sacar(valor)
+  print("Saque de " .. valor .. " ok. Saldo: " .. resultado)
+end
+</pre>
+<pre class="solucao" data-file="main.lua">local saldo = 100
+
+local function sacar(valor)
+  if valor &gt; saldo then
+    error("saldo insuficiente: tem " .. saldo .. ", pediu " .. valor, 0)
+  end
+  saldo = saldo - valor
+  return saldo
+end
+
+for _, valor in ipairs({30, 50, 40, 10}) do
+  local ok, resultado = pcall(sacar, valor)
+  if ok then
+    print("Saque de " .. valor .. " ok. Saldo: " .. resultado)
+  else
+    print("Saque de " .. valor .. " recusado: " .. resultado)
+  end
+end
+</pre>
+</div>
+
+<hr>
+
+<h2>3. Protegendo um trecho: a função anônima</h2>
+<p>E se o código arriscado não for uma função pronta, mas algumas linhas soltas? Embrulhe-as numa <strong>função anônima</strong> (sem nome), escrita ali mesmo, dentro do <code>pcall</code>:</p>
+
+<pre class="file" data-file="p11.lua">local ok, msg = pcall(function ()
+  print("antes do erro")
+  error("parou aqui")
+  print("depois do erro")
+end)
+print(ok, msg)
+</pre>
+
+<pre class="term">$ lua p11.lua
+antes do erro
+false	p11.lua:3: parou aqui</pre>
+
+<p>O <code>function () … end</code> cria a função na hora, e o <code>pcall</code> a executa. O que estava antes do erro rodou (<code>antes do erro</code>); o que estava depois, dentro da função, não (<code>depois do erro</code> nunca apareceu). O erro "pula" direto para fora da função, até o <code>pcall</code> que o segura.</p>
+
+<p>O <code>pcall</code> segura <strong>qualquer</strong> erro, não só os lançados com <code>error</code>. Os erros do próprio Lua chegam com a mesma mensagem que você veria no terminal:</p>
+
+<pre class="file" data-file="p3.lua">local ok, msg = pcall(function ()
+  local t = nil
+  return t.nome
+end)
+print(ok)
+print(msg)
+print(pcall(function () return 1 + {} end))
+print(pcall(string.rep, "ab", 3))
+print(pcall(string.rep))
+print(pcall(nil))
+print(pcall(math.max, 3, 9, 4))
+</pre>
+
+<pre class="term">$ lua p3.lua
+false
+p3.lua:3: attempt to index a nil value (local 't')
+false	p3.lua:7: attempt to perform arithmetic on a table value
+true	ababab
+false	bad argument #1 to 'string.rep' (string expected, got no value)
+false	attempt to call a nil value
+true	9</pre>
+
+<p>Algumas coisas para notar:</p>
+<ul>
+  <li><code>pcall(string.rep, "ab", 3)</code>: o <code>pcall</code> funciona com as funções prontas do Lua também. Deu certo, devolveu <code>true</code> e <code>ababab</code>.</li>
+  <li><code>pcall(string.rep)</code>, sem argumentos: a mensagem não tem <code>arquivo:linha:</code>, porque quem chamou o <code>string.rep</code> foi o próprio <code>pcall</code>, e não uma linha sua. (E o nome aparece como <code>'string.rep'</code>; numa chamada normal sairia só <code>'rep'</code>.)</li>
+  <li><code>pcall(nil)</code>: se o que você passa não é uma função, o <code>pcall</code> também não quebra: devolve <code>false</code> e <code>attempt to call a nil value</code>.</li>
+</ul>
+
+<div class="trylua">
+<p class="try-task"><strong>Experimente:</strong> rode e compare cada linha com o código. Depois acrescente as suas: <code>print(pcall(tonumber, "12"))</code>, <code>print(pcall(function () return #nil end))</code>, <code>print(pcall(error, "socorro"))</code>. Qual delas dá <code>true</code>?</p>
+<pre class="script" data-file="main.lua">local ok, msg = pcall(function ()
+  local t = nil
+  return t.nome
+end)
+print(ok)
+print(msg)
+print(pcall(function () return 1 + {} end))
+print(pcall(string.rep, "ab", 3))
+print(pcall(string.rep))
+print(pcall(nil))
+print(pcall(math.max, 3, 9, 4))
+</pre>
+</div>
+
+<hr>
+
+<h2>4. Erros em forma de tabela</h2>
+<p>Na aula <a href="error.html">error</a>, você viu que dá para lançar uma tabela, e que o <code>lua</code> só sabia dizer <code>(error object is a table value)</code>. Com o <code>pcall</code>, a tabela chega <strong>inteira</strong> nas suas mãos, e você lê os campos:</p>
+
+<pre class="file" data-file="p4.lua">local function buscar(codigo)
+  if codigo ~= 1 then
+    error({ codigo = 404, mensagem = "produto não encontrado" })
+  end
+  return "pão francês"
+end
+
+for _, c in ipairs({1, 7}) do
+  local ok, r = pcall(buscar, c)
+  if ok then
+    print("Achei: " .. r)
+  else
+    print("Erro " .. r.codigo .. ": " .. r.mensagem)
+  end
+end
+</pre>
+
+<pre class="term">$ lua p4.lua
+Achei: pão francês
+Erro 404: produto não encontrado</pre>
+
+<p>Com uma tabela, o programa pode decidir pelo <strong>código</strong> (um número, fácil de comparar com <code>==</code>) em vez de procurar palavras dentro de uma mensagem. Num programa maior, cada tipo de problema ganha o seu código: 404 para "não encontrado", 403 para "proibido"… (os mesmos números que os sites usam).</p>
+
+<p>Outros valores lançados com <code>error</code> também chegam como são, conferidos no lab:</p>
+
+<pre class="file" data-file="p6.lua">local ok, msg = pcall(error, "falhou")
+print(ok, msg)
+print(pcall(error, "falhou", 0))
+print(pcall(error))
+print(pcall(error, 42))
+local ok2, msg2 = pcall(error, 42)
+print(type(msg2), msg2 + 1)
+</pre>
+
+<pre class="term">$ lua p6.lua
+false	falhou
+false	falhou
+false	&lt;no error object&gt;
+false	42
+number	43</pre>
+
+<ul>
+  <li><code>pcall(error, "falhou")</code>: sem <code>arquivo:linha:</code>, pelo mesmo motivo do <code>string.rep</code>: quem chamou o <code>error</code> foi o <code>pcall</code>, não uma linha sua.</li>
+  <li><code>pcall(error, 42)</code>: o erro é o <strong>número</strong> 42 (o <code>type</code> diz <code>number</code>, e dá para somar).</li>
+  <li><code>pcall(error)</code>, sem mensagem: <span class="versao">5.5</span> o Lua 5.5 entrega o <strong>texto</strong> <code>&lt;no error object&gt;</code> ("sem objeto de erro"). No Lua 5.4 do lab, o mesmo programa devolveu <code>nil</code>. Nunca lance um erro sem mensagem; mas, se receber um <code>&lt;no error object&gt;</code>, já sabe de onde veio.</li>
+</ul>
+
+<hr>
+
+<h2>5. Pedir de novo até a resposta ser válida</h2>
+<p>Um uso muito comum: ler algo do teclado, validar com uma função que lança erro, e, se der erro, avisar e perguntar de novo. O <code>pcall</code> fica dentro de um <a href="while.html">while</a>:</p>
+
+<pre class="file" data-file="p7.lua">local function ler_idade(texto)
+  local n = tonumber(texto)
+  if not n then
+    error("isso não é um número: " .. texto, 0)
+  end
+  if n &lt; 0 or n &gt; 130 then
+    error("idade fora da faixa: " .. n, 0)
+  end
+  return n
+end
+
+while true do
+  io.write("Sua idade: ")
+  local linha = io.read()
+  if not linha then break end
+  local ok, resultado = pcall(ler_idade, linha)
+  if ok then
+    print("Idade registrada: " .. resultado)
+    break
+  end
+  print("Ops: " .. resultado .. ". Tente de novo.")
+end
+</pre>
+
+<p>No terminal, a Ana digitou <code>Ana</code>, depois <code>200</code>, depois <code>32</code>:</p>
+
+<pre class="term">$ lua p7.lua
+Sua idade: Ana
+Ops: isso não é um número: Ana. Tente de novo.
+Sua idade: 200
+Ops: idade fora da faixa: 200. Tente de novo.
+Sua idade: 32
+Idade registrada: 32</pre>
+
+<dl class="anatomy">
+  <dt>ler_idade</dt><dd>Só valida: ou devolve o número, ou lança um erro com nível 0 (mensagem limpa, para o usuário).</dd>
+  <dt>if not linha then break end</dt><dd>Se a entrada acabar (<kbd>Ctrl</kbd>+<kbd>D</kbd> no terminal), o <code>io.read()</code> devolve <code>nil</code>, e o laço termina em vez de perguntar para sempre.</dd>
+  <dt>pcall(ler_idade, linha)</dt><dd>A rede: um erro na validação vira um <code>false</code> e uma mensagem, não o fim do programa.</dd>
+  <dt>break</dt><dd>Deu certo: sai do laço (veja <a href="break.html">break</a>).</dd>
+</dl>
+
+<hr>
+
+<h2>6. O <code>pcall</code> também segura o <code>stack overflow</code></h2>
+<p>Até o estouro da pilha (veja <a href="recursao.html">Recursão</a>) é um erro como outro qualquer:</p>
+
+<pre class="file" data-file="p8.lua">local function f(n) return f(n + 1) + 1 end
+print(pcall(f, 1))
+print("sobrevivi")
+</pre>
+
+<pre class="term">$ lua p8.lua
+false	p8.lua:1: stack overflow
+sobrevivi</pre>
+
+<p>Não faça disso um hábito (o certo é consertar a recursão), mas é bom saber: um <code>pcall</code> em volta da parte principal do programa garante que <strong>nenhum</strong> erro o derrube sem uma mensagem sua.</p>
+
+<hr>
+
+<h2 id="formas">Formas diferentes de fazer a mesma coisa</h2>
+<p>O mesmo saque protegido, de três jeitos:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Forma</th><th>Código</th><th>Quando usar</th></tr>
+<tr><td>Passando a função e os argumentos</td><td><code>pcall(sacar, valor)</code></td><td>O mais comum: uma chamada só, de uma função que já existe</td></tr>
+<tr><td>Função anônima</td><td><code>pcall(function () return sacar(valor) end)</code></td><td>Para proteger várias linhas, ou uma chamada de método (<code>pcall(function () return conta:sacar(10) end)</code>)</td></tr>
+<tr><td>Sem erro nenhum: <code>nil, "mensagem"</code></td><td><code>local novo, msg = sacar_seguro(valor)</code></td><td>Quando a função é sua e o problema é esperado: ela devolve <code>nil</code> e a mensagem em vez de lançar erro (veja <a href="error.html">error</a>)</td></tr>
+<tr><td>Com o rastro</td><td><code>xpcall(sacar, debug.traceback, valor)</code></td><td>Quando você precisa saber <strong>por onde</strong> o erro passou (<a href="xpcall.html">xpcall</a>)</td></tr>
+</table>
+</div>
+
+<p>Para um método, também funciona <code>pcall(conta.sacar, conta, 10)</code>: lembre que <code>conta:sacar(10)</code> é só um atalho para <code>conta.sacar(conta, 10)</code> (veja <a href="metodos.html">Métodos</a>).</p>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+
+<div class="cenario">
+<strong>Escreveu <code>pcall(f(x))</code>: a rede ficou embaixo do trapezista errado</strong>
+<pre class="file" data-file="p5.lua">local function dividir(a, b)
+  if b == 0 then
+    error("divisão por zero")
+  end
+  return a / b
+end
+
+local ok, msg = pcall(dividir(7, 0))
+print("nunca chega aqui", ok, msg)
+</pre>
+<pre class="term">$ lua p5.lua
+lua: p5.lua:3: divisão por zero
+stack traceback:
+	[C]: in global 'error'
+	p5.lua:3: in local 'dividir'
+	p5.lua:8: in main chunk
+	[C]: in ?
+$ echo $?
+1</pre>
+<p>O erro <strong>não foi capturado</strong>, e repare: no rastro nem aparece o <code>pcall</code>. Com os parênteses, <code>dividir(7, 0)</code> roda <strong>primeiro</strong>, fora de qualquer proteção, para que o resultado dele seja entregue ao <code>pcall</code>. O erro acontece antes de o <code>pcall</code> começar. <strong>Como consertar:</strong> passe a função e os argumentos separados, <code>pcall(dividir, 7, 0)</code>, ou embrulhe numa anônima, <code>pcall(function () return dividir(7, 0) end)</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Usou o resultado sem testar o <code>ok</code></strong>
+<p>Se você escreve <code>local ok, total = pcall(somar, lista)</code> e depois <code>print("Total: " .. total * 2)</code> sem testar, quando der erro o <code>total</code> é a <strong>mensagem</strong> (um texto), e a conta quebra com outro erro, bem mais confuso, longe do problema original. No lab, com <code>pcall(somar, {1, "x"})</code> seguido de <code>print("Total: " .. total * 2)</code>, saiu <code>attempt to mul a 'string' with a 'number'</code> ("tentativa de multiplicar um texto por um número"): o texto era a mensagem do primeiro erro. Teste <strong>sempre</strong> o <code>ok</code> antes.</p>
+</div>
+
+<div class="cenario">
+<strong>A mensagem capturada não diz por onde o erro passou</strong>
+<p>O <code>pcall</code> devolve só a mensagem: a linha onde o erro aconteceu, sem o <code>stack traceback</code>. Quando a função protegida chama outras, e o erro estoura lá no fundo, você sabe a linha, mas não o caminho. Para isso existe o <a href="xpcall.html">xpcall</a> com o <code>debug.traceback</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>O <code>pcall</code> escondeu um erro de digitação</strong>
+<p>O <code>pcall</code> captura <strong>todos</strong> os erros, inclusive os seus enganos de programação (um <code>pirnt</code>, um <code>totl</code>). Se você captura e não mostra a mensagem (<code>if not ok then return end</code>), o defeito some em silêncio, e o programa simplesmente "não faz nada". Ao capturar, mostre (ou guarde) a mensagem, pelo menos enquanto estiver testando.</p>
+</div>
+
+<hr>
+
+<h2>Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>Devolve</th></tr>
+<tr><td><code>pcall(f, a, b)</code></td><td><code>true, &lt;resultados de f(a, b)&gt;</code> ou <code>false, &lt;mensagem&gt;</code></td></tr>
+<tr><td><code>local ok, r = pcall(f, x)</code></td><td>O jeito de sempre; teste o <code>ok</code> antes de usar o <code>r</code></td></tr>
+<tr><td><code>pcall(function () … end)</code></td><td>Protege um trecho de várias linhas</td></tr>
+<tr><td><code>pcall(f, x)</code> com <code>error({…})</code></td><td><code>false</code> e a própria tabela</td></tr>
+<tr><td><code>pcall(nil)</code></td><td><code>false, "attempt to call a nil value"</code></td></tr>
+<tr><td><code>pcall(error)</code></td><td><code>false, "&lt;no error object&gt;"</code> no 5.5 (<code>false, nil</code> no 5.4)</td></tr>
+<tr><td><code>pcall(f(x))</code></td><td><strong>Errado</strong>: <code>f(x)</code> roda antes, sem proteção</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. Complete</h3>
+<p>Complete para chamar <code>converter("abc")</code> de forma protegida:</p>
+<div class="ex-code">local ok, r = <input data-answer="pcall" aria-label="função">(converter<input data-answer="," aria-label="separador"> "abc")</div>
+</div>
+
+<div class="exercise">
+<h3>2. O que aparece?</h3>
+<p>Qual é o <strong>primeiro</strong> valor que <code>print(pcall(math.max, 4, 8))</code> mostra?</p>
+<div class="ex-code"><input data-answer="true" aria-label="primeiro valor"></div>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">3. A função <code>f</code> deu erro dentro do <code>pcall(f)</code>. O que o <code>pcall</code> devolve?</p>
+<label><input type="radio" name="q3"> Nada: o programa para</label>
+<label><input type="radio" name="q3"> <code>false</code> e a mensagem do erro</label>
+<label><input type="radio" name="q3"> <code>true</code> e <code>nil</code></label>
+<label><input type="radio" name="q3"> A mensagem e o <code>stack traceback</code></label>
+</div>
+
+<div class="mc" data-answer="4">
+<p class="mc-q">4. Por que <code>pcall(dividir(7, 0))</code> não segura o erro?</p>
+<label><input type="radio" name="q4"> Porque o <code>pcall</code> não aceita números</label>
+<label><input type="radio" name="q4"> Porque falta o <code>ok</code></label>
+<label><input type="radio" name="q4"> Porque <code>dividir</code> é local</label>
+<label><input type="radio" name="q4"> Porque <code>dividir(7, 0)</code> roda antes do <code>pcall</code>, fora da proteção</label>
+</div>
+
+<div class="mc" data-answer="1">
+<p class="mc-q">5. A função lançou <code>error({ codigo = 404 })</code> e foi chamada com <code>local ok, e = pcall(f)</code>. Como ler o código?</p>
+<label><input type="radio" name="q5"> <code>e.codigo</code></label>
+<label><input type="radio" name="q5"> <code>ok.codigo</code></label>
+<label><input type="radio" name="q5"> <code>tostring(e)</code></label>
+<label><input type="radio" name="q5"> Não dá: a tabela se perde</label>
+</div>
+
+<h3>Missão final: a idade que não derruba o programa</h3>
+
+<div class="trylua" data-stdin="Ana\n200\n32" data-goal="out:Idade registrada: 32;;semerro">
+<p class="try-task"><strong>Missão:</strong> a caixa vai "digitar" <code>Ana</code>, <code>200</code> e <code>32</code>. Hoje o programa fecha na primeira resposta, com o erro da <code>ler_idade</code>. Proteja a chamada com <code>pcall</code>: quando der erro, mostre <code>Ops:</code> e a mensagem e pergunte de novo; quando der certo, mostre <code>Idade registrada:</code> e saia do laço.</p>
+<pre class="script" data-file="main.lua">local function ler_idade(texto)
+  local n = tonumber(texto)
+  if not n then
+    error("isso não é um número: " .. texto, 0)
+  end
+  if n &lt; 0 or n &gt; 130 then
+    error("idade fora da faixa: " .. n, 0)
+  end
+  return n
+end
+
+while true do
+  io.write("Sua idade: ")
+  local linha = io.read()
+  if not linha then break end
+  local idade = ler_idade(linha)
+  print("Idade registrada: " .. idade)
+  break
+end
+</pre>
+<pre class="solucao" data-file="main.lua">local function ler_idade(texto)
+  local n = tonumber(texto)
+  if not n then
+    error("isso não é um número: " .. texto, 0)
+  end
+  if n &lt; 0 or n &gt; 130 then
+    error("idade fora da faixa: " .. n, 0)
+  end
+  return n
+end
+
+while true do
+  io.write("Sua idade: ")
+  local linha = io.read()
+  if not linha then break end
+  local ok, resultado = pcall(ler_idade, linha)
+  if ok then
+    print("Idade registrada: " .. resultado)
+    break
+  end
+  print("Ops: " .. resultado .. ". Tente de novo.")
+end
+</pre>
+</div>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li><code>pcall(f, args…)</code> roda <code>f</code> em modo protegido: devolve <code>true</code> e os resultados, ou <code>false</code> e a mensagem do erro. O programa continua.</li>
+  <li>Passe a função <strong>sem parênteses</strong>; <code>pcall(f(x))</code> roda <code>f(x)</code> antes, sem proteção.</li>
+  <li>Use <code>local ok, r = pcall(…)</code> e teste o <code>ok</code> antes de usar o <code>r</code>.</li>
+  <li>Para proteger várias linhas, use uma função anônima: <code>pcall(function () … end)</code>.</li>
+  <li>O <code>pcall</code> segura qualquer erro: os seus (<code>error</code>), os do Lua, até <code>stack overflow</code>. Um erro em tabela chega inteiro.</li>
+  <li>A mensagem capturada não traz o rastro; para isso, <a href="xpcall.html">xpcall e debug.traceback</a>.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
