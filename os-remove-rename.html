@@ -254,7 +254,7 @@ compras-outubro.txt</pre>
 <pre class="term">$ printf "oi\n" &gt; x.txt
 $ lua -e 'print(os.rename("x.txt", "/tmp/x.txt"))'
 nil	Invalid cross-device link	18</pre>
-<p>"Ligação inválida entre dispositivos", código 18. O mesmo acontece ao mover para um pen drive. Nesse caso, o jeito é copiar (ler o arquivo de um lado e escrever do outro, com <code>io.open</code>) e depois apagar o original com <code>os.remove</code>.</p>
+<p>"Ligação inválida entre dispositivos", código 18. O mesmo acontece ao mover para um pen drive. Nesse caso, o jeito é copiar (ler o arquivo de um lado e escrever do outro, com <code>io.open</code>) e depois apagar o original com <code>os.remove</code>. (No editor do guia, a <code>/tmp</code> fica no mesmo disco da <code>/home/ana</code>, e esse <code>os.rename</code> dá <code>true</code>.)</p>
 </div>
 
 <hr>
@@ -403,7 +403,7 @@ print(os.rename("trancada/contrato.txt", "contrato.txt"))
 <pre class="term">$ lua sem_permissao.lua
 nil	trancada/contrato.txt: Permission denied	13
 nil	Permission denied	13</pre>
-<p>"Permissão negada", código 13, nos dois. (De novo, o <code>rename</code> sem o nome do arquivo.) É o que acontece também ao tentar apagar arquivos do sistema, como os de <code>/etc</code>. <strong>Como consertar:</strong> não é coisa do programa; ou o arquivo não é seu para apagar, ou a permissão da pasta precisa mudar.</p>
+<p>"Permissão negada", código 13, nos dois. (De novo, o <code>rename</code> sem o nome do arquivo.) É o que acontece também ao tentar apagar arquivos do sistema, como os de <code>/etc</code> (no editor do guia não dá para ver isso: lá não existem os arquivos do sistema). <strong>Como consertar:</strong> não é coisa do programa; ou o arquivo não é seu para apagar, ou a permissão da pasta precisa mudar.</p>
 </div>
 
 <div class="cenario">
