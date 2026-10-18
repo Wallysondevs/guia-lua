@@ -1,0 +1,584 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua Funções Variádicas (...) — quantos argumentos vierem | Guia Lua</title>
+<meta name="description" content="Funções variádicas em Lua para quem está começando: os três pontos (...) que recebem quantos argumentos vierem, {...} com ipairs, parâmetros fixos antes do ..., repassar ... para print e string.format, o problema do nil no meio, select('#', ...) e table.pack, a tabela nomeada ...nome do Lua 5.5 e os erros reais: cannot use '...' outside a vararg function.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">Funções Variádicas (...)</span></h1>
+
+<p class="intro">Repare no <code>print</code>: ele aceita um valor, <code>print("oi")</code>, ou cinco, <code>print(1, 2, 3, 4, 5)</code>, ou nenhum, <code>print()</code>. O <code>math.max</code> também: <code>math.max(3, 9, 4)</code> acha o maior de quantos números você mandar. Funções assim, que aceitam <strong>quantos argumentos vierem</strong>, se chamam <strong>variádicas</strong> (de "variável": a quantidade varia). Nesta aula você vai escrever as suas, com os três pontinhos <code>...</code>.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>A criar uma função com <code>...</code> e a passar os argumentos adiante.</li>
+  <li>A guardar os argumentos numa tabela com <code>{...}</code> e percorrê-los com <code>ipairs</code>.</li>
+  <li>A misturar parâmetros fixos com <code>...</code> (e por que o <code>...</code> vem por último).</li>
+  <li>A repassar <code>...</code> para outras funções, como <code>print</code> e <code>string.format</code>.</li>
+  <li>O problema do <code>nil</code> no meio dos argumentos, e as soluções: <code>select("#", ...)</code> e <code>table.pack(...)</code>.</li>
+  <li>A tabela com nome <code>...nome</code>, novidade do Lua 5.5.</li>
+  <li>Os erros reais: <code>cannot use '...' outside a vararg function</code> e outros.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>A ideia: a sacola de compras</h2>
+<p>A ficha de pedido da aula <a href="parametros.html">Parâmetros e Argumentos</a> tinha um número fixo de espaços: um para o produto, um para a quantidade. Mas a sacola de compras da Ana é diferente: num dia cabem dois itens, no outro, dez. Ninguém sabe antes quantos vão entrar.</p>
+
+<p>O <code>...</code> é essa sacola. Na definição da função, ele diz: "pode mandar quantos argumentos quiser, eu levo todos". Dentro da função, <code>...</code> é o conteúdo da sacola, tudo junto.</p>
+
+<hr>
+
+<h2>1. A primeira função com <code>...</code></h2>
+
+<pre class="file" data-file="ver.lua">local function ver(...)
+  print("recebi:", ...)
+end
+
+ver("Ana")
+ver("Ana", "Bia", 3)
+ver()
+</pre>
+
+<pre class="term">$ lua ver.lua
+recebi:	Ana
+recebi:	Ana	Bia	3
+recebi:
+</pre>
+
+<dl class="anatomy">
+  <dt>function ver(...)</dt><dd>Os três pontos no lugar dos parâmetros: a função aceita qualquer quantidade de argumentos, até zero. Os três pontos são escritos juntos, sem espaço.</dd>
+  <dt>print("recebi:", ...)</dt><dd>Dentro da função, <code>...</code> vale <strong>todos os argumentos recebidos</strong>, na ordem, como uma lista de valores separados por vírgula. Aqui eles vão direto para o <code>print</code>: <code>ver("Ana", "Bia", 3)</code> vira <code>print("recebi:", "Ana", "Bia", 3)</code>.</dd>
+  <dt>ver()</dt><dd>Sem argumentos, <code>...</code> não vale nada (zero valores), e o <code>print</code> só mostra <code>recebi:</code>.</dd>
+</dl>
+
+<p>O <code>...</code> se comporta como uma chamada que devolve vários valores (aula <a href="retornos-multiplos.html">Vários Retornos</a>): no fim de uma lista, entram todos.</p>
+
+<hr>
+
+<h2>2. Guardando os argumentos numa tabela: <code>{...}</code></h2>
+<p>Para <strong>fazer alguma coisa</strong> com cada argumento (somar, contar, mostrar um por um), o jeito mais comum é colocar o <code>...</code> dentro de uma tabela e percorrê-la:</p>
+
+<pre class="file" data-file="somar.lua">local function somar(...)
+  local total = 0
+  for _, valor in ipairs({...}) do
+    total = total + valor
+  end
+  return total
+end
+
+print(somar(1, 2))
+print(somar(10, 20, 30, 40))
+print(somar(5))
+print(somar())
+</pre>
+
+<pre class="term">$ lua somar.lua
+3
+100
+5
+0
+</pre>
+
+<dl class="anatomy">
+  <dt>{...}</dt><dd>Uma tabela nova com todos os argumentos: <code>somar(10, 20, 30, 40)</code> faz <code>{10, 20, 30, 40}</code>. É uma lista comum (aula <a href="listas.html">Tabelas como Listas</a>).</dd>
+  <dt>for _, valor in ipairs({...}) do</dt><dd>Percorre a lista item por item (aula <a href="ipairs.html">ipairs</a>); o <code>_</code> ignora a posição.</dd>
+  <dt>somar()</dt><dd>Sem argumentos, a tabela fica vazia, o laço não roda nenhuma vez e o total continua <code>0</code>.</dd>
+</dl>
+
+<div class="trylua" data-goal="src:\.\.\.;;out:Maior: 42;;semerro">
+<p class="try-task"><strong>Missão:</strong> a função <code>maior</code> só olha os dois primeiros números, e por isso diz que o maior é 15. Troque os parâmetros por <code>...</code> e percorra <strong>todos</strong> os números com <code>ipairs({...})</code>, para ela achar o 42.</p>
+<pre class="script" data-file="main.lua">local function maior(a, b)
+  if a &gt; b then
+    return a
+  end
+  return b
+end
+
+print("Maior: " .. maior(7, 15, 42, 3))
+</pre>
+<pre class="solucao" data-file="main.lua">local function maior(...)
+  local lista = {...}
+  local resposta = lista[1]
+  for _, n in ipairs(lista) do
+    if n &gt; resposta then
+      resposta = n
+    end
+  end
+  return resposta
+end
+
+print("Maior: " .. maior(7, 15, 42, 3))
+</pre>
+</div>
+
+<hr>
+
+<h2>3. Parâmetros fixos antes do <code>...</code></h2>
+<p>Uma função pode ter alguns parâmetros com nome e, <strong>depois deles</strong>, o <code>...</code> para o resto. Os primeiros argumentos preenchem os parâmetros fixos; o que sobrar vai para o <code>...</code>:</p>
+
+<pre class="file" data-file="fixo_e_resto.lua">local function anunciar(loja, ...)
+  print("== " .. loja .. " ==")
+  for i, produto in ipairs({...}) do
+    print(i .. ". " .. produto)
+  end
+end
+
+anunciar("Padaria Pão Quente", "pão francês", "sonho", "bolo de milho")
+anunciar("Mercadinho da Esquina", "arroz")
+</pre>
+
+<pre class="term">$ lua fixo_e_resto.lua
+== Padaria Pão Quente ==
+1. pão francês
+2. sonho
+3. bolo de milho
+== Mercadinho da Esquina ==
+1. arroz
+</pre>
+
+<p>Na primeira chamada, <code>loja</code> recebeu <code>"Padaria Pão Quente"</code> e o <code>...</code> ficou com os três produtos. O <code>...</code> tem de ser o <strong>último</strong> da lista de parâmetros: <code>function f(..., ultimo)</code> é erro de sintaxe (veja em <a href="#errado">Quando dá errado</a>). Faz sentido: se a sacola leva tudo o que sobra, não sobra nada para um parâmetro depois dela.</p>
+
+<h3>Pegando os primeiros: <code>local a, b = ...</code></h3>
+<p>O <code>...</code> também pode ir para uma atribuição. As regras de sempre valem: o que sobra é descartado, o que falta vira <code>nil</code>.</p>
+
+<pre class="file" data-file="atribuir.lua">local function primeiros(...)
+  local a, b = ...
+  print("a =", a, "b =", b)
+end
+
+primeiros(10, 20, 30)
+primeiros(10)
+</pre>
+
+<pre class="term">$ lua atribuir.lua
+a =	10	b =	20
+a =	10	b =	nil
+</pre>
+
+<hr>
+
+<h2>4. Repassando o <code>...</code> para outra função</h2>
+<p>Um uso muito comum: uma função que acrescenta alguma coisa e passa todo o resto, intacto, para outra. Por exemplo, um <code>print</code> com um prefixo:</p>
+
+<pre class="file" data-file="repassar.lua">local function log(...)
+  print("[padaria]", ...)
+end
+
+log("abriu às", 6, "horas")
+log("vendidos:", 120, "pães", "e", 8, "bolos")
+</pre>
+
+<pre class="term">$ lua repassar.lua
+[padaria]	abriu às	6	horas
+[padaria]	vendidos:	120	pães	e	8	bolos
+</pre>
+
+<p>Ou um aviso que usa o <code>string.format</code> (aula <a href="string-format.html">string.format</a>), ele mesmo uma função variádica:</p>
+
+<pre class="file" data-file="formatar.lua">local function avisar(formato, ...)
+  print("AVISO: " .. string.format(formato, ...))
+end
+
+avisar("faltam %d pães", 12)
+avisar("%s pediu %d %s", "Bia", 3, "sonhos")
+</pre>
+
+<pre class="term">$ lua formatar.lua
+AVISO: faltam 12 pães
+AVISO: Bia pediu 3 sonhos
+</pre>
+
+<p>A função <code>avisar</code> não precisa saber quantos valores o formato pede: ela só repassa o que recebeu.</p>
+
+<hr>
+
+<h2>5. O problema do <code>nil</code> no meio</h2>
+<p>O <code>{...}</code> com <code>ipairs</code> funciona muito bem, <strong>menos</strong> quando um dos argumentos é <code>nil</code>. O <code>ipairs</code> para no primeiro <code>nil</code>:</p>
+
+<pre class="file" data-file="ipairs_para.lua">local function mostrar(...)
+  for i, v in ipairs({...}) do
+    print(i, v)
+  end
+end
+
+mostrar("Ana", nil, 42)
+</pre>
+
+<pre class="term">$ lua ipairs_para.lua
+1	Ana
+</pre>
+
+<p>O <code>42</code> sumiu. E o <code>#</code> (o tamanho da lista) também não é confiável com buracos (aula <a href="sequencias.html">Sequências e Buracos</a>). Para saber <strong>quantos argumentos chegaram de verdade</strong>, contando os <code>nil</code>, existe o <code>select("#", ...)</code>:</p>
+
+<pre class="file" data-file="contar.lua">local function contar(...)
+  local lista = {...}
+  print("com #:", #lista, "com select:", select("#", ...))
+end
+
+contar(1, 2, 3)
+contar()
+contar(nil, nil)
+contar(1, nil, 3)
+</pre>
+
+<pre class="term">$ lua contar.lua
+com #:	3	com select:	3
+com #:	0	com select:	0
+com #:	0	com select:	2
+com #:	1	com select:	3
+</pre>
+
+<dl class="anatomy">
+  <dt>select("#", ...)</dt><dd>A função <code>select</code> com o primeiro argumento <code>"#"</code> (o texto com o jogo da velha) devolve <strong>quantos</strong> valores vieram depois dele. Conta os <code>nil</code> também.</dd>
+  <dt>contar(nil, nil)</dt><dd>Dois argumentos, os dois <code>nil</code>: o <code>#</code> diz 0, o <code>select</code> diz 2.</dd>
+  <dt>contar(1, nil, 3)</dt><dd>Aqui o <code>#</code> deu 1 no Lua 5.5; no <code>lua5.1</code>, o mesmo programa deu 3. Com um buraco no meio, as duas respostas são "permitidas", e por isso não dá para confiar no <code>#</code>. O <code>select</code> deu 3, o certo.</dd>
+</dl>
+
+<p>O <code>select</code> tem outros usos (pegar os argumentos a partir de uma posição): eles estão na aula <a href="select.html">select e o Número de Argumentos</a>.</p>
+
+<h3><code>table.pack</code>: a tabela que guarda a contagem</h3>
+<p>O <code>table.pack(...)</code> faz uma tabela com os argumentos, como o <code>{...}</code>, e ainda guarda a quantidade num campo <code>n</code>:</p>
+
+<pre class="file" data-file="pack.lua">local function mostrar(...)
+  local args = table.pack(...)
+  print("chegaram " .. args.n .. " argumentos")
+  for i = 1, args.n do
+    print(i, args[i])
+  end
+end
+
+mostrar("Ana", nil, 42)
+</pre>
+
+<pre class="term">$ lua pack.lua
+chegaram 3 argumentos
+1	Ana
+2	nil
+3	42
+</pre>
+
+<p>Com <code>for i = 1, args.n</code> (um <a href="for-numerico.html">for numérico</a> até a contagem certa), nenhum argumento se perde, nem o <code>nil</code>. Mais sobre ele em <a href="table-unpack.html">table.unpack e table.pack</a>.</p>
+
+<div class="trylua">
+<p class="try-task"><strong>Experimente:</strong> rode e compare as duas contagens. Depois troque a chamada por <code>contar("pão", false, "leite")</code>: o <code>false</code> é um valor normal, não um buraco, e as duas contagens concordam.</p>
+<pre class="script" data-file="main.lua">local function contar(...)
+  local lista = {...}
+  print("com #:", #lista, "com select:", select("#", ...))
+  local args = table.pack(...)
+  for i = 1, args.n do
+    print(i, args[i])
+  end
+end
+
+contar("pão", nil, "leite")
+</pre>
+</div>
+
+<hr>
+
+<h2>6. Lua 5.5: a sacola com nome, <code>...nome</code> <span class="versao">5.5</span></h2>
+<p>O Lua 5.5 trouxe um atalho: escrever um nome logo depois dos três pontos. Esse nome passa a ser uma tabela com os argumentos e o campo <code>n</code>, como a do <code>table.pack</code>, sem precisar criá-la à mão:</p>
+
+<pre class="file" data-file="nomeado.lua">local function somar(...numeros)
+  local total = 0
+  for i = 1, numeros.n do
+    total = total + numeros[i]
+  end
+  return total
+end
+
+print(somar(1, 2, 3))
+print(somar())
+</pre>
+
+<pre class="term">$ lua nomeado.lua
+6
+0
+</pre>
+
+<dl class="anatomy">
+  <dt>...numeros</dt><dd>Os três pontos e, colado neles, um nome. Dentro da função, <code>numeros</code> é a tabela dos argumentos extras, e <code>numeros.n</code> diz quantos são (contando os <code>nil</code>). O <code>...</code> continua funcionando junto.</dd>
+  <dt>somente leitura</dt><dd>O manual do Lua 5.5 diz que esse nome é uma variável local <strong>somente de leitura</strong>: <code>numeros = {}</code> dá erro (veja em <a href="#errado">Quando dá errado</a>).</dd>
+</dl>
+
+<div class="note">
+<strong>E nas outras versões?</strong>
+<p>O <code>...nome</code> só existe no Lua 5.5. No <code>lua5.4</code>, o mesmo arquivo dá <code>lua5.4: nomeado.lua:1: ')' expected near 'numeros'</code>. Se o seu código precisa rodar em versões antigas, use <code>table.pack(...)</code>, que existe desde o 5.2 e no LuaJIT. No <strong>Lua 5.1</strong> puro não há <code>table.pack</code> (<code>attempt to call field 'pack' (a nil value)</code>); lá, use <code>select("#", ...)</code>, que existe em todas. Mais em <a href="versoes.html">As Diferenças entre Versões</a>.</p>
+</div>
+
+<hr>
+
+<h2>7. O <code>...</code> do programa principal</h2>
+<p>O arquivo inteiro também é tratado pelo Lua como uma função variádica. No programa principal (fora de qualquer função), <code>...</code> são os argumentos da linha de comando:</p>
+
+<pre class="file" data-file="principal.lua">print("argumentos do programa:", ...)
+print("quantos:", select("#", ...))
+</pre>
+
+<pre class="term">$ lua principal.lua Ana 42 "Bia Lima"
+argumentos do programa:	Ana	42	Bia Lima
+quantos:	3
+$ lua principal.lua
+argumentos do programa:
+quantos:	0
+</pre>
+
+<p>(As aspas fizeram <code>"Bia Lima"</code> chegar como um argumento só. A tabela <code>arg</code> guarda os mesmos valores: aula <a href="arg.html">Argumentos da Linha de Comando</a>.)</p>
+
+<hr>
+
+<h2>Formas diferentes de percorrer os argumentos</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Forma</th><th>Exemplo</th><th>Quando usar</th></tr>
+<tr><td><code>{...}</code> + <code>ipairs</code></td><td><code>for _, v in ipairs({...}) do</code></td><td>O caso comum, quando os argumentos nunca são <code>nil</code> (números, nomes)</td></tr>
+<tr><td><code>table.pack(...)</code> + <code>.n</code></td><td><code>local t = table.pack(...)</code><br><code>for i = 1, t.n do</code></td><td>Quando algum argumento pode ser <code>nil</code>, e o código precisa rodar no 5.2, 5.3, 5.4 e LuaJIT</td></tr>
+<tr><td><code>...nome</code> <span class="versao">5.5</span></td><td><code>function f(...args)</code><br><code>for i = 1, args.n do</code></td><td>O mesmo, mais curto, só no Lua 5.5</td></tr>
+<tr><td><code>select("#", ...)</code></td><td><code>local n = select("#", ...)</code></td><td>Só para contar; e em qualquer versão, até o 5.1</td></tr>
+<tr><td>Repassar direto</td><td><code>print("[log]", ...)</code></td><td>Quando a função não mexe nos argumentos, só os entrega a outra</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+
+<div class="cenario">
+<strong>Usar <code>...</code> numa função que não tem <code>...</code></strong>
+<pre class="file" data-file="fora2.lua">local function somar()
+  local total = 0
+  for _, v in ipairs({...}) do total = total + v end
+  return total
+end
+print(somar(1, 2, 3))
+</pre>
+<pre class="term">$ lua fora2.lua
+lua: fora2.lua:3: cannot use '...' outside a vararg function near '...'
+</pre>
+<p><code>cannot use '...' outside a vararg function near '...'</code>: "não dá para usar <code>...</code> fora de uma função variádica (<em>vararg</em>)". A função foi definida com <code>()</code> vazio, então ela não tem sacola nenhuma. É erro de sintaxe: o Lua recusa o arquivo antes de rodar, por isso não há <code>stack traceback</code>. <strong>Como consertar:</strong> <code>local function somar(...)</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Um parâmetro depois do <code>...</code></strong>
+<pre class="file" data-file="meio.lua">local function f(..., ultimo)
+end
+</pre>
+<pre class="term">$ lua meio.lua
+lua: meio.lua:1: ')' expected near ','
+</pre>
+<p><code>')' expected near ','</code>: depois do <code>...</code>, o Lua só aceita o <code>)</code>. <strong>Como consertar:</strong> os parâmetros fixos vêm antes: <code>local function f(primeiro, ...)</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>O <code>...</code> no meio de uma lista: só o primeiro passa</strong>
+<pre class="file" data-file="corte.lua">local function ver(...)
+  print(..., "fim")
+  print((...))
+end
+ver("a", "b", "c")
+</pre>
+<pre class="term">$ lua corte.lua
+a	fim
+a
+</pre>
+<p>Sem erro, mas o <code>"b"</code> e o <code>"c"</code> sumiram. É a regra de ajuste da aula <a href="retornos-multiplos.html">Vários Retornos</a>: fora do fim da lista, ou entre parênteses, o <code>...</code> entrega só o primeiro valor. <strong>Como consertar:</strong> deixe o <code>...</code> por último (<code>print("início", ...)</code>) ou guarde numa tabela antes.</p>
+</div>
+
+<div class="cenario">
+<strong>O argumento depois do <code>nil</code> sumiu</strong>
+<p>Sem erro: <code>ipairs({...})</code> parou no primeiro <code>nil</code> (seção 5). <strong>Como consertar:</strong> use <code>table.pack(...)</code> e <code>for i = 1, t.n do</code>, ou o <code>...nome</code> do 5.5.</p>
+</div>
+
+<div class="cenario">
+<strong>Trocar a tabela com nome <span class="versao">5.5</span></strong>
+<pre class="file" data-file="nomeado_ro.lua">local function f(...args)
+  args = {}
+end
+</pre>
+<pre class="term">$ lua nomeado_ro.lua
+lua: nomeado_ro.lua:2: attempt to assign to const variable 'args'
+</pre>
+<p><code>attempt to assign to const variable 'args'</code>: "tentativa de atribuir a uma variável constante". O nome do <code>...args</code> é só de leitura. <strong>Como consertar:</strong> crie outra variável: <code>local copia = {}</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Zero argumentos numa função que precisa de pelo menos um</strong>
+<pre class="file" data-file="maior.lua">print(math.max(3, 9, 4), math.min(3, 9, 4))
+print(string.format("%s tem %d anos", "Ana", 30))
+print(math.max())
+</pre>
+<pre class="term">$ lua maior.lua
+9	3
+Ana tem 30 anos
+lua: maior.lua:3: bad argument #1 to 'max' (value expected)
+stack traceback:
+	[C]: in field 'max'
+	maior.lua:3: in main chunk
+	[C]: in ?
+</pre>
+<p>O <code>math.max</code> é variádico, mas exige ao menos um número: <code>bad argument #1 to 'max' (value expected)</code>, "faltou o argumento nº 1 (esperava um valor)". Nas suas funções, faça o mesmo cuidado: confira <code>select("#", ...) == 0</code> e devolva <code>nil, "mensagem"</code>, como em:</p>
+<pre class="file" data-file="media.lua">local function media(...)
+  local n = select("#", ...)
+  if n == 0 then
+    return nil, "nenhuma nota"
+  end
+  local soma = 0
+  for _, nota in ipairs({...}) do
+    soma = soma + nota
+  end
+  return soma / n
+end
+
+print(media(7, 8, 9))
+print(media())
+</pre>
+<pre class="term">$ lua media.lua
+8.0
+nil	nenhuma nota
+</pre>
+</div>
+
+<hr>
+
+<h2>Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>O que faz</th></tr>
+<tr><td><code>function f(...)</code></td><td>Aceita qualquer quantidade de argumentos</td></tr>
+<tr><td><code>function f(a, b, ...)</code></td><td>Os dois primeiros vão para <code>a</code> e <code>b</code>; o resto, para <code>...</code></td></tr>
+<tr><td><code>print(...)</code>, <code>g(x, ...)</code></td><td>Repassa todos os argumentos (no fim da lista)</td></tr>
+<tr><td><code>{...}</code></td><td>Uma lista com os argumentos (perde a conta se houver <code>nil</code>)</td></tr>
+<tr><td><code>local a, b = ...</code></td><td>Os dois primeiros argumentos</td></tr>
+<tr><td><code>select("#", ...)</code></td><td>Quantos argumentos vieram, contando os <code>nil</code></td></tr>
+<tr><td><code>table.pack(...)</code></td><td>Tabela com os argumentos e o campo <code>n</code></td></tr>
+<tr><td><code>function f(...args)</code> <span class="versao">5.5</span></td><td><code>args</code> é a tabela dos argumentos, com <code>args.n</code>; somente leitura</td></tr>
+<tr><td><code>...</code> no programa principal</td><td>Os argumentos da linha de comando</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Sintoma</th><th>Causa provável</th></tr>
+<tr><td><code>cannot use '...' outside a vararg function near '...'</code></td><td>A função usa <code>...</code> mas não tem <code>...</code> nos parâmetros</td></tr>
+<tr><td><code>')' expected near ','</code> na definição</td><td>Um parâmetro depois do <code>...</code></td></tr>
+<tr><td>Argumentos sumindo depois de um <code>nil</code></td><td><code>ipairs({...})</code>; use <code>table.pack</code></td></tr>
+<tr><td>Só o primeiro argumento passou</td><td><code>...</code> no meio da lista ou entre parênteses</td></tr>
+<tr><td><code>attempt to assign to const variable '…'</code></td><td>Atribuição ao nome de <code>...nome</code> (5.5)</td></tr>
+<tr><td><code>')' expected near 'nome'</code> no 5.4 ou no LuaJIT</td><td><code>...nome</code> é só do Lua 5.5</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. A sacola</h3>
+<p>Complete a definição para a função aceitar quantos argumentos vierem:</p>
+<div class="ex-code">local function listar(<input data-answer="..." aria-label="o que vai nos parênteses">)</div>
+</div>
+
+<div class="exercise">
+<h3>2. Contando com os <code>nil</code></h3>
+<p>Complete para contar quantos argumentos chegaram, inclusive os <code>nil</code>:</p>
+<div class="ex-code">local n = select(<input data-answer="&quot;#&quot;|'#'" aria-label="primeiro argumento">, ...)</div>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">3. A função é <code>local function f(a, ...)</code> e a chamada é <code>f(1, 2, 3)</code>. O que vale <code>...</code> dentro dela?</p>
+<label><input type="radio" name="q3"> <code>1, 2, 3</code></label>
+<label><input type="radio" name="q3"> <code>2, 3</code></label>
+<label><input type="radio" name="q3"> <code>3</code></label>
+<label><input type="radio" name="q3"> Nada: <code>a</code> ficou com tudo</label>
+</div>
+
+<div class="mc" data-answer="3">
+<p class="mc-q">4. <code>f(10, nil, 30)</code> chama uma função que faz <code>for i, v in ipairs({...}) do print(i, v) end</code>. O que aparece?</p>
+<label><input type="radio" name="q4"> <code>1 10</code>, <code>2 nil</code>, <code>3 30</code></label>
+<label><input type="radio" name="q4"> <code>1 10</code> e <code>2 30</code></label>
+<label><input type="radio" name="q4"> Só <code>1 10</code>: o <code>ipairs</code> para no <code>nil</code></label>
+<label><input type="radio" name="q4"> Um erro</label>
+</div>
+
+<div class="mc" data-answer="1">
+<p class="mc-q">5. O que significa <code>cannot use '...' outside a vararg function</code>?</p>
+<label><input type="radio" name="q5"> A função usa <code>...</code> no corpo, mas não tem <code>...</code> nos parâmetros</label>
+<label><input type="radio" name="q5"> Faltou um argumento na chamada</label>
+<label><input type="radio" name="q5"> O <code>...</code> foi escrito com espaços</label>
+<label><input type="radio" name="q5"> A função recebeu argumentos demais</label>
+</div>
+
+<div class="mc" data-answer="4">
+<p class="mc-q">6. Qual destas definições é um erro de sintaxe?</p>
+<label><input type="radio" name="q6"> <code>function f(...)</code></label>
+<label><input type="radio" name="q6"> <code>function f(a, b, ...)</code></label>
+<label><input type="radio" name="q6"> <code>function f(...args)</code> no Lua 5.5</label>
+<label><input type="radio" name="q6"> <code>function f(..., a)</code></label>
+</div>
+
+<h3>Missão final: as vendas do dia</h3>
+
+<div class="trylua" data-goal="out:segunda: 3 vendas, total 45;;out:terça: 0 vendas, total 0;;out:quarta: 1 vendas, total 18;;semerro">
+<p class="try-task"><strong>Missão:</strong> a função <code>vendas</code> recebe o nome do dia e, depois, o valor de cada venda (quantas forem). Ela deve mostrar quantas vendas houve e o total. Acrescente o <code>...</code> nos parâmetros, some os valores e conte-os.</p>
+<pre class="script" data-file="main.lua">local function vendas(dia)
+  local quantas = 0
+  local total = 0
+  -- complete aqui
+  print(dia .. ": " .. quantas .. " vendas, total " .. total)
+end
+
+vendas("segunda", 10, 20, 15)
+vendas("terça")
+vendas("quarta", 18)
+</pre>
+<pre class="solucao" data-file="main.lua">local function vendas(dia, ...)
+  local quantas = select("#", ...)
+  local total = 0
+  for _, valor in ipairs({...}) do
+    total = total + valor
+  end
+  print(dia .. ": " .. quantas .. " vendas, total " .. total)
+end
+
+vendas("segunda", 10, 20, 15)
+vendas("terça")
+vendas("quarta", 18)
+</pre>
+</div>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li>Uma função com <code>...</code> nos parâmetros aceita quantos argumentos vierem, até nenhum.</li>
+  <li>Parâmetros fixos vêm antes: <code>function f(a, ...)</code>. Nada pode vir depois do <code>...</code>.</li>
+  <li>Dentro da função, <code>...</code> são os argumentos: repasse com <code>print("x", ...)</code>, guarde com <code>{...}</code> ou <code>local a, b = ...</code>.</li>
+  <li><code>{...}</code> + <code>ipairs</code> é o caminho comum, mas para no primeiro <code>nil</code>. Para contar certo: <code>select("#", ...)</code>; para guardar com a contagem: <code>table.pack(...)</code> e o campo <code>n</code>.</li>
+  <li>No Lua 5.5, <code>function f(...args)</code> já dá a tabela com <code>args.n</code> (somente leitura).</li>
+  <li><code>...</code> fora de uma função variádica: <code>cannot use '...' outside a vararg function</code>.</li>
+  <li>Próxima aula: as funções também são valores, que se guardam em variáveis e tabelas: <a href="funcoes-valores.html">Funções São Valores</a>.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
