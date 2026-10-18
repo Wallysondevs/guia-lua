@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Lua os.date e os.time — datas e horas | Guia Lua</title>
-<meta name="description" content="Datas e horas no Lua 5.5 para quem nunca programou: os.time e os segundos desde 1970, os.date com formatos (%d/%m/%Y, %H:%M), por que sai em inglês e como o os.setlocale(&quot;&quot;) põe em português, a tabela &quot;*t&quot;, montar uma data com os.time{…}, somar dias, os.difftime para contar dias, UTC com &quot;!&quot;, e os erros reais do Lua.">
+<meta name="description" content="Datas e horas no Lua 5.5 para quem nunca programou: os.time e os segundos desde 1970, os.date com formatos (%d/%m/%Y, %H:%M), por que sai em inglês e como o os.setlocale(por que sai em inglês e como o os.setlocale(&quot;&quot;) põe em portuguêsquot;por que sai em inglês e como o os.setlocale(&quot;&quot;) põe em portuguêsquot;, por que sai em inglês e como o os.setlocale(&quot;&quot;) põe em portuguêsquot;timepor que sai em inglês e como o os.setlocale(&quot;&quot;) põe em portuguêsquot;) põe em português, a tabela &quot;*t&quot;, montar uma data com os.time{…}, somar dias, os.difftime para contar dias, UTC com &quot;!&quot;, e os erros reais do Lua.">
 <link rel="stylesheet" href="assets/style.css">
 <script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
 </head>
@@ -25,7 +25,7 @@
 <ul>
   <li>Como o computador guarda a hora: um número de segundos, o <code>os.time()</code>.</li>
   <li>Como mostrar a data e a hora do jeito que você quiser com <code>os.date</code> e os códigos <code>%d</code>, <code>%m</code>, <code>%Y</code>, <code>%H</code>, <code>%M</code>…</li>
-  <li>Por que o <code>os.date</code> fala inglês, e como o <code>os.setlocale("")</code> faz ele falar português.</li>
+  <li>Por que o <code>os.date</code> fala inglês, e como o <code>os.setlocale("", "time")</code> faz ele falar português sem mudar os números.</li>
   <li>Como pegar cada pedaço da data numa tabela com <code>os.date("*t")</code>.</li>
   <li>Como montar uma data qualquer com <code>os.time{…}</code>, somar dias e contar quantos dias faltam com <code>os.difftime</code>.</li>
   <li>O horário UTC com <code>"!"</code>, e os erros reais.</li>
@@ -137,9 +137,35 @@ dom 18 out 2026 16:53:40
   <dt>%c e %x</dt><dd>Os formatos "do idioma" também mudam: <code>%x</code> já sai como <code>18/10/2026</code>, o jeito brasileiro.</dd>
 </dl>
 
+<h3>Cuidado: o <code>os.setlocale("")</code> muda também os números</h3>
+<p>O idioma não é só o nome dos meses. Ele também diz como se escrevem os números, e em português a casa decimal é com <strong>vírgula</strong>. Com <code>os.setlocale("")</code>, o programa inteiro passa a usar vírgula:</p>
+
+<pre class="file" data-file="tudo.lua">os.setlocale("")
+print(os.date("%A, %d de %B", os.time({year = 2026, month = 10, day = 18})))
+print(1.5, string.format("R$ %.2f", 7.5), tonumber("2.5"))
+</pre>
+
+<pre class="term">$ lua tudo.lua
+domingo, 18 de outubro
+1,5	R$ 7,50	2,5</pre>
+
+<p>O <code>print(1.5)</code> mostrou <code>1,5</code>, e o <code>string.format</code> também. Parece bonito na tela, mas é perigoso: um arquivo gravado assim (<code>7,50</code>) pode não ser lido por outro programa, e o <code>tonumber</code> também passa a esperar vírgula. Para mudar <strong>só as datas</strong>, diga a <strong>categoria</strong> no segundo argumento: <code>"time"</code> ("tempo"):</p>
+
+<pre class="file" data-file="so_datas.lua">print(os.setlocale("", "time"))
+print(os.date("%A, %d de %B", os.time({year = 2026, month = 10, day = 18})))
+print(1.5, string.format("R$ %.2f", 7.5), tonumber("2.5"))
+</pre>
+
+<pre class="term">$ lua so_datas.lua
+pt_BR.UTF-8
+domingo, 18 de outubro
+1.5	R$ 7.50	2.5</pre>
+
+<p>Datas em português, números com ponto, como no resto do guia. <strong>Prefira sempre <code>os.setlocale("", "time")</code></strong> quando o objetivo for só a data. (Os detalhes da vírgula nos números estão em <a href="conversao.html">Conversão</a>.)</p>
+
 <div class="warning">
 <strong>O <code>setlocale</code> depende do computador</strong>
-<p>O <code>os.setlocale("")</code> usa o idioma de <strong>quem roda</strong> o programa. Num computador em inglês, continua <code>Sunday</code>; num em espanhol, sai <code>domingo</code> de novo, mas <code>octubre</code>. E ele muda outras coisas além das datas (em alguns idiomas, até o jeito de escrever números). Se o programa <strong>precisa</strong> do nome em português em qualquer computador, o mais seguro é ter a sua própria lista de nomes, como na missão final desta aula. No editor do guia, o <code>os.setlocale("")</code> também dá <code>pt_BR.UTF-8</code>.</p>
+<p>O <code>""</code> quer dizer o idioma de <strong>quem roda</strong> o programa. Num computador em inglês, continua <code>Sunday</code>; num em espanhol, sai <code>domingo</code> de novo, mas <code>octubre</code>. Se o programa <strong>precisa</strong> do nome em português em qualquer computador, o mais seguro é ter a sua própria lista de nomes, como na missão final desta aula. No editor do guia, o <code>os.setlocale("")</code> e o <code>os.setlocale("", "time")</code> dão <code>pt_BR.UTF-8</code>, como na máquina da Ana.</p>
 </div>
 
 <div class="trylua" data-goal="out:25/12/2026;;src:os\.date">
@@ -343,7 +369,7 @@ print(os.date("%d/%m/%Y %H:%M:%S", 0))
 <table class="ref">
 <tr><th>Forma</th><th>Resultado (18/10/2026, 16:53)</th><th>Quando usar</th></tr>
 <tr><td><code>os.date("%d/%m/%Y")</code></td><td><code>18/10/2026</code></td><td>Sempre igual, em qualquer computador. O mais comum</td></tr>
-<tr><td><code>os.setlocale("")</code> + <code>os.date("%x")</code></td><td><code>18/10/2026</code> (num computador em português)</td><td>Quando quer o formato <strong>de quem usa</strong>: num computador em inglês americano sairia <code>10/18/2026</code>, e sem o <code>setlocale</code>, <code>10/18/26</code></td></tr>
+<tr><td><code>os.setlocale("", "time")</code> + <code>os.date("%x")</code></td><td><code>18/10/2026</code> (num computador em português)</td><td>Quando quer o formato <strong>de quem usa</strong>: num computador em inglês americano sairia <code>10/18/2026</code>, e sem o <code>setlocale</code>, <code>10/18/26</code></td></tr>
 <tr><td><code>os.date("%Y-%m-%d")</code></td><td><code>2026-10-18</code></td><td>Nomes de arquivo, registros, dados para outros programas</td></tr>
 <tr><td><code>local t = os.date("*t")</code> + <code>string.format("%02d/%02d/%d", t.day, t.month, t.year)</code></td><td><code>18/10/2026</code></td><td>Quando você vai mexer nos números antes de mostrar</td></tr>
 <tr><td><code>os.time()</code></td><td><code>1792353220</code></td><td>Para contas e para guardar o momento; nunca para mostrar a uma pessoa</td></tr>
@@ -433,14 +459,16 @@ print(os.date("%d/%m/%Y %H:%M", os.time({year = 2026, month = 10, day = 18, hour
 <tr><td><code>os.date("*t")</code> / <code>os.date("*t", s)</code></td><td>Tabela com <code>year</code>, <code>month</code>, <code>day</code>, <code>hour</code>, <code>min</code>, <code>sec</code>, <code>wday</code> (1 = domingo), <code>yday</code>, <code>isdst</code></td></tr>
 <tr><td><code>os.date("!…")</code></td><td>O mesmo, em UTC</td></tr>
 <tr><td><code>os.difftime(depois, antes)</code></td><td>Diferença em segundos (float). Dias: divida por <code>86400</code> e arredonde</td></tr>
-<tr><td><code>os.setlocale("")</code> / <code>os.setlocale()</code></td><td>Usa o idioma do sistema / diz o idioma atual (começa em <code>C</code>)</td></tr>
+<tr><td><code>os.setlocale("", "time")</code></td><td>Datas no idioma do sistema, sem mudar os números</td></tr>
+<tr><td><code>os.setlocale("")</code> / <code>os.setlocale()</code></td><td>Tudo no idioma do sistema (em português, até os números com vírgula) / diz o idioma atual (começa em <code>C</code>)</td></tr>
 </table>
 </div>
 
 <div class="table-wrap">
 <table class="ref">
 <tr><th>Sintoma</th><th>Causa provável</th></tr>
-<tr><td><code>Sunday</code>, <code>October</code> num computador em português</td><td>Faltou <code>os.setlocale("")</code> no começo do programa</td></tr>
+<tr><td><code>Sunday</code>, <code>October</code> num computador em português</td><td>Faltou <code>os.setlocale("", "time")</code> no começo do programa</td></tr>
+<tr><td><code>1,5</code> e <code>7,50</code> com vírgula</td><td>Usou <code>os.setlocale("")</code>, que muda os números também: use <code>os.setlocale("", "time")</code></td></tr>
 <tr><td><code>field 'day' missing in date table</code></td><td>Faltou <code>day</code> (ou <code>year</code>, <code>month</code>), ou o nome está em português</td></tr>
 <tr><td><code>field 'month' is not an integer</code></td><td>Mês como texto (<code>"dez"</code>) em vez de número</td></tr>
 <tr><td><code>bad argument #2 to 'date' (number expected, got string)</code></td><td>Passou uma data escrita no lugar dos segundos</td></tr>
@@ -476,7 +504,7 @@ print(os.date("%d/%m/%Y %H:%M", os.time({year = 2026, month = 10, day = 18, hour
 <p class="mc-q">4. Num computador todo em português, <code>print(os.date("%A"))</code> mostrou <code>Sunday</code>. Por quê?</p>
 <label><input type="radio" name="q4"> O Lua só sabe inglês</label>
 <label><input type="radio" name="q4"> O <code>%A</code> está errado; o certo é <code>%a</code></label>
-<label><input type="radio" name="q4"> Todo programa começa no idioma neutro <code>C</code>; faltou <code>os.setlocale("")</code></label>
+<label><input type="radio" name="q4"> Todo programa começa no idioma neutro <code>C</code>; faltou <code>os.setlocale("", "time")</code></label>
 <label><input type="radio" name="q4"> O relógio do computador está errado</label>
 </div>
 
@@ -522,7 +550,7 @@ print("O Natal de 2026 cai numa " .. dias[t.wday] .. ".")
 <ul>
   <li><code>os.time()</code> é o agora em <strong>segundos desde 1970</strong> (UTC): bom para contas, não para mostrar.</li>
   <li><code>os.date(formato, segundos)</code> transforma em texto: <code>%d/%m/%Y</code> para a data, <code>%H:%M</code> para a hora (<code>%m</code> é mês, <code>%M</code> é minuto). Sem segundos, é agora; com <code>!</code> no começo, é UTC.</li>
-  <li>Nomes de dias e meses (<code>%A</code>, <code>%B</code>) saem em inglês até o programa chamar <code>os.setlocale("")</code>, que usa o idioma do computador de quem roda.</li>
+  <li>Nomes de dias e meses (<code>%A</code>, <code>%B</code>) saem em inglês até o programa chamar <code>os.setlocale("", "time")</code>, que usa o idioma do computador de quem roda só nas datas (o <code>os.setlocale("")</code> sozinho muda também os números para vírgula).</li>
   <li><code>os.date("*t")</code> dá uma tabela com <code>year</code>, <code>month</code>, <code>day</code>, <code>hour</code>, <code>min</code>, <code>sec</code>, <code>wday</code> (1 = domingo), <code>yday</code>.</li>
   <li><code>os.time{year=, month=, day=}</code> monta qualquer data (sem hora, meio-dia) e ajusta datas como o dia 32. Para somar dias, mude o <code>day</code> e passe de novo pelo <code>os.time</code>.</li>
   <li><code>os.difftime(depois, antes)</code> dá a diferença em segundos (float); divida por 86400 e arredonde para ter os dias.</li>
