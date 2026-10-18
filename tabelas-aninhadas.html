@@ -1,0 +1,590 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua Tabelas Aninhadas — tabelas dentro de tabelas | Guia Lua</title>
+<meta name="description" content="Tabelas aninhadas no Lua 5.5 para quem está começando: lista de listas (a matriz de notas, notas[2][3]), dicionário dentro de dicionário (ficha.endereco.cidade), lista de fichas (a turma, ordenada por nota), dicionário de listas (a agenda), criar por partes, acesso seguro com and e or, laços aninhados, o tabuleiro feito com um laço, e os erros reais (attempt to index a nil value (field 'endereco'), field 'integer index', a mesma linha repetida), com missões no editor.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">Tabelas Aninhadas</span></h1>
+
+<p class="intro">Um valor guardado numa tabela pode ser qualquer coisa, inclusive <strong>outra tabela</strong>. Quando uma tabela tem tabelas dentro, dizemos que elas estão <strong>aninhadas</strong> (uma dentro da outra, como os ovos num ninho). É assim que se guarda no Lua quase tudo que tem mais de um nível: as notas de cada aluno em cada bimestre, a ficha de uma pessoa com o endereço dentro, a turma inteira, o tabuleiro de um jogo.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>A fazer uma <strong>lista de listas</strong> (uma "matriz", com linhas e colunas) e a ler <code>notas[2][3]</code>.</li>
+  <li>A pôr um dicionário dentro de outro e ler <code>ficha.endereco.cidade</code>.</li>
+  <li>A fazer uma <strong>lista de fichas</strong> (a turma) e a ordená-la por um campo.</li>
+  <li>A fazer um <strong>dicionário de listas</strong> (cada pessoa com vários telefones).</li>
+  <li>A criar os níveis por partes, a ler com segurança quando um nível pode faltar e a percorrer tudo com laços aninhados.</li>
+  <li>Os erros reais: <code>attempt to index a nil value</code> e a "mesma linha repetida".</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>A ideia: o fichário</h2>
+<p>A secretaria da escola tem um fichário. O fichário é uma caixa (uma tabela) cheia de fichas. Cada ficha é outra tabela: nome, idade, endereço. E o endereço também tem partes: rua, cidade, estado. Para achar a cidade da Ana, você abre o fichário, pega a ficha da Ana, olha o endereço e lê a cidade: <strong>um nível de cada vez</strong>.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Formato</th><th>Exemplo</th><th>Leitura</th></tr>
+<tr><td>Lista de listas</td><td>As notas de cada aluno, por bimestre</td><td><code>notas[2][3]</code></td></tr>
+<tr><td>Dicionário com dicionário dentro</td><td>A ficha com o endereço</td><td><code>ficha.endereco.cidade</code></td></tr>
+<tr><td>Lista de dicionários</td><td>A turma: uma ficha por aluno</td><td><code>turma[2].nome</code></td></tr>
+<tr><td>Dicionário de listas</td><td>A agenda: cada nome com vários telefones</td><td><code>agenda.Bia[1]</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>1. Lista de listas: a matriz</h2>
+<p>A professora guarda as notas da turma assim: uma lista com uma <strong>linha por aluno</strong>, e cada linha é uma lista com as notas dos 4 bimestres.</p>
+
+<pre class="file" data-file="matriz.lua">local notas = {
+  {7, 8, 6, 9},
+  {9, 7, 8, 10},
+  {5, 6, 7, 8},
+}
+print(#notas)
+print(#notas[1])
+print(notas[2])
+print(notas[2][3])
+local linha = notas[2]
+print(linha[3])
+notas[3][1] = 6
+print(notas[3][1])
+</pre>
+
+<pre class="term">$ lua matriz.lua
+3
+4
+table: 0x55d3a365d550
+8
+8
+6
+</pre>
+
+<dl class="anatomy">
+  <dt>{ {7, 8, 6, 9}, … }</dt><dd>A tabela de fora tem 3 itens, e cada item é uma tabela com 4 números. Escrever uma linha por item, com 2 espaços na frente, deixa a "grade" visível no código.</dd>
+  <dt>#notas</dt><dd>Quantos itens a tabela de fora tem: 3 linhas (3 alunos).</dd>
+  <dt>#notas[1]</dt><dd>Quantos itens a primeira linha tem: 4 notas.</dd>
+  <dt>notas[2]</dt><dd>A segunda linha <strong>inteira</strong>: uma tabela (o <code>print</code> só mostra o endereço).</dd>
+  <dt>notas[2][3]</dt><dd>Leia da esquerda para a direita: <code>notas[2]</code> é a linha da Bia; o <code>[3]</code> pega o 3º item <strong>dessa linha</strong>. Resultado: 8.</dd>
+  <dt>local linha = notas[2]</dt><dd>É o mesmo, em dois passos: guardar a linha numa variável e depois pegar <code>linha[3]</code>.</dd>
+  <dt>notas[3][1] = 6</dt><dd>Para mudar, a mesma escrita, do lado esquerdo do <code>=</code>.</dd>
+</dl>
+
+<div class="trylua" data-goal="out:Nota: 8;;src:notas\[2\]\[3\]">
+<p class="try-task"><strong>Missão:</strong> a Bia é a linha 2. Troque o <code>0</code> pela nota dela no 3º bimestre, usando <code>notas[2][3]</code>, para o programa mostrar <code>Nota: 8</code>.</p>
+<pre class="script" data-file="main.lua">local notas = {
+  {7, 8, 6, 9},
+  {9, 7, 8, 10},
+  {5, 6, 7, 8},
+}
+print("Nota: " .. 0)
+</pre>
+<pre class="solucao" data-file="main.lua">local notas = {
+  {7, 8, 6, 9},
+  {9, 7, 8, 10},
+  {5, 6, 7, 8},
+}
+print("Nota: " .. notas[2][3])
+</pre>
+</div>
+
+<h3>Percorrendo: um laço dentro do outro</h3>
+<p>Para passar por todas as notas, use um <a href="lacos-aninhados.html">laço aninhado</a>: o de fora passa pelas linhas; o de dentro, pelas notas da linha atual.</p>
+
+<pre class="file" data-file="matriz_laco.lua">local nomes = {"Ana", "Bia", "Caio"}
+local notas = {
+  {7, 8, 6, 9},
+  {9, 7, 8, 10},
+  {5, 6, 7, 8},
+}
+for i, linha in ipairs(notas) do
+  local soma = 0
+  for j, nota in ipairs(linha) do
+    soma = soma + nota
+  end
+  print(nomes[i], soma / #linha)
+end
+</pre>
+
+<pre class="term">$ lua matriz_laco.lua
+Ana	7.5
+Bia	8.5
+Caio	6.5
+</pre>
+
+<dl class="anatomy">
+  <dt>for i, linha in ipairs(notas)</dt><dd>A cada volta, <code>linha</code> é uma das listas de dentro, e <code>i</code> é a posição dela (1, 2, 3).</dd>
+  <dt>local soma = 0</dt><dd>Fica <strong>dentro</strong> do laço de fora: a soma recomeça do zero para cada aluno.</dd>
+  <dt>for j, nota in ipairs(linha)</dt><dd>O laço de dentro passa pelas 4 notas da linha atual.</dd>
+  <dt>nomes[i]</dt><dd>Os nomes estão numa lista separada, na mesma ordem das linhas. (Na seção 3, eles vão para dentro da própria ficha.)</dd>
+</dl>
+
+<hr>
+
+<h2>2. Dicionário dentro de dicionário: a ficha</h2>
+
+<pre class="file" data-file="ficha.lua">local ficha = {
+  nome = "Ana",
+  idade = 34,
+  endereco = {
+    rua = "Rua das Flores, 12",
+    cidade = "Teresina",
+    uf = "PI",
+  },
+  telefones = {"99999-0001", "3222-0001"},
+}
+print(ficha.nome)
+print(ficha.endereco.cidade)
+print(ficha["endereco"]["uf"])
+print(ficha.telefones[2])
+print(#ficha.telefones)
+ficha.endereco.cidade = "Picos"
+print(ficha.endereco.cidade)
+</pre>
+
+<pre class="term">$ lua ficha.lua
+Ana
+Teresina
+PI
+3222-0001
+2
+Picos
+</pre>
+
+<dl class="anatomy">
+  <dt>endereco = { … }</dt><dd>O valor da chave <code>endereco</code> é outro dicionário, com <code>rua</code>, <code>cidade</code> e <code>uf</code>. A indentação mostra o nível: 2 espaços para os campos da ficha, 4 para os do endereço.</dd>
+  <dt>telefones = {…}</dt><dd>Uma chave da ficha pode guardar também uma <strong>lista</strong>.</dd>
+  <dt>ficha.endereco.cidade</dt><dd>Um ponto por nível: a ficha, o endereço dela, a cidade do endereço.</dd>
+  <dt>ficha["endereco"]["uf"]</dt><dd>A mesma coisa com colchetes (aula <a href="dicionarios.html">Dicionários</a>): <code>t.x</code> é o mesmo que <code>t["x"]</code>, em qualquer nível.</dd>
+  <dt>ficha.telefones[2]</dt><dd>Mistura: o ponto para a chave de texto, os colchetes para a posição na lista.</dd>
+  <dt>#ficha.telefones</dt><dd>O <code>#</code> vale para o último nível: o tamanho da lista de telefones, 2.</dd>
+</dl>
+
+<hr>
+
+<h2>3. Lista de fichas: a turma</h2>
+<p>O formato mais comum de todos: uma lista em que cada item é um dicionário com os mesmos campos. É como uma planilha: cada ficha é uma linha, cada campo é uma coluna.</p>
+
+<pre class="file" data-file="turma.lua">local turma = {
+  {nome = "Ana", nota = 7.5},
+  {nome = "Bia", nota = 9},
+  {nome = "Caio", nota = 6},
+}
+print(#turma)
+print(turma[2].nome)
+for i, aluno in ipairs(turma) do
+  print(i, aluno.nome, aluno.nota)
+end
+table.insert(turma, {nome = "Davi", nota = 8})
+table.sort(turma, function(a, b) return a.nota &gt; b.nota end)
+for i, aluno in ipairs(turma) do
+  print(i .. "º", aluno.nome, aluno.nota)
+end
+</pre>
+
+<pre class="term">$ lua turma.lua
+3
+Bia
+1	Ana	7.5
+2	Bia	9
+3	Caio	6
+1º	Bia	9
+2º	Davi	8
+3º	Ana	7.5
+4º	Caio	6
+</pre>
+
+<dl class="anatomy">
+  <dt>turma[2].nome</dt><dd><code>turma[2]</code> é a ficha da Bia; <code>.nome</code> é o nome dela.</dd>
+  <dt>for i, aluno in ipairs(turma)</dt><dd>A cada volta, <code>aluno</code> é uma ficha inteira; os campos saem com <code>aluno.nome</code> e <code>aluno.nota</code>. Como a turma é uma lista, o <code>ipairs</code> passa em ordem.</dd>
+  <dt>table.insert(turma, {nome = "Davi", nota = 8})</dt><dd>Uma ficha nova, criada ali mesmo, vai para o fim da lista.</dd>
+  <dt>table.sort(turma, function(a, b) return a.nota &gt; b.nota end)</dt><dd>As fichas não sabem se comparar sozinhas: a função diz que <code>a</code> vem antes de <code>b</code> se a nota de <code>a</code> for maior (aula <a href="table-sort.html">table.sort</a>). A turma ficou em ordem de nota, da maior para a menor.</dd>
+</dl>
+
+<div class="trylua" data-goal="out:Média: 8.0;;src:\.nota">
+<p class="try-task"><strong>Missão:</strong> complete o laço para somar a <code>nota</code> de cada aluno da turma, e o programa mostrar <code>Média: 8.0</code>.</p>
+<pre class="script" data-file="main.lua">local turma = {
+  {nome = "Ana", nota = 7},
+  {nome = "Bia", nota = 9},
+  {nome = "Caio", nota = 8},
+}
+local soma = 0
+for _, aluno in ipairs(turma) do
+  -- some aqui a nota do aluno
+end
+print("Média: " .. soma / #turma)
+</pre>
+<pre class="solucao" data-file="main.lua">local turma = {
+  {nome = "Ana", nota = 7},
+  {nome = "Bia", nota = 9},
+  {nome = "Caio", nota = 8},
+}
+local soma = 0
+for _, aluno in ipairs(turma) do
+  soma = soma + aluno.nota
+end
+print("Média: " .. soma / #turma)
+</pre>
+</div>
+
+<hr>
+
+<h2>4. Dicionário de listas: a agenda</h2>
+<p>O contrário da turma: um dicionário em que cada <strong>valor</strong> é uma lista. Na agenda da Ana, cada pessoa pode ter vários telefones:</p>
+
+<pre class="file" data-file="agenda.lua">local agenda = {
+  Ana = {"99999-0001"},
+  Bia = {"99999-0002", "3222-0002"},
+}
+table.insert(agenda.Ana, "3222-0001")
+agenda.Caio = {}
+table.insert(agenda.Caio, "98888-0003")
+print(#agenda.Ana, #agenda.Bia, #agenda.Caio)
+print(table.concat(agenda.Bia, " / "))
+</pre>
+
+<pre class="term">$ lua agenda.lua
+2	2	1
+99999-0002 / 3222-0002
+</pre>
+
+<dl class="anatomy">
+  <dt>table.insert(agenda.Ana, "3222-0001")</dt><dd><code>agenda.Ana</code> é uma lista comum: tudo que você faz com uma lista funciona nela.</dd>
+  <dt>agenda.Caio = {}</dt><dd>Para uma pessoa nova, primeiro crie a lista vazia; só depois dá para inserir nela (veja a seção 5).</dd>
+  <dt>table.concat(agenda.Bia, " / ")</dt><dd>Junta os telefones da Bia num texto (aula <a href="table-concat.html">table.concat</a>).</dd>
+</dl>
+
+<p>Para mostrar a agenda inteira, use <code>pairs</code> no dicionário de fora; e, para ela sair em ordem alfabética, ordene os nomes antes (aula <a href="pairs.html">pairs</a>).</p>
+
+<hr>
+
+<h2>5. Criando por partes, e lendo com segurança</h2>
+<p>Você não precisa escrever tudo de uma vez. Mas cada nível tem de <strong>existir</strong> antes de você guardar coisas dentro dele:</p>
+
+<pre class="file" data-file="partes.lua">local ficha = {nome = "Bia"}
+ficha.endereco = {}
+ficha.endereco.cidade = "Parnaíba"
+print(ficha.endereco.cidade)
+local outra = {nome = "Caio"}
+print(outra.endereco)
+print(outra.endereco and outra.endereco.cidade)
+print((outra.endereco or {}).cidade)
+</pre>
+
+<pre class="term">$ lua partes.lua
+Parnaíba
+nil
+nil
+nil
+</pre>
+
+<dl class="anatomy">
+  <dt>ficha.endereco = {}</dt><dd>Primeiro cria a tabela do endereço, vazia.</dd>
+  <dt>ficha.endereco.cidade = "Parnaíba"</dt><dd>Depois guarda a cidade dentro dela. Sem a linha de cima, esta linha dá erro (veja <a href="#errado">Quando dá errado</a>).</dd>
+  <dt>outra.endereco</dt><dd>O Caio não tem endereço: <code>nil</code>, sem erro (um nível só).</dd>
+  <dt>outra.endereco and outra.endereco.cidade</dt><dd>Leitura segura: se <code>outra.endereco</code> for <code>nil</code>, o <code>and</code> para ali e devolve <code>nil</code>, sem tentar ler <code>.cidade</code> de um <code>nil</code> (aula <a href="operadores-logicos.html">and, or e not</a>).</dd>
+  <dt>(outra.endereco or {}).cidade</dt><dd>Outro jeito: se o endereço faltar, usa uma tabela vazia no lugar; a cidade de uma tabela vazia é <code>nil</code>.</dd>
+</dl>
+
+<h3>Montando uma matriz com laços</h3>
+<p>Para um tabuleiro de jogo da velha (3 linhas, 3 colunas), em vez de escrever as 9 casas à mão, use dois laços. Repare na linha <code>tabuleiro[i] = {}</code>: ela cria uma tabela <strong>nova</strong> para cada linha.</p>
+
+<pre class="file" data-file="tabuleiro.lua">local tabuleiro = {}
+for i = 1, 3 do
+  tabuleiro[i] = {}
+  for j = 1, 3 do
+    tabuleiro[i][j] = "."
+  end
+end
+tabuleiro[1][1] = "X"
+tabuleiro[2][2] = "O"
+for _, l in ipairs(tabuleiro) do
+  print(table.concat(l, " "))
+end
+</pre>
+
+<pre class="term">$ lua tabuleiro.lua
+X . .
+. O .
+. . .
+</pre>
+
+<p>O X foi para a casa (1, 1) e o O para a (2, 2), e cada um apareceu só onde devia. O último cenário de <a href="#errado">Quando dá errado</a> mostra o que acontece quando as três linhas são a <strong>mesma</strong> tabela.</p>
+
+<div class="trylua" data-goal="out:Caio tem 1 telefone;;src:table\.insert">
+<p class="try-task"><strong>Missão:</strong> o Caio é contato novo. Antes do <code>print</code>, crie a lista dele (<code>agenda.Caio = {}</code>) e insira o telefone <code>"98888-0003"</code> com <code>table.insert</code>, para o programa mostrar <code>Caio tem 1 telefone(s)</code>.</p>
+<pre class="script" data-file="main.lua">local agenda = {
+  Ana = {"99999-0001"},
+  Bia = {"99999-0002", "3222-0002"},
+}
+
+print("Caio tem " .. #(agenda.Caio or {}) .. " telefone(s)")
+</pre>
+<pre class="solucao" data-file="main.lua">local agenda = {
+  Ana = {"99999-0001"},
+  Bia = {"99999-0002", "3222-0002"},
+}
+agenda.Caio = {}
+table.insert(agenda.Caio, "98888-0003")
+print("Caio tem " .. #(agenda.Caio or {}) .. " telefone(s)")
+</pre>
+</div>
+
+<hr>
+
+<h2>Qual formato usar</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Seus dados são…</th><th>Use</th><th>Exemplo</th></tr>
+<tr><td>Uma grade de valores do mesmo tipo (linhas e colunas)</td><td>Lista de listas</td><td>Notas por bimestre, tabuleiro, mapa de um jogo</td></tr>
+<tr><td>Uma coisa só, com partes que têm partes</td><td>Dicionário com dicionários dentro</td><td>Uma ficha com endereço; as configurações de um programa</td></tr>
+<tr><td>Muitas coisas do mesmo jeito</td><td>Lista de dicionários</td><td>A turma, os produtos da loja, as linhas de um CSV</td></tr>
+<tr><td>Um nome que leva a vários valores</td><td>Dicionário de listas</td><td>Telefones de cada pessoa, alunos de cada turma</td></tr>
+</table>
+</div>
+
+<div class="tip">
+<strong>Não aninhe mais do que precisa</strong>
+<p>Três ou quatro níveis já ficam difíceis de ler (<code>escola.turmas[2].alunos[5].notas[3]</code>). Quando ficar assim, guarde um nível numa variável com nome (<code>local aluno = escola.turmas[2].alunos[5]</code>) e continue a partir dela.</p>
+</div>
+
+<hr>
+
+<h2 id="errado">Quando dá errado</h2>
+
+<div class="cenario">
+<strong>Ler dentro de um nível que não existe</strong>
+<pre class="file" data-file="erro_endereco.lua">local ficha = {nome = "Caio"}
+print(ficha.endereco.cidade)
+</pre>
+<pre class="term">$ lua erro_endereco.lua
+lua: erro_endereco.lua:2: attempt to index a nil value (field 'endereco')
+stack traceback:
+	erro_endereco.lua:2: in main chunk
+	[C]: in ?
+</pre>
+<dl class="anatomy">
+  <dt>lua: erro_endereco.lua:2:</dt><dd>Linha 2.</dd>
+  <dt>attempt to index a nil value</dt><dd>"Tentativa de indexar um valor <code>nil</code>". <strong>Indexar</strong> é usar o ponto ou os colchetes num valor (<code>x.cidade</code>, <code>x[1]</code>). O Lua tentou fazer <code>.cidade</code> em algo que era <code>nil</code>.</dd>
+  <dt>(field 'endereco')</dt><dd>E diz quem era <code>nil</code>: o campo <code>endereco</code>. A ficha do Caio não tem endereço; <code>ficha.endereco</code> deu <code>nil</code>, e não existe "cidade de nada".</dd>
+</dl>
+<p>Repare: um nível que falta dá <code>nil</code> sem erro (<code>ficha.endereco</code>); o erro vem quando você tenta <strong>entrar</strong> nele. <strong>Como consertar:</strong> se o nível pode faltar, leia com segurança: <code>ficha.endereco and ficha.endereco.cidade</code> (seção 5).</p>
+</div>
+
+<div class="cenario">
+<strong>Guardar dentro de um nível que não existe</strong>
+<pre class="file" data-file="erro_criar.lua">local ficha = {nome = "Caio"}
+ficha.endereco.cidade = "Picos"
+</pre>
+<pre class="term">$ lua erro_criar.lua
+lua: erro_criar.lua:2: attempt to index a nil value (field 'endereco')
+stack traceback:
+	erro_criar.lua:2: in main chunk
+	[C]: in ?
+</pre>
+<p>A mesma mensagem: o Lua não cria o <code>endereco</code> sozinho. <strong>Como consertar:</strong> crie o nível antes: <code>ficha.endereco = {}</code>, ou <code>ficha.endereco = ficha.endereco or {}</code> (cria só se ainda não existir).</p>
+</div>
+
+<div class="cenario">
+<strong>Linha que não existe na matriz</strong>
+<pre class="file" data-file="erro_linha.lua">local notas = {
+  {7, 8, 6, 9},
+  {9, 7, 8, 10},
+}
+print(notas[3][1])
+</pre>
+<pre class="term">$ lua erro_linha.lua
+lua: erro_linha.lua:5: attempt to index a nil value (field 'integer index')
+stack traceback:
+	erro_linha.lua:5: in main chunk
+	[C]: in ?
+</pre>
+<p>Só há 2 linhas: <code>notas[3]</code> é <code>nil</code>, e o <code>[1]</code> tentou entrar nele. Aqui o Lua não tem um nome para mostrar e escreve <code>field 'integer index'</code> ("campo de índice inteiro"): o <code>nil</code> veio de uma posição numérica escrita direto no código. Se a posição estiver numa variável (<code>notas[i][1]</code>), a mensagem diz <code>(field '?')</code>. <strong>Como consertar:</strong> confira os limites: <code>i</code> de 1 até <code>#notas</code>, <code>j</code> de 1 até <code>#notas[i]</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Um nível a mais</strong>
+<pre class="file" data-file="erro_numero.lua">local turma = {
+  {nome = "Ana", nota = 7.5},
+}
+print(turma[1].nota.valor)
+</pre>
+<pre class="term">$ lua erro_numero.lua
+lua: erro_numero.lua:4: attempt to index a number value (field 'nota')
+stack traceback:
+	erro_numero.lua:4: in main chunk
+	[C]: in ?
+</pre>
+<p>"Tentativa de indexar um valor <strong>número</strong>": <code>turma[1].nota</code> já é o número 7.5, e número não tem campos. Você foi um nível além do que existe. <strong>Como consertar:</strong> pare no nível certo: <code>turma[1].nota</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Juntar uma tabela com texto</strong>
+<pre class="file" data-file="erro_print.lua">local ficha = {nome = "Ana", endereco = {cidade = "Teresina"}}
+print("Cidade: " .. ficha.endereco)
+</pre>
+<pre class="term">$ lua erro_print.lua
+lua: erro_print.lua:2: attempt to concatenate a table value (field 'endereco')
+stack traceback:
+	erro_print.lua:2: in main chunk
+	[C]: in ?
+</pre>
+<p>O contrário do anterior: parou um nível <strong>antes</strong>. <code>ficha.endereco</code> é uma tabela, e o <code>..</code> só junta textos e números. <strong>Como consertar:</strong> desça até o valor: <code>ficha.endereco.cidade</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>As linhas do tabuleiro mudam todas juntas (sem erro)</strong>
+<pre class="file" data-file="erro_mesma_linha.lua">local linha = {".", ".", "."}
+local tabuleiro = {linha, linha, linha}
+tabuleiro[1][1] = "X"
+for _, l in ipairs(tabuleiro) do
+  print(table.concat(l, " "))
+end
+</pre>
+<pre class="term">$ lua erro_mesma_linha.lua
+X . .
+X . .
+X . .
+</pre>
+<p>A Ana marcou o X só na linha 1, e ele apareceu nas três. Não há três linhas: há <strong>uma</strong> tabela <code>linha</code>, guardada três vezes. Pôr uma tabela dentro de outra não faz uma cópia; guarda a <strong>mesma</strong> tabela (aula <a href="tabelas-referencia.html">Tabelas São Referências</a>). <strong>Como consertar:</strong> crie uma tabela nova para cada linha, com <code>tabuleiro[i] = {}</code> dentro do laço (seção 5).</p>
+</div>
+
+<hr>
+
+<h2>Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>O que faz</th></tr>
+<tr><td><code>m = {{1, 2}, {3, 4}}</code></td><td>Lista de listas (2 linhas, 2 colunas)</td></tr>
+<tr><td><code>m[i][j]</code></td><td>Item da linha <code>i</code>, coluna <code>j</code></td></tr>
+<tr><td><code>#m</code> / <code>#m[i]</code></td><td>Quantas linhas / quantos itens na linha <code>i</code></td></tr>
+<tr><td><code>f = {endereco = {cidade = "X"}}</code></td><td>Dicionário com dicionário dentro</td></tr>
+<tr><td><code>f.endereco.cidade</code> / <code>f["endereco"]["cidade"]</code></td><td>Lê dois níveis abaixo</td></tr>
+<tr><td><code>turma[i].nome</code></td><td>Campo de uma ficha numa lista de fichas</td></tr>
+<tr><td><code>table.sort(lista, function(a, b) return a.x &lt; b.x end)</code></td><td>Ordena fichas por um campo</td></tr>
+<tr><td><code>t.nivel = t.nivel or {}</code></td><td>Cria o nível se ainda não existir</td></tr>
+<tr><td><code>t.a and t.a.b</code></td><td>Lê <code>b</code> sem erro se <code>a</code> faltar</td></tr>
+<tr><td><code>for i = 1, n do m[i] = {} … end</code></td><td>Uma tabela nova por linha</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Mensagem</th><th>Causa provável</th></tr>
+<tr><td><code>attempt to index a nil value (field 'x')</code></td><td>O nível <code>x</code> não existe (para ler ou para guardar)</td></tr>
+<tr><td><code>attempt to index a nil value (field 'integer index')</code> ou <code>(field '?')</code></td><td>Linha que não existe numa lista de listas</td></tr>
+<tr><td><code>attempt to index a number value (field 'x')</code></td><td>Um nível a mais: <code>x</code> já é um número</td></tr>
+<tr><td><code>attempt to concatenate a table value (field 'x')</code></td><td>Um nível a menos: <code>x</code> ainda é uma tabela</td></tr>
+<tr><td>Mudar uma linha muda todas</td><td>As linhas são a mesma tabela: crie uma nova para cada uma</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. Linha e coluna</h3>
+<p>Com <code>m = {{1, 2, 3}, {4, 5, 6}}</code>, quanto vale <code>m[2][1]</code>?</p>
+<div class="ex-code"><input data-answer="4" aria-label="resposta"></div>
+</div>
+
+<div class="exercise">
+<h3>2. A cidade</h3>
+<p>Complete para mostrar a cidade do endereço da ficha:</p>
+<div class="ex-code">print(ficha.<input data-answer="endereco.cidade" aria-label="caminho">)</div>
+</div>
+
+<div class="exercise">
+<h3>3. Criar o nível</h3>
+<p>Complete a linha que cria o endereço vazio antes de guardar a cidade:</p>
+<div class="ex-code">ficha.endereco = <input data-answer="{}" aria-label="valor"></div>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">4. Com <code>turma = {{nome = "Ana"}, {nome = "Bia"}}</code>, qual escrita dá <code>"Bia"</code>?</p>
+<label><input type="radio" name="q4"> <code>turma.nome[2]</code></label>
+<label><input type="radio" name="q4"> <code>turma[2].nome</code></label>
+<label><input type="radio" name="q4"> <code>turma["Bia"]</code></label>
+<label><input type="radio" name="q4"> <code>turma.Bia</code></label>
+</div>
+
+<div class="mc" data-answer="3">
+<p class="mc-q">5. <code>ficha.endereco.rua</code> deu <code>attempt to index a nil value (field 'endereco')</code>. O que isso quer dizer?</p>
+<label><input type="radio" name="q5"> Que a rua está vazia</label>
+<label><input type="radio" name="q5"> Que a variável <code>ficha</code> não existe</label>
+<label><input type="radio" name="q5"> Que a ficha não tem o campo <code>endereco</code></label>
+<label><input type="radio" name="q5"> Que faltou um <code>print</code></label>
+</div>
+
+<div class="mc" data-answer="1">
+<p class="mc-q">6. Com <code>local l = {0, 0}</code> e <code>local m = {l, l}</code>, o que acontece com <code>m[2][1]</code> depois de <code>m[1][1] = 5</code>?</p>
+<label><input type="radio" name="q6"> Vale 5, porque as duas linhas são a mesma tabela</label>
+<label><input type="radio" name="q6"> Continua 0</label>
+<label><input type="radio" name="q6"> Vira <code>nil</code></label>
+<label><input type="radio" name="q6"> Dá erro</label>
+</div>
+
+<h3>Missão final: o boletim</h3>
+
+<div class="trylua" data-goal="out:Ana: 7.5;;out:Bia: 8.5;;src:\.notas">
+<p class="try-task"><strong>Missão:</strong> cada aluno da turma tem um <code>nome</code> e uma lista de <code>notas</code>. Para cada aluno, some as notas com um laço dentro do laço e mostre a média com uma casa, assim: <code>Ana: 7.5</code> e <code>Bia: 8.5</code>. Use <code>string.format("%s: %.1f", aluno.nome, media)</code>.</p>
+<pre class="script" data-file="main.lua">local turma = {
+  {nome = "Ana", notas = {7, 8, 6, 9}},
+  {nome = "Bia", notas = {9, 7, 8, 10}},
+}
+for _, aluno in ipairs(turma) do
+  print(aluno.nome)
+end
+</pre>
+<pre class="solucao" data-file="main.lua">local turma = {
+  {nome = "Ana", notas = {7, 8, 6, 9}},
+  {nome = "Bia", notas = {9, 7, 8, 10}},
+}
+for _, aluno in ipairs(turma) do
+  local soma = 0
+  for _, nota in ipairs(aluno.notas) do
+    soma = soma + nota
+  end
+  local media = soma / #aluno.notas
+  print(string.format("%s: %.1f", aluno.nome, media))
+end
+</pre>
+</div>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li>Uma tabela pode guardar outras tabelas: é assim que se guardam dados com vários níveis.</li>
+  <li>Lê-se um nível de cada vez, da esquerda para a direita: <code>notas[2][3]</code>, <code>ficha.endereco.cidade</code>, <code>turma[2].nome</code>, <code>agenda.Bia[1]</code>.</li>
+  <li>Os quatro formatos: lista de listas, dicionário com dicionário, lista de dicionários, dicionário de listas.</li>
+  <li>Para percorrer, um laço por nível (laços aninhados).</li>
+  <li>Cada nível tem de existir antes de você entrar nele; senão, <code>attempt to index a nil value (field '…')</code>. Leia com segurança com <code>t.a and t.a.b</code>; crie com <code>t.a = t.a or {}</code>.</li>
+  <li>Pôr a mesma tabela em dois lugares não copia: as linhas de uma matriz precisam ser tabelas novas, uma para cada.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
