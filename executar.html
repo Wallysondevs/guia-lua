@@ -1,0 +1,642 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lua Rodando um Programa — o arquivo .lua e o comando lua | Guia Lua</title>
+<meta name="description" content="Como rodar um programa Lua para quem nunca programou: criar uma pasta, escrever o arquivo .lua no nano, rodar com lua arquivo.lua, a pasta atual e os caminhos, por que o Lua confere o arquivo inteiro antes de rodar (erro de sintaxe × erro na execução), o código de saída, o #!/usr/bin/env lua com chmod +x, lua -e, lua - e as mensagens reais do Lua 5.5 (cannot open, attempt to concatenate a nil value) explicadas em português.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Lua <span class="hl">Rodando um Programa (.lua)</span></h1>
+
+<p class="intro">Um programa Lua é um arquivo de texto, com o nome terminado em <code>.lua</code>, que o interpretador <code>lua</code> lê e executa. Nesta aula você vai fazer o ciclo completo pela primeira vez: criar uma pasta para os seus programas, escrever um arquivo com o editor <strong>nano</strong>, rodá-lo com <code>lua ola.lua</code> e entender o que o terminal responde, inclusive quando ele não acha o arquivo. Você também vai descobrir um detalhe importante do Lua: ele <strong>confere o arquivo inteiro</strong> antes de rodar a primeira linha. No fim, vai transformar o arquivo num comando que roda sozinho, com a linha <code>#!/usr/bin/env lua</code>.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>A criar uma pasta para os seus programas e um arquivo <code>.lua</code> com o <code>nano</code>.</li>
+  <li>A rodar o programa com <code>lua arquivo.lua</code>, e o que cada parte do comando quer dizer.</li>
+  <li>O que é a <strong>pasta atual</strong> e como chegar a um arquivo que está em outra pasta (caminhos).</li>
+  <li>Que o Lua primeiro <strong>confere a escrita</strong> do arquivo todo e depois executa <strong>de cima para baixo</strong>, parando no primeiro erro.</li>
+  <li>O que é o <strong>código de saída</strong> (<code>echo $?</code>).</li>
+  <li>A rodar o arquivo como um comando, com <code>#!/usr/bin/env lua</code> e <code>chmod +x</code>.</li>
+  <li>Outras formas de rodar: <code>lua -e</code>, <code>lua -</code>, <code>lua -i</code> e o editor do guia.</li>
+</ul>
+</div>
+
+<p>Tudo nesta aula foi rodado de verdade com o Lua 5.5 no computador da Ana (Ubuntu 26.04). Se você ainda não tem o Lua, veja <a href="instalar.html">Instalar o Lua</a>, ou faça só as caixas Experimente, que rodam no navegador.</p>
+
+<hr>
+
+<h2>A ideia: a receita e o cozinheiro</h2>
+<p>Pense numa receita escrita num caderno. Ela fica guardada na gaveta, e você pode ler, corrigir e copiar quantas vezes quiser; mas a receita não cozinha sozinha. Quando chega a hora, alguém abre o caderno na página certa e segue os passos, um por um, de cima para baixo.</p>
+
+<p>No Lua é igual:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Na cozinha</th><th>No computador</th></tr>
+<tr><td>A receita escrita</td><td>O arquivo <code>ola.lua</code>, com o seu programa</td></tr>
+<tr><td>O caderno guardado na gaveta</td><td>A <strong>pasta</strong> onde o arquivo está, por exemplo <code>/home/ana/programas</code></td></tr>
+<tr><td>O cozinheiro</td><td>O interpretador <code>lua</code></td></tr>
+<tr><td>"Cozinheiro, faça a receita da página tal"</td><td>O comando <code>lua ola.lua</code>, digitado no terminal</td></tr>
+</table>
+</div>
+
+<p>E este cozinheiro tem uma mania: antes de acender o fogão, ele <strong>lê a receita inteira</strong>, do começo ao fim, para ver se ela está bem escrita. Se achar uma frase sem pé nem cabeça, devolve o caderno sem cozinhar nada. Você vai ver isso acontecer na seção 5.</p>
+
+<hr>
+
+<h2>1. Uma pasta para os seus programas</h2>
+<p>Antes de escrever, crie uma pasta só para os programas do curso. Assim eles não se misturam com as fotos e os documentos. Abra o terminal (<kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>T</kbd>):</p>
+
+<pre class="term">$ mkdir programas                                  « cria a pasta "programas"
+$ cd programas                                     « entra nela
+$ pwd                                              « "onde estou?"
+/home/ana/programas
+$ ls                                               « o que tem aqui? (nada, ainda)
+</pre>
+
+<dl class="anatomy">
+  <dt>mkdir programas</dt><dd><em>make directory</em>, "crie uma pasta" chamada <code>programas</code>. Ela é criada dentro da pasta onde você está; o terminal sempre começa na sua pasta pessoal, <code>/home/ana</code>.</dd>
+  <dt>cd programas</dt><dd><em>change directory</em>, "mude de pasta": entre na pasta <code>programas</code>. Repare que o prompt mudou de <code>~</code> para <code>~/programas</code> (o <code>~</code> é o apelido da sua pasta pessoal).</dd>
+  <dt>pwd</dt><dd><em>print working directory</em>, "mostre a pasta atual".</dd>
+  <dt>ls</dt><dd><em>list</em>, "liste o que tem aqui". A pasta é nova, então não aparece nada.</dd>
+</dl>
+
+<p>A <strong>pasta atual</strong> é como o caderno que está aberto em cima da mesa: quando você fala só o nome de um arquivo, o terminal (e o Lua) procuram nessa pasta. Lembre-se disso; é a causa do erro mais comum desta aula.</p>
+
+<hr>
+
+<h2>2. Escrevendo o arquivo com o nano</h2>
+<p>O <strong>nano</strong> é um editor de texto que roda dentro do próprio terminal. Ele já vem no Ubuntu. Para criar (ou abrir) o arquivo <code>ola.lua</code>:</p>
+
+<pre class="term" data-cwd="~/programas">$ nano ola.lua
+</pre>
+
+<p>O terminal vira o editor. Digite as duas linhas do programa, exatamente assim (com os parênteses e as aspas):</p>
+
+<pre class="file" data-file="ola.lua">print("Olá, mundo!")
+print("Meu primeiro programa em Lua.")
+</pre>
+
+<p>A tela do nano fica assim (a tela inteira tem mais linhas em branco no meio):</p>
+
+<figure>
+<pre>  GNU nano 8.7.1                        ola.lua
+print("Olá, mundo!")
+print("Meu primeiro programa em Lua.")
+
+
+
+                               [ 2 linhas lidas ]
+^G Ajuda     ^O Gravar    ^F Onde está?^K Recortar  ^T Executar  ^C Local
+^X Sair      ^R Ler o arq ^\ Substituir^U Colar     ^J Justificar^/ Ir p/ linha
+</pre>
+<figcaption>O nano com o <code>ola.lua</code> aberto. Embaixo, os atalhos; o <code>^</code> quer dizer a tecla <kbd>Ctrl</kbd>.</figcaption>
+</figure>
+
+<p>As duas linhas de baixo são a "cola" dos atalhos. O <code>^</code> quer dizer <kbd>Ctrl</kbd>: <code>^O</code> é <kbd>Ctrl</kbd>+<kbd>O</kbd>. Você só precisa de dois:</p>
+
+<ol class="passo">
+  <li><strong>Gravar:</strong> aperte <kbd>Ctrl</kbd>+<kbd>O</kbd>. Embaixo aparece o nome do arquivo; aperte <kbd>Enter</kbd> para confirmar. O nano responde com quantas linhas gravou.</li>
+  <li><strong>Sair:</strong> aperte <kbd>Ctrl</kbd>+<kbd>X</kbd>. Você volta para o terminal. (Se você tentar sair sem gravar, o nano pergunta se quer salvar as mudanças: responda <kbd>S</kbd> para sim ou <kbd>N</kbd> para não.)</li>
+</ol>
+
+<p>De volta ao terminal, confira que o arquivo existe e o que tem dentro dele. O <code>cat</code> mostra o conteúdo de um arquivo:</p>
+
+<pre class="term" data-cwd="~/programas">$ ls
+ola.lua
+$ cat ola.lua
+print("Olá, mundo!")
+print("Meu primeiro programa em Lua.")
+</pre>
+
+<div class="tip">
+<strong>Por que <code>.lua</code>?</strong>
+<p>A extensão <code>.lua</code> é a etiqueta que diz "isto é um programa Lua". Os editores usam a etiqueta para colorir o código, as outras pessoas sabem o que é o arquivo só de olhar o nome, e o <code>require</code> procura os <a href="modulos-proprios.html">módulos</a> que você vai criar mais tarde pelo nome com <code>.lua</code>. Para rodar com <code>lua arquivo</code>, a extensão nem é obrigatória (o Lua lê qualquer arquivo de texto), mas use sempre: é o costume, e evita confusão.</p>
+</div>
+
+<hr>
+
+<h2>3. Rodando: <code>lua ola.lua</code></h2>
+<p>Agora, o momento esperado. Ainda dentro da pasta <code>programas</code>:</p>
+
+<pre class="term" data-cwd="~/programas">$ lua ola.lua
+Olá, mundo!
+Meu primeiro programa em Lua.
+</pre>
+
+<dl class="anatomy">
+  <dt>lua</dt><dd>O interpretador: o "cozinheiro".</dd>
+  <dt>ola.lua</dt><dd>O arquivo que ele deve ler e executar: a "receita". Como foi escrito só o nome, ele é procurado na <strong>pasta atual</strong>.</dd>
+</dl>
+
+<p>O Lua leu o arquivo, executou a primeira linha e mostrou <code>Olá, mundo!</code>; executou a segunda e mostrou <code>Meu primeiro programa em Lua.</code>; chegou ao fim do arquivo e terminou, devolvendo o prompt (<code>$</code>) para você. As aspas e os parênteses não aparecem: eles são a "embalagem" do texto, só para o Lua saber onde a frase começa e termina (aula <a href="print.html">print()</a>).</p>
+
+<p>O arquivo continua lá, guardado. Rode quantas vezes quiser; mude o texto no nano e rode de novo para ver a diferença. Esse é o ciclo de todo programador: <strong>editar → gravar → rodar → olhar o resultado</strong>.</p>
+
+<h3>No editor do guia é a mesma coisa</h3>
+<p>As caixas Experimente fazem esse ciclo para você: o código da caixa vira um arquivo chamado <code>main.lua</code>, e o botão <strong>Rodar</strong> faz o equivalente a <code>lua main.lua</code>, com o Lua 5.5 de verdade, no navegador. A aula <a href="simulador.html">O Editor do Guia</a> mostra tudo o que ele faz.</p>
+
+<div class="trylua" data-goal="out:Meu nome é;;semerro">
+<p class="try-task"><strong>Missão:</strong> acrescente uma terceira linha ao programa, com um <code>print</code> que mostre <code>Meu nome é</code> e o seu nome (por exemplo, <code>Meu nome é Ana.</code>). Rode e confira as três linhas.</p>
+<pre class="script" data-file="main.lua">print("Olá, mundo!")
+print("Meu primeiro programa em Lua.")
+</pre>
+<pre class="solucao" data-file="main.lua">print("Olá, mundo!")
+print("Meu primeiro programa em Lua.")
+print("Meu nome é Ana.")
+</pre>
+</div>
+
+<hr>
+
+<h2>4. A pasta atual e os caminhos</h2>
+<p>Agora a Ana voltou para a pasta pessoal (o <code>cd</code> sozinho leva para lá) e tentou rodar o mesmo programa:</p>
+
+<pre class="term" data-cwd="~/programas">$ cd
+$ pwd
+/home/ana
+$ lua ola.lua
+lua: cannot open ola.lua: No such file or directory
+</pre>
+
+<dl class="anatomy">
+  <dt>lua:</dt><dd>Quem está reclamando: o próprio <code>lua</code>, antes mesmo de começar o programa.</dd>
+  <dt>cannot open ola.lua</dt><dd>"Não consigo abrir <code>ola.lua</code>". O nome que aparece é exatamente o que você digitou; ele foi procurado na pasta atual, <code>/home/ana</code>.</dd>
+  <dt>No such file or directory</dt><dd>"Arquivo ou pasta inexistente". É a explicação que o próprio Linux dá.</dd>
+</dl>
+
+<p>O arquivo não sumiu: ele está em <code>/home/ana/programas/ola.lua</code>, mas o Lua procurou um <code>ola.lua</code> em <code>/home/ana</code>. Há dois jeitos de resolver. O primeiro é <strong>entrar na pasta</strong> do arquivo (<code>cd programas</code>) e rodar como antes. O segundo é dizer <strong>o caminho</strong> até o arquivo:</p>
+
+<pre class="term">$ lua programas/ola.lua                           « caminho a partir da pasta atual
+Olá, mundo!
+Meu primeiro programa em Lua.
+$ lua ~/programas/ola.lua                         « caminho a partir da pasta pessoal
+Olá, mundo!
+Meu primeiro programa em Lua.
+</pre>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>Quer dizer</th><th>Funciona de qualquer pasta?</th></tr>
+<tr><td><code>ola.lua</code></td><td>O <code>ola.lua</code> da pasta atual</td><td>Não: só se você estiver na pasta dele</td></tr>
+<tr><td><code>programas/ola.lua</code></td><td>Dentro da pasta <code>programas</code>, que está na pasta atual (caminho <strong>relativo</strong>)</td><td>Não: só a partir de <code>/home/ana</code></td></tr>
+<tr><td><code>~/programas/ola.lua</code></td><td>Dentro da pasta <code>programas</code> da sua pasta pessoal</td><td>Sim</td></tr>
+<tr><td><code>/home/ana/programas/ola.lua</code></td><td>O caminho completo, desde a raiz <code>/</code> (caminho <strong>absoluto</strong>)</td><td>Sim</td></tr>
+</table>
+</div>
+
+<div class="tip">
+<strong>Deixe o terminal completar para você</strong>
+<p>Digite <code>lua ~/pro</code> e aperte <kbd>Tab</kbd>: o terminal completa o nome da pasta (<code>~/programas/</code>). Aperte <kbd>Tab</kbd> de novo depois de <code>o</code> e ele completa <code>ola.lua</code>. Se o <kbd>Tab</kbd> não completar, é sinal de que o arquivo não está onde você pensa. Usar o <kbd>Tab</kbd> evita a maioria dos erros de digitação em nomes de arquivo.</p>
+</div>
+
+<hr>
+
+<h2>5. Primeiro ele confere, depois executa de cima para baixo</h2>
+<p>O <code>lua</code> trabalha em duas etapas. Primeiro ele <strong>lê o arquivo inteiro</strong> e confere se a escrita está certa (a <strong>sintaxe</strong>, a "gramática" da linguagem), traduzindo tudo para <em>bytecode</em> (a tradução que você conheceu na <a href="introducao.html">Introdução</a>). Só se estiver tudo certo ele começa a <strong>executar</strong>, uma linha de cada vez, de cima para baixo. Dois erros da Ana mostram a diferença.</p>
+
+<h3>Um erro durante a execução</h3>
+<p>A Ana escreveu a lista de compras e esqueceu as aspas no feijão. (O <code>..</code>, dois pontos seguidos, junta dois textos num só: aula <a href="concatenacao.html">Juntando Textos</a>.)</p>
+
+<pre class="file" data-file="compras.lua">print("Lista de compras da Ana")
+print("1. arroz")
+print("2. " .. feijao)
+print("3. café")
+</pre>
+
+<pre class="term" data-cwd="~/programas">$ lua compras.lua
+Lista de compras da Ana                            « linha 1: rodou
+1. arroz                                           « linha 2: rodou
+lua: compras.lua:3: attempt to concatenate a nil value (global 'feijao')
+stack traceback:
+	compras.lua:3: in main chunk
+	[C]: in ?
+</pre>
+
+<p>A escrita do arquivo estava certa (para o Lua, <code>feijao</code> sem aspas é um nome válido), então ele começou a executar. As duas primeiras linhas <strong>rodaram</strong>, e as frases apareceram. Na terceira, o Lua encontrou um problema e <strong>parou ali</strong>: a quarta linha (o café) nunca chegou a ser executada. A mensagem, pedaço por pedaço:</p>
+
+<dl class="anatomy">
+  <dt>lua: compras.lua:3:</dt><dd>No arquivo <code>compras.lua</code>, <strong>linha 3</strong>.</dd>
+  <dt>attempt to concatenate a nil value</dt><dd>"Tentativa de concatenar (juntar) um valor <code>nil</code>". O <code>..</code> tentou juntar o texto <code>"2. "</code> com uma coisa que vale <code>nil</code>, o "nada" do Lua.</dd>
+  <dt>(global 'feijao')</dt><dd>A coisa que vale <code>nil</code>: o nome <code>feijao</code>. Sem aspas, o Lua acha que <code>feijao</code> é o nome de uma <a href="variaveis.html">variável</a>, e nenhuma variável com esse nome foi criada; um nome que ninguém criou vale <code>nil</code>. Com aspas (<code>"feijão"</code>), seria um texto.</dd>
+  <dt>stack traceback: … compras.lua:3: in main chunk</dt><dd>O "rastro" do erro: aconteceu na linha 3, no corpo principal do arquivo (o <em>main chunk</em>, e não dentro de uma função, que você vai aprender depois). O <code>[C]: in ?</code> do fim é o próprio interpretador.</dd>
+</dl>
+
+<div class="trylua" data-goal="out:2. feijão;;out:3. café;;semerro">
+<p class="try-task"><strong>Missão:</strong> rode e veja o programa parar na linha 3. Conserte a linha (o feijão é um texto: precisa de aspas) e rode de novo, até aparecerem os três itens.</p>
+<pre class="script" data-file="main.lua">print("Lista de compras da Ana")
+print("1. arroz")
+print("2. " .. feijao)
+print("3. café")
+</pre>
+<pre class="solucao" data-file="main.lua">print("Lista de compras da Ana")
+print("1. arroz")
+print("2. " .. "feijão")
+print("3. café")
+</pre>
+</div>
+
+<h3>Um erro de escrita: nada roda</h3>
+<p>Agora a Ana esqueceu de fechar um parêntese na linha 3:</p>
+
+<pre class="file" data-file="compras2.lua">print("Lista de compras da Ana")
+print("1. arroz")
+print("2. feijão"
+print("3. café")
+</pre>
+
+<pre class="term" data-cwd="~/programas">$ lua compras2.lua
+lua: compras2.lua:4: ')' expected (to close '(' at line 3) near 'print'
+</pre>
+
+<p>Repare: <strong>nenhuma</strong> linha apareceu, nem a primeira, que estava perfeita. Desta vez o erro é de <strong>sintaxe</strong>, e o Lua o encontrou na etapa de conferir, antes de executar qualquer coisa. Também não tem <code>stack traceback</code>: o programa nem começou. A mensagem:</p>
+
+<dl class="anatomy">
+  <dt>compras2.lua:4:</dt><dd>Onde o Lua <strong>percebeu</strong> o problema: na linha 4. Mas o erro de verdade está na linha 3; continue lendo.</dd>
+  <dt>')' expected</dt><dd>"Era esperado um <code>)</code>".</dd>
+  <dt>(to close '(' at line 3)</dt><dd>"Para fechar o <code>(</code> da linha 3". Esta é a pista boa: o parêntese que ficou aberto está na linha 3.</dd>
+  <dt>near 'print'</dt><dd>"Perto de <code>print</code>": o Lua ainda esperava o <code>)</code> quando deu de cara com o <code>print</code> da linha 4.</dd>
+</dl>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th></th><th>Erro de sintaxe (de escrita)</th><th>Erro de execução</th></tr>
+<tr><td><strong>Quando o Lua percebe</strong></td><td>Ao conferir o arquivo, antes de rodar</td><td>No meio da execução, ao chegar na linha</td></tr>
+<tr><td><strong>O que roda antes</strong></td><td>Nada</td><td>Todas as linhas antes da linha com erro</td></tr>
+<tr><td><strong>Tem <code>stack traceback</code>?</strong></td><td>Não</td><td>Sim</td></tr>
+<tr><td><strong>Exemplos de mensagem</strong></td><td><code>')' expected</code>, <code>'end' expected</code>, <code>unexpected symbol</code></td><td><code>attempt to call a nil value</code>, <code>attempt to concatenate a nil value</code></td></tr>
+</table>
+</div>
+
+<p>Dica de leitura: numa mensagem de erro do Lua, olhe primeiro o <strong>arquivo e a linha</strong> (<code>compras.lua:3:</code>) e depois a explicação. A aula <a href="erros.html">Lendo uma Mensagem de Erro</a> ensina a ler mensagens maiores.</p>
+
+<h3>O código de saída</h3>
+<p>Todo programa, quando termina, devolve ao terminal um número, o <strong>código de saída</strong>: <code>0</code> quer dizer "terminei bem"; qualquer outro número quer dizer "deu problema". O terminal guarda esse número em <code>$?</code>, e o <code>echo</code> mostra:</p>
+
+<pre class="term" data-cwd="~/programas">$ lua ola.lua
+Olá, mundo!
+Meu primeiro programa em Lua.
+$ echo $?
+0                                                  « terminou bem
+$ lua compras.lua
+Lista de compras da Ana
+1. arroz
+lua: compras.lua:3: attempt to concatenate a nil value (global 'feijao')
+stack traceback:
+	compras.lua:3: in main chunk
+	[C]: in ?
+$ echo $?
+1                                                  « terminou com erro
+</pre>
+
+<p>O erro de sintaxe e o "cannot open" também dão <code>1</code>. Você não precisa disso no dia a dia (a mensagem de erro já é bem clara), mas outros programas usam o código de saída para saber se o seu deu certo. O editor do guia também mostra esse número embaixo da saída de cada execução.</p>
+
+<hr>
+
+<h2>6. Rodando o arquivo como um comando</h2>
+<p>Os programas do sistema, como o <code>ls</code>, são rodados só pelo nome, sem <code>lua</code> na frente. Dá para fazer o mesmo com os seus. A Ana tentou:</p>
+
+<pre class="term" data-cwd="~/programas">$ ./ola.lua
+bash: ./ola.lua: Permissão negada
+</pre>
+
+<p>O <code>./</code> quer dizer "o arquivo desta pasta" (o ponto é a pasta atual). O terminal achou o arquivo, mas recusou: no Linux, um arquivo só pode ser executado se tiver a <strong>permissão de execução</strong>, e um arquivo novo não tem. O <code>chmod +x</code> ("mude as permissões: acrescente execução") dá essa permissão:</p>
+
+<pre class="term" data-cwd="~/programas">$ chmod +x ola.lua
+$ ls -l ola.lua
+-rwxrwxr-x 1 ana ana 61 Oct 18 16:45 ola.lua          « os x quer dizer "pode executar"
+$ ./ola.lua
+./ola.lua: linha 1: erro de sintaxe próximo ao token inesperado `"Olá, mundo!"'
+./ola.lua: linha 1: `print("Olá, mundo!")'
+</pre>
+
+<p>Agora ele rodou, mas deu um erro estranho, <strong>em português</strong>. Repare que a mensagem não começa com <code>lua:</code>: quem reclamou foi o <strong>bash</strong>, o programa do terminal. Sem saber quem deveria ler o arquivo, o terminal tentou executá-lo como se fosse uma lista de comandos do próprio terminal, e <code>print("Olá, mundo!")</code> não faz sentido para ele. Falta dizer, dentro do arquivo, quem é o cozinheiro.</p>
+
+<h3>A linha <code>#!/usr/bin/env lua</code></h3>
+<p>Ela vai na <strong>primeira linha</strong> do arquivo, sozinha:</p>
+
+<pre class="file" data-file="ola.lua">#!/usr/bin/env lua
+print("Olá, mundo!")
+print("Meu primeiro programa em Lua.")
+</pre>
+
+<dl class="anatomy">
+  <dt>#!</dt><dd>Chamado de <em>shebang</em> (lê-se "xibéngue"). Quando um arquivo executável começa com esses dois caracteres, o Linux lê o resto da linha para saber qual programa deve abrir o arquivo.</dd>
+  <dt>/usr/bin/env</dt><dd>Um programa do sistema que procura outro programa pelo nome, nas pastas de comandos. Usar o <code>env</code> em vez de escrever <code>/usr/bin/lua</code> direto faz o arquivo funcionar mesmo num computador em que o Lua está em outra pasta (no macOS com Homebrew, ou com o Lua compilado em <code>/usr/local</code>).</dd>
+  <dt>lua</dt><dd>O programa que o <code>env</code> deve procurar e chamar.</dd>
+</dl>
+
+<p>Com a linha no lugar (a permissão continua lá, porque o arquivo é o mesmo):</p>
+
+<pre class="term" data-cwd="~/programas">$ cat ola.lua
+#!/usr/bin/env lua
+print("Olá, mundo!")
+print("Meu primeiro programa em Lua.")
+$ ./ola.lua
+Olá, mundo!
+Meu primeiro programa em Lua.
+$ lua ola.lua                                      « o jeito de sempre continua valendo
+Olá, mundo!
+Meu primeiro programa em Lua.
+</pre>
+
+<p>E por que o <code>#!</code> não atrapalha quando você roda com <code>lua ola.lua</code>? No Lua, o <code>#</code> <strong>não</strong> é comentário (o comentário do Lua é <code>--</code>, aula <a href="comentarios.html">Comentários</a>). É uma exceção feita de propósito: quando a <strong>primeira</strong> linha do arquivo começa com <code>#</code>, o <code>lua</code> pula essa linha. Em qualquer outra linha, o <code>#</code> no começo é erro:</p>
+
+<pre class="file" data-file="shebang2.lua">print("Olá, mundo!")
+#!/usr/bin/env lua
+</pre>
+
+<pre class="term" data-cwd="~/programas">$ lua shebang2.lua
+lua: shebang2.lua:2: unexpected symbol near '#'
+</pre>
+
+<p>"Símbolo inesperado perto de <code>#</code>", na linha 2. É um erro de sintaxe (repare: nem o <code>Olá, mundo!</code> da linha 1 apareceu). O <code>#</code> no meio do código tem outro trabalho, o de medir o tamanho das coisas (aula <a href="operador-tamanho.html">O Operador de Tamanho</a>).</p>
+
+<div class="note">
+<strong>Por que o <code>./</code>?</strong>
+<p>Sem o <code>./</code>, o terminal procura o comando só nas pastas de comandos do sistema (como <code>/usr/bin</code>), e não na pasta atual:</p>
+<pre class="term" data-cwd="~/programas">$ ola.lua
+ola.lua: comando não encontrado
+</pre>
+<p>É uma proteção: assim, um arquivo qualquer numa pasta não consegue se passar por um comando do sistema. Para os seus programas, use <code>./ola.lua</code> (ou <code>lua ola.lua</code>).</p>
+</div>
+
+<hr>
+
+<h2>7. Outras formas de rodar</h2>
+
+<h3><code>lua -e</code>: uma linha, sem arquivo</h3>
+<p>Para testar uma linha só, sem criar arquivo, use <code>-e</code> (de <em>execute</em>, "execute") e o código entre aspas simples. Dá para usar mais de um <code>-e</code>, e eles rodam em ordem:</p>
+
+<pre class="term">$ lua -e 'print("Olá, Ana!")'
+Olá, Ana!
+$ lua -e 'print(2 + 3)' -e 'print("fim")'
+5
+fim
+</pre>
+
+<p>As aspas simples por fora protegem o código do terminal (as aspas duplas de dentro são do Lua). Quando dá erro num <code>-e</code>, a mensagem chama o código de <code>(command line)</code>, "linha de comando", no lugar do nome do arquivo.</p>
+
+<h3><code>lua -</code>: o programa vem pelo "cano"</h3>
+<p>Com um <code>-</code> sozinho no lugar do nome do arquivo, o <code>lua</code> lê o programa da <strong>entrada</strong>: do que outro comando manda para ele pelo <code>|</code> (o "cano", em inglês <em>pipe</em>):</p>
+
+<pre class="term">$ echo 'print("veio pelo cano")' | lua -
+veio pelo cano
+</pre>
+
+<p>Você quase não vai usar isso, mas vai ver em tutoriais.</p>
+
+<h3><code>lua -i</code>: roda o arquivo e fica no Lua</h3>
+<p>O <code>-i</code> (de <em>interactive</em>, "interativo") roda o arquivo e, em vez de terminar, abre o <a href="repl.html">modo interativo</a> (<code>&gt;</code>), para você continuar experimentando:</p>
+
+<pre class="term" data-cwd="~/programas">$ lua -i ola.lua
+Lua 5.5.0  Copyright (C) 1994-2025 Lua.org, PUC-Rio
+Olá, mundo!
+Meu primeiro programa em Lua.
+&gt; print("Ainda estou no Lua")
+Ainda estou no Lua
+&gt; os.exit()
+</pre>
+
+<p>(O <code>os.exit()</code> fecha o Lua e volta ao terminal. A aula <a href="repl.html">O Modo Interativo</a> mostra tudo o que dá para fazer lá dentro.)</p>
+
+<h3>Criar o arquivo sem abrir o editor</h3>
+<p>Para um programa de uma linha, dá até para criar o arquivo direto do terminal, com o <code>echo</code> e o <code>&gt;</code> ("mande para o arquivo"):</p>
+
+<pre class="term" data-cwd="~/programas">$ echo 'print("Feito com echo!")' &gt; rapido.lua
+$ lua rapido.lua
+Feito com echo!
+</pre>
+
+<p>Cuidado: o <code>&gt;</code> <strong>apaga</strong> o que havia no arquivo antes. Para programas de verdade, use um editor.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Forma</th><th>Quando usar</th></tr>
+<tr><td><code>lua arquivo.lua</code></td><td><strong>Quase sempre.</strong> Funciona em qualquer arquivo, sem preparar nada. É o que o guia usa</td></tr>
+<tr><td><code>./arquivo.lua</code> (com <code>#!</code> e <code>chmod +x</code>)</td><td>Programas que você vai usar como ferramenta, todo dia, como um comando do sistema</td></tr>
+<tr><td><code>lua -e '...'</code></td><td>Testar uma linha rapidinho</td></tr>
+<tr><td><code>lua -i arquivo.lua</code></td><td>Rodar e depois investigar o que o programa deixou pronto</td></tr>
+<tr><td><code>... | lua -</code></td><td>Quando o programa vem de outro comando</td></tr>
+<tr><td>A caixa Experimente</td><td>Estudar as aulas e testar ideias sem sair do navegador</td></tr>
+<tr><td><code>lua55 arquivo.lua</code></td><td>No Windows, com o LuaBinaries (aula <a href="instalar.html">Instalar o Lua</a>)</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Quando dá errado</h2>
+
+<div class="cenario">
+<strong>Nome do arquivo digitado errado</strong>
+<pre class="term" data-cwd="~/programas">$ lua ol.lua
+lua: cannot open ol.lua: No such file or directory
+$ lua Ola.lua
+lua: cannot open Ola.lua: No such file or directory
+$ lua ola
+lua: cannot open ola: No such file or directory
+</pre>
+<p><strong>O que aconteceu:</strong> o mesmo "não consigo abrir" da seção 4, mas agora a pasta está certa e o nome, errado: <code>ol.lua</code> sem o <code>a</code>; <code>Ola.lua</code> com maiúscula (no Linux, <code>Ola.lua</code> e <code>ola.lua</code> são arquivos diferentes); <code>ola</code> sem o <code>.lua</code> (o <code>lua</code> não acrescenta a extensão sozinho). Leia o nome na mensagem: ele mostra exatamente o que o Lua procurou.</p>
+<p><strong>Como resolver:</strong> confira com <code>ls</code> o nome exato do arquivo e use o <kbd>Tab</kbd> para completar.</p>
+</div>
+
+<div class="cenario">
+<strong>Arquivo com espaço no nome</strong>
+<p>A Ana salvou um programa como <code>meu programa.lua</code>, com espaço:</p>
+<pre class="term" data-cwd="~/programas">$ lua meu programa.lua
+lua: cannot open meu: No such file or directory
+$ lua "meu programa.lua"                           « com aspas, funciona
+Olá, mundo!
+Meu primeiro programa em Lua.
+</pre>
+<p><strong>O que aconteceu:</strong> no terminal, o espaço separa as partes do comando. O <code>lua</code> entendeu que o arquivo era <code>meu</code> (e que <code>programa.lua</code> era outra coisa, passada para o programa). Repare no nome da mensagem: <code>meu</code>.</p>
+<p><strong>Como resolver:</strong> ponha o nome entre aspas ou, melhor, não use espaços em nomes de programas. Use o <strong>sublinhado</strong>: <code>meu_programa.lua</code>.</p>
+<pre class="term" data-cwd="~/programas">$ mv "meu programa.lua" meu_programa.lua          « mv renomeia o arquivo
+$ lua meu_programa.lua
+Olá, mundo!
+Meu primeiro programa em Lua.
+</pre>
+</div>
+
+<div class="cenario">
+<strong><code>Permissão negada</code> ao rodar com <code>./</code></strong>
+<pre class="term" data-cwd="~/programas">$ ./ola.lua
+bash: ./ola.lua: Permissão negada
+</pre>
+<p><strong>O que aconteceu:</strong> o arquivo não tem permissão de execução. <strong>Como resolver:</strong> <code>chmod +x ola.lua</code>, uma vez só; ou rode com <code>lua ola.lua</code>, que não precisa dessa permissão.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro do bash em português: <code>erro de sintaxe próximo ao token inesperado</code></strong>
+<pre class="term" data-cwd="~/programas">$ ./ola.lua
+./ola.lua: linha 1: erro de sintaxe próximo ao token inesperado `"Olá, mundo!"'
+./ola.lua: linha 1: `print("Olá, mundo!")'
+</pre>
+<p><strong>O que aconteceu:</strong> o arquivo foi executado com <code>./</code>, mas não tem a linha <code>#!/usr/bin/env lua</code> no começo (ou ela não está na <strong>primeira</strong> linha, ou está com um espaço antes do <code>#!</code>). O terminal tentou ler o Lua como se fossem comandos do terminal. A pista: a mensagem é em português e não começa com <code>lua:</code>, então não veio do Lua.</p>
+<p><strong>Como resolver:</strong> coloque <code>#!/usr/bin/env lua</code> como primeira linha, sem nada antes, ou rode com <code>lua ola.lua</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Digitei <code>lua ola.lua</code> dentro do <code>&gt;</code></strong>
+<pre class="term" data-cwd="~/programas">$ lua
+Lua 5.5.0  Copyright (C) 1994-2025 Lua.org, PUC-Rio
+&gt; lua ola.lua
+stdin:1: syntax error near 'ola'
+&gt; os.exit()
+</pre>
+<p><strong>O que aconteceu:</strong> o <code>lua ola.lua</code> é um comando do <strong>terminal</strong> (o <code>$</code>). Dentro do modo interativo (o <code>&gt;</code>), quem lê é o Lua, e para ele <code>lua ola.lua</code> são dois nomes soltos, um do lado do outro, sem sentido: "erro de sintaxe perto de <code>ola</code>". O <code>stdin:1:</code> é o "arquivo" do modo interativo (o que você digita), linha 1.</p>
+<p><strong>Como resolver:</strong> saia com <code>os.exit()</code> (ou <kbd>Ctrl</kbd>+<kbd>D</kbd>) e digite o comando no <code>$</code>. (Para rodar um arquivo sem sair do Lua existe o <code>dofile("ola.lua")</code>, assunto da aula <a href="load.html">load, loadfile e dofile</a>.)</p>
+</div>
+
+<h3>Missão: a receita fora de ordem</h3>
+
+<div class="trylua" data-goal="outre:1\. Pré-aqueça o forno\n2\. Misture os ingredientes\n3\. Leve ao forno">
+<p class="try-task"><strong>Missão:</strong> o Lua executa o arquivo de cima para baixo, e a receita de bolo da Ana saiu com os passos trocados. Mude a ordem das linhas (sem mudar os textos) para os passos aparecerem na ordem 1, 2, 3.</p>
+<pre class="script" data-file="main.lua">print("Bolo simples da Ana")
+print("1. Pré-aqueça o forno")
+print("3. Leve ao forno por 40 minutos")
+print("2. Misture os ingredientes")
+</pre>
+<pre class="solucao" data-file="main.lua">print("Bolo simples da Ana")
+print("1. Pré-aqueça o forno")
+print("2. Misture os ingredientes")
+print("3. Leve ao forno por 40 minutos")
+</pre>
+</div>
+
+<h3>Missão: o parêntese esquecido</h3>
+
+<div class="trylua" data-goal="out:Lista de compras da Ana;;out:3. café;;semerro">
+<p class="try-task"><strong>Missão:</strong> rode e repare que <strong>nada</strong> aparece, nem a primeira linha: é um erro de sintaxe. Leia a mensagem (ela aponta a linha 4, mas fala do <code>(</code> da linha 3), conserte e rode de novo.</p>
+<pre class="script" data-file="main.lua">print("Lista de compras da Ana")
+print("1. arroz")
+print("2. feijão"
+print("3. café")
+</pre>
+<pre class="solucao" data-file="main.lua">print("Lista de compras da Ana")
+print("1. arroz")
+print("2. feijão")
+print("3. café")
+</pre>
+</div>
+
+<hr>
+
+<h2>Referência rápida</h2>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Comando</th><th>O que faz</th></tr>
+<tr><td><code>mkdir programas</code> / <code>cd programas</code> / <code>pwd</code> / <code>ls</code></td><td>Cria uma pasta / entra nela / mostra onde você está / lista os arquivos</td></tr>
+<tr><td><code>nano ola.lua</code></td><td>Abre (ou cria) o arquivo no editor. <kbd>Ctrl</kbd>+<kbd>O</kbd> grava, <kbd>Ctrl</kbd>+<kbd>X</kbd> sai</td></tr>
+<tr><td><code>cat ola.lua</code></td><td>Mostra o conteúdo do arquivo</td></tr>
+<tr><td><code>lua ola.lua</code></td><td>Roda o programa da pasta atual</td></tr>
+<tr><td><code>lua ~/programas/ola.lua</code></td><td>Roda o programa pelo caminho, de qualquer pasta</td></tr>
+<tr><td><code>echo $?</code></td><td>Mostra o código de saída do último comando (0 = deu certo)</td></tr>
+<tr><td><code>#!/usr/bin/env lua</code> + <code>chmod +x ola.lua</code></td><td>Permite rodar com <code>./ola.lua</code></td></tr>
+<tr><td><code>lua -e 'código'</code></td><td>Roda o código da linha de comando, sem arquivo</td></tr>
+<tr><td><code>lua -</code></td><td>Roda o programa que chega pela entrada (<code>|</code>)</td></tr>
+<tr><td><code>lua -i ola.lua</code></td><td>Roda o arquivo e abre o modo interativo</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Mensagem</th><th>Causa provável</th></tr>
+<tr><td><code>lua: cannot open ola.lua: No such file or directory</code></td><td>Você não está na pasta do arquivo, ou o nome está errado</td></tr>
+<tr><td><code>lua: arquivo.lua:4: ')' expected (to close '(' at line 3)</code></td><td>Erro de sintaxe: parêntese aberto na linha 3. Nada roda</td></tr>
+<tr><td><code>lua: arquivo.lua:3: attempt to concatenate a nil value (global 'feijao')</code></td><td>Erro de execução: texto sem aspas. As linhas 1 e 2 rodaram</td></tr>
+<tr><td><code>bash: ./ola.lua: Permissão negada</code></td><td>Falta o <code>chmod +x</code></td></tr>
+<tr><td><code>./ola.lua: linha 1: erro de sintaxe próximo ao token inesperado</code></td><td>Falta o <code>#!/usr/bin/env lua</code> na primeira linha</td></tr>
+<tr><td><code>unexpected symbol near '#'</code></td><td>Um <code>#!</code> fora da primeira linha</td></tr>
+<tr><td><code>stdin:1: syntax error near 'ola'</code></td><td>Comando do terminal digitado dentro do <code>&gt;</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="exercise">
+<h3>1. Rodar o programa</h3>
+<p>Complete o comando que roda o programa <code>notas.lua</code> da pasta atual:</p>
+<div class="ex-code">$ <input data-answer="lua" aria-label="comando"> notas.lua</div>
+</div>
+
+<div class="exercise">
+<h3>2. O shebang</h3>
+<p>Complete a primeira linha que permite rodar um arquivo Lua com <code>./</code>:</p>
+<div class="ex-code">#!/usr/bin/env <input data-answer="lua" aria-label="programa"></div>
+</div>
+
+<div class="exercise">
+<h3>3. A permissão</h3>
+<p>Complete o comando que dá permissão de execução ao arquivo:</p>
+<div class="ex-code">$ chmod <input data-answer="+x" aria-label="opção"> ola.lua</div>
+</div>
+
+<div class="mc" data-answer="3">
+<p class="mc-q">4. A Ana está em <code>/home/ana</code> e o arquivo está em <code>/home/ana/programas/ola.lua</code>. Ela digitou <code>lua ola.lua</code> e recebeu <code>cannot open ola.lua: No such file or directory</code>. O que ela pode fazer?</p>
+<label><input type="radio" name="q4"> Reinstalar o Lua.</label>
+<label><input type="radio" name="q4"> Trocar o nome do arquivo para <code>ola.txt</code>.</label>
+<label><input type="radio" name="q4"> Entrar na pasta com <code>cd programas</code> ou rodar <code>lua programas/ola.lua</code>.</label>
+<label><input type="radio" name="q4"> Rodar <code>lua -i ola.lua</code>.</label>
+</div>
+
+<div class="mc" data-answer="2">
+<p class="mc-q">5. Um programa de 10 linhas tem um <code>)</code> faltando na linha 7. O que aparece quando a Ana roda?</p>
+<label><input type="radio" name="q5"> As linhas 1 a 6 rodam, e depois aparece o erro.</label>
+<label><input type="radio" name="q5"> Só a mensagem de erro de sintaxe: nenhuma linha roda, porque o Lua confere o arquivo inteiro antes de executar.</label>
+<label><input type="radio" name="q5"> O programa roda inteiro e ignora a linha 7.</label>
+<label><input type="radio" name="q5"> O Lua conserta o parêntese sozinho.</label>
+</div>
+
+<div class="mc" data-answer="4">
+<p class="mc-q">6. O que o <code>echo $?</code> mostra logo depois de um programa que terminou com <code>attempt to call a nil value</code>?</p>
+<label><input type="radio" name="q6"> <code>0</code></label>
+<label><input type="radio" name="q6"> O texto da mensagem de erro de novo</label>
+<label><input type="radio" name="q6"> <code>nil</code></label>
+<label><input type="radio" name="q6"> <code>1</code></label>
+</div>
+
+<div class="mc" data-answer="1">
+<p class="mc-q">7. Por que a linha <code>#!/usr/bin/env lua</code> não dá erro quando você roda <code>lua ola.lua</code>?</p>
+<label><input type="radio" name="q7"> Porque o <code>lua</code> pula a primeira linha do arquivo quando ela começa com <code>#</code>.</label>
+<label><input type="radio" name="q7"> Porque no Lua todo <code>#</code> começa um comentário.</label>
+<label><input type="radio" name="q7"> Porque o <code>env</code> apaga a linha antes.</label>
+<label><input type="radio" name="q7"> Ela dá erro, sim, mas o Lua esconde.</label>
+</div>
+
+<hr>
+
+<h2>Resumo</h2>
+<ul>
+  <li>Um programa Lua é um arquivo de texto <code>.lua</code>. Escreva com um editor (o <code>nano</code>: <kbd>Ctrl</kbd>+<kbd>O</kbd> grava, <kbd>Ctrl</kbd>+<kbd>X</kbd> sai) e rode com <code>lua arquivo.lua</code>.</li>
+  <li>O nome sozinho é procurado na <strong>pasta atual</strong>. Fora dela, use o caminho (<code>lua ~/programas/ola.lua</code>) ou entre na pasta com <code>cd</code>. Se o arquivo não for achado: <code>lua: cannot open …: No such file or directory</code>.</li>
+  <li>O Lua <strong>confere a escrita do arquivo inteiro</strong> antes de rodar: com um erro de sintaxe, nenhuma linha roda e não há <code>stack traceback</code>.</li>
+  <li>Depois, ele executa <strong>de cima para baixo</strong> e para no primeiro erro de execução; as linhas de antes já rodaram.</li>
+  <li>As mensagens dizem o arquivo e a linha (<code>lua: compras.lua:3:</code>) e o problema. O código de saída (<code>echo $?</code>) é <code>0</code> quando dá certo e <code>1</code> com erro.</li>
+  <li>Com <code>#!/usr/bin/env lua</code> na primeira linha e <code>chmod +x</code>, o arquivo roda como um comando: <code>./ola.lua</code>. O <code>lua</code> pula só essa primeira linha com <code>#</code>.</li>
+  <li><code>lua -e '…'</code> roda uma linha sem arquivo; <code>lua -</code> lê o programa da entrada; <code>lua -i arquivo.lua</code> roda e abre o modo interativo.</li>
+  <li>Próximo passo: conversar com o Lua linha por linha, em <a href="repl.html">O Modo Interativo (&gt;)</a>.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
